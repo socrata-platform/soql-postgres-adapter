@@ -44,7 +44,7 @@ object Dependencies {
   val typesafeConfig = "com.typesafe" % "config" % versions.typesafeConfig
 
   val secondarylib = "com.socrata" %% "secondarylib" % versions.dataCoordinator // % "provided"
-  val coordinator = "com.socrata" %% "coordinator" % versions.dataCoordinator
+  val coordinatorlib = "com.socrata" %% "coordinator" % versions.dataCoordinator
 
   val slf4j = "org.slf4j" % "slf4j-log4j12" % versions.slf4j
 }

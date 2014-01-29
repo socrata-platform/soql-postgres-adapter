@@ -13,6 +13,7 @@ object CommonPG {
       socrataUtil,
       soqlStdlib,
       secondarylib,
+      coordinatorlib,
       typesafeConfig,
       slf4j
     )
