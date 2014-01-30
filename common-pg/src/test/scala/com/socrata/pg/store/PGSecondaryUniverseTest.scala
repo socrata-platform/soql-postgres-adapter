@@ -11,10 +11,9 @@ import com.socrata.soql.types.{SoQLValue, SoQLType}
 /**
  *
  */
-class PGSecondaryUniverseTest extends FunSuite with MustMatchers with PropertyChecks with BeforeAndAfterAll {
+class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndAfterAll {
     type CT = SoQLType
     type CV = SoQLValue
-    val common = new SoQLCommon()
     override def beforeAll() {
     }
 
@@ -30,7 +29,7 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with PropertyCh
 
     test("Universe can create a table") {
       withDB() { conn =>
-        val pgu = new PGSecondaryUniverse[CT, CV](conn,  common )
+        val pgu = new PGSecondaryUniverse[CT, CV](conn,  PostgresUniverseCommon )
       }
     }
 
