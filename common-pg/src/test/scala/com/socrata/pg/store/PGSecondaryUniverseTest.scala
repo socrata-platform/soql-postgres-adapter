@@ -10,7 +10,7 @@ import com.socrata.datacoordinator.id.{CopyId, DatasetId}
 import com.socrata.datacoordinator.truth.metadata.{CopyPair, CopyInfo, LifecycleStage, DatasetInfo}
 import com.socrata.datacoordinator.secondary.LifecycleStage
 import com.socrata.datacoordinator.common.{StandardDatasetMapLimits, DataSourceConfig, DataSourceFromConfig, DatabaseCreator}
-import com.socrata.datacoordinator.truth.sql.DatabasePopulator
+import com.socrata.datacoordinator.truth.sql.{DatasetMapLimits, DatabasePopulator}
 
 
 /**
@@ -26,22 +26,23 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
     override def afterAll() {
     }
 
-    def withDB[T]()(f: Connection => T): T = {
-      using(DriverManager.getConnection("jdbc:h2:mem:")) { conn =>
+    def populateDatabase(conn: Connection) {
+      val sql = DatabasePopulator.metadataTablesCreate(DatasetMapLimits())
+      using(conn.createStatement()) { stmt =>
+        stmt.execute(sql)
+      }
+    }
+
+    def withDb[T]()(f: (Connection) => T): T = {
+      using(DriverManager.getConnection("jdbc:postgresql://localhost:5432/secondary_test", "blist", "blist")) { conn =>
         conn.setAutoCommit(false)
+        populateDatabase(conn)
         f(conn)
       }
     }
 
     test("Universe can create a table") {
-      withDB() { conn =>
-        //for {
-        //  dsInfo <- DataSourceFromConfig(new DataSourceConfig(config, "com.socrata.coordinator.backup.receiver.database"))
-        //  conn <- managed(dsInfo.dataSource.getConnection())
-        //} {
-        //  DatabasePopulator.populate(conn, StandardDatasetMapLimits)
-        //}
-
+      withDb() { conn =>
         val pgu = new PGSecondaryUniverse[CT, CV](conn,  PostgresUniverseCommon )
         val copyInfo = pgu.datasetMapWriter.create("us")
         pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue]).create(copyInfo)
