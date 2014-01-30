@@ -48,7 +48,9 @@ object PostgresUniverseCommon extends PostgresCommonSupport[SoQLType, SoQLValue]
   def tmpDir = File.createTempFile("pg-store", "pg").getParentFile
   val SystemColumns = SoQLSystemColumns
 
-  val newRowCodec = SoQLRowLogCodec
+  val newRowCodec = newRowLogCodec _
+
+  def newRowLogCodec() = SoQLRowLogCodec
   private val internalNamePrefix = "pg."
 
   def isSystemColumn(ci: AbstractColumnInfoLike): Boolean =
