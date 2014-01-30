@@ -1,14 +1,15 @@
 package com.socrata.pg.store
 
 import java.sql.Connection
-import com.socrata.datacoordinator.truth.universe.{LoaderProvider, SchemaLoaderProvider, Commitable, Universe}
+import com.socrata.datacoordinator.truth.universe._
 import com.socrata.datacoordinator.truth.universe.sql.PostgresCommonSupport
 import com.socrata.datacoordinator.truth.loader.{ReportWriter, Logger}
-import com.socrata.datacoordinator.truth.metadata.DatasetCopyContext
+import com.socrata.datacoordinator.truth.metadata.{DatasetMapWriter, DatasetCopyContext}
 import com.socrata.datacoordinator.util.{RowVersionProvider, RowIdProvider}
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.truth.loader.sql.RepBasedPostgresSchemaLoader
 import org.joda.time.DateTime
+import com.socrata.datacoordinator.truth.metadata.sql.PostgresDatasetMapWriter
 
 /**
  *
@@ -19,6 +20,7 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](conn: Connection,
   with Commitable
   with SchemaLoaderProvider
   with LoaderProvider
+  with DatasetMapWriterProvider
 {
   import commonSupport._
   private val txnStart = DateTime.now()
@@ -41,6 +43,9 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](conn: Connection,
   }
 
   def schemaLoader(logger: Logger[SoQLType, SoQLValue]) = new RepBasedPostgresSchemaLoader(conn, logger, repFor, tablespace)
+
+  lazy val datasetMapWriter: DatasetMapWriter[CT] =
+    new PostgresDatasetMapWriter(conn, typeContext.typeNamespace, timingReport, obfuscationKeyGenerator, initialCounterValue)
 }
 
 
