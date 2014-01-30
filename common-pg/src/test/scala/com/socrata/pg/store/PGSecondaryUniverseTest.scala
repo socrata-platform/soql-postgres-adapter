@@ -9,6 +9,8 @@ import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.id.{CopyId, DatasetId}
 import com.socrata.datacoordinator.truth.metadata.{CopyPair, CopyInfo, LifecycleStage, DatasetInfo}
 import com.socrata.datacoordinator.secondary.LifecycleStage
+import com.socrata.datacoordinator.common.{StandardDatasetMapLimits, DataSourceConfig, DataSourceFromConfig, DatabaseCreator}
+import com.socrata.datacoordinator.truth.sql.DatabasePopulator
 
 
 /**
@@ -33,6 +35,13 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
 
     test("Universe can create a table") {
       withDB() { conn =>
+        //for {
+        //  dsInfo <- DataSourceFromConfig(new DataSourceConfig(config, "com.socrata.coordinator.backup.receiver.database"))
+        //  conn <- managed(dsInfo.dataSource.getConnection())
+        //} {
+        //  DatabasePopulator.populate(conn, StandardDatasetMapLimits)
+        //}
+
         val pgu = new PGSecondaryUniverse[CT, CV](conn,  PostgresUniverseCommon )
         val copyInfo = pgu.datasetMapWriter.create("us")
         pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue]).create(copyInfo)
