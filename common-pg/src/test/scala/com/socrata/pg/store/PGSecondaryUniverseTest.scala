@@ -2,6 +2,8 @@ package com.socrata.pg.store
 
 import org.scalatest.{BeforeAndAfterAll, FunSuite}
 import org.scalatest.matchers.MustMatchers
+import org.scalatest.matchers.MustMatchers
+
 import org.scalatest.prop.PropertyChecks
 import java.sql.{DriverManager, Connection}
 import com.rojoma.simplearm.util._
@@ -46,21 +48,32 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
     test("Universe can create a table") {
       withDb() { conn =>
         val pgu = new PGSecondaryUniverse[CT, CV](conn,  PostgresUniverseCommon )
-        val copyInfo = pgu.datasetMapWriter.create("us")
+        val copyInfo = pgu.datasetMapWriter.create("us") // locale
         val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
         sLoader.create(copyInfo)
 
         val cols = SoQLType.typesByName filterKeys (!Set(TypeName("json")).contains(_)) map {
           case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(n + "_USERNAME"), t, n + "_PHYSNAME")
         }
-
         sLoader.addColumns(cols)
 
         // if you want to examine the tables...
         //pgu.commit
 
+        // Did we do it?
+        val existing = for (reader <- pgu.datasetReader.openDataset(copyInfo)) yield {
+          reader.schema.values map {
+              colInfo => (colInfo.systemId, colInfo.typeName)
+          }
+        }.toMap
+
+        cols foreach {
+          colInfo =>  {
+            existing must contain (colInfo.systemId, colInfo.typeName)
+            println("Checked that " + colInfo.userColumnId + ":" + colInfo.typeName + " was truely and surely created")
+          }
+        }
       }
     }
-
 
 }
