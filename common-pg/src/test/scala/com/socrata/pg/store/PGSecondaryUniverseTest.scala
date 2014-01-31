@@ -11,11 +11,10 @@ import com.socrata.soql.types.{SoQLValue, SoQLText, SoQLType}
 import com.socrata.datacoordinator.id.{UserColumnId, CopyId, DatasetId}
 import com.socrata.datacoordinator.truth.metadata._
 import com.socrata.datacoordinator.secondary.LifecycleStage
-import com.socrata.datacoordinator.common.{StandardDatasetMapLimits, DataSourceConfig, DataSourceFromConfig, DatabaseCreator}
+import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig, DatabaseCreator}
 import com.socrata.datacoordinator.truth.sql.{DatasetMapLimits, DatabasePopulator}
 import com.socrata.soql.environment.TypeName
 import com.socrata.datacoordinator.truth.loader.SchemaLoader
-import com.socrata.pg.store.PGSecondaryUniverse
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.truth.sql.DatasetMapLimits
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
@@ -76,6 +75,12 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
       }
     }
 
+    def jdbcColumnCount(conn:Connection, tableName:String):Integer = {
+      val rs = conn.getMetaData.getColumns(null, null, tableName, null)
+      rs.last
+      rs.getRow
+    }
+
     test("Universe can create a table") {
       withDb() { conn =>
         val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
@@ -102,13 +107,17 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
     test("Universe can del columns") {
       withDb() { conn =>
         val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
+        val types = SoQLType.typesByName filterKeys (!Set(TypeName("json")).contains(_))
 
-        val cols = SoQLType.typesByName filterKeys (!Set(TypeName("json")).contains(_)) map {
+        val cols = types map {
           case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(n + "_USERNAME"), t, n + "_PHYSNAME")
         }
         sLoader.addColumns(cols)
 
         validateSchema(cols, getSchema(pgu, copyInfo))
+//        assert(jdbcColumnCount(conn, copyInfo.dataTableName) == cols.size, s"Expected table to have ${cols.size} columns")
+
+        cols.foreach(pgu.datasetMapWriter.dropColumn(_))
 
         try {
           sLoader.dropColumns(cols)
@@ -117,6 +126,7 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
         }
 
         assert(getSchema(pgu, copyInfo).size == 0, "We expect no columns");
+//        assert(jdbcColumnCount(conn, copyInfo.dataTableName) == 0, s"Expected table to have no columns")
       }
     }
 
