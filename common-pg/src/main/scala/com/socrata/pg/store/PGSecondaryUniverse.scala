@@ -28,7 +28,8 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](conn: Connection,
   def transactionStart = txnStart
 
   def commit() = {
-    println("I would commit here")
+    println("I am committing here")
+    conn.commit
   }
 
   def rollback() = { println("I would rollback here")}
