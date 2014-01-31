@@ -19,6 +19,7 @@ import com.socrata.pg.store.PGSecondaryUniverse
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.truth.sql.DatasetMapLimits
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
+import org.postgresql.util.PSQLException
 
 
 /**
@@ -79,7 +80,7 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
       withDb() { conn =>
         val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
         val blankTableSchema = getSchema(pgu, copyInfo)
-        assert(blankTableSchema.size == 0, "We expect no columns");
+        assert(blankTableSchema.size == 0, "We expect no columns")
       }
     }
 
@@ -99,7 +100,24 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
     }
 
     test("Universe can del columns") {
+      withDb() { conn =>
+        val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
 
+        val cols = SoQLType.typesByName filterKeys (!Set(TypeName("json")).contains(_)) map {
+          case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(n + "_USERNAME"), t, n + "_PHYSNAME")
+        }
+        sLoader.addColumns(cols)
+
+        validateSchema(cols, getSchema(pgu, copyInfo))
+
+        try {
+          sLoader.dropColumns(cols)
+        } catch {
+          case pex:PSQLException => println("Failing Query: " + pex.getServerErrorMessage.getHint + " - " + pex.getSQLState); throw pex
+        }
+
+        assert(getSchema(pgu, copyInfo).size == 0, "We expect no columns");
+      }
     }
 
     test("Universe can insert rows") {
