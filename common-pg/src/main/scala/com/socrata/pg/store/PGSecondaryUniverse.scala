@@ -42,13 +42,13 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](conn: Connection,
     conn.abort(commonSupport.executor)
   }
 
-  def prevettedLoader(copyCtx: DatasetCopyContext[CT], logger: Logger[CT, CV]) =
+  def prevettedLoader(copyCtx: DatasetCopyContext[SoQLType], logger: Logger[SoQLType, SoQLValue]) =
     new SqlPrevettedLoader(conn, sqlizerFactory(copyCtx.copyInfo, datasetContextFactory(copyCtx.schema)), logger)
 
-  def sqlizerFactory(copyInfo: CopyInfo, datasetContext: RepBasedSqlDatasetContext[CT, CV]) =
+  def sqlizerFactory(copyInfo: CopyInfo, datasetContext: RepBasedSqlDatasetContext[SoQLType, SoQLValue]) =
     new PostgresRepBasedDataSqlizer(copyInfo.dataTableName, datasetContext, copyInProvider)
 
-  def datasetContextFactory(schema: ColumnIdMap[ColumnInfo[CT]]): RepBasedSqlDatasetContext[CT, CV] = {
+  def datasetContextFactory(schema: ColumnIdMap[ColumnInfo[SoQLType]]): RepBasedSqlDatasetContext[SoQLType, SoQLValue] = {
     RepBasedSqlDatasetContext(
       typeContext,
       schema.mapValuesStrict(repFor),
@@ -61,13 +61,13 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](conn: Connection,
 
   def schemaLoader(logger: Logger[SoQLType, SoQLValue]) = new RepBasedPostgresSchemaLoader(conn, logger, repFor, tablespace)
 
-  def loader(copyCtx: DatasetCopyContext[CT], rowIdProvider: RowIdProvider, rowVersionProvider: RowVersionProvider, logger: Logger[CT, CV], reportWriter: ReportWriter[CV], replaceUpdatedRows: Boolean) =
+  def loader(copyCtx: DatasetCopyContext[SoQLType], rowIdProvider: RowIdProvider, rowVersionProvider: RowVersionProvider, logger: Logger[SoQLType, SoQLValue], reportWriter: ReportWriter[SoQLValue], replaceUpdatedRows: Boolean) =
     managed(loaderProvider(conn, copyCtx, rowPreparer(transactionStart, copyCtx, replaceUpdatedRows), rowIdProvider, rowVersionProvider, logger, reportWriter, timingReport))
 
-  lazy val datasetMapWriter: DatasetMapWriter[CT] =
+  lazy val datasetMapWriter: DatasetMapWriter[SoQLType] =
     new PostgresDatasetMapWriter(conn, typeContext.typeNamespace, timingReport, obfuscationKeyGenerator, initialCounterValue)
 
-  lazy val datasetMapReader: DatasetMapReader[CT] =
+  lazy val datasetMapReader: DatasetMapReader[SoQLType] =
     new PostgresDatasetMapReader(conn, typeContext.typeNamespace, timingReport)
 
   lazy val datasetReader = DatasetReader(lowLevelDatabaseReader)
