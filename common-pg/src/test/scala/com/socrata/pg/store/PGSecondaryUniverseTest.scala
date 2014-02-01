@@ -72,6 +72,31 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
       (pgu, copyInfo, sLoader)
     }
 
+    def createTableWithSchema(pgu:PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo:CopyInfo, sLoader:SchemaLoader[SoQLType]) = {
+      // Setup the data columns
+      val cols = SoQLType.typesByName filterKeys (!Set(TypeName("json")).contains(_)) map {
+        case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(n + "_USERNAME"), t, n + "_PHYSNAME")
+      }
+
+      // Set up the required columns
+      val systemPrimaryKey:ColumnInfo[SoQLType] =
+        pgu.datasetMapWriter.setSystemPrimaryKey(pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(":id"), SoQLID, "system_id"))
+      val versionColumn:ColumnInfo[SoQLType] =
+        pgu.datasetMapWriter.setVersion(pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(":version"), SoQLVersion, "version_id"))
+
+      // Add all columns
+      sLoader.addColumns(cols ++ Seq(systemPrimaryKey, versionColumn))
+
+      // Register the system and version columns
+      sLoader.makeSystemPrimaryKey(systemPrimaryKey)
+      sLoader.makeVersion(versionColumn)
+
+      // get the schema and validate
+      val schema = getSchema(pgu, copyInfo)
+      validateSchema(cols, schema)
+      schema
+    }
+
     def getSchema(pgu:PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo:CopyInfo):ColumnIdMap[ColumnInfo[SoQLType]] = {
       for (reader <- pgu.datasetReader.openDataset(copyInfo)) yield reader.schema
     }
@@ -100,6 +125,32 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
         val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
         val blankTableSchema = getSchema(pgu, copyInfo)
         assert(blankTableSchema.size == 0, "We expect no columns")
+      }
+    }
+
+    def dummyValues():Map[TypeName, SoQLValue] = {
+      SoQLType.typesByName map {
+        case ((name, typ)) => {
+          val dummyVal = typ match {
+            case SoQLText => SoQLText("Hello World")
+            case SoQLID => SoQLID(0)
+            case SoQLVersion => SoQLVersion(0)
+            case SoQLBoolean => SoQLBoolean.canonicalTrue
+            case SoQLNumber => SoQLNumber(new BigDecimal(0.0))
+            case SoQLMoney  => SoQLMoney(new BigDecimal(0.0))
+            case SoQLDouble => SoQLDouble(0.1)
+            case SoQLFixedTimestamp => SoQLFixedTimestamp(new DateTime())
+            case SoQLFloatingTimestamp => SoQLFloatingTimestamp(new LocalDateTime())
+            case SoQLDate => SoQLDate(new LocalDate())
+            case SoQLTime => SoQLTime(new LocalTime())
+            case SoQLObject => SoQLObject(new JObject(Map("hi" -> JString("there"))))
+            case SoQLArray => SoQLArray(new JArray(Seq(JString("there"))))
+            case SoQLJson => SoQLJson(new JArray(Seq(JString("there"))))
+            case SoQLLocation => SoQLLocation(0.1, 0.2)
+            case SoQLNull => SoQLNull
+          }
+          (name, dummyVal)
+        }
       }
     }
 
@@ -147,47 +198,16 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
     test("Universe can insert rows") {
       withDb() { conn =>
         val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
-        val cols = SoQLType.typesByName filterKeys (!Set(TypeName("json")).contains(_)) map {
-          case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(n + "_USERNAME"), t, n + "_PHYSNAME")
-        }
-        val systemPrimaryKey:ColumnInfo[SoQLType] =
-          pgu.datasetMapWriter.setSystemPrimaryKey(pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(":id"), SoQLID, "system_id"))
-        val versionColumn:ColumnInfo[SoQLType] =
-          pgu.datasetMapWriter.setVersion(pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(":version"), SoQLVersion, "version_id"))
-        sLoader.addColumns(cols ++ Seq(systemPrimaryKey, versionColumn))
-        sLoader.makeSystemPrimaryKey(systemPrimaryKey)
-        sLoader.makeVersion(versionColumn)
+        val schema = createTableWithSchema(pgu, copyInfo, sLoader)
 
-        val schema = getSchema(pgu, copyInfo)
-        validateSchema(cols, getSchema(pgu, copyInfo))
-
-        val dummyVals:Map[TypeName, SoQLValue] = SoQLType.typesByName map {
-          case ((name, typ)) => {
-            val dummyVal = typ match {
-              case SoQLText => SoQLText("Hello World")
-              case SoQLID => SoQLID(0)
-              case SoQLVersion => SoQLVersion(0)
-              case SoQLBoolean => SoQLBoolean.canonicalTrue
-              case SoQLNumber => SoQLNumber(new BigDecimal(0.0))
-              case SoQLMoney  => SoQLMoney(new BigDecimal(0.0))
-              case SoQLDouble => SoQLDouble(0.1)
-              case SoQLFixedTimestamp => SoQLFixedTimestamp(new DateTime())
-              case SoQLFloatingTimestamp => SoQLFloatingTimestamp(new LocalDateTime())
-              case SoQLDate => SoQLDate(new LocalDate())
-              case SoQLTime => SoQLTime(new LocalTime())
-              case SoQLObject => SoQLObject(new JObject(Map("hi" -> JString("there"))))
-              case SoQLArray => SoQLArray(new JArray(Seq(JString("there"))))
-              case SoQLJson => SoQLJson(new JArray(Seq(JString("there"))))
-              case SoQLLocation => SoQLLocation(0.1, 0.2)
-              case SoQLNull => SoQLNull
-            }
-            (name, dummyVal)
-          }
-        }
+        // Setup our row data
+        val dummyVals = dummyValues()
         val colIdMap = schema.foldLeft(ColumnIdMap[SoQLValue]())  { (acc, kv) =>
           val (cId, columnInfo) = kv
           acc + (cId -> dummyVals(columnInfo.typ.name))
         }
+
+        // Perform the insert
         val copyCtx = new DatasetCopyContext[SoQLType](copyInfo, schema)
         val loader = pgu.prevettedLoader(copyCtx, pgu.logger(copyInfo.datasetInfo, "test-user"))
 
@@ -203,6 +223,10 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
     }
 
     test("Universe can delete rows") {
+
+    }
+
+    test("Universe can read a row by id") {
 
     }
 
