@@ -2,36 +2,21 @@ package com.socrata.pg.store
 
 import org.scalatest.{BeforeAndAfterAll, FunSuite}
 import org.scalatest.matchers.MustMatchers
-import org.scalatest.matchers.MustMatchers
 
-import org.scalatest.prop.PropertyChecks
 import java.sql.{DriverManager, Connection}
 import com.rojoma.simplearm.util._
 import com.socrata.soql.types._
 import com.socrata.datacoordinator.id._
 import com.socrata.datacoordinator.truth.metadata._
-import com.socrata.datacoordinator.secondary.LifecycleStage
-import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig, DatabaseCreator}
 import com.socrata.datacoordinator.truth.sql.{DatasetMapLimits, DatabasePopulator}
 import com.socrata.soql.environment.TypeName
 import com.socrata.datacoordinator.truth.loader.SchemaLoader
-import com.socrata.pg.store.PGSecondaryUniverse
-import com.socrata.datacoordinator.truth.sql.DatasetMapLimits
 import org.postgresql.util.PSQLException
-import com.socrata.datacoordinator.Row
-import com.socrata.datacoordinator.truth.sql.DatasetMapLimits
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.datacoordinator.truth.sql.DatasetMapLimits
 import org.joda.time.{LocalTime, LocalDate, LocalDateTime, DateTime}
 import com.rojoma.json.ast.{JArray, JString, JObject}
 import java.math.BigDecimal
 import com.socrata.datacoordinator.truth.metadata.ColumnInfo
-import com.rojoma.json.ast.JString
-import com.socrata.datacoordinator.truth.sql.DatasetMapLimits
-import com.socrata.datacoordinator.truth.metadata.CopyInfo
-import com.socrata.datacoordinator.truth.metadata.ColumnInfo
-import com.rojoma.json.ast.JString
-import com.socrata.datacoordinator.truth.sql.DatasetMapLimits
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 
 
@@ -180,7 +165,8 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
         sLoader.addColumns(cols)
 
         validateSchema(cols, getSchema(pgu, copyInfo))
-//        assert(jdbcColumnCount(conn, copyInfo.dataTableName) == cols.size, s"Expected table to have ${cols.size} columns")
+        // +1 since location maps to lat and lon columns, so this test is pretty fragile in the face of new data types
+        assert(jdbcColumnCount(conn, copyInfo.dataTableName) == cols.size+1, s"Expected table to have ${cols.size+1} columns")
 
         cols.foreach(pgu.datasetMapWriter.dropColumn(_))
 
@@ -191,7 +177,7 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
         }
 
         assert(getSchema(pgu, copyInfo).size == 0, "We expect no columns");
-//        assert(jdbcColumnCount(conn, copyInfo.dataTableName) == 0, s"Expected table to have no columns")
+        assert(jdbcColumnCount(conn, copyInfo.dataTableName) == 0, s"Expected table to have no columns")
       }
     }
 
