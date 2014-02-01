@@ -5,7 +5,7 @@ import com.socrata.soql.types._
 import com.socrata.datacoordinator.common.soql.{SoQLRowLogCodec, SoQLRep, SoQLTypeContext}
 import com.socrata.datacoordinator.truth.metadata.{DatasetCopyContext, DatasetInfo, AbstractColumnInfoLike}
 import java.util.concurrent.{Executors, TimeUnit, ExecutorService}
-import com.socrata.datacoordinator.truth.universe.sql.PostgresCommonSupport
+import com.socrata.datacoordinator.truth.universe.sql.{PostgresCopyIn, PostgresCommonSupport}
 import org.joda.time.DateTime
 import com.socrata.datacoordinator.util.collection.{MutableColumnIdSet, UserColumnIdMap, ColumnIdSet}
 import com.socrata.datacoordinator.truth.loader.RowPreparer
@@ -143,9 +143,8 @@ object PostgresUniverseCommon extends PostgresCommonSupport[SoQLType, SoQLValue]
   val tablespace: (String) => Option[String] = {
     _ => None
   }
-  val copyInProvider: (Connection, String, OutputStream => Unit) => Long = {
-    (conn, s, u) => 0L
-  }
+  val copyInProvider: (Connection, String, OutputStream => Unit) => Long = PostgresCopyIn
+
   val timingReport = NoopTimingReport
 }
 

@@ -24,10 +24,10 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](conn: Connection,
   extends Universe[SoQLType, SoQLValue]
   with Commitable
   with SchemaLoaderProvider
-  with PrevettedLoaderProvider
   with DatasetMapWriterProvider
   with DatasetMapReaderProvider
   with DatasetReaderProvider
+  with LoggerProvider
 {
   import commonSupport._
   private val txnStart = DateTime.now()
@@ -45,6 +45,7 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](conn: Connection,
   def prevettedLoader(copyCtx: DatasetCopyContext[SoQLType], logger: Logger[SoQLType, SoQLValue]) =
     new SqlPrevettedLoader(conn, sqlizerFactory(copyCtx.copyInfo, datasetContextFactory(copyCtx.schema)), logger)
 
+
   def sqlizerFactory(copyInfo: CopyInfo, datasetContext: RepBasedSqlDatasetContext[SoQLType, SoQLValue]) =
     new PostgresRepBasedDataSqlizer(copyInfo.dataTableName, datasetContext, copyInProvider)
 
@@ -61,8 +62,8 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](conn: Connection,
 
   def schemaLoader(logger: Logger[SoQLType, SoQLValue]) = new RepBasedPostgresSchemaLoader(conn, logger, repFor, tablespace)
 
-  def loader(copyCtx: DatasetCopyContext[SoQLType], rowIdProvider: RowIdProvider, rowVersionProvider: RowVersionProvider, logger: Logger[SoQLType, SoQLValue], reportWriter: ReportWriter[SoQLValue], replaceUpdatedRows: Boolean) =
-    managed(loaderProvider(conn, copyCtx, rowPreparer(transactionStart, copyCtx, replaceUpdatedRows), rowIdProvider, rowVersionProvider, logger, reportWriter, timingReport))
+  //def loader(copyCtx: DatasetCopyContext[SoQLType], rowIdProvider: RowIdProvider, rowVersionProvider: RowVersionProvider, logger: Logger[SoQLType, SoQLValue], reportWriter: ReportWriter[SoQLValue], replaceUpdatedRows: Boolean) =
+  //  managed(loaderProvider(conn, copyCtx, rowPreparer(transactionStart, copyCtx, replaceUpdatedRows), rowIdProvider, rowVersionProvider, logger, reportWriter, timingReport))
 
   lazy val datasetMapWriter: DatasetMapWriter[SoQLType] =
     new PostgresDatasetMapWriter(conn, typeContext.typeNamespace, timingReport, obfuscationKeyGenerator, initialCounterValue)
@@ -75,6 +76,8 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](conn: Connection,
   lazy val lowLevelDatabaseReader = new PostgresDatabaseReader(conn, datasetMapReader, repFor)
 
   def openDatabase = lowLevelDatabaseReader.openDatabase _
+
+  def logger(datasetInfo: DatasetInfo, user: String) = new PGSecondaryLogger[SoQLType, SoQLValue]()
 }
 
 
