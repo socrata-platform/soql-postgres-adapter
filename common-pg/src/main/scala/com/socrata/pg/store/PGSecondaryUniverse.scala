@@ -5,9 +5,9 @@ import com.socrata.datacoordinator.truth.universe._
 import com.socrata.datacoordinator.truth.universe.sql.PostgresCommonSupport
 import com.socrata.datacoordinator.truth.loader.{ReportWriter, Logger}
 import com.socrata.datacoordinator.truth.metadata._
-import com.socrata.datacoordinator.util.{RowVersionProvider, RowIdProvider}
+import com.socrata.datacoordinator.util.{TransferrableContextTimingReport, RowVersionProvider, RowIdProvider}
 import com.rojoma.simplearm.util._
-import com.socrata.datacoordinator.truth.loader.sql.{PostgresRepBasedDataSqlizer, SqlPrevettedLoader, RepBasedPostgresSchemaLoader}
+import com.socrata.datacoordinator.truth.loader.sql.{DataSqlizer, PostgresRepBasedDataSqlizer, SqlPrevettedLoader, RepBasedPostgresSchemaLoader}
 import org.joda.time.DateTime
 import com.socrata.datacoordinator.truth.metadata.sql.{PostgresDatasetMapReader, PostgresDatasetMapWriter}
 import com.socrata.datacoordinator.truth.sql.{PostgresDatabaseReader, PostgresDatabaseMutator, RepBasedSqlDatasetContext}
@@ -28,6 +28,7 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](conn: Connection,
   with DatasetMapReaderProvider
   with DatasetReaderProvider
   with LoggerProvider
+  with RowReaderProvider[SoQLType, SoQLValue]
 {
   import commonSupport._
   private val txnStart = DateTime.now()
@@ -78,6 +79,8 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](conn: Connection,
   def openDatabase = lowLevelDatabaseReader.openDatabase _
 
   def logger(datasetInfo: DatasetInfo, user: String) = new PGSecondaryLogger[SoQLType, SoQLValue]()
+
+  def reader(copyCtx: DatasetCopyContext[SoQLType]) = new PGSecondaryRowReader[SoQLType, SoQLValue](conn, sqlizerFactory(copyCtx.copyInfo, datasetContextFactory(copyCtx.schema)), timingReport)
 }
 
 

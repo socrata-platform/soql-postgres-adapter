@@ -94,7 +94,7 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
       expect foreach {
         colInfo =>  {
           existing must contain (colInfo.systemId, colInfo.typ)
-          println("Checked that " + colInfo.userColumnId+ ":" + colInfo.typeName + " was truly and surely created")
+          //println("Checked that " + colInfo.userColumnId+ ":" + colInfo.typeName + " was truly and surely created")
         }
       }
     }
@@ -200,6 +200,22 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
         loader.insert(new RowId(0), colIdMap)
         loader.flush()
         //pgu.commit()
+
+        val reader = pgu.reader(copyCtx)
+        //reader.lookupRows(Seq(SoQLID(0)).iterator).foreach {
+        //  (k, v) => println("ROWID: " + k + " VALUES: " + v)
+        //}
+        //println("GOT ROWS? " + reader.lookupRows(Seq(SoQLID(0)).iterator))
+        val result = reader.lookupRows(Seq(SoQLID(0)).iterator)
+        assert(result.size == 1)
+        val row = result.get(SoQLID(0)).get
+        val rowValues = row.row.values.toSet
+
+        // Check that all our dummy values can be read; except for json.
+        dummyVals filterKeys (!Set(TypeName("json")).contains(_)) foreach {
+          (v) => assert(rowValues.contains(v._2), "Could not find " + v + " in row values: " + rowValues)
+        }
+
       }
 
     }
@@ -213,7 +229,6 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
     }
 
     test("Universe can read a row by id") {
-
     }
 
     test("Universe can delete table") {
