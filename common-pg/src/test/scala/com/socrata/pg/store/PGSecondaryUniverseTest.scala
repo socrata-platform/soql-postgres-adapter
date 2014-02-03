@@ -18,10 +18,6 @@ import com.rojoma.json.ast.{JArray, JString, JObject}
 import java.math.BigDecimal
 import com.socrata.datacoordinator.truth.metadata.ColumnInfo
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
-import scala.concurrent.duration.Duration
-import java.util.concurrent.TimeUnit
-import com.socrata.datacoordinator.util.{RowIdProvider, RowDataProvider}
-import com.socrata.datacoordinator.Row
 
 
 /**
@@ -161,8 +157,8 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
             case SoQLID => SoQLID(0)
             case SoQLVersion => SoQLVersion(0)
             case SoQLBoolean => SoQLBoolean.canonicalTrue
-            case SoQLNumber => SoQLNumber(new BigDecimal("2.3"))
-            case SoQLMoney  => SoQLMoney(new BigDecimal("4.56"))
+            case SoQLNumber => SoQLNumber(new BigDecimal(0.0))
+            case SoQLMoney  => SoQLMoney(new BigDecimal(0.0))
             case SoQLDouble => SoQLDouble(0.1)
             case SoQLFixedTimestamp => SoQLFixedTimestamp(new DateTime())
             case SoQLFloatingTimestamp => SoQLFloatingTimestamp(new LocalDateTime())
@@ -317,24 +313,15 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
       withDb() { conn =>
         val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
         val schema = createTableWithSchema(pgu, copyInfo, sLoader)
-        val startRowId = copyInfo.datasetInfo.nextCounterValue
-        val idProvider = new RowIdProvider(new RowDataProvider(startRowId))
 
         // Setup our row data
         val dummyVals = dummyValues()
 
-        for (n <- 1 to 10) {
-          val id = idProvider.allocate
-          insertDummyRow(id, dummyVals.updated(SoQLID.name,new SoQLID(id.underlying)), pgu, copyInfo, schema)
-        }
-        pgu.datasetMapWriter.updateNextCounterValue(copyInfo, idProvider.underlying.allocate())
-
-        pgu.datasetMapReader.datasetInfo(copyInfo.datasetInfo.systemId) match {
-          case Some(ds) => assert (ds.nextCounterValue == startRowId+10, "Should have incremented counter by 10")
-          case None => fail("Couldn't read datasetInfo")
+        for (id <- 1 until 10) {
+          insertDummyRow(new RowId(id), dummyVals.updated(SoQLID.name,SoQLID(id)), pgu, copyInfo, schema)
         }
 
-        for (id <- startRowId until startRowId + 10) {
+        for (id <- 1 until 10) {
           val result = getRow(new RowId(id), pgu, copyInfo, schema)
           assert(result.size == 1, "Expected only a single row for id " + id + " but got " + result.size)
         }
