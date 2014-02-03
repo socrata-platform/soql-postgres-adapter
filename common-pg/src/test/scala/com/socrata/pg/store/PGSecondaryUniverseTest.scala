@@ -292,7 +292,25 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
     }
 
     test("Universe can delete rows") {
+      withDb() { conn =>
+        val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
+        val schema = createTableWithSchema(pgu, copyInfo, sLoader)
 
+        // Setup our row data for insert with a "notupdated" field
+        val dummyVals = dummyValues()
+        for (id <- 1 until 10) {
+          insertDummyRow(new RowId(id), dummyVals.updated(SoQLID.name,SoQLID(id)).updated(SoQLText.name, SoQLText("notupdated")), pgu, copyInfo, schema)
+        }
+        val copyCtx = new DatasetCopyContext[SoQLType](copyInfo, schema)
+        val loader = pgu.prevettedLoader(copyCtx, pgu.logger(copyInfo.datasetInfo, "test-user"))
+        for (id <- 1 until 10) {
+          val rowId = new RowId(id)
+          loader.delete(rowId, None)
+        }
+        loader.flush()
+        val result = getRow(new RowId(5), pgu, copyInfo, schema)
+        assert(result.size == 0, "Should not have rows!")
+      }
     }
 
     test("Universe can read a row by id") {
