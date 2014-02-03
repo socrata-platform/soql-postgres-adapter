@@ -1,4 +1,4 @@
 {
     "class" : "com.socrata.pg.store.PGSecondary",
-    "name" : "pg-secondary"
+    "name" : "pg"
 }

@@ -324,18 +324,25 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
     }
 
     test("Universe can delete table") {
-
+      withDb() { conn =>
+        val (pgu, copyInfo, sLoader) = createTable(conn)
+        sLoader.drop(copyInfo)
+        // Can't delete the table if it's the only instance of the table that exists
+        // Can't delete the table if it's published
+        // Maybe can delete the table if it's a snapshot?
+        //        pgu.datasetMapWriter
+        //        pgu.commit
+        println(copyInfo.dataTableName)
+        // Check to see if dropped table is in pending drop table operations collection
+      }
     }
 
     test("Universe can delete a copy of a dataset") {
 
     }
 
-
     test("Universe can delete a published copy") {
 
     }
-
-
 
 }
