@@ -21,6 +21,7 @@ import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import scala.concurrent.duration.Duration
 import java.util.concurrent.TimeUnit
 import com.socrata.datacoordinator.util.{RowIdProvider, RowDataProvider}
+import com.socrata.datacoordinator.Row
 
 
 /**
@@ -124,10 +125,23 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
       //pgu.commit()
     }
 
+
     def getRow(id:RowId,pgu:PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo:CopyInfo, schema:ColumnIdMap[ColumnInfo[SoQLType]]) = {
       val copyCtx = new DatasetCopyContext[SoQLType](copyInfo, schema)
       val reader = pgu.reader(copyCtx)
       reader.lookupRows(Seq(SoQLID(id.underlying)).iterator)
+    }
+
+    def getSpecialColumnIds(schema:ColumnIdMap[ColumnInfo[SoQLType]]) = {
+      val versionColId = schema.filterNot {
+        (colId, colInfo) => colInfo.typ != SoQLVersion
+      }.iterator.next()._1
+
+      val systemColId = schema.filterNot {
+        (colId, colInfo) => colInfo.typ != SoQLID
+      }.iterator.next()._1
+
+      (systemColId, versionColId)
     }
 
   
@@ -230,7 +244,52 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
     }
 
     test("Universe can update rows") {
+      withDb() { conn =>
+        val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
+        val schema = createTableWithSchema(pgu, copyInfo, sLoader)
 
+        // Get the column id of the SoQLText object
+        val textColId = schema.filterNot {
+          (colId, colInfo) => colInfo.typ != SoQLText
+        }.iterator.next()._1
+
+        val (systemColId, versionColId) = getSpecialColumnIds(schema)
+
+        // Setup our row data for insert with a "notupdated" field
+        val dummyVals = dummyValues()
+        for (id <- 1 until 10) {
+          insertDummyRow(new RowId(id), dummyVals.updated(SoQLID.name,SoQLID(id)).updated(SoQLText.name, SoQLText("notupdated")), pgu, copyInfo, schema)
+        }
+
+        val expect = SoQLText("updated")
+
+        // Perform the update
+        val copyCtx = new DatasetCopyContext[SoQLType](copyInfo, schema)
+        val loader = pgu.prevettedLoader(copyCtx, pgu.logger(copyInfo.datasetInfo, "test-user"))
+
+
+        for (id <- 1 until 10) {
+          val rowId = new RowId(id)
+          // Setup our row; adding in the special version and system column values
+          val colIdMap = schema.foldLeft(ColumnIdMap[SoQLValue]())  { (acc, kv) =>
+            val (cId, columnInfo) = kv
+            acc + (cId -> dummyVals.get(columnInfo.typ.name).get)
+          }
+          val newRow =  colIdMap + (textColId -> expect) + (versionColId -> SoQLVersion(2)) + (systemColId -> SoQLID(id))
+
+
+          loader.update(rowId, None, newRow)
+          loader.flush()
+        }
+
+        // Verify every row was updated
+        for (id <- 1 until 10) {
+          val rowId = new RowId(id)
+          val result = getRow(rowId, pgu, copyInfo, schema)
+          assert(result.size == 1, "Expected only a single row for id " + id + " but got " + result.size)
+          assert(result.get(SoQLID(id)).get.row.get(textColId).get == expect)
+        }
+      }
     }
 
     test("Universe can delete rows") {
@@ -268,5 +327,16 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
     test("Universe can delete table") {
 
     }
+
+    test("Universe can delete a copy of a dataset") {
+
+    }
+
+
+    test("Universe can delete a published copy") {
+
+    }
+
+
 
 }
