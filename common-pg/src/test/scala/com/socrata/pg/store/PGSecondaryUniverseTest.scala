@@ -105,6 +105,29 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
       rs.getRow
     }
 
+    def insertDummyRow(id:RowId, values:Map[TypeName, SoQLValue], pgu:PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo:CopyInfo, schema:ColumnIdMap[ColumnInfo[SoQLType]]) {
+      // Setup our row data with column Ids
+      val colIdMap = schema.foldLeft(ColumnIdMap[SoQLValue]())  { (acc, kv) =>
+        val (cId, columnInfo) = kv
+        acc + (cId -> values(columnInfo.typ.name))
+      }
+
+      // Perform the insert
+      val copyCtx = new DatasetCopyContext[SoQLType](copyInfo, schema)
+      val loader = pgu.prevettedLoader(copyCtx, pgu.logger(copyInfo.datasetInfo, "test-user"))
+
+      loader.insert(id, colIdMap)
+      loader.flush()
+      //pgu.commit()
+    }
+
+    def getRow(id:RowId,pgu:PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo:CopyInfo, schema:ColumnIdMap[ColumnInfo[SoQLType]]) = {
+      val copyCtx = new DatasetCopyContext[SoQLType](copyInfo, schema)
+      val reader = pgu.reader(copyCtx)
+      reader.lookupRows(Seq(SoQLID(id.underlying)).iterator)
+    }
+
+  
     test("Universe can create a table") {
       withDb() { conn =>
         val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
@@ -188,25 +211,9 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
 
         // Setup our row data
         val dummyVals = dummyValues()
-        val colIdMap = schema.foldLeft(ColumnIdMap[SoQLValue]())  { (acc, kv) =>
-          val (cId, columnInfo) = kv
-          acc + (cId -> dummyVals(columnInfo.typ.name))
-        }
+        insertDummyRow(new RowId(0), dummyVals, pgu, copyInfo, schema)
 
-        // Perform the insert
-        val copyCtx = new DatasetCopyContext[SoQLType](copyInfo, schema)
-        val loader = pgu.prevettedLoader(copyCtx, pgu.logger(copyInfo.datasetInfo, "test-user"))
-
-        loader.insert(new RowId(0), colIdMap)
-        loader.flush()
-        //pgu.commit()
-
-        val reader = pgu.reader(copyCtx)
-        //reader.lookupRows(Seq(SoQLID(0)).iterator).foreach {
-        //  (k, v) => println("ROWID: " + k + " VALUES: " + v)
-        //}
-        //println("GOT ROWS? " + reader.lookupRows(Seq(SoQLID(0)).iterator))
-        val result = reader.lookupRows(Seq(SoQLID(0)).iterator)
+        val result = getRow(new RowId(0), pgu, copyInfo, schema)
         assert(result.size == 1)
         val row = result.get(SoQLID(0)).get
         val rowValues = row.row.values.toSet
@@ -215,7 +222,6 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
         dummyVals filterKeys (!Set(TypeName("json")).contains(_)) foreach {
           (v) => assert(rowValues.contains(v._2), "Could not find " + v + " in row values: " + rowValues)
         }
-
       }
 
     }
@@ -229,6 +235,22 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
     }
 
     test("Universe can read a row by id") {
+      withDb() { conn =>
+        val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
+        val schema = createTableWithSchema(pgu, copyInfo, sLoader)
+
+        // Setup our row data
+        val dummyVals = dummyValues()
+
+        for (id <- 1 until 10) {
+          insertDummyRow(new RowId(id), dummyVals.updated(SoQLID.name,SoQLID(id)), pgu, copyInfo, schema)
+        }
+
+        for (id <- 1 until 10) {
+          val result = getRow(new RowId(id), pgu, copyInfo, schema)
+          assert(result.size == 1, "Expected only a single row for id " + id + " but got " + result.size)
+        }
+      }
     }
 
     test("Universe can delete table") {
