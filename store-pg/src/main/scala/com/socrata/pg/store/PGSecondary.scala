@@ -7,6 +7,25 @@ import com.socrata.datacoordinator.secondary.ColumnInfo
 import com.socrata.datacoordinator.secondary.CopyInfo
 import com.socrata.datacoordinator.secondary.DatasetInfo
 import com.typesafe.config.Config
+import com.socrata.pg.store.ddl.DatasetSchema
+import java.sql.{DriverManager, Connection}
+import com.rojoma.simplearm.util._
+import com.socrata.datacoordinator.secondary.ColumnInfo
+import com.socrata.datacoordinator.secondary.VersionColumnChanged
+import com.socrata.datacoordinator.secondary.WorkingCopyCreated
+import com.socrata.datacoordinator.secondary.RowIdentifierSet
+import com.socrata.datacoordinator.secondary.ColumnCreated
+import com.socrata.datacoordinator.secondary.RowIdentifierCleared
+import com.socrata.datacoordinator.secondary.Update
+import com.socrata.datacoordinator.secondary.SystemRowIdentifierChanged
+import com.socrata.datacoordinator.secondary.SnapshotDropped
+import com.socrata.datacoordinator.secondary.Delete
+import com.socrata.datacoordinator.secondary.DatasetInfo
+import com.socrata.datacoordinator.secondary.RowDataUpdated
+import com.socrata.datacoordinator.secondary.ColumnRemoved
+import com.socrata.datacoordinator.secondary.CopyInfo
+import com.socrata.datacoordinator.secondary.Insert
+import com.socrata.datacoordinator.truth.sql.{DatasetMapLimits, DatabasePopulator}
 
 /**
  * Postgres Secondary Store Implementation
@@ -134,7 +153,16 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
     }
 
     def workingCopyCreated(datasetInfo: DatasetInfo, dataVersion: Long, copyInfo: CopyInfo) = {
-        DatasetMeta.setMetadata(DatasetMeta(datasetInfo.internalName, copyInfo.copyNumber, dataVersion, datasetInfo.localeName, datasetInfo.obfuscationKey.toString, "no primary key"))
+        if (copyInfo.copyNumber != 1)
+            throw new UnsupportedOperationException("Cannot support making working copies beyond the first copy")
+        // if we have not seen the dataset before
+        withDb() { conn =>
+          val (pgu, copyInfoSecondary, sLoader) = DatasetSchema.createTable(conn, datasetInfo.localeName)
+          if (copyInfoSecondary.copyNumber != 1)
+            throw new UnsupportedOperationException("We only support one copy of a dataset!")
+
+        }
+        DatasetMeta.setMetadata(DatasetMeta(datasetInfo.internalName, copyInfo.copyNumber, dataVersion, datasetInfo.localeName, datasetInfo.obfuscationKey.toString, ""))
     }
 
     def workingCopyPublished = {
@@ -164,5 +192,24 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
     println("{}: version '{}' (datasetInfo: {}, copyInfo: {}, schema: {}, cookie: {}, rows)",
       this.getClass.toString, datasetInfo, copyInfo, schema, cookie, rows)
     throw new UnsupportedOperationException("TODO later")
+  }
+
+
+  def withDb[T]()(f: (Connection) => T): T = {
+    def loglevel = 0; // 2 = debug, 0 = default
+    using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/secondary_test?loglevel=$loglevel", "blist", "blist")) {
+      conn =>
+        conn.setAutoCommit(true)
+        populateDatabase(conn)
+        f(conn)
+    }
+  }
+
+  def populateDatabase(conn: Connection) {
+    val sql = DatabasePopulator.metadataTablesCreate(DatasetMapLimits())
+    using(conn.createStatement()) {
+      stmt =>
+        stmt.execute(sql)
+    }
   }
 }
