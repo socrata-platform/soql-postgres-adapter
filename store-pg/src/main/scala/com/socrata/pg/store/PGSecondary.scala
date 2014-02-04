@@ -145,11 +145,11 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
     }
 
     def columnRemoved(info: ColumnInfo[SoQLType]) = {
-      throw new UnsupportedOperationException("TODO NOW")
+      throw new UnsupportedOperationException("TODO NOW optionally")
     }
 
     def systemRowIdentifierChanged(info: ColumnInfo[SoQLType]) = {
-      throw new UnsupportedOperationException("TODO NOW optionally")
+      throw new UnsupportedOperationException("TODO NOW")
     }
 
     def workingCopyCreated(datasetInfo: DatasetInfo, dataVersion: Long, copyInfo: CopyInfo) = {
