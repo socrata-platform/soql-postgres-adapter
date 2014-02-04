@@ -40,7 +40,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
     // every set of changes to a copy increments the version number
     // What happens when this is wrong? Almost certaintly should turn into a resync
     println("{}: currentVersion '{}', (cookie: {})", datasetInternalName, cookie)
-    throw new UnsupportedOperationException("TODO NOW")
+    DatasetMeta.getMetadata(datasetInternalName).get.version
   }
 
   // Current copy number is incremented every time a copy is made within the data coordinator
@@ -56,7 +56,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
     //
     // What happens if this is wrong? almost certainly it would turn into a resync
     println("{}: currentCopyNumber '{}' (cookie: {})", this.getClass.toString, datasetInternalName, cookie)
-    throw new UnsupportedOperationException("TODO NOW")
+    DatasetMeta.getMetadata(datasetInternalName).get.copy
   }
 
   // Currently there are zero-or-more snapshots, which are what you get when you publish a working copy when there is
@@ -110,7 +110,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
           case RowIdentifierCleared(info) => Unit // no-op
           case SystemRowIdentifierChanged(info) => systemRowIdentifierChanged(info)
           case VersionColumnChanged(info) => Unit // no-op
-          case WorkingCopyCreated(copyInfo) => workingCopyCreated(copyInfo)
+          case WorkingCopyCreated(copyInfo) => workingCopyCreated(datasetInfo, dataVersion, copyInfo)
           case WorkingCopyDropped => throw new UnsupportedOperationException("TODO later")
           case DataCopied => throw new UnsupportedOperationException("TODO later")
           case SnapshotDropped(info) => throw new UnsupportedOperationException("TODO later")
@@ -133,8 +133,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
       throw new UnsupportedOperationException("TODO NOW optionally")
     }
 
-    def workingCopyCreated(copyInfo: CopyInfo) = {
-      throw new UnsupportedOperationException("TODO NOW")
+    def workingCopyCreated(datasetInfo: DatasetInfo, dataVersion: Long, copyInfo: CopyInfo) = {
+        DatasetMeta.setMetadata(DatasetMeta(datasetInfo.internalName, copyInfo.copyNumber, dataVersion, datasetInfo.localeName, datasetInfo.obfuscationKey.toString, "no primary key"))
     }
 
     def workingCopyPublished = {
