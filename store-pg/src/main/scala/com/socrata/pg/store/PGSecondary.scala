@@ -15,6 +15,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
   // Called when this process is shutting down (or being killed)
   def shutdown() {
     println("{}: shutdown (config: {})", this.getClass.toString, config)
+    // noop
   }
 
   // Return true to get all the events from the stream of updates from the data-coordinator
@@ -30,6 +31,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
   def dropDataset(datasetInternalName: String, cookie: Secondary.Cookie) {
     // last thing you will get for a dataset.
     println("{}: dropDataset '{}' (cookie : {}) ", this.getClass.toString, datasetInternalName, cookie)
+    throw new UnsupportedOperationException("TODO later")
   }
 
   // Every set of changes increments the version number, so a given copy (number) may have
@@ -38,7 +40,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
     // every set of changes to a copy increments the version number
     // What happens when this is wrong? Almost certaintly should turn into a resync
     println("{}: currentVersion '{}', (cookie: {})", datasetInternalName, cookie)
-    0
+    throw new UnsupportedOperationException("TODO NOW")
   }
 
   // Current copy number is incremented every time a copy is made within the data coordinator
@@ -54,13 +56,13 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
     //
     // What happens if this is wrong? almost certainly it would turn into a resync
     println("{}: currentCopyNumber '{}' (cookie: {})", this.getClass.toString, datasetInternalName, cookie)
-    0
+    throw new UnsupportedOperationException("TODO NOW")
   }
 
   // Currently there are zero-or-more snapshots, which are what you get when you publish a working copy when there is
   // an existing published working copy of that same dataset.
   // To NOOP this API, return an empty set.
-  @deprecated
+  @deprecated("Not supporting snapshots beyond bare minimum required to function", since = "forever")
   def snapshots(datasetInternalName: String, cookie: Secondary.Cookie): Set[Long] = {
     // if we a publish through version(); a snapshot "could" be created
     println("{}: snapshots '{}' (cookie: {})", this.getClass.toString, datasetInternalName, cookie)
@@ -70,7 +72,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
   // Is only ever called as part of a resync.
   def dropCopy(datasetInternalName: String, copyNumber: Long, cookie: Secondary.Cookie): Secondary.Cookie = {
     println("{}: dropCopy '{}' (cookie: {})", this.getClass.toString, datasetInternalName, cookie)
-    cookie
+    throw new UnsupportedOperationException("TODO later")
   }
 
   /// NEED datasetName -> currentCopyNum
@@ -99,21 +101,25 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
       this.getClass.toString, datasetInfo, dataVersion, cookie, events)
 
     events.foreach {
+      case Truncated => throw new UnsupportedOperationException("TODO later")
+      case ColumnCreated(info) => throw new UnsupportedOperationException("TODO NOW")
+      case ColumnRemoved(_)  =>  throw new UnsupportedOperationException("TODO optional")
+      case RowIdentifierSet(_) => Unit // no-op
+      case RowIdentifierCleared(_) => Unit // no-op
+      case SystemRowIdentifierChanged(info) => throw new UnsupportedOperationException("TODO NOW")
+      case VersionColumnChanged(info) => Unit // no-op
+      case WorkingCopyCreated(copyInfo) => throw new UnsupportedOperationException("TODO NOW")
+      case WorkingCopyDropped => throw new UnsupportedOperationException("TODO later")
+      case DataCopied => throw new UnsupportedOperationException("TODO later")
+      case SnapshotDropped(info) => throw new UnsupportedOperationException("TODO later")
+      case WorkingCopyPublished => throw new UnsupportedOperationException("TODO optional")
       case RowDataUpdated(ops) =>
         ops.foreach {
-          case Insert(sid, row) =>  throw new UnsupportedOperationException
-          case Update(sid, row) => throw new UnsupportedOperationException
-          case Delete(sid) => throw new UnsupportedOperationException
+          case Insert(sid, row) =>  throw new UnsupportedOperationException("TODO NOW")
+          case Update(sid, row) => throw new UnsupportedOperationException("TODO NOW")
+          case Delete(sid) => throw new UnsupportedOperationException("TODO NOW")
         }
-      case WorkingCopyCreated(copyInfo) => throw new UnsupportedOperationException
-      case ColumnCreated(info) => throw new UnsupportedOperationException
-      case SnapshotDropped(info) => throw new UnsupportedOperationException
-      case Truncated => throw new UnsupportedOperationException
-      case ColumnRemoved(_)  =>  throw new UnsupportedOperationException
-      case WorkingCopyCreated(_) => throw new UnsupportedOperationException
-      case RowIdentifierSet(_) => throw new UnsupportedOperationException
-      case RowIdentifierCleared(_) => throw new UnsupportedOperationException
-      case otherOps => throw new UnsupportedOperationException
+      case otherOps => throw new UnsupportedOperationException("Unexpected operation")
     }
 
     cookie
@@ -130,6 +136,6 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
     // We need to perform some accounting here to make sure readers know a resync is in process
     println("{}: version '{}' (datasetInfo: {}, copyInfo: {}, schema: {}, cookie: {}, rows)",
       this.getClass.toString, datasetInfo, copyInfo, schema, cookie, rows)
-    cookie
+    throw new UnsupportedOperationException("TODO later")
   }
 }
