@@ -18,7 +18,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
 
   def wantsWorkingCopies: Boolean = {
     println("{}: wantsWorkingCopies", this.getClass.toString)
-    false
+    true
   }
 
   def dropDataset(datasetInternalName: String, cookie: Secondary.Cookie) {
@@ -75,6 +75,25 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
     //     - stored in copy_map
     println("{}: version '{}' (datasetInfo: {}, dataVersion: {}, cookie: {}, events: {})",
       this.getClass.toString, datasetInfo, dataVersion, cookie, events)
+
+    events.foreach {
+      case RowDataUpdated(ops) =>
+        ops.foreach {
+          case Insert(sid, row) =>  throw new UnsupportedOperationException
+          case Update(sid, row) => throw new UnsupportedOperationException
+          case Delete(sid) => throw new UnsupportedOperationException
+        }
+      case WorkingCopyCreated(copyInfo) => throw new UnsupportedOperationException
+      case ColumnCreated(info) => throw new UnsupportedOperationException
+      case SnapshotDropped(info) => throw new UnsupportedOperationException
+      case Truncated => throw new UnsupportedOperationException
+      case ColumnRemoved(_)  =>  throw new UnsupportedOperationException
+      case WorkingCopyCreated(_) => throw new UnsupportedOperationException
+      case RowIdentifierSet(_) => throw new UnsupportedOperationException
+      case RowIdentifierCleared(_) => throw new UnsupportedOperationException
+      case otherOps => throw new UnsupportedOperationException
+    }
+
     cookie
   }
 
