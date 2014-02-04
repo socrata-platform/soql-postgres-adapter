@@ -100,26 +100,53 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
     println("{}: version '{}' (datasetInfo: {}, dataVersion: {}, cookie: {}, events: {})",
       this.getClass.toString, datasetInfo, dataVersion, cookie, events)
 
-    events.foreach {
-      case Truncated => throw new UnsupportedOperationException("TODO later")
-      case ColumnCreated(info) => throw new UnsupportedOperationException("TODO NOW")
-      case ColumnRemoved(_)  =>  throw new UnsupportedOperationException("TODO optional")
-      case RowIdentifierSet(_) => Unit // no-op
-      case RowIdentifierCleared(_) => Unit // no-op
-      case SystemRowIdentifierChanged(info) => throw new UnsupportedOperationException("TODO NOW")
-      case VersionColumnChanged(info) => Unit // no-op
-      case WorkingCopyCreated(copyInfo) => throw new UnsupportedOperationException("TODO NOW")
-      case WorkingCopyDropped => throw new UnsupportedOperationException("TODO later")
-      case DataCopied => throw new UnsupportedOperationException("TODO later")
-      case SnapshotDropped(info) => throw new UnsupportedOperationException("TODO later")
-      case WorkingCopyPublished => throw new UnsupportedOperationException("TODO optional")
-      case RowDataUpdated(ops) =>
-        ops.foreach {
-          case Insert(sid, row) =>  throw new UnsupportedOperationException("TODO NOW")
-          case Update(sid, row) => throw new UnsupportedOperationException("TODO NOW")
-          case Delete(sid) => throw new UnsupportedOperationException("TODO NOW")
+    events.foreach { e =>
+        println("got event: {}", e)
+        e match {
+          case Truncated => throw new UnsupportedOperationException("TODO later")
+          case ColumnCreated(info) => columnCreated(info)
+          case ColumnRemoved(info)  =>  columnRemoved(info)
+          case RowIdentifierSet(info) => Unit // no-op
+          case RowIdentifierCleared(info) => Unit // no-op
+          case SystemRowIdentifierChanged(info) => systemRowIdentifierChanged(info)
+          case VersionColumnChanged(info) => Unit // no-op
+          case WorkingCopyCreated(copyInfo) => workingCopyCreated(copyInfo)
+          case WorkingCopyDropped => throw new UnsupportedOperationException("TODO later")
+          case DataCopied => throw new UnsupportedOperationException("TODO later")
+          case SnapshotDropped(info) => throw new UnsupportedOperationException("TODO later")
+          case WorkingCopyPublished => workingCopyPublished
+          case RowDataUpdated(ops) => rowDataUpdated(ops)
+          case otherOps => throw new UnsupportedOperationException("Unexpected operation")
         }
-      case otherOps => throw new UnsupportedOperationException("Unexpected operation")
+    }
+
+
+    def columnCreated(info: ColumnInfo[SoQLType]) = {
+      throw new UnsupportedOperationException("TODO NOW")
+    }
+
+    def columnRemoved(info: ColumnInfo[SoQLType]) = {
+      throw new UnsupportedOperationException("TODO NOW")
+    }
+
+    def systemRowIdentifierChanged(info: ColumnInfo[SoQLType]) = {
+      throw new UnsupportedOperationException("TODO NOW optionally")
+    }
+
+    def workingCopyCreated(copyInfo: CopyInfo) = {
+      throw new UnsupportedOperationException("TODO NOW")
+    }
+
+    def workingCopyPublished = {
+      throw new UnsupportedOperationException("TODO optional")
+    }
+
+    def rowDataUpdated(ops: Seq[Operation[SoQLValue]]) = {
+      ops.foreach {
+        case Insert(sid, row) =>  throw new UnsupportedOperationException("TODO NOW")
+        case Update(sid, row) => throw new UnsupportedOperationException("TODO NOW")
+        case Delete(sid) => throw new UnsupportedOperationException("TODO NOW")
+      }
     }
 
     cookie
