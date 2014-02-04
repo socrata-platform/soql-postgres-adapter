@@ -3,9 +3,6 @@ package com.socrata.pg.store
 import com.socrata.datacoordinator.secondary._
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.datacoordinator.secondary.ColumnInfo
-import com.socrata.datacoordinator.secondary.CopyInfo
-import com.socrata.datacoordinator.secondary.DatasetInfo
 import com.typesafe.config.Config
 import com.socrata.pg.store.ddl.DatasetSchema
 import java.sql.{DriverManager, Connection}
@@ -160,7 +157,6 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
     def workingCopyCreated(datasetInfo: DatasetInfo, dataVersion: Long, copyInfo: CopyInfo, conn:Connection) = {
         if (copyInfo.copyNumber != 1)
             throw new UnsupportedOperationException("Cannot support making working copies beyond the first copy")
-        // if we have not seen the dataset before
         val (pgu, copyInfoSecondary, sLoader) = DatasetSchema.createTable(conn, datasetInfo.localeName)
         if (copyInfoSecondary.copyNumber != 1)
           throw new UnsupportedOperationException("We only support one copy of a dataset!")
