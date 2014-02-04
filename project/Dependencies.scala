@@ -17,7 +17,6 @@ object Dependencies {
     val soqlStdlib = "0.0.16-SNAPSHOT"
     val typesafeConfig = "1.0.0"
     val dataCoordinator = "0.0.1-SNAPSHOT"
-    val h2Database = "1.3.175"
   }
 
   val commonsCli = "commons-cli" % "commons-cli" % versions.commonsCli
@@ -48,7 +47,5 @@ object Dependencies {
   val coordinatorlib = "com.socrata" %% "coordinator" % versions.dataCoordinator
 
   val slf4j = "org.slf4j" % "slf4j-log4j12" % versions.slf4j
-
-  val h2Database = "com.h2database"   % "h2"    % versions.h2Database  % "test"
 
 }

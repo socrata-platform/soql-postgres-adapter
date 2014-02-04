@@ -15,8 +15,7 @@ object CommonPG {
       secondarylib,
       coordinatorlib,
       typesafeConfig,
-      slf4j,
-      h2Database
+      slf4j
     )
   )
 }
