@@ -94,7 +94,13 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
     throw new UnsupportedOperationException("TODO later")
   }
 
-  /// NEED datasetName -> currentCopyNum
+
+  def version(datasetInfo: DatasetInfo, dataVersion: Long, cookie: Secondary.Cookie, events: Iterator[Event[SoQLType, SoQLValue]]): Secondary.Cookie = {
+    withDb() { conn =>
+       _version(datasetInfo, dataVersion, cookie, events, conn)
+    }
+  }
+    /// NEED datasetName -> currentCopyNum
   /// datasetName -> in_async
 
   // The main method by which data will be sent to this API.
@@ -103,7 +109,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
   // A separate event will be passed to this method for actually copying the data
   // If working copy already exists and we receive a workingCopyCreated event is received, then a resync event/exception should fire
   // Publishing a working copy promotes that working copy to a published copy. There should no longer be a working copy after publishing
-  def version(datasetInfo: DatasetInfo, dataVersion: Long, cookie: Secondary.Cookie, events: Iterator[Event[SoQLType, SoQLValue]]): Secondary.Cookie = {
+  protected def _version(datasetInfo: DatasetInfo, dataVersion: Long, cookie: Secondary.Cookie, events: Iterator[Event[SoQLType, SoQLValue]], conn:Connection): Secondary.Cookie = {
     // How do we get the copyInfo? dataset_map
     //  - One of the events that comes through here will be working copy created; it must be the first if it does; separate event for actually copying
     //    the data
@@ -118,50 +124,46 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
     //     - stored in copy_map
     println("{}: version '{}' (datasetInfo: {}, dataVersion: {}, cookie: {}, events: {})",
       this.getClass.toString, datasetInfo, dataVersion, cookie, events)
-
     events.foreach { e =>
         println("got event: {}", e)
         e match {
           case Truncated => throw new UnsupportedOperationException("TODO later")
-          case ColumnCreated(info) => columnCreated(info)
-          case ColumnRemoved(info)  =>  columnRemoved(info)
+          case ColumnCreated(info) => columnCreated(info, conn)
+          case ColumnRemoved(info)  =>  columnRemoved(info, conn)
           case RowIdentifierSet(info) => Unit // no-op
           case RowIdentifierCleared(info) => Unit // no-op
-          case SystemRowIdentifierChanged(info) => systemRowIdentifierChanged(info)
+          case SystemRowIdentifierChanged(info) => systemRowIdentifierChanged(info, conn)
           case VersionColumnChanged(info) => Unit // no-op
-          case WorkingCopyCreated(copyInfo) => workingCopyCreated(datasetInfo, dataVersion, copyInfo)
+          case WorkingCopyCreated(copyInfo) => workingCopyCreated(datasetInfo, dataVersion, copyInfo, conn)
           case WorkingCopyDropped => throw new UnsupportedOperationException("TODO later")
           case DataCopied => throw new UnsupportedOperationException("TODO later")
           case SnapshotDropped(info) => throw new UnsupportedOperationException("TODO later")
           case WorkingCopyPublished => workingCopyPublished
-          case RowDataUpdated(ops) => rowDataUpdated(ops)
+          case RowDataUpdated(ops) => rowDataUpdated(ops, conn)
           case otherOps => throw new UnsupportedOperationException("Unexpected operation")
         }
     }
 
 
-    def columnCreated(info: ColumnInfo[SoQLType]) = {
+    def columnCreated(info: ColumnInfo[SoQLType], conn:Connection) = {
       throw new UnsupportedOperationException("TODO NOW")
     }
 
-    def columnRemoved(info: ColumnInfo[SoQLType]) = {
+    def columnRemoved(info: ColumnInfo[SoQLType], conn:Connection) = {
       throw new UnsupportedOperationException("TODO NOW")
     }
 
-    def systemRowIdentifierChanged(info: ColumnInfo[SoQLType]) = {
+    def systemRowIdentifierChanged(info: ColumnInfo[SoQLType], conn:Connection) = {
       throw new UnsupportedOperationException("TODO NOW optionally")
     }
 
-    def workingCopyCreated(datasetInfo: DatasetInfo, dataVersion: Long, copyInfo: CopyInfo) = {
+    def workingCopyCreated(datasetInfo: DatasetInfo, dataVersion: Long, copyInfo: CopyInfo, conn:Connection) = {
         if (copyInfo.copyNumber != 1)
             throw new UnsupportedOperationException("Cannot support making working copies beyond the first copy")
         // if we have not seen the dataset before
-        withDb() { conn =>
-          val (pgu, copyInfoSecondary, sLoader) = DatasetSchema.createTable(conn, datasetInfo.localeName)
-          if (copyInfoSecondary.copyNumber != 1)
-            throw new UnsupportedOperationException("We only support one copy of a dataset!")
-
-        }
+        val (pgu, copyInfoSecondary, sLoader) = DatasetSchema.createTable(conn, datasetInfo.localeName)
+        if (copyInfoSecondary.copyNumber != 1)
+          throw new UnsupportedOperationException("We only support one copy of a dataset!")
         DatasetMeta.setMetadata(DatasetMeta(datasetInfo.internalName, copyInfo.copyNumber, dataVersion, datasetInfo.localeName, datasetInfo.obfuscationKey.toString, ""))
     }
 
@@ -169,7 +171,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
       throw new UnsupportedOperationException("TODO optional")
     }
 
-    def rowDataUpdated(ops: Seq[Operation[SoQLValue]]) = {
+    def rowDataUpdated(ops: Seq[Operation[SoQLValue]], conn:Connection) = {
       ops.foreach {
         case Insert(sid, row) =>  throw new UnsupportedOperationException("TODO NOW")
         case Update(sid, row) => throw new UnsupportedOperationException("TODO NOW")
