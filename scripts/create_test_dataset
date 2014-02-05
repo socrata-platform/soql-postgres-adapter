@@ -6,25 +6,23 @@ if [ -z "$ds_name" ]; then
 fi
 
 echo "Creating dataset..."
-#curl -v -X POST --data-binary @- -H 'Content-type: application/json' http://localhost:8081/dataset <<-EOD
-cat <<-EOD
-  {resource_name:"$ds_name",name:"Hello World!",columns:[{field_name:"key",datatype:"number",name:"identifier"},{field_name:"value",datatype:"text",name:"thing",description:"something interesting, dunno what"}]}
+curl -X POST --data-binary @- -H 'Content-type: application/json' http://localhost:8081/dataset <<EOD
+{resource_name:"$ds_name",name:"Hello World!",columns:[{field_name:"key",datatype:"number",name:"identifier"},{field_name:"value",datatype:"text",name:"thing",description:"something interesting, dunno what"}]}
 EOD
 
-exit
 echo "Posting data to dataset..."
-curl -v -s -X POST --data-binary @- -H 'Content-type: application/json' "http://localhost:8081/resource/${ds_name}" <<-EOD
-  [{key:1,value:"one"}
-  ,{key:2,value:"two"}
-  ,{key:3,value:"three"}
-  ,{key:4,value:"four"}
-  ,{key:5,value:"five"}
-  ]
+curl -s -X POST --data-binary @- -H 'Content-type: application/json' "http://localhost:8081/resource/${ds_name}" <<EOD
+[{key:1,value:"one"}
+,{key:2,value:"two"}
+,{key:3,value:"three"}
+,{key:4,value:"four"}
+,{key:5,value:"five"}
+]
 EOD
 
 echo "Publishing dataset..."
-curl -v -X PUT http://localhost:8081/dataset-copy/${ds_name}
+curl -X PUT http://localhost:8081/dataset-copy/${ds_name}
 
 
 echo "Sending dataset to pg..."
-curl -v -X POST http://localhost:8081/dataset-copy/${ds_name}/pg
+curl -X POST http://localhost:8081/dataset-copy/${ds_name}/pg
