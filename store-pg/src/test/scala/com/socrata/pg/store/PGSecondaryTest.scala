@@ -18,6 +18,7 @@ import com.socrata.datacoordinator.secondary.CopyInfo
 import com.socrata.datacoordinator.secondary.DatasetInfo
 import org.apache.log4j.PropertyConfigurator
 import com.socrata.thirdparty.typesafeconfig.Propertizer
+import com.socrata.pg.store.events.WorkingCopyCreatedEventHandler
 
 /**
  * Test... the PGSecondary.
@@ -57,7 +58,7 @@ class PGSecondaryTest  extends FunSuite with MustMatchers with BeforeAndAfterAll
         val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
         val dataVersion = 0L
         val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
-        (new PGSecondary(config)).workingCopyCreated(datasetInfo, dataVersion, copyInfo, conn)
+        WorkingCopyCreatedEventHandler(datasetInfo, dataVersion, copyInfo, conn)
      }
   }
 

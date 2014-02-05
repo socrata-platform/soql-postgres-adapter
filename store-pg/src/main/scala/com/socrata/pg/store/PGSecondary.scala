@@ -4,7 +4,7 @@ import com.socrata.datacoordinator.secondary._
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.typesafe.config.Config
-import com.socrata.pg.store.ddl.DatasetSchema
+import com.socrata.pg.store.events.WorkingCopyCreatedEventHandler
 import java.sql.{DriverManager, Connection}
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo}
@@ -25,6 +25,7 @@ import com.socrata.datacoordinator.secondary.CopyInfo
 import com.socrata.datacoordinator.secondary.Insert
 import com.socrata.datacoordinator.id.{UserColumnId, DatasetId}
 import com.socrata.soql.brita.AsciiIdentifierFilter
+import org.slf4j.MarkerFactory
 
 /**
  * Postgres Secondary Store Implementation
@@ -146,7 +147,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
     // dataVersion is the version which cooresponds to the set of events which we are given; corresponds with the currentVersion
     //     - ignore this if the dataVersion <= currentVersion
     //     - stored in copy_map
-    log.debug(s"version (datasetInfo: ${datasetInfo}, dataVersion: ${dataVersion}, cookie: ${cookie}, events: ${events})")
+    log.debug("version (datasetInfo: {}, dataVersion: {}, cookie: {}, events: {})", Seq(datasetInfo, dataVersion, cookie, events))
+
+    //log.debug("I want a {} long {}", dataVersion, "and a string", events, cookie)
 
     // TODO check version beforehand
 
@@ -160,7 +163,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
           case RowIdentifierCleared(info) => Unit // no-op
           case SystemRowIdentifierChanged(colInfo) => systemRowIdentifierChanged(datasetInfo, dataVersion, colInfo, conn)
           case VersionColumnChanged(info) => Unit // no-op
-          case WorkingCopyCreated(copyInfo) => workingCopyCreated(datasetInfo, dataVersion, copyInfo, conn)
+          case WorkingCopyCreated(copyInfo) => WorkingCopyCreatedEventHandler(datasetInfo, dataVersion, copyInfo, conn)
           case WorkingCopyDropped => throw new UnsupportedOperationException("TODO later")
           case DataCopied => throw new UnsupportedOperationException("TODO later")
           case SnapshotDropped(info) => throw new UnsupportedOperationException("TODO later")
@@ -236,14 +239,6 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
       sLoader.makeSystemPrimaryKey(newTruthColumnInfo)
     }
 
-    def workingCopyCreated(datasetInfo: DatasetInfo, dataVersion: Long, copyInfo: CopyInfo, conn:Connection) = {
-        if (copyInfo.copyNumber != 1)
-            throw new UnsupportedOperationException("Cannot support making working copies beyond the first copy")
-        val (pgu, copyInfoSecondary, sLoader) = DatasetSchema.createTable(conn, datasetInfo.localeName)
-        if (copyInfoSecondary.copyNumber != 1)
-          throw new UnsupportedOperationException("We only support one copy of a dataset!")
-        DatasetMeta.setMetadata(DatasetMeta(datasetInfo.internalName, copyInfoSecondary.datasetInfo.systemId.underlying))
-    }
 
     def workingCopyPublished = {
       throw new UnsupportedOperationException("TODO optional")
