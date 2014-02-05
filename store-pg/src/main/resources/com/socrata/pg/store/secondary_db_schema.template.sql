@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS dataset_map (
   -- Note: when flipping a backup to primary, the system_id sequence object must be setup since
   -- playing back logs doesn't access the object.
   system_id             BIGSERIAL                    NOT NULL PRIMARY KEY,
-  dataset_internal_name VARCHAR(%TABLE_NAME_LEN%)    NOT NULL, -- Will be unique across a given SODA server environment (i.e. Azure West)
+  -- commented out until we have the code to set it...
+  -- dataset_internal_name VARCHAR(%TABLE_NAME_LEN%)    NOT NULL, -- Will be unique across a given SODA server environment (i.e. Azure West)
   next_counter_value    BIGINT                       NOT NULL,
   locale_name           VARCHAR(%LOCALE_NAME_LEN%)   NOT NULL,
   obfuscation_key       BYTEA                        NOT NULL,

@@ -23,24 +23,26 @@ import com.socrata.datacoordinator.secondary.RowDataUpdated
 import com.socrata.datacoordinator.secondary.ColumnRemoved
 import com.socrata.datacoordinator.secondary.CopyInfo
 import com.socrata.datacoordinator.secondary.Insert
-import com.socrata.datacoordinator.truth.sql.DatasetMapLimits
-import com.socrata.datacoordinator.id.DatasetId
+import com.socrata.datacoordinator.id.{UserColumnId, DatasetId}
+import com.socrata.soql.brita.AsciiIdentifierFilter
 
 /**
  * Postgres Secondary Store Implementation
  */
 class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
+  private val log = org.slf4j.LoggerFactory.getLogger(classOf[PGSecondary])
+
   // Called when this process is shutting down (or being killed)
   def shutdown() {
-    println("{}: shutdown (config: {})", this.getClass.toString, config)
-    // noop
+    log.debug("shutdown (config: {})", config)
+    // no-op
   }
 
   // Return true to get all the events from the stream of updates from the data-coordinator
   // Returning false here means that instead of a stream of updates from the DC, we will receive
   // the resync event instead.
   def wantsWorkingCopies: Boolean = {
-    println("{}: wantsWorkingCopies", this.getClass.toString)
+    log.debug("wantsWorkingCopies returning true")
     true
   }
 
@@ -48,7 +50,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
   // that all data related to that dataset can/should be destroyed
   def dropDataset(datasetInternalName: String, cookie: Secondary.Cookie) {
     // last thing you will get for a dataset.
-    println("{}: dropDataset '{}' (cookie : {}) ", this.getClass.toString, datasetInternalName, cookie)
+    log.debug(s"dropDataset '${datasetInternalName}' (cookie : ${cookie}) ")
     throw new UnsupportedOperationException("TODO later")
   }
 
@@ -63,7 +65,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
   protected[store] def _currentVersion(datasetInternalName: String, cookie: Secondary.Cookie, conn: Connection): Long = {
     // every set of changes to a copy increments the version number
     // What happens when this is wrong? Almost certainly should turn into a resync
-    println("{}: currentVersion '{}', (cookie: {})", datasetInternalName, cookie)
+    log.debug(s"currentVersion '${datasetInternalName}', (cookie: ${cookie})")
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
 
     val datasetMeta = DatasetMeta.getMetadata(datasetInternalName).get
@@ -91,7 +93,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
     // if we do not do working copies; we *should* receive a resync event instead of a publish event
     //
     // What happens if this is wrong? almost certainly it would turn into a resync
-    println("{}: currentCopyNumber '{}' (cookie: {})", this.getClass.toString, datasetInternalName, cookie)
+    log.debug(s"currentCopyNumber '${datasetInternalName}' (cookie: ${cookie})")
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
     val datasetMeta = DatasetMeta.getMetadata(datasetInternalName).get
 
@@ -102,17 +104,17 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
 
   // Currently there are zero-or-more snapshots, which are what you get when you publish a working copy when there is
   // an existing published working copy of that same dataset.
-  // To NOOP this API, return an empty set.
+  // To NO-OP this API, return an empty set.
   @deprecated("Not supporting snapshots beyond bare minimum required to function", since = "forever")
   def snapshots(datasetInternalName: String, cookie: Secondary.Cookie): Set[Long] = {
     // if we a publish through version(); a snapshot "could" be created
-    println("{}: snapshots '{}' (cookie: {})", this.getClass.toString, datasetInternalName, cookie)
+    log.debug(s"snapshots '${datasetInternalName}' (cookie: ${cookie}})")
     Set()
   }
 
   // Is only ever called as part of a resync.
   def dropCopy(datasetInternalName: String, copyNumber: Long, cookie: Secondary.Cookie): Secondary.Cookie = {
-    println("{}: dropCopy '{}' (cookie: {})", this.getClass.toString, datasetInternalName, cookie)
+    log.debug(s"dropCopy '${datasetInternalName}' (cookie: ${cookie}})")
     throw new UnsupportedOperationException("TODO later")
   }
 
@@ -144,17 +146,19 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
     // dataVersion is the version which cooresponds to the set of events which we are given; corresponds with the currentVersion
     //     - ignore this if the dataVersion <= currentVersion
     //     - stored in copy_map
-    println("{}: version '{}' (datasetInfo: {}, dataVersion: {}, cookie: {}, events: {})",
-      this.getClass.toString, datasetInfo, dataVersion, cookie, events)
+    log.debug(s"version (datasetInfo: ${datasetInfo}, dataVersion: ${dataVersion}, cookie: ${cookie}, events: ${events})")
+
+    // TODO check version beforehand
+
     events.foreach { e =>
-        println("got event: {}", e)
+        log.debug("got event: {}", e)
         e match {
           case Truncated => throw new UnsupportedOperationException("TODO later")
           case ColumnCreated(colInfo) => columnCreated(datasetInfo, dataVersion, colInfo, conn)
           case ColumnRemoved(info)  =>  columnRemoved(info, conn)
           case RowIdentifierSet(info) => Unit // no-op
           case RowIdentifierCleared(info) => Unit // no-op
-          case SystemRowIdentifierChanged(info) => systemRowIdentifierChanged(info, conn)
+          case SystemRowIdentifierChanged(colInfo) => systemRowIdentifierChanged(datasetInfo, dataVersion, colInfo, conn)
           case VersionColumnChanged(info) => Unit // no-op
           case WorkingCopyCreated(copyInfo) => workingCopyCreated(datasetInfo, dataVersion, copyInfo, conn)
           case WorkingCopyDropped => throw new UnsupportedOperationException("TODO later")
@@ -165,11 +169,25 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
           case otherOps => throw new UnsupportedOperationException("Unexpected operation")
         }
       }
+
+      // TODO update version afterwards
+
       cookie
     }
 
 
-    // TODO2 we should be batching these
+  // TODO this is copy and paste from SoQLCommon ...
+  private def physicalColumnBaseBase(nameHint: String, systemColumn: Boolean): String =
+    AsciiIdentifierFilter(List(if(systemColumn) "s" else "u", nameHint)).
+      take(StandardDatasetMapLimits.maximumPhysicalColumnBaseLength).
+      replaceAll("_+$", "").
+      toLowerCase
+
+  private def isSystemColumnId(name: UserColumnId) =
+    SoQLSystemColumns.isSystemColumnId(name)
+
+
+  // TODO2 we should be batching these
     def columnCreated(secDatasetInfo: DatasetInfo, secDatasetVersion: Long, secColInfo: SecondaryColumnInfo[SoQLType], conn:Connection) = {
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
       val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
@@ -179,28 +197,43 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
       val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(new DatasetId(datasetMeta.datasetSystemId)).get
       val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
 
-      val truthColInfo = pgu.datasetMapWriter.addColumn(
+      val truthColInfo = pgu.datasetMapWriter.addColumnWithId(
+          secColInfo.systemId,
           truthCopyInfo,
           secColInfo.id, // user column id
           secColInfo.typ,
-          secColInfo.id.underlying // + secColInfo.systemId.underlying // system column id
+          physicalColumnBaseBase(secColInfo.id.underlying, isSystemColumnId(secColInfo.id)) // system column id
       )
 
       if (secColInfo.isSystemPrimaryKey) pgu.datasetMapWriter.setSystemPrimaryKey(truthColInfo)
-      // noop these two, never set them?
+      // no-op these two, never set them?
 //      if (secColInfo.isUserPrimaryKey) pgu.datasetMapWriter.setUserPrimaryKey(truthColInfo)
 //      if (secColInfo.isVersion) pgu.datasetMapWriter.setVersion(truthColInfo)
 
       sLoader.addColumns(Seq(truthColInfo))
       if (truthColInfo.isSystemPrimaryKey) sLoader.makeSystemPrimaryKey(truthColInfo)
+      conn.commit
     }
 
     def columnRemoved(info: ColumnInfo[SoQLType], conn:Connection) = {
       throw new UnsupportedOperationException("TODO NOW optionally")
     }
 
-    def systemRowIdentifierChanged(info: ColumnInfo[SoQLType], conn:Connection) = {
-      throw new UnsupportedOperationException("TODO NOW")
+    // TODO verify this can only be called once?
+    def systemRowIdentifierChanged(secDatasetInfo: DatasetInfo, dataVersion: Long, secColumnInfo: ColumnInfo[SoQLType], conn:Connection) = {
+      val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
+      val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
+
+      val datasetMeta = DatasetMeta.getMetadata(secDatasetInfo.internalName).get
+
+      val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(new DatasetId(datasetMeta.datasetSystemId)).get
+      val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
+
+      val truthColumnInfo = pgu.datasetMapReader.schema(truthCopyInfo)(secColumnInfo.systemId)
+
+      val newTruthColumnInfo = pgu.datasetMapWriter.setSystemPrimaryKey(truthColumnInfo)
+
+      sLoader.makeSystemPrimaryKey(newTruthColumnInfo)
     }
 
     def workingCopyCreated(datasetInfo: DatasetInfo, dataVersion: Long, copyInfo: CopyInfo, conn:Connection) = {
@@ -233,18 +266,22 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
   def resync(datasetInfo: DatasetInfo, copyInfo: CopyInfo, schema: ColumnIdMap[ColumnInfo[SoQLType]], cookie: Secondary.Cookie, rows: _root_.com.rojoma.simplearm.Managed[Iterator[ColumnIdMap[SoQLValue]]]): Secondary.Cookie = {
     // should tell us the new copy number
     // We need to perform some accounting here to make sure readers know a resync is in process
-    println("{}: version '{}' (datasetInfo: {}, copyInfo: {}, schema: {}, cookie: {}, rows)",
-      this.getClass.toString, datasetInfo, copyInfo, schema, cookie, rows)
+    log.debug("resync (datasetInfo: {}, copyInfo: {}, schema: {}, cookie: {}, rows)",
+      datasetInfo, copyInfo, schema, cookie, rows)
     throw new UnsupportedOperationException("TODO later")
   }
 
 
+  @volatile var populatedDb = false
   def withDb[T]()(f: (Connection) => T): T = {
     def loglevel = 0; // 2 = debug, 0 = default
     using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/secondary_test?loglevel=$loglevel", "blist", "blist")) {
       conn =>
         conn.setAutoCommit(false)
-        populateDatabase(conn)
+        if (!populatedDb) {
+          populateDatabase(conn)
+          populatedDb = true
+        }
         f(conn)
     }
   }

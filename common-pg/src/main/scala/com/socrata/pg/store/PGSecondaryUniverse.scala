@@ -66,7 +66,9 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](conn: Connection,
   //def loader(copyCtx: DatasetCopyContext[SoQLType], rowIdProvider: RowIdProvider, rowVersionProvider: RowVersionProvider, logger: Logger[SoQLType, SoQLValue], reportWriter: ReportWriter[SoQLValue], replaceUpdatedRows: Boolean) =
   //  managed(loaderProvider(conn, copyCtx, rowPreparer(transactionStart, copyCtx, replaceUpdatedRows), rowIdProvider, rowVersionProvider, logger, reportWriter, timingReport))
 
-  lazy val datasetMapWriter: DatasetMapWriter[SoQLType] =
+  // TODO: is it legit to expose the BackupDatasetMap (writer) here?  Need it to set ids...
+  // lazy val datasetMapWriter: DatasetMapWriter[SoQLType] =
+  lazy val datasetMapWriter: BackupDatasetMap[SoQLType] =
     new PostgresDatasetMapWriter(conn, typeContext.typeNamespace, timingReport, obfuscationKeyGenerator, initialCounterValue)
 
   lazy val datasetMapReader: DatasetMapReader[SoQLType] =
