@@ -4,7 +4,7 @@ import com.socrata.datacoordinator.secondary._
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.typesafe.config.Config
-import com.socrata.pg.store.events.WorkingCopyCreatedEventHandler
+import com.socrata.pg.store.events.WorkingCopyCreatedHandler
 import java.sql.{DriverManager, Connection}
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo}
@@ -161,7 +161,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           case RowIdentifierCleared(info) => Unit // no-op
           case SystemRowIdentifierChanged(colInfo) => systemRowIdentifierChanged(datasetInfo, dataVersion, colInfo, conn)
           case VersionColumnChanged(info) => Unit // no-op
-          case WorkingCopyCreated(copyInfo) => WorkingCopyCreatedEventHandler(datasetInfo, dataVersion, copyInfo, conn)
+          case WorkingCopyCreated(copyInfo) => WorkingCopyCreatedHandler(datasetInfo, dataVersion, copyInfo, conn)
           case WorkingCopyDropped => throw new UnsupportedOperationException("TODO later")
           case DataCopied => throw new UnsupportedOperationException("TODO later")
           case SnapshotDropped(info) => throw new UnsupportedOperationException("TODO later")

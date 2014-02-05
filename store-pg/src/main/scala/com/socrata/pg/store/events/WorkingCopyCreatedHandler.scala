@@ -10,7 +10,7 @@ import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo }
 /**
  * Handles WorkingCopyCreated Event
  */
-case class WorkingCopyCreatedEventHandler(datasetInfo:SecondaryDatasetInfo, dataVersion: Long, copyInfo:SecondaryCopyInfo, conn:Connection) {
+case class WorkingCopyCreatedHandler(datasetInfo:SecondaryDatasetInfo, dataVersion: Long, copyInfo:SecondaryCopyInfo, conn:Connection) {
 
   if (copyInfo.copyNumber != 1)
     throw new UnsupportedOperationException("Cannot support making working copies beyond the first copy")

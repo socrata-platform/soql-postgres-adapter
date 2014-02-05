@@ -4,7 +4,7 @@ import com.socrata.datacoordinator.secondary.{LifecycleStage, CopyInfo, DatasetI
 import com.socrata.datacoordinator.id.CopyId
 import com.socrata.pg.store.PGSecondaryTestBase
 
-class WorkingCopyCreatedEventHandlerTest extends PGSecondaryTestBase {
+class WorkingCopyCreatedHandlerTest extends PGSecondaryTestBase {
   import com.socrata.pg.store.PGSecondaryUtil._
 
   test("can handle working copy event") {
@@ -12,7 +12,7 @@ class WorkingCopyCreatedEventHandlerTest extends PGSecondaryTestBase {
       val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
       val dataVersion = 0L
       val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
-      WorkingCopyCreatedEventHandler(datasetInfo, dataVersion, copyInfo, conn)
+      WorkingCopyCreatedHandler(datasetInfo, dataVersion, copyInfo, conn)
     }
   }
 
