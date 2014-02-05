@@ -4,6 +4,7 @@ IF (SELECT NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dataset_lifecycle_
   CREATE TYPE dataset_lifecycle_stage AS ENUM('Unpublished', 'Published', 'Snapshotted', 'Discarded');
 END IF;
 
+-- Allows for a only single given row to have the value "Unit"
 IF (SELECT NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'unit')) THEN
   CREATE TYPE unit AS ENUM('Unit');
 END IF;
@@ -13,10 +14,14 @@ CREATE TABLE IF NOT EXISTS dataset_map (
   -- playing back logs doesn't access the object.
   system_id             BIGSERIAL                    NOT NULL PRIMARY KEY,
   -- commented out until we have the code to set it...
-  -- dataset_internal_name VARCHAR(%TABLE_NAME_LEN%)    NOT NULL, -- Will be unique across a given SODA server environment (i.e. Azure West)
   next_counter_value    BIGINT                       NOT NULL,
   locale_name           VARCHAR(%LOCALE_NAME_LEN%)   NOT NULL,
-  obfuscation_key       BYTEA                        NOT NULL,
+  obfuscation_key       BYTEA                        NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS dataset_internal_name_map (
+  dataset_internal_name VARCHAR(%TABLE_NAME_LEN%)    NOT NULL, -- Will be unique across a given SODA server environment (i.e. Azure West)
+  dataset_system_id BIGINT                           NOT NULL REFERENCES dataset_map(system_id),
   UNIQUE (dataset_internal_name)
 );
 
