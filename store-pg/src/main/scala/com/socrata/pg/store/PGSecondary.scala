@@ -22,7 +22,7 @@ import com.socrata.datacoordinator.secondary.RowDataUpdated
 import com.socrata.datacoordinator.secondary.ColumnRemoved
 import com.socrata.datacoordinator.secondary.CopyInfo
 import com.socrata.datacoordinator.secondary.Insert
-import com.socrata.datacoordinator.truth.sql.{DatasetMapLimits, DatabasePopulator}
+import com.socrata.datacoordinator.truth.sql.DatasetMapLimits
 
 /**
  * Postgres Secondary Store Implementation
@@ -54,7 +54,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
   // multiple versions over the course of it's life
   def currentVersion(datasetInternalName: String, cookie: Secondary.Cookie): Long = {
     // every set of changes to a copy increments the version number
-    // What happens when this is wrong? Almost certaintly should turn into a resync
+    // What happens when this is wrong? Almost certainly should turn into a resync
     println("{}: currentVersion '{}', (cookie: {})", datasetInternalName, cookie)
     DatasetMeta.getMetadata(datasetInternalName).get.version
   }
@@ -204,7 +204,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
   }
 
   def populateDatabase(conn: Connection) {
-    val sql = DatabasePopulator.metadataTablesCreate(DatasetMapLimits())
+    val sql = DatabasePopulator.createSchema()
     using(conn.createStatement()) {
       stmt =>
         stmt.execute(sql)
