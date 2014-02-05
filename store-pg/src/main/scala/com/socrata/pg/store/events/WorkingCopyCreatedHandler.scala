@@ -20,7 +20,7 @@ case class WorkingCopyCreatedHandler(datasetInfo:SecondaryDatasetInfo, dataVersi
   DatasetMeta.setMetadata(DatasetMeta(datasetInfo.internalName, copyInfoSecondary.datasetInfo.systemId.underlying))
 
 
-  def createDataset(conn:Connection, locale:String):(PGSecondaryUniverse[SoQLType, SoQLValue], TruthCopyInfo, SchemaLoader[SoQLType]) = {
+  private def createDataset(conn:Connection, locale:String):(PGSecondaryUniverse[SoQLType, SoQLValue], TruthCopyInfo, SchemaLoader[SoQLType]) = {
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
     val copyInfo = pgu.datasetMapWriter.create(locale)
     val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
