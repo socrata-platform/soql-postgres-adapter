@@ -17,6 +17,7 @@ object Dependencies {
     val soqlStdlib = "0.0.16-SNAPSHOT"
     val typesafeConfig = "1.0.0"
     val dataCoordinator = "0.0.1-SNAPSHOT"
+    val typesafeScalaLogging = "1.1.0"
   }
 
   val commonsCli = "commons-cli" % "commons-cli" % versions.commonsCli
@@ -47,5 +48,7 @@ object Dependencies {
   val coordinatorlib = "com.socrata" %% "coordinator" % versions.dataCoordinator
 
   val slf4j = "org.slf4j" % "slf4j-log4j12" % versions.slf4j
+
+  val typesafeScalaLogging = "com.typesafe" %% "scalalogging-slf4j" % versions.typesafeScalaLogging
 
 }
