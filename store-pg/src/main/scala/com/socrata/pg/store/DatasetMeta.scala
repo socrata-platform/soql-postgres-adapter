@@ -8,7 +8,7 @@ import com.rojoma.simplearm.util._
 /**
  * Store and Retrieve Dataset Metadata
  */
-case class DatasetMeta(datasetInternalName: String, copy: Long, version: Long, locale: String, obfuscationKey: String, primaryKey: String)
+case class DatasetMeta(datasetInternalName: String, datasetSystemId: Long)
 
 object DatasetMeta {
 
@@ -24,12 +24,7 @@ object DatasetMeta {
         fis: FileInputStream => prop.load(fis)
       }
       Some(DatasetMeta(datasetInternalName,
-        prop.getProperty("copy", "0").toLong,
-        prop.getProperty("version", "0").toLong,
-        prop.getProperty("locale", "us"),
-        prop.getProperty("obfkey", ""),
-        prop.getProperty("prikey", "id")))
-
+        prop.getProperty("datasetSystemId", "-1").toLong))
     } else {
       None
     }
@@ -38,11 +33,7 @@ object DatasetMeta {
   def setMetadata(md: DatasetMeta) {
     val prop = new Properties()
     val propFile = internalToFile(md.datasetInternalName)
-    prop.setProperty("copy", md.copy.toString)
-    prop.setProperty("version", md.version.toString)
-    prop.setProperty("locale", md.locale)
-    prop.setProperty("obfkey", md.obfuscationKey)
-    prop.setProperty("prikey", md.primaryKey)
+    prop.setProperty("datasetSystemId", md.datasetSystemId.toString)
     using(new FileOutputStream(propFile)) {
       fos => prop.store(fos, "Temporary Mapping for Secondary Store Dataset IDs")
     }
