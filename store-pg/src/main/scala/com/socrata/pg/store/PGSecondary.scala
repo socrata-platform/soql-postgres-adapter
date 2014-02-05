@@ -22,7 +22,6 @@ import com.socrata.datacoordinator.secondary.RowDataUpdated
 import com.socrata.datacoordinator.secondary.ColumnRemoved
 import com.socrata.datacoordinator.secondary.CopyInfo
 import com.socrata.datacoordinator.secondary.Insert
-import com.socrata.datacoordinator.truth.sql.{DatasetMapLimits, DatabasePopulator}
 
 /**
  * Postgres Secondary Store Implementation
@@ -139,6 +138,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
           case RowDataUpdated(ops) => rowDataUpdated(ops, conn)
           case otherOps => throw new UnsupportedOperationException("Unexpected operation")
         }
+      }
+      cookie
     }
 
 
@@ -175,9 +176,6 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
       }
     }
 
-    cookie
-  }
-
   // This is an expensive operation in that it is both time consuming as well as locking the data source for the duration
   // of the resync event. The resync event can come from either the DC, or originate from a ResyncSecondaryException being thrown
   // Incoming rows have their own ids already provided at this point
@@ -204,7 +202,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
   }
 
   def populateDatabase(conn: Connection) {
-    val sql = DatabasePopulator.metadataTablesCreate(DatasetMapLimits())
+    val sql = DatabasePopulator.createSchema()
     using(conn.createStatement()) {
       stmt =>
         stmt.execute(sql)

@@ -11,6 +11,7 @@ object BuildSettings {
     SocrataCloudbeesSbt.socrataBuildSettings ++ Seq(
     scalaVersion := "2.10.2",
     version := "0.0.19-SNAPSHOT",
+    fork in test := true,
     scalacOptions ++= Seq("-language:implicitConversions")
   )
 
