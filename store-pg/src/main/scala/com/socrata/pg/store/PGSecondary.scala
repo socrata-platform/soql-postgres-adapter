@@ -239,7 +239,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     def workingCopyCreated(datasetInfo: DatasetInfo, dataVersion: Long, copyInfo: CopyInfo, conn:Connection) = {
       if (copyInfo.copyNumber != 1)
           throw new UnsupportedOperationException("Cannot support making working copies beyond the first copy")
-      val (pgu, copyInfoSecondary, sLoader) = DatasetSchema.createTable(conn, datasetInfo.localeName)
+      val (_, copyInfoSecondary, _) = DatasetSchema.createTable(conn, datasetInfo.localeName)
       if (copyInfoSecondary.copyNumber != 1)
         throw new UnsupportedOperationException("We only support one copy of a dataset!")
       DatasetMeta.setMetadata(DatasetMeta(datasetInfo.internalName, copyInfoSecondary.datasetInfo.systemId.underlying))
