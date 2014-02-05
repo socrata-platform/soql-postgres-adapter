@@ -53,7 +53,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] {
   // multiple versions over the course of it's life
   def currentVersion(datasetInternalName: String, cookie: Secondary.Cookie): Long = {
     // every set of changes to a copy increments the version number
-    // What happens when this is wrong? Almost certaintly should turn into a resync
+    // What happens when this is wrong? Almost certainly should turn into a resync
     println("{}: currentVersion '{}', (cookie: {})", datasetInternalName, cookie)
     DatasetMeta.getMetadata(datasetInternalName).get.version
   }
