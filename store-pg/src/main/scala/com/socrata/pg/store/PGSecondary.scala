@@ -4,7 +4,7 @@ import com.socrata.datacoordinator.secondary._
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.typesafe.config.Config
-import com.socrata.pg.store.events.WorkingCopyCreatedHandler
+import com.socrata.pg.store.events.{WorkingCopyPublishedHandler, SystemRowIdentifierChangedHandler, WorkingCopyCreatedHandler}
 import java.sql.{DriverManager, Connection}
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo}
@@ -161,13 +161,13 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           case ColumnRemoved(info)  =>  columnRemoved(info, conn)
           case RowIdentifierSet(info) => Unit // no-op
           case RowIdentifierCleared(info) => Unit // no-op
-          case SystemRowIdentifierChanged(colInfo) => systemRowIdentifierChanged(datasetInfo, dataVersion, colInfo, conn)
+          case SystemRowIdentifierChanged(colInfo) => SystemRowIdentifierChangedHandler(datasetInfo, dataVersion, colInfo, conn)
           case VersionColumnChanged(colInfo) => versionColumnChanged(datasetInfo, dataVersion, colInfo, conn)
           case WorkingCopyCreated(copyInfo) => WorkingCopyCreatedHandler(datasetInfo, dataVersion, copyInfo, conn)
           case WorkingCopyDropped => throw new UnsupportedOperationException("TODO later")
           case DataCopied => throw new UnsupportedOperationException("TODO later")
           case SnapshotDropped(info) => throw new UnsupportedOperationException("TODO later")
-          case WorkingCopyPublished => workingCopyPublished(datasetInfo, dataVersion, conn)
+          case WorkingCopyPublished => WorkingCopyPublishedHandler(datasetInfo, dataVersion, conn)
           case RowDataUpdated(ops) => rowDataUpdated(datasetInfo, dataVersion, ops, conn)
           case otherOps => throw new UnsupportedOperationException("Unexpected operation")
         }
@@ -221,23 +221,6 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
 
     // This only gets called once at dataset creation time.  We do not support it changing.
-    def systemRowIdentifierChanged(secDatasetInfo: DatasetInfo, dataVersion: Long, secColumnInfo: ColumnInfo[SoQLType], conn:Connection) = {
-      val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
-      val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
-
-      val datasetMeta = DatasetMeta.getMetadata(secDatasetInfo.internalName).get
-
-      val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(new DatasetId(datasetMeta.datasetSystemId)).get
-      val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
-
-      val truthColumnInfo = pgu.datasetMapReader.schema(truthCopyInfo)(secColumnInfo.systemId)
-
-      val newTruthColumnInfo = pgu.datasetMapWriter.setSystemPrimaryKey(truthColumnInfo)
-
-      sLoader.makeSystemPrimaryKey(newTruthColumnInfo)
-    }
-
-    // This only gets called once at dataset creation time.  We do not support it changing.
     def versionColumnChanged(secDatasetInfo: DatasetInfo, dataVersion: Long, secColumnInfo: ColumnInfo[SoQLType], conn:Connection) = {
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
       val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
@@ -252,18 +235,6 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       val newTruthColumnInfo = pgu.datasetMapWriter.setVersion(truthColumnInfo)
 
       sLoader.makeVersion(newTruthColumnInfo)
-    }
-
-    def workingCopyPublished(secDatasetInfo: DatasetInfo, dataVersion: Long, conn:Connection) = {
-      val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
-      val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
-
-      val datasetMeta = DatasetMeta.getMetadata(secDatasetInfo.internalName).get
-
-      val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(new DatasetId(datasetMeta.datasetSystemId)).get
-      val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
-
-      pgu.datasetMapWriter.publish(truthCopyInfo)
     }
 
     def rowDataUpdated(datasetInfo: DatasetInfo, dataVersion: Long, ops: Seq[Operation[SoQLValue]], conn:Connection) = {
