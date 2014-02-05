@@ -143,7 +143,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     //  - Unpublished => Working Copy
 
     // rowVersion is given through the event
-    // dataVersion is the version which cooresponds to the set of events which we are given; corresponds with the currentVersion
+    // dataVersion is the version which corresponds to the set of events which we are given; corresponds with the currentVersion
     //     - ignore this if the dataVersion <= currentVersion
     //     - stored in copy_map
     logger.debug("version (datasetInfo: {}, dataVersion: {}, cookie: {}, events: {})",
@@ -237,12 +237,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
 
     def workingCopyCreated(datasetInfo: DatasetInfo, dataVersion: Long, copyInfo: CopyInfo, conn:Connection) = {
-        if (copyInfo.copyNumber != 1)
-            throw new UnsupportedOperationException("Cannot support making working copies beyond the first copy")
-        val (pgu, copyInfoSecondary, sLoader) = DatasetSchema.createTable(conn, datasetInfo.localeName)
-        if (copyInfoSecondary.copyNumber != 1)
-          throw new UnsupportedOperationException("We only support one copy of a dataset!")
-        DatasetMeta.setMetadata(DatasetMeta(datasetInfo.internalName, copyInfoSecondary.datasetInfo.systemId.underlying))
+      if (copyInfo.copyNumber != 1)
+          throw new UnsupportedOperationException("Cannot support making working copies beyond the first copy")
+      val (pgu, copyInfoSecondary, sLoader) = DatasetSchema.createTable(conn, datasetInfo.localeName)
+      if (copyInfoSecondary.copyNumber != 1)
+        throw new UnsupportedOperationException("We only support one copy of a dataset!")
+      DatasetMeta.setMetadata(DatasetMeta(datasetInfo.internalName, copyInfoSecondary.datasetInfo.systemId.underlying))
     }
 
     def workingCopyPublished = {
