@@ -8,7 +8,7 @@ import com.rojoma.simplearm.util._
 import com.socrata.soql.types._
 import com.socrata.datacoordinator.id._
 import com.socrata.datacoordinator.truth.metadata._
-import com.socrata.datacoordinator.truth.sql.{DatasetMapLimits, DatabasePopulator}
+import com.socrata.datacoordinator.truth.sql.{DatasetMapLimits, DatabasePopulator => TruthDatabasePopulator}
 import com.socrata.soql.environment.TypeName
 import com.socrata.datacoordinator.truth.loader.SchemaLoader
 import org.postgresql.util.PSQLException
@@ -34,7 +34,7 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
     }
 
     def populateDatabase(conn: Connection) {
-      val sql = DatabasePopulator.metadataTablesCreate(DatasetMapLimits())
+      val sql = TruthDatabasePopulator.metadataTablesCreate(DatasetMapLimits())
       using(conn.createStatement()) { stmt =>
         stmt.execute(sql)
       }

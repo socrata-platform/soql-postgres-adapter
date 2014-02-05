@@ -68,9 +68,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     logger.debug(s"currentVersion '${datasetInternalName}', (cookie: ${cookie})")
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
 
-    val datasetMeta = DatasetMeta.getMetadata(datasetInternalName).get
+    val datasetId: DatasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName(datasetInternalName).get
 
-    val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(new DatasetId(datasetMeta.datasetSystemId)).get
+    val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
     val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
     truthCopyInfo.dataVersion
   }
@@ -95,9 +95,10 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     // What happens if this is wrong? almost certainly it would turn into a resync
     logger.debug(s"currentCopyNumber '${datasetInternalName}' (cookie: ${cookie})")
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
-    val datasetMeta = DatasetMeta.getMetadata(datasetInternalName).get
 
-    val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(new DatasetId(datasetMeta.datasetSystemId)).get
+    val datasetId: DatasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName(datasetInternalName).get
+
+    val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
     val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
     truthCopyInfo.systemId.underlying
   }
@@ -193,9 +194,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
       val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
 
-      val datasetMeta = DatasetMeta.getMetadata(secDatasetInfo.internalName).get
+      val datasetId: DatasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName(secDatasetInfo.internalName).get
 
-      val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(new DatasetId(datasetMeta.datasetSystemId)).get
+      val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
       val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
 
       val truthColInfo = pgu.datasetMapWriter.addColumnWithId(
@@ -224,9 +225,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
       val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
 
-      val datasetMeta = DatasetMeta.getMetadata(secDatasetInfo.internalName).get
+      val datasetId: DatasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName(secDatasetInfo.internalName).get
 
-      val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(new DatasetId(datasetMeta.datasetSystemId)).get
+      val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
       val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
 
       val truthColumnInfo = pgu.datasetMapReader.schema(truthCopyInfo)(secColumnInfo.systemId)
@@ -242,7 +243,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       val (_, copyInfoSecondary, _) = DatasetSchema.createTable(conn, datasetInfo.localeName)
       if (copyInfoSecondary.copyNumber != 1)
         throw new UnsupportedOperationException("We only support one copy of a dataset!")
-      DatasetMeta.setMetadata(DatasetMeta(datasetInfo.internalName, copyInfoSecondary.datasetInfo.systemId.underlying))
+      new PostgresDatasetInternalNameMapWriter(conn).create(datasetInfo.internalName, copyInfoSecondary.datasetInfo.systemId)
     }
 
     def workingCopyPublished = {

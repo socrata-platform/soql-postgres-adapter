@@ -29,7 +29,7 @@ class PGSecondaryTest  extends FunSuite with MustMatchers with BeforeAndAfterAll
   val localeName = "us"
   val obfuscationKey = "key".getBytes
 
-  // TOOD cleanup temporary log hack
+  // TODO cleanup temporary log hack
   override def beforeAll = {
     val rootConfig = ConfigFactory.load()
     PropertyConfigurator.configure(Propertizer("log4j", rootConfig.getConfig("com.socrata.soql-server-pg.log4j")))
@@ -37,9 +37,7 @@ class PGSecondaryTest  extends FunSuite with MustMatchers with BeforeAndAfterAll
 
   def populateDatabase(conn: Connection) {
     val sql = DatabasePopulator.createSchema()
-    using(conn.createStatement()) { stmt =>
-      stmt.execute(sql)
-    }
+    using(conn.createStatement()) { stmt => stmt.execute(sql) }
   }
 
   def withDb[T]()(f: (Connection) => T): T = {
@@ -53,12 +51,12 @@ class PGSecondaryTest  extends FunSuite with MustMatchers with BeforeAndAfterAll
 
 
   test("can handle working copy event") {
-     withDb() { conn =>
-        val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
-        val dataVersion = 0L
-        val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
-        (new PGSecondary(config)).workingCopyCreated(datasetInfo, dataVersion, copyInfo, conn)
-     }
+    withDb() { conn =>
+      val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
+      val dataVersion = 0L
+      val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
+      (new PGSecondary(config)).workingCopyCreated(datasetInfo, dataVersion, copyInfo, conn)
+    }
   }
 
   test("refuse to create working copies with copy ids != 1") {
@@ -76,13 +74,13 @@ class PGSecondaryTest  extends FunSuite with MustMatchers with BeforeAndAfterAll
       val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
       val pgs = new PGSecondary(config)
       val events = Seq(
-          WorkingCopyCreated(copyInfo),
-          ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId("mysystemidcolumn"), SoQLText, true, false, false)),
-          ColumnCreated(ColumnInfo(new ColumnId(9125), new UserColumnId("myuseridcolumn"), SoQLText, false, true, false)),
-          ColumnCreated(ColumnInfo(new ColumnId(9126), new UserColumnId("myversioncolumn"), SoQLText, false, false, true)),
-          ColumnCreated(ColumnInfo(new ColumnId(9127), new UserColumnId("mycolumn"), SoQLText, false, false, false)),
-          ColumnCreated(ColumnInfo(new ColumnId(9128), new UserColumnId(":updated_at"), SoQLTime, false, false, false))
-        ).iterator
+        WorkingCopyCreated(copyInfo),
+        ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId("mysystemidcolumn"), SoQLText, true, false, false)),
+        ColumnCreated(ColumnInfo(new ColumnId(9125), new UserColumnId("myuseridcolumn"), SoQLText, false, true, false)),
+        ColumnCreated(ColumnInfo(new ColumnId(9126), new UserColumnId("myversioncolumn"), SoQLText, false, false, true)),
+        ColumnCreated(ColumnInfo(new ColumnId(9127), new UserColumnId("mycolumn"), SoQLText, false, false, false)),
+        ColumnCreated(ColumnInfo(new ColumnId(9128), new UserColumnId(":updated_at"), SoQLTime, false, false, false))
+      ).iterator
       pgs._version(datasetInfo, dataVersion, None, events, conn)
     }
   }
@@ -94,11 +92,12 @@ class PGSecondaryTest  extends FunSuite with MustMatchers with BeforeAndAfterAll
       val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
       val pgs = new PGSecondary(config)
       val events = Seq(
-          WorkingCopyCreated(copyInfo),
-          ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, false, false, false)),
-          SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, false, false, false))
-        ).iterator
+        WorkingCopyCreated(copyInfo),
+        ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, false, false, false)),
+        SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, false, false, false))
+      ).iterator
       pgs._version(datasetInfo, dataVersion, None, events, conn)
     }
   }
+
 }
