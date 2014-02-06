@@ -6,7 +6,7 @@ import com.socrata.soql.types._
 import com.socrata.datacoordinator.secondary.ColumnInfo
 import com.socrata.datacoordinator.secondary.WorkingCopyCreated
 import com.socrata.datacoordinator.secondary.ColumnCreated
-import com.socrata.datacoordinator.secondary.CopyInfo
+import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo}
 import com.socrata.datacoordinator.secondary.DatasetInfo
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 
@@ -21,7 +21,7 @@ class PGSecondaryTest extends PGSecondaryTestBase {
     withPgu() { pgu =>
       val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
       val dataVersion = 0L
-      val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
+      val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
       val pgs = new PGSecondary(config)
       val events = Seq(
         WorkingCopyCreated(copyInfo),
@@ -39,7 +39,7 @@ class PGSecondaryTest extends PGSecondaryTestBase {
     withPgu() { pgu =>
       val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
       val dataVersion = 0L
-      val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
+      val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
       val pgs = new PGSecondary(config)
       val events = Seq(
         WorkingCopyCreated(copyInfo),
@@ -55,7 +55,7 @@ class PGSecondaryTest extends PGSecondaryTestBase {
     withPgu() { pgu =>
       val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
       val dataVersion = 0L
-      val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
+      val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
       val pgs = new PGSecondary(config)
 
       val row1 = ColumnIdMap() + (new ColumnId(9124), new SoQLID(1000)) + (new ColumnId(9126), new SoQLText("foo"))

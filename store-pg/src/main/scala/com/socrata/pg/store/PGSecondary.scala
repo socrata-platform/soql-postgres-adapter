@@ -140,14 +140,15 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     //     - stored in copy_map
     logger.debug(s"version (secondaryDatasetInfo: ${secondaryDatasetInfo}}, newDataVersion: ${newDataVersion}}, cookie: ${cookie}, events: ${events})")
 
-    // we can only get one working copy created event, and if we get it then it has to be first.
-    // it would be nice to enforce that in this code and not just rely on it...
-    val (wccEvents, remainingEvents) = events.partition {
+    // if we have a WorkingCopyCreated event, it is supposed to be the first event in the version,
+    // and the only WorkingCopyCreated event in the version.
+    val (wccEvents, remainingEvents) = events.span {
       case WorkingCopyCreated(copyInfo) => true
       case _ => false
     }
 
-    wccEvents.foreach { e =>
+    if (wccEvents.hasNext) {
+      val e = wccEvents.next
       logger.debug("got working copy event: {}", e)
       e match {
         case WorkingCopyCreated(copyInfo) => WorkingCopyCreatedHandler(pgu, secondaryDatasetInfo, copyInfo)
@@ -155,7 +156,11 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       }
     }
 
-    // now that we have working copy creation out of the way, we can figure load our
+    if (wccEvents.hasNext) {
+      throw new UnsupportedOperationException(s"Got ${wccEvents.size+1} leading WorkingCopyCreated events, only support one in a version")
+    }
+
+    // now that we have working copy creation out of the way, we can load our
     // copyInfo with assurance that it is there unless we are out of sync
     val datasetId = pgu.datasetInternalNameMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName).getOrElse(
       throw new ResyncSecondaryException(s"Couldn't find mapping for datasetInternalName ${secondaryDatasetInfo.internalName}")
