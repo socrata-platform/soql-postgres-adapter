@@ -8,7 +8,7 @@ import com.socrata.pg.store.events.{WorkingCopyPublishedHandler, SystemRowIdenti
 import java.sql.{DriverManager, Connection}
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo}
-import com.socrata.datacoordinator.truth.metadata.{ColumnInfo => TruthColumnInfo, DatasetCopyContext}
+import com.socrata.datacoordinator.truth.metadata.{DatasetCopyContext}
 import com.socrata.datacoordinator.secondary.VersionColumnChanged
 import com.socrata.datacoordinator.secondary.WorkingCopyCreated
 import com.socrata.datacoordinator.secondary.RowIdentifierSet
@@ -122,9 +122,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
   def version(datasetInfo: DatasetInfo, dataVersion: Long, cookie: Secondary.Cookie, events: Iterator[Event[SoQLType, SoQLValue]]): Secondary.Cookie = {
     withDb() { conn =>
-       val cookieOut = _version(datasetInfo, dataVersion, cookie, events, conn)
-       conn.commit()
-       cookieOut
+     val cookieOut = _version(datasetInfo, dataVersion, cookie, events, conn)
+     conn.commit()
+     cookieOut
     }
   }
     /// NEED datasetName -> currentCopyNum
@@ -155,28 +155,29 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     // TODO check version beforehand
 
     events.foreach { e =>
-        logger.debug("got event: {}", e)
-        e match {
-          case Truncated => throw new UnsupportedOperationException("TODO later")
-          case ColumnCreated(colInfo) => columnCreated(datasetInfo, dataVersion, colInfo, conn)
-          case ColumnRemoved(info)  =>  columnRemoved(info, conn)
-          case RowIdentifierSet(info) => Unit // no-op
-          case RowIdentifierCleared(info) => Unit // no-op
-          case SystemRowIdentifierChanged(colInfo) => SystemRowIdentifierChangedHandler(datasetInfo, dataVersion, colInfo, conn)
-          case VersionColumnChanged(colInfo) => versionColumnChanged(datasetInfo, dataVersion, colInfo, conn)
-          case WorkingCopyCreated(copyInfo) => WorkingCopyCreatedHandler(datasetInfo, dataVersion, copyInfo, conn)
-          case WorkingCopyDropped => throw new UnsupportedOperationException("TODO later")
-          case DataCopied => throw new UnsupportedOperationException("TODO later")
-          case SnapshotDropped(info) => throw new UnsupportedOperationException("TODO later")
-          case WorkingCopyPublished => WorkingCopyPublishedHandler(datasetInfo, dataVersion, conn)
-          case RowDataUpdated(ops) => rowDataUpdated(datasetInfo, dataVersion, ops, conn)
-          case otherOps => throw new UnsupportedOperationException("Unexpected operation")
-        }
+      logger.debug("got event: {}", e)
+      e match {
+        case Truncated => throw new UnsupportedOperationException("TODO later")
+        case ColumnCreated(colInfo) => columnCreated(datasetInfo, dataVersion, colInfo, conn)
+        case ColumnRemoved(info)  =>  columnRemoved(info, conn)
+        case RowIdentifierSet(info) => Unit // no-op
+        case RowIdentifierCleared(info) => Unit // no-op
+        // TODO Decide if we're going to pass "conn" as the first parameter (as seems to be the norm elsewhere), or use named arguments to avoid ordering issues altogether...
+        case SystemRowIdentifierChanged(colInfo) => SystemRowIdentifierChangedHandler(conn = conn, secDatasetInfo = datasetInfo, dataVersion = dataVersion, secColumnInfo = colInfo)
+        case VersionColumnChanged(colInfo) => versionColumnChanged(datasetInfo, dataVersion, colInfo, conn)
+        case WorkingCopyCreated(copyInfo) => WorkingCopyCreatedHandler(datasetInfo, dataVersion, copyInfo, conn)
+        case WorkingCopyDropped => throw new UnsupportedOperationException("TODO later")
+        case DataCopied => throw new UnsupportedOperationException("TODO later")
+        case SnapshotDropped(info) => throw new UnsupportedOperationException("TODO later")
+        case WorkingCopyPublished => WorkingCopyPublishedHandler(datasetInfo, dataVersion, conn)
+        case RowDataUpdated(ops) => rowDataUpdated(datasetInfo, dataVersion, ops, conn)
+        case otherOps => throw new UnsupportedOperationException("Unexpected operation")
       }
-
-      // TODO update version afterwards
-      cookie
     }
+
+    // TODO update version afterwards
+    cookie
+  }
 
 
   // TODO this is copy and paste from SoQLCommon ...
@@ -190,82 +191,80 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     SoQLSystemColumns.isSystemColumnId(name)
 
 
-  // TODO2 we should be batching these
-    def columnCreated(secDatasetInfo: DatasetInfo, secDatasetVersion: Long, secColInfo: SecondaryColumnInfo[SoQLType], conn:Connection) = {
-      val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
-      val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
+// TODO2 we should be batching these
+  def columnCreated(secDatasetInfo: DatasetInfo, secDatasetVersion: Long, secColInfo: SecondaryColumnInfo[SoQLType], conn:Connection) = {
+    val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
+    val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
 
-      val datasetId: DatasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName(secDatasetInfo.internalName).get
+    val datasetId: DatasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName(secDatasetInfo.internalName).get
 
-      val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
-      val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
+    val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
+    val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
 
-      val truthColInfo = pgu.datasetMapWriter.addColumnWithId(
-          secColInfo.systemId,
-          truthCopyInfo,
-          secColInfo.id, // user column id
-          secColInfo.typ,
-          physicalColumnBaseBase(secColInfo.id.underlying, isSystemColumnId(secColInfo.id)) // system column id
-      )
+    val truthColInfo = pgu.datasetMapWriter.addColumnWithId(
+      secColInfo.systemId,
+      truthCopyInfo,
+      secColInfo.id, // user column id
+      secColInfo.typ,
+      physicalColumnBaseBase(secColInfo.id.underlying, isSystemColumnId(secColInfo.id)) // system column id
+    )
 
-      if (secColInfo.isSystemPrimaryKey) pgu.datasetMapWriter.setSystemPrimaryKey(truthColInfo)
-      // no-op these two, never set them?
-      if (secColInfo.isUserPrimaryKey) pgu.datasetMapWriter.setUserPrimaryKey(truthColInfo)
-      if (secColInfo.isVersion) pgu.datasetMapWriter.setVersion(truthColInfo)
+    if (secColInfo.isSystemPrimaryKey) pgu.datasetMapWriter.setSystemPrimaryKey(truthColInfo)
+    // no-op these two, never set them?
+    if (secColInfo.isUserPrimaryKey) pgu.datasetMapWriter.setUserPrimaryKey(truthColInfo)
+    if (secColInfo.isVersion) pgu.datasetMapWriter.setVersion(truthColInfo)
 
-      sLoader.addColumns(Seq(truthColInfo))
-      if (truthColInfo.isSystemPrimaryKey) sLoader.makeSystemPrimaryKey(truthColInfo)
-    }
+    sLoader.addColumns(Seq(truthColInfo))
+    if (truthColInfo.isSystemPrimaryKey) sLoader.makeSystemPrimaryKey(truthColInfo)
+  }
 
-    def columnRemoved(info: ColumnInfo[SoQLType], conn:Connection) = {
-      throw new UnsupportedOperationException("TODO NOW optionally")
-    }
+  def columnRemoved(info: ColumnInfo[SoQLType], conn:Connection) = {
+    throw new UnsupportedOperationException("TODO NOW optionally")
+  }
 
-    // This only gets called once at dataset creation time.  We do not support it changing.
-    def versionColumnChanged(secDatasetInfo: DatasetInfo, dataVersion: Long, secColumnInfo: ColumnInfo[SoQLType], conn:Connection) = {
-      val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
-      val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
+  // This only gets called once at dataset creation time.  We do not support it changing.
+  def versionColumnChanged(secDatasetInfo: DatasetInfo, dataVersion: Long, secColumnInfo: ColumnInfo[SoQLType], conn:Connection) = {
+    val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
+    val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
 
-      val datasetId: DatasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName(secDatasetInfo.internalName).get
+    val datasetId: DatasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName(secDatasetInfo.internalName).get
 
-      val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
-      val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
+    val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
+    val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
 
-      val truthColumnInfo = pgu.datasetMapReader.schema(truthCopyInfo)(secColumnInfo.systemId)
+    val truthColumnInfo = pgu.datasetMapReader.schema(truthCopyInfo)(secColumnInfo.systemId)
 
-      val newTruthColumnInfo = pgu.datasetMapWriter.setVersion(truthColumnInfo)
+    val newTruthColumnInfo = pgu.datasetMapWriter.setVersion(truthColumnInfo)
 
-      sLoader.makeVersion(newTruthColumnInfo)
-    }
+    sLoader.makeVersion(newTruthColumnInfo)
+  }
 
-    def rowDataUpdated(datasetInfo: DatasetInfo, dataVersion: Long, ops: Seq[Operation[SoQLValue]], conn:Connection) = {
-      ops.foreach { o =>
-        logger.debug("Got row operation: {}", o)
-        o match {
-          case Insert(sid, row) => rowInsert(datasetInfo, sid, row, conn)
-          case Update(sid, row) => throw new UnsupportedOperationException("TODO NOW")
-          case Delete(sid) => throw new UnsupportedOperationException("TODO NOW")
-        }
+  def rowDataUpdated(datasetInfo: DatasetInfo, dataVersion: Long, ops: Seq[Operation[SoQLValue]], conn:Connection) = {
+    ops.foreach { o =>
+      logger.debug("Got row operation: {}", o)
+      o match {
+        case Insert(sid, row) => rowInsert(datasetInfo, sid, row, conn)
+        case Update(sid, row) => throw new UnsupportedOperationException("TODO NOW")
+        case Delete(sid) => throw new UnsupportedOperationException("TODO NOW")
       }
     }
+  }
 
 
-    def rowInsert(secDatasetInfo: DatasetInfo, systemId: RowId, row: Row[SoQLValue], conn:Connection) = {
-      val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
-      val datasetId: DatasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName(secDatasetInfo.internalName).get
+  def rowInsert(secDatasetInfo: DatasetInfo, systemId: RowId, row: Row[SoQLValue], conn:Connection) = {
+    val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
+    val datasetId: DatasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName(secDatasetInfo.internalName).get
 
-      val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
-      val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
-      val truthSchema = pgu.datasetMapReader.schema(truthCopyInfo)
+    val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
+    val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
+    val truthSchema = pgu.datasetMapReader.schema(truthCopyInfo)
 
-      val copyCtx = new DatasetCopyContext[SoQLType](truthCopyInfo, truthSchema)
-      val loader = pgu.prevettedLoader(copyCtx, pgu.logger(truthCopyInfo.datasetInfo, "test-user"))
+    val copyCtx = new DatasetCopyContext[SoQLType](truthCopyInfo, truthSchema)
+    val loader = pgu.prevettedLoader(copyCtx, pgu.logger(truthCopyInfo.datasetInfo, "test-user"))
 
-      loader.insert(systemId, row)
-      loader.flushInserts()
-    }
-
-
+    loader.insert(systemId, row)
+    loader.flushInserts()
+  }
 
   // This is an expensive operation in that it is both time consuming as well as locking the data source for the duration
   // of the resync event. The resync event can come from either the DC, or originate from a ResyncSecondaryException being thrown
