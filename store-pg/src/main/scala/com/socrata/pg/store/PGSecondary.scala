@@ -92,7 +92,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     // What happens if this is wrong? almost certainly it would turn into a resync
     logger.debug(s"currentCopyNumber '${datasetInternalName}' (cookie: ${cookie})")
 
-    truthCopyInfo(pgu, datasetInternalName).systemId.underlying
+    truthCopyInfo(pgu, datasetInternalName).copyNumber
   }
 
   // Currently there are zero-or-more snapshots, which are what you get when you publish a working copy when there is
