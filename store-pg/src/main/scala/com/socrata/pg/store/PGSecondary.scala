@@ -4,11 +4,11 @@ import com.socrata.datacoordinator.secondary._
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.typesafe.config.Config
-import com.socrata.pg.store.ddl.DatasetSchema
+import com.socrata.pg.store.events.{WorkingCopyPublishedHandler, SystemRowIdentifierChangedHandler, WorkingCopyCreatedHandler}
 import java.sql.{DriverManager, Connection}
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo}
-import com.socrata.datacoordinator.truth.metadata.{ColumnInfo => TruthColumnInfo}
+import com.socrata.datacoordinator.truth.metadata.{ColumnInfo => TruthColumnInfo, DatasetCopyContext}
 import com.socrata.datacoordinator.secondary.VersionColumnChanged
 import com.socrata.datacoordinator.secondary.WorkingCopyCreated
 import com.socrata.datacoordinator.secondary.RowIdentifierSet
@@ -23,7 +23,7 @@ import com.socrata.datacoordinator.secondary.RowDataUpdated
 import com.socrata.datacoordinator.secondary.ColumnRemoved
 import com.socrata.datacoordinator.secondary.CopyInfo
 import com.socrata.datacoordinator.secondary.Insert
-import com.socrata.datacoordinator.id.{UserColumnId, DatasetId}
+import com.socrata.datacoordinator.id.{RowId, UserColumnId, DatasetId}
 import com.socrata.soql.brita.AsciiIdentifierFilter
 import com.typesafe.scalalogging.slf4j.Logging
 
@@ -122,7 +122,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
   def version(datasetInfo: DatasetInfo, dataVersion: Long, cookie: Secondary.Cookie, events: Iterator[Event[SoQLType, SoQLValue]]): Secondary.Cookie = {
     withDb() { conn =>
-       _version(datasetInfo, dataVersion, cookie, events, conn)
+       val cookieOut = _version(datasetInfo, dataVersion, cookie, events, conn)
+       conn.commit()
+       cookieOut
     }
   }
     /// NEED datasetName -> currentCopyNum
@@ -160,20 +162,19 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           case ColumnRemoved(info)  =>  columnRemoved(info, conn)
           case RowIdentifierSet(info) => Unit // no-op
           case RowIdentifierCleared(info) => Unit // no-op
-          case SystemRowIdentifierChanged(colInfo) => systemRowIdentifierChanged(datasetInfo, dataVersion, colInfo, conn)
-          case VersionColumnChanged(info) => Unit // no-op
-          case WorkingCopyCreated(copyInfo) => workingCopyCreated(datasetInfo, dataVersion, copyInfo, conn)
+          case SystemRowIdentifierChanged(colInfo) => SystemRowIdentifierChangedHandler(datasetInfo, dataVersion, colInfo, conn)
+          case VersionColumnChanged(colInfo) => versionColumnChanged(datasetInfo, dataVersion, colInfo, conn)
+          case WorkingCopyCreated(copyInfo) => WorkingCopyCreatedHandler(datasetInfo, dataVersion, copyInfo, conn)
           case WorkingCopyDropped => throw new UnsupportedOperationException("TODO later")
           case DataCopied => throw new UnsupportedOperationException("TODO later")
           case SnapshotDropped(info) => throw new UnsupportedOperationException("TODO later")
-          case WorkingCopyPublished => workingCopyPublished
-          case RowDataUpdated(ops) => rowDataUpdated(ops, conn)
+          case WorkingCopyPublished => WorkingCopyPublishedHandler(datasetInfo, dataVersion, conn)
+          case RowDataUpdated(ops) => rowDataUpdated(datasetInfo, dataVersion, ops, conn)
           case otherOps => throw new UnsupportedOperationException("Unexpected operation")
         }
       }
 
       // TODO update version afterwards
-
       cookie
     }
 
@@ -209,8 +210,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
       if (secColInfo.isSystemPrimaryKey) pgu.datasetMapWriter.setSystemPrimaryKey(truthColInfo)
       // no-op these two, never set them?
-//      if (secColInfo.isUserPrimaryKey) pgu.datasetMapWriter.setUserPrimaryKey(truthColInfo)
-//      if (secColInfo.isVersion) pgu.datasetMapWriter.setVersion(truthColInfo)
+      if (secColInfo.isUserPrimaryKey) pgu.datasetMapWriter.setUserPrimaryKey(truthColInfo)
+      if (secColInfo.isVersion) pgu.datasetMapWriter.setVersion(truthColInfo)
 
       sLoader.addColumns(Seq(truthColInfo))
       if (truthColInfo.isSystemPrimaryKey) sLoader.makeSystemPrimaryKey(truthColInfo)
@@ -221,7 +222,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
 
     // This only gets called once at dataset creation time.  We do not support it changing.
-    def systemRowIdentifierChanged(secDatasetInfo: DatasetInfo, dataVersion: Long, secColumnInfo: ColumnInfo[SoQLType], conn:Connection) = {
+    def versionColumnChanged(secDatasetInfo: DatasetInfo, dataVersion: Long, secColumnInfo: ColumnInfo[SoQLType], conn:Connection) = {
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
       val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
 
@@ -232,34 +233,39 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
       val truthColumnInfo = pgu.datasetMapReader.schema(truthCopyInfo)(secColumnInfo.systemId)
 
-      val newTruthColumnInfo = pgu.datasetMapWriter.setSystemPrimaryKey(truthColumnInfo)
+      val newTruthColumnInfo = pgu.datasetMapWriter.setVersion(truthColumnInfo)
 
-      sLoader.makeSystemPrimaryKey(newTruthColumnInfo)
+      sLoader.makeVersion(newTruthColumnInfo)
     }
 
-    def workingCopyCreated(datasetInfo: DatasetInfo, dataVersion: Long, copyInfo: CopyInfo, conn:Connection) = {
-      if (copyInfo.copyNumber != 1)
-          throw new UnsupportedOperationException("Cannot support making working copies beyond the first copy")
-      val (_, copyInfoSecondary, _) = DatasetSchema.createTable(conn, datasetInfo.localeName)
-      if (copyInfoSecondary.copyNumber != 1)
-        throw new UnsupportedOperationException("We only support one copy of a dataset!")
-      new PostgresDatasetInternalNameMapWriter(conn).create(datasetInfo.internalName, copyInfoSecondary.datasetInfo.systemId)
-    }
-
-    def workingCopyPublished = {
-      throw new UnsupportedOperationException("TODO optional")
-    }
-
-    def rowDataUpdated(ops: Seq[Operation[SoQLValue]], conn:Connection) = {
+    def rowDataUpdated(datasetInfo: DatasetInfo, dataVersion: Long, ops: Seq[Operation[SoQLValue]], conn:Connection) = {
       ops.foreach { o =>
         logger.debug("Got row operation: {}", o)
         o match {
-          case Insert(sid, row) =>  throw new UnsupportedOperationException("TODO NOW")
+          case Insert(sid, row) => rowInsert(datasetInfo, sid, row, conn)
           case Update(sid, row) => throw new UnsupportedOperationException("TODO NOW")
           case Delete(sid) => throw new UnsupportedOperationException("TODO NOW")
         }
       }
     }
+
+
+    def rowInsert(secDatasetInfo: DatasetInfo, systemId: RowId, row: Row[SoQLValue], conn:Connection) = {
+      val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
+      val datasetId: DatasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName(secDatasetInfo.internalName).get
+
+      val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
+      val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
+      val truthSchema = pgu.datasetMapReader.schema(truthCopyInfo)
+
+      val copyCtx = new DatasetCopyContext[SoQLType](truthCopyInfo, truthSchema)
+      val loader = pgu.prevettedLoader(copyCtx, pgu.logger(truthCopyInfo.datasetInfo, "test-user"))
+
+      loader.insert(systemId, row)
+      loader.flushInserts()
+    }
+
+
 
   // This is an expensive operation in that it is both time consuming as well as locking the data source for the duration
   // of the resync event. The resync event can come from either the DC, or originate from a ResyncSecondaryException being thrown
