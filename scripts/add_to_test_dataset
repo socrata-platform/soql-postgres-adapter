@@ -1,0 +1,16 @@
+#!/bin/sh
+ds_name=$1
+if [ -z "$ds_name" ]; then
+  echo "Usage: $0 <dataset name to add to>"
+  exit 1
+fi
+
+echo "Posting data to dataset..."
+curl -s -X POST --data-binary @- -H 'Content-type: application/json' "http://localhost:8081/resource/${ds_name}" <<EOD
+[{key:1,value:"one"}
+,{key:2,value:"two"}
+,{key:3,value:"three"}
+,{key:4,value:"four"}
+,{key:5,value:"five"}
+]
+EOD
