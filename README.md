@@ -9,4 +9,7 @@ webdav4sbt - available at https://bitbucket.org/diversit/webdav4sbt.git
 
 ### Build
 
-sbt package
+sudo -u postgres createdb -O blist -E utf-8 secondary_test
+createdb -O blist -E utf-8 secondary_test
+sbt test package assembly
+
