@@ -3,6 +3,7 @@ package com.socrata.pg.store
 import java.sql.{DriverManager, Connection}
 import com.rojoma.simplearm.util._
 import com.typesafe.config.{ConfigFactory, Config}
+import com.socrata.soql.types.{SoQLValue, SoQLType}
 
 object PGSecondaryUtil {
 
@@ -24,6 +25,13 @@ object PGSecondaryUtil {
       conn.setAutoCommit(false)
       populateDatabase(conn)
       f(conn)
+    }
+  }
+
+  def withPgu[T]()(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
+    withDb() { conn =>
+      val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
+      f(pgu)
     }
   }
 

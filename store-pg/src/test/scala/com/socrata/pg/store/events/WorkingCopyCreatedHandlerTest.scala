@@ -8,11 +8,11 @@ class WorkingCopyCreatedHandlerTest extends PGSecondaryTestBase {
   import com.socrata.pg.store.PGSecondaryUtil._
 
   test("can handle working copy event") {
-    withDb() { conn =>
+    withPgu() { pgu =>
       val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
       val dataVersion = 0L
       val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
-      WorkingCopyCreatedHandler(datasetInfo, dataVersion, copyInfo, conn)
+      WorkingCopyCreatedHandler(pgu, datasetInfo, copyInfo)
     }
   }
 
