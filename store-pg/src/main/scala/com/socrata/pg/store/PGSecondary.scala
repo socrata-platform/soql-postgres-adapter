@@ -1,31 +1,37 @@
 package com.socrata.pg.store
 
-import com.socrata.datacoordinator.secondary._
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.typesafe.config.Config
 import com.socrata.pg.store.events.{WorkingCopyPublishedHandler, SystemRowIdentifierChangedHandler, WorkingCopyCreatedHandler}
 import java.sql.{DriverManager, Connection}
 import com.rojoma.simplearm.util._
-import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo}
-import com.socrata.datacoordinator.truth.metadata.{DatasetCopyContext}
+import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo, DatasetInfo => SecondaryDatasetInfo, _}
+import com.socrata.datacoordinator.id.{RowId, UserColumnId, DatasetId}
+import com.socrata.soql.brita.AsciiIdentifierFilter
+import com.typesafe.scalalogging.slf4j.Logging
+import com.socrata.pg.store.events.SystemRowIdentifierChangedHandler
+import com.socrata.pg.store.events.WorkingCopyCreatedHandler
+import com.socrata.pg.store.events.WorkingCopyPublishedHandler
+import com.socrata.pg.store.events.SystemRowIdentifierChangedHandler
+import com.socrata.datacoordinator.secondary.RowIdentifierCleared
+import com.socrata.datacoordinator.secondary.Update
+import com.socrata.datacoordinator.secondary.SnapshotDropped
+import com.socrata.datacoordinator.secondary.DatasetInfo
+import com.socrata.datacoordinator.secondary.RowDataUpdated
+import com.socrata.datacoordinator.secondary.ColumnInfo
 import com.socrata.datacoordinator.secondary.VersionColumnChanged
 import com.socrata.datacoordinator.secondary.WorkingCopyCreated
 import com.socrata.datacoordinator.secondary.RowIdentifierSet
 import com.socrata.datacoordinator.secondary.ColumnCreated
-import com.socrata.datacoordinator.secondary.RowIdentifierCleared
-import com.socrata.datacoordinator.secondary.Update
+import com.socrata.pg.store.events.WorkingCopyCreatedHandler
 import com.socrata.datacoordinator.secondary.SystemRowIdentifierChanged
-import com.socrata.datacoordinator.secondary.SnapshotDropped
 import com.socrata.datacoordinator.secondary.Delete
-import com.socrata.datacoordinator.secondary.DatasetInfo
-import com.socrata.datacoordinator.secondary.RowDataUpdated
 import com.socrata.datacoordinator.secondary.ColumnRemoved
+import com.socrata.pg.store.events.WorkingCopyPublishedHandler
 import com.socrata.datacoordinator.secondary.CopyInfo
 import com.socrata.datacoordinator.secondary.Insert
-import com.socrata.datacoordinator.id.{RowId, UserColumnId, DatasetId}
-import com.socrata.soql.brita.AsciiIdentifierFilter
-import com.typesafe.scalalogging.slf4j.Logging
+import com.socrata.datacoordinator.truth.metadata.DatasetCopyContext
 
 /**
  * Postgres Secondary Store Implementation
@@ -136,7 +142,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   // A separate event will be passed to this method for actually copying the data
   // If working copy already exists and we receive a workingCopyCreated event is received, then a resync event/exception should fire
   // Publishing a working copy promotes that working copy to a published copy. There should no longer be a working copy after publishing
-  protected[store] def _version(datasetInfo: DatasetInfo, dataVersion: Long, cookie: Secondary.Cookie, events: Iterator[Event[SoQLType, SoQLValue]], conn:Connection): Secondary.Cookie = {
+  protected[store] def _version(secondaryDatasetInfo: DatasetInfo, newDataVersion: Long, cookie: Secondary.Cookie, events: Iterator[Event[SoQLType, SoQLValue]], conn:Connection): Secondary.Cookie = {
     // How do we get the copyInfo? dataset_map
     //  - One of the events that comes through here will be working copy created; it must be the first if it does; separate event for actually copying
     //    the data
@@ -146,36 +152,53 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     //  - Unpublished => Working Copy
 
     // rowVersion is given through the event
-    // dataVersion is the version which corresponds to the set of events which we are given; corresponds with the currentVersion
-    //     - ignore this if the dataVersion <= currentVersion
+    // newDataVersion is the version which corresponds to the set of events which we are given; corresponds with the currentVersion
+    //     - ignore this if the newDataVersion <= currentVersion
     //     - stored in copy_map
-    logger.debug("version (datasetInfo: {}, dataVersion: {}, cookie: {}, events: {})",
-      datasetInfo, dataVersion.asInstanceOf[AnyRef], cookie, events)
+    logger.debug("version (datasetInfo: {}, newDataVersion: {}, cookie: {}, events: {})",
+      secondaryDatasetInfo, newDataVersion.asInstanceOf[AnyRef], cookie, events)
 
-    // TODO check version beforehand
+    val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon)
+    val datasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName(secondaryDatasetInfo.internalName)
+
+    val truthDatasetInfo = datasetId.flatMap(pgu.datasetMapReader.datasetInfo(_))
+    val truthCopyInfo = truthDatasetInfo.map(pgu.datasetMapReader.latest(_))
+
+    // if the latest CopyInfo exists, it must be the previous version to what we have or we are out of sync
+    truthCopyInfo
+      .filter(copy => copy.dataVersion+1 != newDataVersion)
+      .foreach(copy => throw new ResyncSecondaryException(s"Current version ${copy.dataVersion}, next version ${newDataVersion} but should be ${copy.dataVersion+1}"))
+
 
     events.foreach { e =>
       logger.debug("got event: {}", e)
       e match {
         case Truncated => throw new UnsupportedOperationException("TODO later")
-        case ColumnCreated(colInfo) => columnCreated(datasetInfo, dataVersion, colInfo, conn)
+        case ColumnCreated(colInfo) => columnCreated(secondaryDatasetInfo, newDataVersion, colInfo, conn)
         case ColumnRemoved(info)  =>  columnRemoved(info, conn)
         case RowIdentifierSet(info) => Unit // no-op
         case RowIdentifierCleared(info) => Unit // no-op
         // TODO Decide if we're going to pass "conn" as the first parameter (as seems to be the norm elsewhere), or use named arguments to avoid ordering issues altogether...
-        case SystemRowIdentifierChanged(colInfo) => SystemRowIdentifierChangedHandler(conn = conn, secDatasetInfo = datasetInfo, dataVersion = dataVersion, secColumnInfo = colInfo)
-        case VersionColumnChanged(colInfo) => versionColumnChanged(datasetInfo, dataVersion, colInfo, conn)
-        case WorkingCopyCreated(copyInfo) => WorkingCopyCreatedHandler(datasetInfo, dataVersion, copyInfo, conn)
+        case SystemRowIdentifierChanged(colInfo) => SystemRowIdentifierChangedHandler(conn = conn, secDatasetInfo = secondaryDatasetInfo, dataVersion = newDataVersion, secColumnInfo = colInfo)
+        case VersionColumnChanged(colInfo) => versionColumnChanged(secondaryDatasetInfo, newDataVersion, colInfo, conn)
+        case WorkingCopyCreated(copyInfo) => WorkingCopyCreatedHandler(secondaryDatasetInfo, newDataVersion, copyInfo, conn)
         case WorkingCopyDropped => throw new UnsupportedOperationException("TODO later")
         case DataCopied => throw new UnsupportedOperationException("TODO later")
         case SnapshotDropped(info) => throw new UnsupportedOperationException("TODO later")
-        case WorkingCopyPublished => WorkingCopyPublishedHandler(datasetInfo, dataVersion, conn)
-        case RowDataUpdated(ops) => rowDataUpdated(datasetInfo, dataVersion, ops, conn)
+        case WorkingCopyPublished => WorkingCopyPublishedHandler(secondaryDatasetInfo, newDataVersion, conn)
+        case RowDataUpdated(ops) => rowDataUpdated(secondaryDatasetInfo, newDataVersion, ops, conn)
         case otherOps => throw new UnsupportedOperationException("Unexpected operation")
       }
     }
 
-    // TODO update version afterwards
+    // at this point, the dataset and copy must exist.
+    // TODO we only actually have to look this up if WorkingCopyCreated or WorkingCopyDropped(?) was called
+    val newDatasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName(secondaryDatasetInfo.internalName).get
+    val newTruthDatasetInfo = pgu.datasetMapReader.datasetInfo(newDatasetId).get
+    val newTruthCopyInfo = pgu.datasetMapReader.latest(newTruthDatasetInfo)
+
+    pgu.datasetMapWriter.updateDataVersion(newTruthCopyInfo, newDataVersion)
+
     cookie
   }
 

@@ -31,7 +31,7 @@ class PGSecondaryTest extends PGSecondaryTestBase {
         ColumnCreated(ColumnInfo(new ColumnId(9127), new UserColumnId("mycolumn"), SoQLText, false, false, false)),
         ColumnCreated(ColumnInfo(new ColumnId(9128), new UserColumnId(":updated_at"), SoQLTime, false, false, false))
       ).iterator
-      pgs._version(datasetInfo, dataVersion, None, events, conn)
+      pgs._version(datasetInfo, dataVersion+1, None, events, conn)
     }
   }
 
@@ -46,7 +46,7 @@ class PGSecondaryTest extends PGSecondaryTestBase {
         ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, false, false, false)),
         SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, false, false, false))
       ).iterator
-      pgs._version(datasetInfo, dataVersion, None, events, conn)
+      pgs._version(datasetInfo, dataVersion+1, None, events, conn)
     }
   }
 
@@ -70,7 +70,7 @@ class PGSecondaryTest extends PGSecondaryTestBase {
         RowDataUpdated(Seq(Insert(new RowId(1000), row1), Insert(new RowId(1001), row2)))
 
       ).iterator
-      pgs._version(datasetInfo, dataVersion, None, events, conn)
+      pgs._version(datasetInfo, dataVersion+1, None, events, conn)
     }
   }
 }
