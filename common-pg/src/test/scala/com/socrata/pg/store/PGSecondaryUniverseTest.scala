@@ -18,6 +18,9 @@ import java.math.BigDecimal
 import com.socrata.datacoordinator.truth.metadata.ColumnInfo
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.socrata.datacoordinator.truth.universe.sql.SqlTableCleanup
+import com.typesafe.config.ConfigFactory
+import com.socrata.thirdparty.typesafeconfig.Propertizer
+import org.apache.log4j.PropertyConfigurator
 
 
 /**
@@ -28,6 +31,8 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
     type CV = SoQLValue
     val common = PostgresUniverseCommon
     override def beforeAll() {
+      val rootConfig = ConfigFactory.load()
+      PropertyConfigurator.configure(Propertizer("log4j", rootConfig.getConfig("com.socrata.soql-server-pg.log4j")))
     }
 
     override def afterAll() {
