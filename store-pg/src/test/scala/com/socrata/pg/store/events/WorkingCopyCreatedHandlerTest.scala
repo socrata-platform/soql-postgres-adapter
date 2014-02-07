@@ -4,6 +4,7 @@ import com.socrata.datacoordinator.secondary.{LifecycleStage, CopyInfo, DatasetI
 import com.socrata.datacoordinator.id.CopyId
 import com.socrata.pg.store.PGSecondaryTestBase
 import scala.language.reflectiveCalls
+import com.socrata.datacoordinator.truth.metadata
 
 class WorkingCopyCreatedHandlerTest extends PGSecondaryTestBase {
   import com.socrata.pg.store.PGSecondaryUtil._
@@ -18,6 +19,9 @@ class WorkingCopyCreatedHandlerTest extends PGSecondaryTestBase {
       val dataVersion = 0L
       val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
       WorkingCopyCreatedHandler(pgu, datasetInfo, copyInfo)
+
+      val truthCopyInfo = getTruthCopyInfo(pgu, datasetInfo)
+      truthCopyInfo.lifecycleStage should be (metadata.LifecycleStage.Unpublished)
     }
   }
 

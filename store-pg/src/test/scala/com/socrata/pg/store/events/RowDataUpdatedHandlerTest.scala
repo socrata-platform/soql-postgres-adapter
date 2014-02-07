@@ -10,55 +10,63 @@ import com.typesafe.scalalogging.slf4j.Logging
 import com.socrata.datacoordinator.secondary.RowDataUpdated
 import com.socrata.datacoordinator.secondary.Update
 import com.socrata.datacoordinator.secondary.Insert
+import com.socrata.datacoordinator.secondary.Delete
 
 
 class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with Logging {
 
   import com.socrata.pg.store.PGSecondaryUtil._
 
+  private val insertOps = Seq(
+          (1000, 110, "foo"),
+          (1001, 112, "foo2"),
+          (1002, 114, "foo3")).map { r =>
+          Insert(new RowId(r._1), ColumnIdMap()
+            + (new ColumnId(9124), new SoQLID(r._1))
+            + (new ColumnId(9125), new SoQLVersion(r._2))
+            + (new ColumnId(9126), new SoQLText(r._3))
+          )
+        }
+
   test("handle row insert") {
     withPgu() {
       pgu =>
         val f = columnsCreatedFixture
-
-        val row1 = ColumnIdMap() +(new ColumnId(9124), new SoQLID(1000)) +(new ColumnId(9126), new SoQLText("foo"))
-        val row2 = ColumnIdMap() +(new ColumnId(9124), new SoQLID(1001)) +(new ColumnId(9126), new SoQLText("foo2"))
-
         val events = f.events ++ Seq(
-          RowDataUpdated(Seq(Insert(new RowId(1000), row1), Insert(new RowId(1001), row2)))
+          RowDataUpdated(insertOps)
         )
-        f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
 
+        f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
 
         for {
           truthCopyInfo <- unmanaged(getTruthCopyInfo(pgu, f.datasetInfo))
           reader <- pgu.datasetReader.openDataset(truthCopyInfo)
           rows <- reader.rows()
-        } rows.map(_(new ColumnId(9126))).collect { case SoQLText(s) => s }.toSet should contain theSameElementsAs Set("foo", "foo2")
+        } rows.map(_(new ColumnId(9126))).collect { case SoQLText(s) => s }.toSet should contain theSameElementsAs Set("foo", "foo2", "foo3")
     }
   }
 
   test("handle row update") {
     withDb() {
       conn =>
+
         val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
-
         val f = columnsCreatedFixture
+        val events = f.events :+ RowDataUpdated(insertOps)
 
-        val row1 = ColumnIdMap() +(new ColumnId(9124), new SoQLID(1000)) +(new ColumnId(9125), new SoQLVersion(110)) +(new ColumnId(9126), new SoQLText("foo"))
-        val row2 = ColumnIdMap() +(new ColumnId(9124), new SoQLID(1001)) +(new ColumnId(9125), new SoQLVersion(112)) +(new ColumnId(9126), new SoQLText("foo2"))
-
-        val events = f.events ++ Seq(
-          RowDataUpdated(Seq(Insert(new RowId(1000), row1), Insert(new RowId(1001), row2)))
-        )
         f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
 
-        val row1u = ColumnIdMap() +(new ColumnId(9124), new SoQLID(1000)) +(new ColumnId(9125), new SoQLVersion(110)) +(new ColumnId(9126), new SoQLText("bar"))
-        val row2u = ColumnIdMap() +(new ColumnId(9124), new SoQLID(1001)) +(new ColumnId(9125), new SoQLVersion(112)) +(new ColumnId(9126), new SoQLText("bar2"))
+        val updateOps = Seq(
+          (1000, 110, "bar"),
+          (1002, 114, "bar3")).map { r =>
+          Update(new RowId(r._1), ColumnIdMap()
+            + (new ColumnId(9124), new SoQLID(r._1))
+            + (new ColumnId(9125), new SoQLVersion(r._2))
+            + (new ColumnId(9126), new SoQLText(r._3))
+          )(None)
+        }
 
-        val updateEvents = Seq(
-          RowDataUpdated(Seq(Update(new RowId(1000), row1u)(Option(row1)), Update(new RowId(1001), row2u)(Option(row2))))
-        )
+        val updateEvents = Seq(RowDataUpdated(updateOps))
 
         f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 2, None, updateEvents.iterator)
 
@@ -66,7 +74,34 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with Logging {
           truthCopyInfo <- unmanaged(getTruthCopyInfo(pgu, f.datasetInfo))
           reader <- pgu.datasetReader.openDataset(truthCopyInfo)
           rows <- reader.rows()
-        } rows.map(_(new ColumnId(9126))).collect { case SoQLText(s) => s }.toSet should contain theSameElementsAs Set("bar", "bar2")
+        } rows.map(_(new ColumnId(9126))).collect { case SoQLText(s) => s }.toSet should contain theSameElementsAs Set("bar", "foo2", "bar3")
+    }
+  }
+
+  test("handle row delete") {
+    withDb() { conn =>
+      val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
+      val f = columnsCreatedFixture
+      val events = f.events :+ RowDataUpdated(insertOps)
+
+      f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
+
+      val deleteOps = Seq(
+        1000,
+        1002).map { r =>
+        Delete(new RowId(r))(None)
+      }
+
+      val deleteEvents = Seq(RowDataUpdated(deleteOps))
+
+      f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 2, None, deleteEvents.iterator)
+
+      for {
+        truthCopyInfo <- unmanaged(getTruthCopyInfo(pgu, f.datasetInfo))
+        reader <- pgu.datasetReader.openDataset(truthCopyInfo)
+        rows <- reader.rows()
+      } rows.map(_(new ColumnId(9126))).collect { case SoQLText(s) => s }.toSet should contain theSameElementsAs Set("foo2")
+
     }
   }
 
