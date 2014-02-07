@@ -1,9 +1,7 @@
 package com.socrata.pg.store.events
 
-import com.socrata.datacoordinator.id.{UserColumnId, ColumnId}
-import com.socrata.datacoordinator.secondary.{WorkingCopyPublished, SystemRowIdentifierChanged, ColumnCreated, ColumnInfo}
+import com.socrata.datacoordinator.secondary.{WorkingCopyPublished}
 import com.socrata.pg.store.PGSecondaryTestBase
-import com.socrata.soql.types.SoQLID
 import scala.language.reflectiveCalls
 import com.socrata.datacoordinator.truth.metadata.LifecycleStage
 
@@ -21,8 +19,7 @@ class WorkingCopyPublishedHandlerTest extends PGSecondaryTestBase {
 
       val truthCopyInfo = getTruthCopyInfo(pgu, f.datasetInfo)
 
-      assert(truthCopyInfo.lifecycleStage == LifecycleStage.Published, s"Dataset should be published now, but is ${truthCopyInfo.lifecycleStage}")
-      val schema = pgu.datasetMapReader.schema(truthCopyInfo)
+      truthCopyInfo.lifecycleStage shouldEqual LifecycleStage.Published
     }
   }
 

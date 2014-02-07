@@ -16,8 +16,7 @@ class CurrentVersionTest extends PGSecondaryTestBase {
         f.pgs._version(pgu, f.datasetInfo, version, None, Iterator(e))
       }
 
-      assert(f.pgs._currentVersion(pgu, testInternalName, None) == version)
-
+      f.pgs._currentVersion(pgu, testInternalName, None) shouldEqual version
     }
   }
 

@@ -15,7 +15,7 @@ class CurrentCopyNumberTest extends PGSecondaryTestBase {
       val actualCopyNum = f.pgs._currentCopyNumber(pgu, testInternalName, None)
 
       // right now we only support a single copy of the dataset ... so this is a silly test!
-      assert(actualCopyNum == 1, s"Current copy number should be 1, not ${actualCopyNum}")
+      actualCopyNum shouldEqual 1
 
     }
   }

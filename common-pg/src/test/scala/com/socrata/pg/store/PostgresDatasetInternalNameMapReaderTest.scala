@@ -1,14 +1,13 @@
 package com.socrata.pg.store
 
-import org.scalatest.{BeforeAndAfterAll, FunSuite}
-import org.scalatest.matchers.MustMatchers
+import org.scalatest.{Matchers, BeforeAndAfterAll, FunSuite}
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import java.sql.{DriverManager, Connection}
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.datacoordinator.common.StandardObfuscationKeyGenerator
 
-class PostgresDatasetInternalNameMapReaderTest extends FunSuite with MustMatchers with BeforeAndAfterAll {
+class PostgresDatasetInternalNameMapReaderTest extends FunSuite with Matchers with BeforeAndAfterAll {
 
   type CT = SoQLType
   type CV = SoQLValue
@@ -65,7 +64,7 @@ class PostgresDatasetInternalNameMapReaderTest extends FunSuite with MustMatcher
     withDb() {
       conn => {
         val datasetId: DatasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName("Dataset Name").get
-        assert(new DatasetId(123) == datasetId, "Expected 'Dataset Name' to map to id 123")
+        datasetId shouldEqual new DatasetId(123)
       }
     }
   }

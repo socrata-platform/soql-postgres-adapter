@@ -2,12 +2,10 @@ package com.socrata.pg.store.events
 
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.id.{RowId, ColumnId}
-import com.socrata.datacoordinator.secondary.{Update, Insert, RowDataUpdated}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.store.{PostgresUniverseCommon, PGSecondaryUniverse, PGSecondaryTestBase}
 import com.socrata.soql.types._
 import scala.language.reflectiveCalls
-import com.socrata.datacoordinator.truth.metadata.DatasetCopyContext
 import com.typesafe.scalalogging.slf4j.Logging
 import com.socrata.datacoordinator.secondary.RowDataUpdated
 import com.socrata.datacoordinator.secondary.Update
@@ -32,22 +30,11 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with Logging {
         f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
 
 
-        val rowsSet = for {
+        for {
           truthCopyInfo <- unmanaged(getTruthCopyInfo(pgu, f.datasetInfo))
           reader <- pgu.datasetReader.openDataset(truthCopyInfo)
           rows <- reader.rows()
-        } yield {
-          rows.map { cidMap =>
-            cidMap(new ColumnId(9126)) match {
-              case SoQLText(s) => s
-              case _ => throw new RuntimeException("unexpected column value")
-            }
-          }.toSet
-        }
-
-        val expectedRowsSet = Set("foo", "foo2")
-        assert(rowsSet equals expectedRowsSet, s"Should have found ${expectedRowsSet}, but found ${rowsSet}")
-
+        } rows.map(_(new ColumnId(9126))).collect { case SoQLText(s) => s }.toSet should contain theSameElementsAs Set("foo", "foo2")
     }
   }
 
@@ -75,23 +62,11 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with Logging {
 
         f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 2, None, updateEvents.iterator)
 
-
-        val rowsSet = for {
+        for {
           truthCopyInfo <- unmanaged(getTruthCopyInfo(pgu, f.datasetInfo))
           reader <- pgu.datasetReader.openDataset(truthCopyInfo)
           rows <- reader.rows()
-        } yield {
-          rows.map { cidMap =>
-            cidMap(new ColumnId(9126)) match {
-              case SoQLText(s) => s
-              case _ => throw new RuntimeException("unexpected column value")
-            }
-          }.toSet
-        }
-
-        val expectedRowsSet = Set("bar", "bar2")
-        assert(rowsSet equals expectedRowsSet, s"Should have found ${expectedRowsSet}, but found ${rowsSet}")
-
+        } rows.map(_(new ColumnId(9126))).collect { case SoQLText(s) => s }.toSet should contain theSameElementsAs Set("bar", "bar2")
     }
   }
 

@@ -22,7 +22,7 @@ class VersionColumnChangedHandlerTest extends PGSecondaryTestBase {
       val truthCopyInfo = getTruthCopyInfo(pgu, f.datasetInfo)
       val schema = pgu.datasetMapReader.schema(truthCopyInfo)
 
-      assert(schema.values.filter(_.isVersion).size == 1, "Should have one version column now")
+      schema.values.filter(_.isVersion) should have size (1)
     }
   }
 

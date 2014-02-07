@@ -9,13 +9,7 @@ import com.socrata.soql.types._
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.ConfigFactory
 import org.apache.log4j.PropertyConfigurator
-import org.scalatest.matchers.MustMatchers
-import org.scalatest.{BeforeAndAfterAll, FunSuite}
-import com.socrata.datacoordinator.secondary.ColumnInfo
-import com.socrata.datacoordinator.secondary.WorkingCopyCreated
-import com.socrata.datacoordinator.secondary.ColumnCreated
-import com.socrata.datacoordinator.secondary.SystemRowIdentifierChanged
-import com.socrata.datacoordinator.secondary.DatasetInfo
+import org.scalatest.{Matchers, BeforeAndAfterAll, FunSuite}
 import com.socrata.datacoordinator.secondary.ColumnInfo
 import com.socrata.datacoordinator.secondary.WorkingCopyCreated
 import com.socrata.datacoordinator.secondary.ResyncSecondaryException
@@ -23,7 +17,7 @@ import com.socrata.datacoordinator.secondary.ColumnCreated
 import com.socrata.datacoordinator.secondary.SystemRowIdentifierChanged
 import com.socrata.datacoordinator.secondary.DatasetInfo
 
-class PGSecondaryTestBase  extends FunSuite with MustMatchers with BeforeAndAfterAll {
+class PGSecondaryTestBase  extends FunSuite with Matchers with BeforeAndAfterAll {
   override def beforeAll = {
     val rootConfig = ConfigFactory.load()
     PropertyConfigurator.configure(Propertizer("log4j", rootConfig.getConfig("com.socrata.soql-server-pg.log4j")))

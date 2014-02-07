@@ -22,7 +22,7 @@ class SystemRowIdentifierChangedHandlerTest extends PGSecondaryTestBase {
       val truthCopyInfo = getTruthCopyInfo(pgu, f.datasetInfo)
       val schema = pgu.datasetMapReader.schema(truthCopyInfo)
 
-      assert(schema.values.filter(_.isSystemPrimaryKey).size == 1, "Should have one system primary key now")
+      schema.values.filter(_.isSystemPrimaryKey) should have size (1)
     }
   }
 

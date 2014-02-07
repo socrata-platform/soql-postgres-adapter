@@ -1,7 +1,6 @@
 package com.socrata.pg.store
 
-import org.scalatest.{BeforeAndAfterAll, FunSuite}
-import org.scalatest.matchers.MustMatchers
+import org.scalatest.{Matchers, BeforeAndAfterAll, FunSuite}
 
 import java.sql.{DriverManager, Connection}
 import com.rojoma.simplearm.util._
@@ -24,7 +23,7 @@ import com.socrata.datacoordinator.truth.universe.sql.SqlTableCleanup
 /**
  *
  */
-class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndAfterAll {
+class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfterAll {
     type CT = SoQLType
     type CV = SoQLValue
     val common = PostgresUniverseCommon
@@ -94,7 +93,7 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
 
       expect foreach {
         colInfo =>  {
-          existing must contain (colInfo.systemId, colInfo.typ)
+          existing should contain (colInfo.systemId, colInfo.typ)
           //println("Checked that " + colInfo.userColumnId+ ":" + colInfo.typeName + " was truly and surely created")
         }
       }

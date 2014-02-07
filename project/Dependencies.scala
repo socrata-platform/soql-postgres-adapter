@@ -8,7 +8,7 @@ object Dependencies {
     val commonsLang = "2.6"
     val jodaConvert = "1.2"
     val jodaTime = "2.1"
-    val scalaTest = "1.9.1"
+    val scalaTest = "2.1.0-RC2"
     val simpleArm = "[1.1.10,2.0.0)"
     val slf4j = "1.7.5"
     val socrataUtils = "[0.6.0,1.0.0)"
