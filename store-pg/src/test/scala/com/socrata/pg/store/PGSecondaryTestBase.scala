@@ -1,20 +1,21 @@
 package com.socrata.pg.store
 
 import com.socrata.datacoordinator.id.{UserColumnId, ColumnId, CopyId}
-import com.socrata.datacoordinator.secondary.ColumnCreated
-import com.socrata.datacoordinator.secondary.ColumnInfo
-import com.socrata.datacoordinator.secondary.DatasetInfo
-import com.socrata.datacoordinator.secondary.LifecycleStage
-import com.socrata.datacoordinator.secondary.SystemRowIdentifierChanged
-import com.socrata.datacoordinator.secondary.WorkingCopyCreated
-import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo}
+import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, _}
+import com.socrata.datacoordinator.secondary.{DatasetInfo => SecondaryDatasetInfo}
+import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo}
 import com.socrata.pg.store.PGSecondaryUtil._
-import com.socrata.soql.types.{SoQLText, SoQLID}
+import com.socrata.soql.types.{SoQLValue, SoQLType, SoQLText, SoQLID}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.ConfigFactory
 import org.apache.log4j.PropertyConfigurator
 import org.scalatest.matchers.MustMatchers
 import org.scalatest.{BeforeAndAfterAll, FunSuite}
+import com.socrata.datacoordinator.secondary.ColumnInfo
+import com.socrata.datacoordinator.secondary.WorkingCopyCreated
+import com.socrata.datacoordinator.secondary.ColumnCreated
+import com.socrata.datacoordinator.secondary.SystemRowIdentifierChanged
+import com.socrata.datacoordinator.secondary.DatasetInfo
 
 class PGSecondaryTestBase  extends FunSuite with MustMatchers with BeforeAndAfterAll {
   override def beforeAll = {
@@ -46,6 +47,15 @@ class PGSecondaryTestBase  extends FunSuite with MustMatchers with BeforeAndAfte
         ColumnCreated(ColumnInfo(new ColumnId(9126), new UserColumnId("mycolumn"), SoQLText, false, false, false)),
         SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, true, false, false))
       )
+    }
+
+    def getTruthCopyInfo(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], secondaryDatasetInfo: SecondaryDatasetInfo): TruthCopyInfo = {
+      val datasetId = pgu.datasetInternalNameMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName).getOrElse(
+        throw new ResyncSecondaryException(s"Couldn't find mapping for datasetInternalName ${secondaryDatasetInfo.internalName}")
+      )
+
+      val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
+      pgu.datasetMapReader.latest(truthDatasetInfo)
     }
 
 }
