@@ -8,7 +8,13 @@ import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo}
 
 // This only gets called once at dataset creation time.  We do not support it changing.
 case class VersionColumnChangedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], truthCopyInfo: TruthCopyInfo, secColumnInfo: SecondaryColumnInfo[SoQLType]) {
-  val truthColumnInfo = pgu.datasetMapReader.schema(truthCopyInfo)(secColumnInfo.systemId)
+  val schema = pgu.datasetMapReader.schema(truthCopyInfo)
+
+  schema.values.filter(_.isVersion).foreach { col =>
+    throw new UnsupportedOperationException(s"Can't modify existing version column of ${col}")
+  }
+
+  val truthColumnInfo = schema(secColumnInfo.systemId)
 
   val newTruthColumnInfo = pgu.datasetMapWriter.setVersion(truthColumnInfo)
 

@@ -5,7 +5,7 @@ import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, _}
 import com.socrata.datacoordinator.secondary.{DatasetInfo => SecondaryDatasetInfo}
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo}
 import com.socrata.pg.store.PGSecondaryUtil._
-import com.socrata.soql.types.{SoQLValue, SoQLType, SoQLText, SoQLID}
+import com.socrata.soql.types._
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.ConfigFactory
 import org.apache.log4j.PropertyConfigurator
@@ -13,6 +13,12 @@ import org.scalatest.matchers.MustMatchers
 import org.scalatest.{BeforeAndAfterAll, FunSuite}
 import com.socrata.datacoordinator.secondary.ColumnInfo
 import com.socrata.datacoordinator.secondary.WorkingCopyCreated
+import com.socrata.datacoordinator.secondary.ColumnCreated
+import com.socrata.datacoordinator.secondary.SystemRowIdentifierChanged
+import com.socrata.datacoordinator.secondary.DatasetInfo
+import com.socrata.datacoordinator.secondary.ColumnInfo
+import com.socrata.datacoordinator.secondary.WorkingCopyCreated
+import com.socrata.datacoordinator.secondary.ResyncSecondaryException
 import com.socrata.datacoordinator.secondary.ColumnCreated
 import com.socrata.datacoordinator.secondary.SystemRowIdentifierChanged
 import com.socrata.datacoordinator.secondary.DatasetInfo
@@ -43,7 +49,7 @@ class PGSecondaryTestBase  extends FunSuite with MustMatchers with BeforeAndAfte
       val events = Seq(
         WorkingCopyCreated(copyInfo),
         ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, false, false, false)),
-        ColumnCreated(ColumnInfo(new ColumnId(9125), new UserColumnId(":version"), SoQLID, false, false, true)),
+        ColumnCreated(ColumnInfo(new ColumnId(9125), new UserColumnId(":version"), SoQLVersion, false, false, true)),
         ColumnCreated(ColumnInfo(new ColumnId(9126), new UserColumnId("mycolumn"), SoQLText, false, false, false)),
         SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, true, false, false))
       )
