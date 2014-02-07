@@ -18,6 +18,7 @@ import com.rojoma.json.ast.{JArray, JString, JObject}
 import java.math.BigDecimal
 import com.socrata.datacoordinator.truth.metadata.ColumnInfo
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
+import com.socrata.datacoordinator.truth.universe.sql.SqlTableCleanup
 
 
 /**
@@ -140,10 +141,32 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
       (systemColId, versionColId)
     }
 
-  
+    def fetchColumnFromTable(connection: Connection, options: Map[String, String]) = {
+      val tableName = options.getOrElse("tableName", "")
+      val columnName = options.getOrElse("columnName", "")
+      val whereClause = options.getOrElse("whereClause", "")
+      val statement = connection.prepareStatement(s"SELECT $columnName FROM $tableName WHERE $whereClause")
+      using(statement.executeQuery) { rs =>
+        if (rs.next) {
+          rs.getString(columnName)
+        } else {
+          ""
+        }
+      }
+    }
+
+    def updateColumnValueInTable(connection: Connection, options: Map[String, String]) {
+      val tableName = options.getOrElse("tableName", "")
+      val columnName = options.getOrElse("columnName", "")
+      val columnValue = options.getOrElse("columnValue", "")
+      val whereClause = options.getOrElse("whereClause", "")
+      val statement = connection.prepareStatement(s"UPDATE $tableName SET $columnName = $columnValue WHERE $whereClause")
+      statement.execute
+    }
+
     test("Universe can create a table") {
       withDb() { conn =>
-        val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
+        val (pgu, copyInfo, _) = createTable(conn:Connection)
         val blankTableSchema = getSchema(pgu, copyInfo)
         assert(blankTableSchema.size == 0, "We expect no columns")
       }
@@ -328,22 +351,50 @@ class PGSecondaryUniverseTest extends FunSuite with MustMatchers with BeforeAndA
       }
     }
 
-    test("Universe can delete table") {
+    // Can't delete the table if it's the only instance of the table that exists
+    // Can't delete the table if it's published
+    // Maybe can delete the table if it's a snapshot?
+    test("Universe can delete a table by adding row to pending_table_drops") {
       withDb() { conn =>
-        val (pgu, copyInfo, sLoader) = createTable(conn)
+        val (_, copyInfo, sLoader) = createTable(conn)
         sLoader.drop(copyInfo)
-        // Can't delete the table if it's the only instance of the table that exists
-        // Can't delete the table if it's published
-        // Maybe can delete the table if it's a snapshot?
-        //        pgu.datasetMapWriter
-        //        pgu.commit
-        println(copyInfo.dataTableName)
+        val dataTableName = copyInfo.dataTableName
         // Check to see if dropped table is in pending drop table operations collection
+        val tableName = fetchColumnFromTable(connection = conn, Map(
+          "tableName" -> "pending_table_drops",
+          "columnName" -> "table_name",
+          "whereClause" -> s"table_name = '$dataTableName'"
+        ))
+        assert(tableName.length > 0, s"Expected to find $dataTableName in the pending_table_drops table")
       }
     }
 
-    test("Universe can delete a copy of a dataset") {
-
+    test("Universe can delete a table that is referenced by pending_table_drops") {
+      withDb() { conn =>
+        val (_, copyInfo, sLoader) = createTable(conn)
+        sLoader.drop(copyInfo)
+        val dataTableName = copyInfo.dataTableName
+        updateColumnValueInTable(connection = conn, options = Map(
+          "tableName" -> "pending_table_drops",
+          "columnName" -> "queued_at",
+          "columnValue" -> "now() - ('2 day' :: INTERVAL)",
+          "whereClause" -> s"table_name = '$dataTableName'"
+        ))
+        val deletedSomeTables = new SqlTableCleanup(conn).cleanupPendingDrops()
+        assert(deletedSomeTables, "Expected to have deleted at least one row from pending_table_drops")
+        val tableName = fetchColumnFromTable(connection = conn, Map(
+          "tableName" -> "pending_table_drops",
+          "columnName" -> "table_name",
+          "whereClause" -> s"table_name = '$dataTableName'"
+        ))
+        assert(tableName.length == 0, s"Expected NOT to find $dataTableName in the pending_table_drops table")
+        val publicTableName = fetchColumnFromTable(connection = conn, Map(
+          "tableName" -> "pg_tables",
+          "columnName" -> "tablename",
+          "whereClause" -> s"schemaname = 'public' AND tablename = '$dataTableName'"
+        ))
+        assert(publicTableName.length == 0, "Expected NOT to find $dataTableName in the pg_tables table")
+      }
     }
 
     test("Universe can delete a published copy") {

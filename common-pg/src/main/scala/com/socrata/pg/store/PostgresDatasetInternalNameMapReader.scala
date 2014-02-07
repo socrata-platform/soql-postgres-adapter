@@ -6,10 +6,8 @@ import com.socrata.datacoordinator.id.DatasetId
 
 class PostgresDatasetInternalNameMapReader(val conn: Connection) {
 
-  val dataseInternalNameMapByStringQuery = "SELECT dataset_system_id FROM dataset_internal_name_map WHERE dataset_internal_name = ?"
-
   def datasetIdForInternalName(datasetInternalName: String): Option[DatasetId] = {
-    using(conn.prepareStatement(dataseInternalNameMapByStringQuery)) { stmt =>
+    using(conn.prepareStatement("SELECT dataset_system_id FROM dataset_internal_name_map WHERE dataset_internal_name = ?")) { stmt =>
       stmt.setString(1, datasetInternalName)
       using(stmt.executeQuery()) { rs =>
         if (rs.next()) {
