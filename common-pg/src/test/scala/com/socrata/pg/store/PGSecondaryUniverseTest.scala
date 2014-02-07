@@ -355,9 +355,9 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
       }
     }
 
-    // Can't delete the table if it's the only instance of the table that exists
-    // Can't delete the table if it's published
-    // Maybe can delete the table if it's a snapshot?
+    // TODO Verify this statement: Can't delete the table if it's the only instance of the table that exists
+    // TODO Verify this statement: Can't delete the table if it's published
+    // TODO Verify this statement: Maybe can delete the table if it's a snapshot?
     test("Universe can delete a table by adding row to pending_table_drops") {
       withDb() { conn =>
         val (_, copyInfo, sLoader) = createTable(conn)
@@ -401,6 +401,9 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
       }
     }
 
+    // TODO Is this deleting a "working copy" ?
+    // TODO Is this deleting a "snapshot" ?
+    // TODO Does it matter if the dataset has been published or not?
     test("Universe can delete a published copy") {
 
     }
