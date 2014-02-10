@@ -19,8 +19,7 @@ import com.socrata.datacoordinator.secondary.DatasetInfo
 
 class PGSecondaryTestBase  extends FunSuite with Matchers with BeforeAndAfterAll {
   override def beforeAll = {
-    val rootConfig = ConfigFactory.load()
-    PropertyConfigurator.configure(Propertizer("log4j", rootConfig.getConfig("com.socrata.soql-server-pg.log4j")))
+    PropertyConfigurator.configure(Propertizer("log4j", config.getConfig("log4j")))
   }
 
   def workingCopyCreatedFixture =
