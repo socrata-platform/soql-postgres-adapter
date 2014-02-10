@@ -30,9 +30,10 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
     type CT = SoQLType
     type CV = SoQLValue
     val common = PostgresUniverseCommon
+
     override def beforeAll() {
-      val rootConfig = ConfigFactory.load()
-      PropertyConfigurator.configure(Propertizer("log4j", rootConfig.getConfig("com.socrata.soql-server-pg.log4j")))
+      val config = ConfigFactory.load().getConfig("com.socrata.pg.common")
+      PropertyConfigurator.configure(Propertizer("log4j", config.getConfig("log4j")))
     }
 
     override def afterAll() {
