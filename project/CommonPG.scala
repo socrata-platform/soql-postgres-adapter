@@ -10,6 +10,8 @@ object CommonPG {
       commonsIo,
       jodaConvert,
       jodaTime,
+      liquibaseCore,
+      liquibasePlugin,
       socrataUtil,
       soqlStdlib,
       secondarylib,
