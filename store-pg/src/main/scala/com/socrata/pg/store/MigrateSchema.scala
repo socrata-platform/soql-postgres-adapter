@@ -11,16 +11,16 @@ import com.socrata.thirdparty.typesafeconfig.Propertizer
  * This object takes Liquibase operations and performs according migrations to the pg-secondary schemas.
  */
 object MigrateSchema extends App {
-
   /**
    * Performs a Liquibase schema migration.
    * @param args(0) Migration operation to perform.
+   *        args(1) Database tree (located in config) to migrate.
    * */
   override def main(args: Array[String]) {
-    // Verify that one argument was passed
-    if (args.length != 1)
+    // Verify that two arguments were passed
+    if (args.length != 2)
       throw new IllegalArgumentException(
-        s"Incorrect number of arguments - expected 1 but received ${args.length}")
+        s"Incorrect number of arguments - expected 2 but received ${args.length}")
 
     // Verify that the argument provided is actually a valid operation
     val operation = {
@@ -36,11 +36,6 @@ object MigrateSchema extends App {
     val config = ConfigFactory.load.getConfig("com.socrata.pg.store")
     PropertyConfigurator.configure(Propertizer("log4j", config.getConfig("log4j")))
 
-    DatabaseTrees.foreach(tree => SchemaMigrator(tree, operation, config))
+    SchemaMigrator(args(1), operation, config)
   }
-  private lazy val DatabaseTrees =
-    Array(
-      "database",
-      "test-database"
-    )
 }
