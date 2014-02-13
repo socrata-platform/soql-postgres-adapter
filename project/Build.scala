@@ -7,7 +7,7 @@ object Build extends sbt.Build {
     file(".")
   ).settings(BuildSettings.buildSettings: _*)
    .aggregate(allOtherProjects: _*)
-   .dependsOn(commonPG,storePG)
+   .dependsOn(commonPG,storePG, soqlServerPG)
 
   private def allOtherProjects =
     for {
@@ -20,4 +20,5 @@ object Build extends sbt.Build {
 
   lazy val commonPG = p("common-pg", CommonPG)
   lazy val storePG = p("store-pg", StorePG) dependsOn(commonPG)
+  lazy val soqlServerPG = p("soql-server-pg", SoqlServerPG) dependsOn(commonPG)
 }
