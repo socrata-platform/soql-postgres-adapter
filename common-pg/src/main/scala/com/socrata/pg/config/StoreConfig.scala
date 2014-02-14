@@ -1,7 +1,6 @@
-package com.socrata.pg.store.config
+package com.socrata.pg.config
 
 import com.typesafe.config.Config
-
 
 class StoreConfig(config: Config, val root: String) extends ConfigHelper {
 

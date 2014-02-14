@@ -1,7 +1,7 @@
 package com.socrata.pg.server.config
 
 import com.typesafe.config.Config
-import com.socrata.pg.store.config.{ConfigHelper, StoreConfig}
+import com.socrata.pg.config.{StoreConfig, ConfigHelper}
 
 class QueryServerConfig(val config: Config, val root: String) extends ConfigHelper {
   val log4j = config.getConfig(k("log4j"))

@@ -1,4 +1,4 @@
-package com.socrata.pg.store.config
+package com.socrata.pg.config
 
 trait ConfigHelper {
   val root: String
