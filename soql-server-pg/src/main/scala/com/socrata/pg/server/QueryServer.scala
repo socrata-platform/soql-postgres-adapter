@@ -66,7 +66,6 @@ object QueryServer extends Logging {
     }
   }
 
-
   val config = try {
     new QueryServerConfig(withDefaultAddress(ConfigFactory.load()), "com.socrata.soql-server-pg")
   } catch {

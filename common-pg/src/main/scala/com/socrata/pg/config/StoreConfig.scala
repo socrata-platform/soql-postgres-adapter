@@ -1,24 +1,25 @@
 package com.socrata.pg.config
 
 import com.typesafe.config.Config
+import com.socrata.thirdparty.typesafeconfig.ConfigClass
 
-class StoreConfig(config: Config, val root: String) extends ConfigHelper {
+class StoreConfig(config: Config, root: String) extends ConfigClass(config, root) {
 
-  class C3P0(val root: String) extends ConfigHelper {
-    val maxPoolSize = config.getInt(k("maxPoolSize"))
-    val idleConnectionTestPeriod = config.getInt(k("idleConnectionTestPeriod"))
-    val testConnectionOnCheckin = config.getBoolean(k("testConnectionOnCheckin"))
-    val preferredTestQuery = config.getString(k("preferredTestQuery"))
-    val maxIdleTimeExcessConnections = config.getInt(k("maxIdleTimeExcessConnections"))
+  class C3P0(val root: String) extends ConfigClass(config, root) {
+    val maxPoolSize = getInt("maxPoolSize")
+    val idleConnectionTestPeriod = getInt("idleConnectionTestPeriod")
+    val testConnectionOnCheckin = config.getBoolean(path("testConnectionOnCheckin"))
+    val preferredTestQuery = getString("preferredTestQuery")
+    val maxIdleTimeExcessConnections = getInt("maxIdleTimeExcessConnections")
   }
 
-  class DatabaseConfig(val root: String) extends ConfigHelper {
-    val host = config.getString(k("host"))
-    val port = config.getInt(k("port"))
-    val username = config.getString(k("username"))
-    val password = config.getString(k("password"))
-    val c3p0 = new C3P0(k("c3p0"))
+  class DatabaseConfig(val root: String) extends ConfigClass(config, root) {
+    val host = getString("host")
+    val port = getInt("port")
+    val username = getString("username")
+    val password = getString("password")
+    val c3p0 = new C3P0(path("c3p0"))
   }
 
-  val database = new DatabaseConfig(k("database"))
+  val database = new DatabaseConfig(path("database"))
 }

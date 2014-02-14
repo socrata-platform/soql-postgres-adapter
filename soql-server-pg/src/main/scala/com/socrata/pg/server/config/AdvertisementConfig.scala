@@ -1,11 +1,11 @@
 package com.socrata.pg.server.config
 
 import com.typesafe.config.Config
+import com.socrata.thirdparty.typesafeconfig.ConfigClass
 
-class AdvertisementConfig(config: Config, root: String) {
-  private def k(field: String) = root + "." + field
+class AdvertisementConfig(config: Config, root: String) extends ConfigClass(config, root) {
 
-  val basePath = config.getString(k("base-path"))
-  val name = config.getString(k("name"))
-  val address = config.getString(k("address"))
+  val basePath = getString("base-path")
+  val name = getString("name")
+  val address = getString("address")
 }
