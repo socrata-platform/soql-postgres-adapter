@@ -7,7 +7,7 @@ Postgres Adapter for SODAServer
 sbt
 webdav4sbt - available at https://bitbucket.org/diversit/webdav4sbt.git
 
-### Build
+### Build and Test
 
 sudo -u postgres createdb -O blist -E utf-8 secondary_test
 createdb -O blist -E utf-8 secondary_test
