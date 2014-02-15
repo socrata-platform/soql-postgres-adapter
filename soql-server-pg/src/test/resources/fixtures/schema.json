@@ -1,0 +1,11 @@
+{
+   "hash" : "f34df7d2f79d2efd1fc056c710dc7c7357ada536",
+   "schema" :
+      {
+         ":version" : "row_version",
+         "mycolumn" : "text",
+         ":id" : "row_identifier"
+      },
+   "pk" : ":id",
+   "locale" : "us"
+}

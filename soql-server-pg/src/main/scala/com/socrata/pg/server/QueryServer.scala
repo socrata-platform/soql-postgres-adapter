@@ -2,9 +2,12 @@ package com.socrata.pg.server
 
 import com.rojoma.simplearm.util._
 import com.rojoma.json.ast.JString
+import com.rojoma.json.util.JsonUtil
 import com.netflix.curator.x.discovery.{ServiceDiscoveryBuilder, ServiceInstanceBuilder}
 import com.netflix.curator.framework.CuratorFrameworkFactory
 import com.netflix.curator.retry
+import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
+import com.socrata.datacoordinator.truth.metadata.Schema
 import com.socrata.http.server.implicits._
 import com.socrata.http.server.responses._
 import com.socrata.http.server.routing.{SimpleRouteContext, SimpleResource}
@@ -14,6 +17,8 @@ import com.socrata.http.server.curator.CuratorBroker
 import com.socrata.http.server.util.handlers.{LoggingHandler, ThreadRenamingHandler}
 import com.socrata.http.server._
 import com.socrata.pg.server.config.QueryServerConfig
+import com.socrata.pg.Schema._
+import com.socrata.pg.SecondaryBase
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.{ConfigFactory, Config}
 import com.typesafe.scalalogging.slf4j.Logging
@@ -23,12 +28,12 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.{Executors, ExecutorService}
 import javax.servlet.http.HttpServletRequest
 
-
-class QueryServer() {
+class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Logging {
 
   private val routerSet = locally {
     import SimpleRouteContext._
     Routes(
+      Route("/schema", SchemaResource),
       Route("/version", VersionResource)
     )
   }
@@ -51,6 +56,38 @@ class QueryServer() {
     val response = OK ~> ContentType("application/json; charset=utf-8") ~> Content(version.toString)
 
     override val get = { req: HttpServletRequest => response }
+  }
+
+  object SchemaResource extends SimpleResource {
+    override val get = schema _
+  }
+
+  def schema(req: HttpServletRequest): HttpResponse = {
+    val ds = req.getParameter("ds")
+    latestSchema(ds) match {
+      case Some(schema) =>
+        OK ~> ContentType("application/json; charset=utf-8") ~> Write(JsonUtil.writeJson(_, schema, buffer = true))
+      case None =>
+        NotFound
+    }
+  }
+
+  /**
+   * Get lastest schema
+   * @param ds Data coordinator dataset id
+   * @return Some schema or none
+   */
+  def latestSchema(ds: String): Option[Schema] = {
+
+    withPgu() { pgu =>
+      for {
+        datasetId <- pgu.datasetInternalNameMapReader.datasetIdForInternalName(ds)
+        datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
+      } yield {
+        val latest = pgu.datasetMapReader.latest(datasetInfo)
+        pgu.datasetReader.openDataset(latest).map(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
+      }
+    }
   }
 }
 
@@ -79,6 +116,7 @@ object QueryServer extends Logging {
   def main(args:Array[String]) {
 
     val address = config.advertisement.address
+    val datasourceConfig = new DataSourceConfig(config.getRawConfig("store"), "database")
 
     implicit object executorResource extends com.rojoma.simplearm.Resource[ExecutorService] {
       def close(a: ExecutorService) { a.shutdown() }
@@ -100,11 +138,13 @@ object QueryServer extends Logging {
         build())
       pong <- managed(new LivenessCheckResponder(new InetSocketAddress(InetAddress.getByName(address), 0)))
       executor <- managed(Executors.newCachedThreadPool())
+      dsInfo <- DataSourceFromConfig(datasourceConfig)
+      conn <- managed(dsInfo.dataSource.getConnection)
     } {
       curator.start()
       discovery.start()
       pong.start()
-      val queryServer = new QueryServer()
+      val queryServer = new QueryServer(datasourceConfig)
       val auxData = new AuxiliaryData(livenessCheckInfo = Some(pong.livenessCheckInfo))
       val curatorBroker = new CuratorBroker(discovery, address, config.advertisement.name + "." + config.instance, Some(auxData))
       val handler = ThreadRenamingHandler(LoggingHandler(queryServer.route))

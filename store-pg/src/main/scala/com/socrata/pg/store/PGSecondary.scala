@@ -28,12 +28,13 @@ import com.socrata.datacoordinator.secondary.ResyncSecondaryException
 import com.socrata.datacoordinator.secondary.ColumnRemoved
 import com.socrata.pg.store.events.WorkingCopyPublishedHandler
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
+import com.socrata.pg.SecondaryBase
 
 /**
  * Postgres Secondary Store Implementation
  */
-class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] with Logging {
-  private val dsConfig = new DataSourceConfig(config, "database")
+class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] with SecondaryBase with Logging {
+  val dsConfig = new DataSourceConfig(config, "database")
 
   // Called when this process is shutting down (or being killed)
   def shutdown() {
@@ -216,37 +217,11 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     throw new UnsupportedOperationException("TODO later")
   }
 
-
-  @volatile var populatedDb = false
-  private def withDb[T]()(f: (Connection) => T): T = {
-    // TODO: add back loglevel setting, it is handy
-    def loglevel = 0; // 2 = debug, 0 = default
-    // TODO: this isn't really the right lifecycle here, recreating this for each withDb call, need to rationalize
-    for {
-      dsInfo <- DataSourceFromConfig(dsConfig)
-      conn <- managed(dsInfo.dataSource.getConnection)
-    } yield {
-        conn.setAutoCommit(false)
-        if (!populatedDb) {
-          populateDatabase(conn)
-          populatedDb = true
-        }
-        f(conn)
-    }
-  }
-
-  private def populateDatabase(conn: Connection) {
+  override protected def populateDatabase(conn: Connection) {
     val sql = DatabasePopulator.createSchema()
     using(conn.createStatement()) {
       stmt =>
         stmt.execute(sql)
-    }
-  }
-
-  private def withPgu[T]()(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
-    withDb() { conn =>
-      val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
-      f(pgu)
     }
   }
 

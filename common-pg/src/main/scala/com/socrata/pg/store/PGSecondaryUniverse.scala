@@ -5,7 +5,7 @@ import com.socrata.datacoordinator.truth.universe._
 import com.socrata.datacoordinator.truth.universe.sql.PostgresCommonSupport
 import com.socrata.datacoordinator.truth.loader.{ReportWriter, Logger}
 import com.socrata.datacoordinator.truth.metadata._
-import com.socrata.datacoordinator.util.{TransferrableContextTimingReport, RowVersionProvider, RowIdProvider}
+import com.socrata.datacoordinator.util.{NullCache, TransferrableContextTimingReport, RowVersionProvider, RowIdProvider}
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.truth.loader.sql.{DataSqlizer, PostgresRepBasedDataSqlizer, SqlPrevettedLoader, RepBasedPostgresSchemaLoader}
 import org.joda.time.DateTime
@@ -15,6 +15,7 @@ import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.rojoma.simplearm.SimpleArm
 import com.socrata.datacoordinator.truth.{LowLevelDatabaseReader, DatasetReader, DatasetMutator}
+import com.socrata.datacoordinator.truth.metadata.SchemaFinder
 
 /**
  *
@@ -24,6 +25,7 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](conn: Connection,
   extends Universe[SoQLType, SoQLValue]
   with Commitable
   with SchemaLoaderProvider
+  with SchemaFinderProvider
   with DatasetMapWriterProvider
   with DatasetMapReaderProvider
   with DatasetReaderProvider
@@ -87,6 +89,11 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](conn: Connection,
   def logger(datasetInfo: DatasetInfo, user: String) = new PGSecondaryLogger[SoQLType, SoQLValue]()
 
   def reader(copyCtx: DatasetCopyContext[SoQLType]) = new PGSecondaryRowReader[SoQLType, SoQLValue](conn, sqlizerFactory(copyCtx.copyInfo, datasetContextFactory(copyCtx.schema)), timingReport)
+
+  def schemaFinder: SchemaFinder[PGSecondaryUniverse[SoQLType, SoQLValue]#CT] =
+    // Skip schema cache for query coordinator already provides caching.
+    new com.socrata.datacoordinator.service.SchemaFinder(commonSupport.typeContext.typeNamespace.userTypeForType _, NullCache)
+
 }
 
 
