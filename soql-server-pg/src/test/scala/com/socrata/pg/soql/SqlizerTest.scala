@@ -1,7 +1,6 @@
 package com.socrata.pg.soql
 
-import org.scalatest.FunSuite
-import org.scalatest.matchers.MustMatchers
+import org.scalatest.{Matchers, FunSuite}
 import com.socrata.soql.environment.{DatasetContext, ColumnName}
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.soql.types._
@@ -9,23 +8,23 @@ import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.SoQLAnalysis
 
-class SqlizerTest extends FunSuite with MustMatchers {
+class SqlizerTest extends FunSuite with Matchers {
 
   import SqlizerTest._
 
   test("string literal with quotes") {
     val soql = "select 'there is a '' quote'"
-    sql(soql) must equal("SELECT 'there is a '' quote'")
+    sql(soql) should be ("SELECT 'there is a '' quote'")
   }
 
   test("field in (x, y...)") {
     val soql = "select case_number where case_number in ('ha001', 'ha002', 'ha003') order by case_number offset 1 limit 2"
-    sql(soql) must equal("SELECT case_number WHERE case_number in('ha001','ha002','ha003') ORDER BY case_number nulls last LIMIT 2 OFFSET 1")
+    sql(soql) should be ("SELECT case_number WHERE case_number in('ha001','ha002','ha003') ORDER BY case_number nulls last LIMIT 2 OFFSET 1")
   }
 
   test("expr and expr") {
     val soql = "select id where id = 1 and case_number = 'cn001'"
-    sql(soql) must equal("SELECT id WHERE id = 1 and case_number = 'cn001'")
+    sql(soql) should be ("SELECT id WHERE id = 1 and case_number = 'cn001'")
   }
 }
 

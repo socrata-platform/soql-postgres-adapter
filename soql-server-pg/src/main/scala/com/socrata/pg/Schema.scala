@@ -4,13 +4,13 @@ import com.rojoma.json.codec.JsonCodec
 import com.rojoma.json.matcher.{PObject, Variable}
 import com.rojoma.json.ast.{JValue, JString, JObject}
 import com.socrata.datacoordinator.id.UserColumnId
-import com.socrata.datacoordinator.truth.metadata.Schema
+import com.socrata.datacoordinator.truth.metadata.{Schema => TruthSchema}
 import com.socrata.datacoordinator.util.collection.UserColumnIdMap
 import com.socrata.soql.environment.TypeName
 
 object Schema {
 
-  implicit object SchemaCodec extends JsonCodec[Schema] {
+  implicit object SchemaCodec extends JsonCodec[TruthSchema] {
     private implicit val schemaProperCodec = new JsonCodec[UserColumnIdMap[TypeName]] {
       def encode(schema: UserColumnIdMap[TypeName]) =  {
         val map = schema.foldLeft(Map.empty[String, JValue]) { (acc, item) =>
@@ -40,7 +40,7 @@ object Schema {
       "locale" -> localeVar
     )
 
-    def encode(schemaObj: Schema) = {
+    def encode(schemaObj: TruthSchema) = {
       PSchema.generate(
         hashVar := schemaObj.hash,
         schemaVar := schemaObj.schema,
@@ -49,7 +49,7 @@ object Schema {
     }
 
     def decode(x: JValue) = PSchema.matches(x) map { results =>
-      new Schema(hashVar(results), schemaVar(results), new UserColumnId(pkVar(results)), localeVar(results))
+      new TruthSchema(hashVar(results), schemaVar(results), new UserColumnId(pkVar(results)), localeVar(results))
     }
   }
 }
