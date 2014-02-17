@@ -2,12 +2,13 @@ package com.socrata.pg.soql
 
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.soql.typed._
-import com.socrata.soql.types.SoQLType
+import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.soql.SoQLAnalysis
+import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 
 
 trait Sqlizer[T] {
-  def sql: String
+  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]]): String
 }
 
 object Sqlizer {
@@ -34,7 +35,7 @@ object Sqlizer {
     new OrderBySqlizer(ob)
   }
 
-  implicit def analysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType]): Sqlizer[SoQLAnalysis[UserColumnId, SoQLType]] = {
-    new SoQLAnalysisSqlizer(analysis)
+  implicit def analysisSqlizer(analysisTable: Tuple2[SoQLAnalysis[UserColumnId, SoQLType], String]): Sqlizer[Tuple2[SoQLAnalysis[UserColumnId, SoQLType], String]] = {
+    new SoQLAnalysisSqlizer(analysisTable._1, analysisTable._2)
   }
 }

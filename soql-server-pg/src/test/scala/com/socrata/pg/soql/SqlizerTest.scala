@@ -1,8 +1,9 @@
 package com.socrata.pg.soql
 
 import org.scalatest.{Matchers, FunSuite}
-import com.socrata.soql.environment.{DatasetContext, ColumnName}
 import com.socrata.datacoordinator.id.UserColumnId
+import com.socrata.datacoordinator.truth.sql.SqlColumnRep
+import com.socrata.soql.environment.{DatasetContext, ColumnName}
 import com.socrata.soql.types._
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
@@ -14,17 +15,18 @@ class SqlizerTest extends FunSuite with Matchers {
 
   test("string literal with quotes") {
     val soql = "select 'there is a '' quote'"
-    sql(soql) should be ("SELECT 'there is a '' quote'")
+    val sss = sql(soql)
+    sql(soql) should be ("SELECT 'there is a '' quote' FROM t1")
   }
 
   test("field in (x, y...)") {
     val soql = "select case_number where case_number in ('ha001', 'ha002', 'ha003') order by case_number offset 1 limit 2"
-    sql(soql) should be ("SELECT case_number WHERE case_number in('ha001','ha002','ha003') ORDER BY case_number nulls last LIMIT 2 OFFSET 1")
+    sql(soql) should be ("SELECT case_number FROM t1 WHERE case_number in('ha001','ha002','ha003') ORDER BY case_number nulls last LIMIT 2 OFFSET 1")
   }
 
   test("expr and expr") {
     val soql = "select id where id = 1 and case_number = 'cn001'"
-    sql(soql) should be ("SELECT id WHERE id = 1 and case_number = 'cn001'")
+    sql(soql) should be ("SELECT id FROM t1 WHERE id = 1 and case_number = 'cn001'")
   }
 }
 
@@ -34,7 +36,7 @@ object SqlizerTest {
 
   private def sql(soql: String): String = {
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
-    analysis.sql
+    (analysis, "t1").sql(Map.empty[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]])
   }
 
   private val idMap =  (cn: ColumnName) => new UserColumnId(cn.caseFolded)

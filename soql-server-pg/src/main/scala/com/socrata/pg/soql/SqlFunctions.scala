@@ -5,6 +5,7 @@ import com.socrata.soql.functions.SoQLFunctions
 import com.socrata.soql.environment.FunctionName
 import com.socrata.soql.types._
 import com.socrata.soql.typed.FunctionCall
+import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 
 
 object SqlFunctions {
@@ -49,25 +50,25 @@ object SqlFunctions {
   )
 
 
-  private def infix(fnName: String)(fn: FunCall): String = {
-    val l = fn.parameters(0).sql
-    val r = fn.parameters(1).sql
+  private def infix(fnName: String)(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]]): String = {
+    val l = fn.parameters(0).sql(rep)
+    val r = fn.parameters(1).sql(rep)
     s"$l $fnName $r"
   }
 
-  private def nary(fnName: String)(fn: FunCall): String = {
-    fn.parameters.map(_.sql).mkString(fnName + "(", ",", ")")
+  private def nary(fnName: String)(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]]): String = {
+    fn.parameters.map(_.sql(rep)).mkString(fnName + "(", ",", ")")
   }
 
-  private def naryish(fnName: String)(fn: FunCall): String = {
-    val head = fn.parameters.head.sql
-    fn.parameters.tail.map(_.sql).mkString(head + " " + fnName + "(", ",", ")")
+  private def naryish(fnName: String)(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]]): String = {
+    val head = fn.parameters.head.sql(rep)
+    fn.parameters.tail.map(_.sql(rep)).mkString(head + " " + fnName + "(", ",", ")")
   }
 
-  private def formatCall(template: String)(fn: FunCall): String = {
-    val params = fn.parameters.map(_.sql)
+  private def formatCall(template: String)(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]]): String = {
+    val params = fn.parameters.map(_.sql(rep))
     template.format(params)
   }
 
-  private def todo(fn: FunCall): String = ???
+  private def todo(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]]): String = ???
 }

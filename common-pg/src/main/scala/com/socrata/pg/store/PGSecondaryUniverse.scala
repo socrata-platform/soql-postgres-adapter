@@ -20,8 +20,8 @@ import com.socrata.datacoordinator.truth.metadata.SchemaFinder
 /**
  *
  */
-class PGSecondaryUniverse[SoQLType, SoQLValue](conn: Connection,
-                                                commonSupport: PostgresCommonSupport[SoQLType, SoQLValue])
+class PGSecondaryUniverse[SoQLType, SoQLValue](val conn: Connection,
+                                               val commonSupport: PostgresCommonSupport[SoQLType, SoQLValue])
   extends Universe[SoQLType, SoQLValue]
   with Commitable
   with SchemaLoaderProvider

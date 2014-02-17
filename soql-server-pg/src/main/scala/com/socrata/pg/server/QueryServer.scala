@@ -1,13 +1,18 @@
 package com.socrata.pg.server
 
 import com.rojoma.simplearm.util._
-import com.rojoma.json.ast.JString
 import com.rojoma.json.util.JsonUtil
 import com.netflix.curator.x.discovery.{ServiceDiscoveryBuilder, ServiceInstanceBuilder}
 import com.netflix.curator.framework.CuratorFrameworkFactory
 import com.netflix.curator.retry
+import com.rojoma.json.ast.JString
+import com.socrata.datacoordinator.common.soql.SoQLTypeContext
 import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
-import com.socrata.datacoordinator.truth.metadata.Schema
+import com.socrata.datacoordinator.id.{RowId, UserColumnId}
+import com.socrata.datacoordinator.truth.sql.RepBasedSqlDatasetContext
+import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
+import com.socrata.datacoordinator.truth.metadata.{DatasetCopyContext, ColumnInfo, CopyInfo, Schema}
+import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.http.server.implicits._
 import com.socrata.http.server.responses._
 import com.socrata.http.server.routing.{SimpleRouteContext, SimpleResource}
@@ -16,9 +21,17 @@ import com.socrata.http.server.livenesscheck.LivenessCheckResponder
 import com.socrata.http.server.curator.CuratorBroker
 import com.socrata.http.server.util.handlers.{LoggingHandler, ThreadRenamingHandler}
 import com.socrata.http.server._
+import com.socrata.pg.query.{DataSqlizerQuerier, RowReaderQuerier}
 import com.socrata.pg.server.config.QueryServerConfig
 import com.socrata.pg.Schema._
 import com.socrata.pg.SecondaryBase
+import com.socrata.pg.soql.Sqlizer
+import com.socrata.pg.store.{PostgresUniverseCommon, PGSecondaryUniverse, SchemaUtil, PGSecondaryRowReader}
+import com.socrata.soql.analyzer.SoQLAnalyzerHelper
+import com.socrata.soql.environment.ColumnName
+import com.socrata.soql.SoQLAnalysis
+import com.socrata.soql.types.{SoQLVersion, SoQLValue, SoQLID, SoQLType}
+import com.socrata.soql.typed.CoreExpr
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.{ConfigFactory, Config}
 import com.typesafe.scalalogging.slf4j.Logging
@@ -26,7 +39,10 @@ import org.apache.log4j.PropertyConfigurator
 import java.net.{InetAddress, InetSocketAddress}
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.{Executors, ExecutorService}
-import javax.servlet.http.HttpServletRequest
+import javax.servlet.http.{HttpServletResponse, HttpServletRequest}
+import java.sql.Connection
+import java.io.ByteArrayInputStream
+
 
 class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Logging {
 
@@ -34,6 +50,7 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
     import SimpleRouteContext._
     Routes(
       Route("/schema", SchemaResource),
+      Route("/query", QueryResource),
       Route("/version", VersionResource)
     )
   }
@@ -69,6 +86,90 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
         OK ~> ContentType("application/json; charset=utf-8") ~> Write(JsonUtil.writeJson(_, schema, buffer = true))
       case None =>
         NotFound
+    }
+  }
+
+  object QueryResource extends SimpleResource {
+    override val get = query _
+    override val post = query _
+  }
+
+  def query(req: HttpServletRequest): HttpServletResponse => Unit =  {
+
+    import Sqlizer._
+
+    val datasetId = req.getParameter("dataset")
+    val analysisParam = req.getParameter("query")
+    val analysisStream = new ByteArrayInputStream(analysisParam.getBytes(StandardCharsets.ISO_8859_1))
+    val schemaHash = req.getParameter("schemaHash")
+    val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserializer(analysisStream)
+    val rowCount = Option(req.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
+
+    withPgu() { pgu =>
+      for {
+        datasetId <- pgu.datasetInternalNameMapReader.datasetIdForInternalName(datasetId)
+        datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
+      } yield {
+        val latest: CopyInfo = pgu.datasetMapReader.latest(datasetInfo)
+        for (readCtx <- pgu.datasetReader.openDataset(latest)) yield {
+          val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
+          val systemToUserColumnMap =  SchemaUtil.systemToUserColumnMap(readCtx.schema)
+          val userToSystemColumnMap = SchemaUtil.userToSystemColumnMap(readCtx.schema)
+          val qrySchema = querySchema(pgu, analysis, latest)
+          val qrySchemaWithRequiredColumns = SchemaUtil.addRequiredColumnsToSchema(qrySchema, baseSchema)
+          val qryContext: RepBasedSqlDatasetContext[SoQLType, SoQLValue] = pgu.datasetContextFactory(ColumnIdMap(qrySchemaWithRequiredColumns))
+
+          val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema)
+          val sqlReps = querier.getSqlReps(systemToUserColumnMap)
+          val managedRowIt = querier.query(analysis, (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) => (a, tableName).sql(sqlReps),
+            systemToUserColumnMap, userToSystemColumnMap,
+            qryContext.schema)
+
+          for (result <- managedRowIt) {
+            result.foreach(row => println("PG Query Server: " + row.toString))
+          }
+
+          OK
+        }
+      }
+    }
+
+    NotFound
+  }
+
+  private def readerWithQuery[SoQLType, SoQLValue](conn: Connection,
+                                                   pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                                                   copyCtx: DatasetCopyContext[SoQLType],
+                                                   schema: com.socrata.datacoordinator.util.collection.ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]]):
+    PGSecondaryRowReader[SoQLType, SoQLValue] with RowReaderQuerier[SoQLType, SoQLValue] = {
+
+    new PGSecondaryRowReader[SoQLType, SoQLValue] (
+      conn,
+      new PostgresRepBasedDataSqlizer(copyCtx.copyInfo.dataTableName, pgu.datasetContextFactory(schema), pgu.commonSupport.copyInProvider) with DataSqlizerQuerier[SoQLType, SoQLValue],
+      pgu.commonSupport.timingReport) with RowReaderQuerier[SoQLType, SoQLValue]
+  }
+
+
+  private def querySchema(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                  analysis: SoQLAnalysis[UserColumnId, SoQLType],
+                  latest: CopyInfo):
+                  Map[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.truth.metadata.ColumnInfo[pgu.CT]] = {
+    analysis.selection.foldLeft(Map.empty[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.truth.metadata.ColumnInfo[pgu.CT]]) { (map, entry) =>
+      entry match {
+        case (columnName: ColumnName, coreExpr: CoreExpr[UserColumnId, SoQLType]) =>
+          val cid = new com.socrata.datacoordinator.id.ColumnId(map.size + 1)
+          val cinfo = new com.socrata.datacoordinator.truth.metadata.ColumnInfo[pgu.CT](
+            latest,
+            cid,
+            new UserColumnId(columnName.name),
+            coreExpr.typ,
+            columnName.name,
+            coreExpr.typ == SoQLID,
+            false,
+            coreExpr.typ == SoQLVersion
+          )(SoQLTypeContext.typeNamespace, null)
+          map + (cid -> cinfo)
+      }
     }
   }
 
