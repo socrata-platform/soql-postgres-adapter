@@ -5,7 +5,7 @@ import com.socrata.datacoordinator.Row
 import com.socrata.pg.store.PostgresUniverseCommon
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.id.{UserColumnId, ColumnId}
-import com.rojoma.json.ast.JValue
+import com.rojoma.json.ast.{JObject, JValue}
 import com.socrata.http.server.util.StrongEntityTag
 import java.nio.charset.StandardCharsets
 
