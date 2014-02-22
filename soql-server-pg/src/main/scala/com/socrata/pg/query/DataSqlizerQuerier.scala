@@ -1,20 +1,19 @@
 package com.socrata.pg.query
 
-import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.truth.loader.sql.AbstractRepBasedDataSqlizer
-import com.socrata.datacoordinator.util.collection.{MutableColumnIdMap, ColumnIdMap}
+import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.MutableRow
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.soql.types.SoQLType
-import java.sql.{PreparedStatement, Connection, ResultSet}
+import java.sql.{Connection, ResultSet}
 
 trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
   this: AbstractRepBasedDataSqlizer[CT, CV] =>
 
-  def query[T](conn: Connection, analysis: SoQLAnalysis[UserColumnId, SoQLType],
+  def query(conn: Connection, analysis: SoQLAnalysis[UserColumnId, SoQLType],
                toSql: (SoQLAnalysis[UserColumnId, SoQLType], String) => String, // analsysis, tableName
                systemToUserColumnMap: Map[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.id.UserColumnId],
                userToSystemColumnMap: Map[com.socrata.datacoordinator.id.UserColumnId, com.socrata.datacoordinator.id.ColumnId],
@@ -41,7 +40,6 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
     }
     row.freeze()
   }
-
 
   class ResultSetIt(rs: ResultSet, toRow: (ResultSet) => com.socrata.datacoordinator.Row[CV]) extends CloseableIterator[com.socrata.datacoordinator.Row[CV]] {
 
