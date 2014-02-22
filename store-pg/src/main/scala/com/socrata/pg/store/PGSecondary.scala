@@ -66,7 +66,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
   // Every set of changes increments the version number, so a given copy (number) may have
   // multiple versions over the course of it's life
-  protected[store] def _currentVersion(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInternalName: String, cookie: Secondary.Cookie): Long = {
+  def _currentVersion(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInternalName: String, cookie: Secondary.Cookie): Long = {
     // every set of changes to a copy increments the version number
     // What happens when this is wrong? Almost certainly should turn into a resync
     logger.debug(s"currentVersion '${datasetInternalName}', (cookie: ${cookie})")
@@ -127,7 +127,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   // A separate event will be passed to this method for actually copying the data
   // If working copy already exists and we receive a workingCopyCreated event is received, then a resync event/exception should fire
   // Publishing a working copy promotes that working copy to a published copy. There should no longer be a working copy after publishing
-  protected[store] def _version(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], secondaryDatasetInfo: DatasetInfo, newDataVersion: Long, cookie: Secondary.Cookie, events: Iterator[Event[SoQLType, SoQLValue]]): Secondary.Cookie = {
+  def _version(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], secondaryDatasetInfo: DatasetInfo, newDataVersion: Long, cookie: Secondary.Cookie, events: Iterator[Event[SoQLType, SoQLValue]]): Secondary.Cookie = {
     // How do we get the copyInfo? dataset_map
     //  - One of the events that comes through here will be working copy created; it must be the first if it does; separate event for actually copying
     //    the data

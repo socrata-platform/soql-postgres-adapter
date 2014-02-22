@@ -1,5 +1,6 @@
 package com.socrata.pg.server
 
+import com.rojoma.simplearm.Managed
 import com.rojoma.simplearm.util._
 import com.rojoma.json.util.JsonUtil
 import com.netflix.curator.x.discovery.{ServiceDiscoveryBuilder, ServiceInstanceBuilder}
@@ -8,11 +9,12 @@ import com.netflix.curator.retry
 import com.rojoma.json.ast.JString
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
 import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
-import com.socrata.datacoordinator.id.{RowId, UserColumnId}
+import com.socrata.datacoordinator.id.{DatasetId, RowId, UserColumnId}
 import com.socrata.datacoordinator.truth.sql.RepBasedSqlDatasetContext
 import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
 import com.socrata.datacoordinator.truth.metadata.{DatasetCopyContext, ColumnInfo, CopyInfo, Schema}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
+import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.http.server.implicits._
 import com.socrata.http.server.responses._
 import com.socrata.http.server.routing.{SimpleRouteContext, SimpleResource}
@@ -96,8 +98,6 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
 
   def query(req: HttpServletRequest): HttpServletResponse => Unit =  {
 
-    import Sqlizer._
-
     val datasetId = req.getParameter("dataset")
     val analysisParam = req.getParameter("query")
     val analysisStream = new ByteArrayInputStream(analysisParam.getBytes(StandardCharsets.ISO_8859_1))
@@ -106,35 +106,51 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
     val rowCount = Option(req.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
 
     withPgu() { pgu =>
-      for {
-        datasetId <- pgu.datasetInternalNameMapReader.datasetIdForInternalName(datasetId)
-        datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
-      } yield {
+      pgu.datasetInternalNameMapReader.datasetIdForInternalName(datasetId) match {
+        case Some(dsId) =>
+          val managedRowIt = execQuery(pgu, dsId, analysis)
+          // CJSON follows...
+          for (result <- managedRowIt) {
+            result.foreach(row => println("PG Query Server: " + row.toString))
+          }
+          OK
+        case None =>
+          NotFound
+      }
+    }
+  }
+
+  def execQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetId: DatasetId, analysis: SoQLAnalysis[UserColumnId, SoQLType]):
+            Managed[CloseableIterator[com.socrata.datacoordinator.Row[SoQLValue]]] = {
+
+    import Sqlizer._
+
+    pgu.datasetMapReader.datasetInfo(datasetId) match {
+      case Some(datasetInfo) =>
         val latest: CopyInfo = pgu.datasetMapReader.latest(datasetInfo)
         for (readCtx <- pgu.datasetReader.openDataset(latest)) yield {
           val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
           val systemToUserColumnMap =  SchemaUtil.systemToUserColumnMap(readCtx.schema)
           val userToSystemColumnMap = SchemaUtil.userToSystemColumnMap(readCtx.schema)
           val qrySchema = querySchema(pgu, analysis, latest)
-          val qrySchemaWithRequiredColumns = SchemaUtil.addRequiredColumnsToSchema(qrySchema, baseSchema)
-          val qryContext: RepBasedSqlDatasetContext[SoQLType, SoQLValue] = pgu.datasetContextFactory(ColumnIdMap(qrySchemaWithRequiredColumns))
+          val (qrySchemaWithRequiredColumns, qryHasIdColumn, qryHasVerColumn) = SchemaUtil.addRequiredColumnsToSchema(qrySchema, baseSchema)
+          val qryColumnIdMap = ColumnIdMap(qrySchemaWithRequiredColumns)
+          val qryContext: RepBasedSqlDatasetContext[SoQLType, SoQLValue] = pgu.datasetContextFactory(qryColumnIdMap)
+          // Remove added :id or :version fields not coming from the user.
+          val qryContextSchema = qryContext.schema.filter { (cid, rep) =>
+            (rep.representedType != SoQLID || qryHasIdColumn) &&
+            (rep.representedType != SoQLVersion || qryHasVerColumn)
+          }
 
           val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema)
           val sqlReps = querier.getSqlReps(systemToUserColumnMap)
-          val managedRowIt = querier.query(analysis, (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) => (a, tableName).sql(sqlReps),
+          querier.query(analysis, (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) => (a, tableName).sql(sqlReps),
             systemToUserColumnMap, userToSystemColumnMap,
-            qryContext.schema)
-
-          for (result <- managedRowIt) {
-            result.foreach(row => println("PG Query Server: " + row.toString))
-          }
-
-          OK
+            qryContextSchema)
         }
-      }
+      case None =>
+        throw new Exception("Cannot find dataset info.")
     }
-
-    NotFound
   }
 
   private def readerWithQuery[SoQLType, SoQLValue](conn: Connection,
@@ -154,9 +170,15 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
                   analysis: SoQLAnalysis[UserColumnId, SoQLType],
                   latest: CopyInfo):
                   Map[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.truth.metadata.ColumnInfo[pgu.CT]] = {
+
     analysis.selection.foldLeft(Map.empty[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.truth.metadata.ColumnInfo[pgu.CT]]) { (map, entry) =>
       entry match {
         case (columnName: ColumnName, coreExpr: CoreExpr[UserColumnId, SoQLType]) =>
+          // Always make the 1st column user key to stop system key from being used in ContextFactory.
+          // If an artifical :id is added (when :id is not selected in the query), it causes
+          // problem in RepBasedSqlDatasetContext.
+          // Here, user key may not meet the unique constraint.  But we don't care for query purpose.
+          val isUserKey = map.size == 0
           val cid = new com.socrata.datacoordinator.id.ColumnId(map.size + 1)
           val cinfo = new com.socrata.datacoordinator.truth.metadata.ColumnInfo[pgu.CT](
             latest,
@@ -165,7 +187,7 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
             coreExpr.typ,
             columnName.name,
             coreExpr.typ == SoQLID,
-            false,
+            isUserKey,
             coreExpr.typ == SoQLVersion
           )(SoQLTypeContext.typeNamespace, null)
           map + (cid -> cinfo)

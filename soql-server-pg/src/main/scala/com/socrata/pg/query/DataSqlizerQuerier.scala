@@ -7,9 +7,10 @@ import com.socrata.datacoordinator.MutableRow
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.soql.SoQLAnalysis
+import com.typesafe.scalalogging.slf4j.Logging
 import java.sql.{Connection, ResultSet}
 
-trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
+trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
   this: AbstractRepBasedDataSqlizer[CT, CV] =>
 
   def query(conn: Connection, analysis: SoQLAnalysis[UserColumnId, CT],
@@ -32,10 +33,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
 
     schema.keys.toSeq.reverse.foreach { cid => // TODO: Remove the need for reverse
       val rep = schema(cid)
-      if (cid.underlying > 0) {
-        row(cid) = rep.fromResultSet(rs, i)
-        i += rep.physColumns.length
-      }
+      row(cid) = rep.fromResultSet(rs, i)
+      i += rep.physColumns.length
     }
     row.freeze()
   }
