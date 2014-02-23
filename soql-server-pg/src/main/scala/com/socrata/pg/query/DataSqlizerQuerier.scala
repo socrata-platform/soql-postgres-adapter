@@ -5,16 +5,15 @@ import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.MutableRow
 import com.socrata.datacoordinator.util.CloseableIterator
-import com.socrata.soql.SoQLAnalysis
 import com.socrata.datacoordinator.id.UserColumnId
-import com.socrata.soql.types.SoQLType
+import com.socrata.soql.SoQLAnalysis
 import java.sql.{Connection, ResultSet}
 
 trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
   this: AbstractRepBasedDataSqlizer[CT, CV] =>
 
-  def query(conn: Connection, analysis: SoQLAnalysis[UserColumnId, SoQLType],
-               toSql: (SoQLAnalysis[UserColumnId, SoQLType], String) => String, // analsysis, tableName
+  def query(conn: Connection, analysis: SoQLAnalysis[UserColumnId, CT],
+               toSql: (SoQLAnalysis[UserColumnId, CT], String) => String, // analsysis, tableName
                systemToUserColumnMap: Map[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.id.UserColumnId],
                userToSystemColumnMap: Map[com.socrata.datacoordinator.id.UserColumnId, com.socrata.datacoordinator.id.ColumnId],
                querySchema: ColumnIdMap[SqlColumnRep[CT, CV]]) :

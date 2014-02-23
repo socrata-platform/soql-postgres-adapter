@@ -15,7 +15,6 @@ class SqlizerTest extends FunSuite with Matchers {
 
   test("string literal with quotes") {
     val soql = "select 'there is a '' quote'"
-    val sss = sql(soql)
     sql(soql) should be ("SELECT 'there is a '' quote' FROM t1")
   }
 

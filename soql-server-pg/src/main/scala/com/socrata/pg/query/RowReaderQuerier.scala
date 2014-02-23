@@ -8,14 +8,13 @@ import com.socrata.datacoordinator.truth.loader.sql.DataSqlizer
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.store.PGSecondaryRowReader
-import com.socrata.soql.types.SoQLType
 import com.socrata.soql.SoQLAnalysis
 
 trait RowReaderQuerier[CT, CV] {
   this: PGSecondaryRowReader[CT, CV] =>
 
-  def query(analysis: SoQLAnalysis[UserColumnId, SoQLType],
-            toSql: (SoQLAnalysis[UserColumnId, SoQLType], String) => String,
+  def query(analysis: SoQLAnalysis[UserColumnId, CT],
+            toSql: (SoQLAnalysis[UserColumnId, CT], String) => String,
             systemToUserColumnMap: Map[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.id.UserColumnId],
             userToSystemColumnMap: Map[com.socrata.datacoordinator.id.UserColumnId, com.socrata.datacoordinator.id.ColumnId],
             querySchema: ColumnIdMap[SqlColumnRep[CT, CV]]):
