@@ -5,6 +5,7 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.MutableRow
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
+import com.socrata.pg.soql.ParametricSql
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
 import com.typesafe.scalalogging.slf4j.Logging
@@ -14,14 +15,18 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
   this: AbstractRepBasedDataSqlizer[CT, CV] =>
 
   def query(conn: Connection, analysis: SoQLAnalysis[UserColumnId, CT],
-               toSql: (SoQLAnalysis[UserColumnId, CT], String) => String, // analsysis, tableName
+               toSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
                systemToUserColumnMap: Map[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.id.UserColumnId],
                userToSystemColumnMap: Map[com.socrata.datacoordinator.id.UserColumnId, com.socrata.datacoordinator.id.ColumnId],
                querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]]) :
                CloseableIterator[com.socrata.datacoordinator.Row[CV]] = {
 
-    val sql = toSql(analysis, this.dataTableName)
+    val ParametricSql(sql, setParams) = toSql(analysis, this.dataTableName)
+    logger.debug("sql: {}", sql)
     val stmt = conn.prepareStatement(sql) // To be closed on closeable iterator close.
+    setParams.zipWithIndex.foreach { case (setParamFn, idx) =>
+      setParamFn(Some(stmt), idx + 1)
+    }
     val rs = stmt.executeQuery()
     new ResultSetIt(rs, decodeRow(querySchema))
   }

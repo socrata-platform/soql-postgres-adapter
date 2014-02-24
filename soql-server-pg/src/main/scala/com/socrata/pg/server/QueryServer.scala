@@ -130,7 +130,8 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
           val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor(_))
           val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema)
           val sqlReps = querier.getSqlReps(systemToUserColumnMap)
-          val results = querier.query(analysis, (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) => (a, tableName).sql(sqlReps),
+
+          val results = querier.query(analysis, (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) => (a, tableName).sql(sqlReps, Seq.empty),
                                         systemToUserColumnMap,
                                         userToSystemColumnMap,
                                         qryReps)

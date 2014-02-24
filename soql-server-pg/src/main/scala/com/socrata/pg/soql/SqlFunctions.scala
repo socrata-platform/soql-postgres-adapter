@@ -49,26 +49,43 @@ object SqlFunctions {
     // TODO: Complete the function list.
   )
 
-
-  private def infix(fnName: String)(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]]): String = {
-    val l = fn.parameters(0).sql(rep)
-    val r = fn.parameters(1).sql(rep)
-    s"$l $fnName $r"
+  private def infix(fnName: String)(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam]): ParametricSql = {
+    val ParametricSql(l, setParamsL) = fn.parameters(0).sql(rep, setParams)
+    val ParametricSql(r, setParamsLR) = fn.parameters(1).sql(rep, setParamsL)
+    val s = s"$l $fnName $r"
+    ParametricSql(s, setParamsLR)
   }
 
-  private def nary(fnName: String)(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]]): String = {
-    fn.parameters.map(_.sql(rep)).mkString(fnName + "(", ",", ")")
+  private def nary(fnName: String)(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam]): ParametricSql = {
+
+    val sqlFragsAndParams = fn.parameters.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
+      val ParametricSql(sql, newSetParams) = param.sql(rep, acc._2)
+      (acc._1 :+ sql, newSetParams)
+    }
+
+    ParametricSql(sqlFragsAndParams._1.mkString(fnName + "(", ",", ")"), sqlFragsAndParams._2)
   }
 
-  private def naryish(fnName: String)(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]]): String = {
-    val head = fn.parameters.head.sql(rep)
-    fn.parameters.tail.map(_.sql(rep)).mkString(head + " " + fnName + "(", ",", ")")
+  private def naryish(fnName: String)(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam]): ParametricSql = {
+    val ParametricSql(head, setParamsHead) = fn.parameters.head.sql(rep, setParams)
+
+    val sqlFragsAndParams = fn.parameters.tail.foldLeft(Tuple2(Seq.empty[String], setParamsHead)) { (acc, param) =>
+      val ParametricSql(sql, newSetParams) = param.sql(rep, acc._2)
+      (acc._1 :+ sql, newSetParams)
+    }
+
+    ParametricSql(sqlFragsAndParams._1.mkString(head + " " + fnName + "(", ",", ")"), sqlFragsAndParams._2)
   }
 
-  private def formatCall(template: String)(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]]): String = {
-    val params = fn.parameters.map(_.sql(rep))
-    template.format(params)
+  private def formatCall(template: String)(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam]): ParametricSql = {
+
+    val sqlFragsAndParams = fn.parameters.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
+      val ParametricSql(sql, newSetParams) = param.sql(rep, acc._2)
+      (acc._1 :+ sql, newSetParams)
+    }
+
+    ParametricSql(template.format(sqlFragsAndParams._1), sqlFragsAndParams._2)
   }
 
-  private def todo(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]]): String = ???
+  private def todo(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam]): ParametricSql = ???
 }

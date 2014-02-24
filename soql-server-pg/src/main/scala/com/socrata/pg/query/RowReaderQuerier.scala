@@ -6,6 +6,7 @@ import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.truth.loader.sql.DataSqlizer
 import com.socrata.datacoordinator.util.CloseableIterator
+import com.socrata.pg.soql.ParametricSql
 import com.socrata.pg.store.PGSecondaryRowReader
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
@@ -14,7 +15,7 @@ trait RowReaderQuerier[CT, CV] {
   this: PGSecondaryRowReader[CT, CV] =>
 
   def query(analysis: SoQLAnalysis[UserColumnId, CT],
-            toSql: (SoQLAnalysis[UserColumnId, CT], String) => String,
+            toSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql,
             systemToUserColumnMap: Map[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.id.UserColumnId],
             userToSystemColumnMap: Map[com.socrata.datacoordinator.id.UserColumnId, com.socrata.datacoordinator.id.ColumnId],
             querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]]):

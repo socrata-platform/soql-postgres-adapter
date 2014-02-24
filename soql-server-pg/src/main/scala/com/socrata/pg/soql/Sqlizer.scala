@@ -5,13 +5,23 @@ import com.socrata.soql.typed._
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
+import java.sql.PreparedStatement
+import com.socrata.pg.soql.Sqlizer.SetParam
 
+
+case class ParametricSql(sql: String, setParams: Seq[SetParam])
 
 trait Sqlizer[T] {
-  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]]): String
+
+  import Sqlizer._
+
+  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam]): ParametricSql
 }
 
 object Sqlizer {
+
+  type SetParam = (Option[PreparedStatement], Int) => Option[Any]
+
   implicit def stringLiteralSqlizer(lit: StringLiteral[SoQLType]): Sqlizer[StringLiteral[SoQLType]] = {
     new StringLiteralSqlizer(lit)
   }

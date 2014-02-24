@@ -15,17 +15,29 @@ class SqlizerTest extends FunSuite with Matchers {
 
   test("string literal with quotes") {
     val soql = "select 'there is a '' quote'"
-    sql(soql) should be ("SELECT 'there is a '' quote' FROM t1")
+    val ParametricSql(sql, setParams) = sqlize(soql)
+    sql should be ("SELECT ? FROM t1")
+    setParams.length should be (1)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq("there is a ' quote" ))
   }
 
   test("field in (x, y...)") {
     val soql = "select case_number where case_number in ('ha001', 'ha002', 'ha003') order by case_number offset 1 limit 2"
-    sql(soql) should be ("SELECT case_number FROM t1 WHERE case_number in('ha001','ha002','ha003') ORDER BY case_number nulls last LIMIT 2 OFFSET 1")
+    val ParametricSql(sql, setParams) = sqlize(soql)
+    sql should be ("SELECT case_number FROM t1 WHERE case_number in(?,?,?) ORDER BY case_number nulls last LIMIT 2 OFFSET 1")
+    setParams.length should be (3)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq("ha001", "ha002", "ha003"))
   }
 
   test("expr and expr") {
     val soql = "select id where id = 1 and case_number = 'cn001'"
-    sql(soql) should be ("SELECT id FROM t1 WHERE id = 1 and case_number = 'cn001'")
+    val ParametricSql(sql, setParams) = sqlize(soql)
+    sql should be ("SELECT id FROM t1 WHERE id = ? and case_number = ?")
+    setParams.length should be (2)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq(1, "cn001"))
   }
 }
 
@@ -33,9 +45,9 @@ object SqlizerTest {
 
   import Sqlizer._
 
-  private def sql(soql: String): String = {
+  private def sqlize(soql: String): ParametricSql = {
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
-    (analysis, "t1").sql(Map.empty[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]])
+    (analysis, "t1").sql(Map.empty[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], Seq.empty)
   }
 
   private val idMap =  (cn: ColumnName) => new UserColumnId(cn.caseFolded)
