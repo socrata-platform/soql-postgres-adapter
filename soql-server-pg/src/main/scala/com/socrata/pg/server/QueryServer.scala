@@ -9,8 +9,8 @@ import com.netflix.curator.retry
 import com.rojoma.json.ast.JString
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
 import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
-import com.socrata.datacoordinator.id.{DatasetId, RowId, UserColumnId}
-import com.socrata.datacoordinator.truth.sql.RepBasedSqlDatasetContext
+import com.socrata.datacoordinator.id.{ColumnId, DatasetId, RowId, UserColumnId}
+import com.socrata.datacoordinator.truth.sql.{SqlColumnRep, RepBasedSqlDatasetContext}
 import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
 import com.socrata.datacoordinator.truth.metadata.{DatasetCopyContext, ColumnInfo, CopyInfo, Schema}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
@@ -28,8 +28,9 @@ import com.socrata.pg.server.config.QueryServerConfig
 import com.socrata.pg.Schema._
 import com.socrata.pg.SecondaryBase
 import com.socrata.pg.soql.Sqlizer
-import com.socrata.pg.store.{PostgresUniverseCommon, PGSecondaryUniverse, SchemaUtil, PGSecondaryRowReader}
+import com.socrata.pg.store.{PGSecondaryUniverse, SchemaUtil, PGSecondaryRowReader}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
+import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.types.{SoQLVersion, SoQLValue, SoQLID, SoQLType}
@@ -133,20 +134,12 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
           val systemToUserColumnMap =  SchemaUtil.systemToUserColumnMap(readCtx.schema)
           val userToSystemColumnMap = SchemaUtil.userToSystemColumnMap(readCtx.schema)
           val qrySchema = querySchema(pgu, analysis, latest)
-          val (qrySchemaWithRequiredColumns, qryHasIdColumn, qryHasVerColumn) = SchemaUtil.addRequiredColumnsToSchema(qrySchema, baseSchema)
-          val qryColumnIdMap = ColumnIdMap(qrySchemaWithRequiredColumns)
-          val qryContext: RepBasedSqlDatasetContext[SoQLType, SoQLValue] = pgu.datasetContextFactory(qryColumnIdMap)
-          // Remove added :id or :version fields not coming from the user.
-          val qryContextSchema = qryContext.schema.filter { (cid, rep) =>
-            (rep.representedType != SoQLID || qryHasIdColumn) &&
-            (rep.representedType != SoQLVersion || qryHasVerColumn)
-          }
-
+          val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor(_))
           val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema)
           val sqlReps = querier.getSqlReps(systemToUserColumnMap)
           querier.query(analysis, (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) => (a, tableName).sql(sqlReps),
             systemToUserColumnMap, userToSystemColumnMap,
-            qryContextSchema)
+            qryReps)
         }
       case None =>
         throw new Exception("Cannot find dataset info.")
@@ -165,20 +158,21 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
       pgu.commonSupport.timingReport) with RowReaderQuerier[SoQLType, SoQLValue]
   }
 
-
+  /**
+   * @param pgu
+   * @param analysis parsed soql
+   * @param latest
+   * @return a schema for the selected columns
+   */
+  // TODO: Handle expressions and column aliases.
   private def querySchema(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                   analysis: SoQLAnalysis[UserColumnId, SoQLType],
                   latest: CopyInfo):
-                  Map[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.truth.metadata.ColumnInfo[pgu.CT]] = {
+                  OrderedMap[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.truth.metadata.ColumnInfo[pgu.CT]] = {
 
-    analysis.selection.foldLeft(Map.empty[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.truth.metadata.ColumnInfo[pgu.CT]]) { (map, entry) =>
+    analysis.selection.foldLeft(OrderedMap.empty[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.truth.metadata.ColumnInfo[pgu.CT]]) { (map, entry) =>
       entry match {
         case (columnName: ColumnName, coreExpr: CoreExpr[UserColumnId, SoQLType]) =>
-          // Always make the 1st column user key to stop system key from being used in ContextFactory.
-          // If an artifical :id is added (when :id is not selected in the query), it causes
-          // problem in RepBasedSqlDatasetContext.
-          // Here, user key may not meet the unique constraint.  But we don't care for query purpose.
-          val isUserKey = map.size == 0
           val cid = new com.socrata.datacoordinator.id.ColumnId(map.size + 1)
           val cinfo = new com.socrata.datacoordinator.truth.metadata.ColumnInfo[pgu.CT](
             latest,
@@ -187,7 +181,7 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
             coreExpr.typ,
             columnName.name,
             coreExpr.typ == SoQLID,
-            isUserKey,
+            false, // isUserKey
             coreExpr.typ == SoQLVersion
           )(SoQLTypeContext.typeNamespace, null)
           map + (cid -> cinfo)
