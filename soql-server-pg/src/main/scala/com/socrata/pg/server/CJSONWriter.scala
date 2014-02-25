@@ -5,7 +5,7 @@ import java.io.{OutputStreamWriter, BufferedWriter, Writer}
 import com.rojoma.json.io.CompactJsonWriter
 import com.rojoma.json.util.{AutomaticJsonCodecBuilder, JsonUtil}
 import com.socrata.soql.types._
-import com.socrata.datacoordinator.id.UserColumnId
+import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo, DatasetCopyContext, ColumnInfo}
 import com.rojoma.simplearm._
@@ -17,6 +17,8 @@ import org.slf4j.LoggerFactory
 import com.socrata.datacoordinator.truth.DatasetReader._
 import com.socrata.datacoordinator.truth.sql.RepBasedSqlDatasetContext
 import javax.servlet.http.HttpServletResponse
+import com.socrata.datacoordinator.truth.DatasetContext
+import com.socrata.soql.collection.OrderedSet
 
 /**
  * Writes rows as CJSON
@@ -24,53 +26,65 @@ import javax.servlet.http.HttpServletResponse
  *    {
  *      approximate_row_count: x,
  *      locale: en,
+ *      "pk"
  *      schema: [
  *                  {name -> type},
  *                  {name2 -> type}
  *              ],
  *    },
- *    [row 1]
- *    [row 2]
- *    [row 3]
+ *    [row 1],
+ *    [row 2],
+ *    [row 3],
  *
  */
 object CJSONWriter {
   val logger: Logger =
     Logger(LoggerFactory getLogger getClass.getName)
 
-  def writeCJson(analysis:SoQLAnalysis[UserColumnId, SoQLType],
+  def writeCJson(baseSchema:ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]],
                  copyCtx:DatasetCopyContext[SoQLType],
                  colIdMap:ColumnIdMap[ColumnInfo[SoQLType]],
                  rowData:CloseableIterator[com.socrata.datacoordinator.Row[SoQLValue]],
+                 systemToUserColumnMap:Map[ColumnId,UserColumnId],
+                 requestColumns:Set[UserColumnId],
                  rowCount: Option[Long],
                  locale: String = "en_US") = (r:HttpServletResponse) => {
-    r.setStatus(200)
-    r.setContentType("application/json; charset=utf-8")
-    val writer:Writer = new OutputStreamWriter(r.getOutputStream)
-    logger.info("Writing to CJSON!")
+    r.setContentType("application/json")
+    r.setCharacterEncoding("utf-8")
+    val os = r.getOutputStream
+    val writer:Writer = new OutputStreamWriter(os)
     val jsonReps = PostgresUniverseCommon.jsonReps(copyCtx.datasetInfo)
-    //val jsonSchema = copyCtx.schema.mapValuesStrict { ci => jsonReps(ci.typ)}
+    //val jsonSchema = baseSchema.mapValuesStrict { ci => jsonReps(ci.typ)}
 
     writer.write("[{")
     rowCount.map { rc =>
-      writer.write("\"approximate_row_count\": %s\n ,".format(JNumber(rc).toString))
+      writer.write("\"approximate_row_count\": %s\n,".format(JNumber(rc).toString))
     }
     writer.write("\"locale\":\"%s\"".format(locale))
-    writeSchema(analysis, writer)
 
+    // We need the user names; but only the ones for the fields we request
+    logger.info("Request Columns: " + requestColumns)
+    val requestSchema = baseSchema filter {
+      (id, info) => systemToUserColumnMap.get(info.systemId) match {
+          case Some(cId:UserColumnId) => requestColumns.contains(cId)
+          case None => false
+        }
+    }
+    writeSchema(requestSchema, writer)
     writer.write("\n }")
 
     rowData foreach {
-      row => println("PG Query Server: " + row.toString)
+      row =>
         val jsonRowValues: Seq[JValue] = colIdMap.foldLeft(Seq.empty[JValue]) {
           (acc, colIdTyp) =>
             val id = colIdTyp._1
             val rep = jsonReps(colIdTyp._2.typ)
-            //val rep = jsonSchema(colIdTyp)
+            //val rep = jsonSchema(colIdTyp._1)
             if (row.contains(id)) {
               val cjValue: JValue = rep.toJValue(row(id))
               acc :+ cjValue
             } else {
+              logger.warn("Unable to find column " + id + " in row " + row)
               acc
             }
         }
@@ -81,11 +95,10 @@ object CJSONWriter {
     writer.write("\n]\n")
     writer.flush()
     writer.close()
-
   }
 
-  private def writeSchema(analysis:SoQLAnalysis[UserColumnId, SoQLType], writer: Writer) {
-    val sel = analysis.selection.map { case (k, v) => Field(k.name, v.typ.toString) }.toArray
+  private def writeSchema(schema:ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]], writer: Writer) {
+    val sel = schema.values.map { colInfo => Field(colInfo.userColumnId.underlying, colInfo.typ.toString()) }.toArray
     val sortedSel = sel.sortWith( _.c < _.c)
     writer.write("\n ,\"schema\":")
     JsonUtil.writeJson(writer, sortedSel)

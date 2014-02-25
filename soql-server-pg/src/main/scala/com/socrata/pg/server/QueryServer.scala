@@ -32,7 +32,7 @@ import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.types.{SoQLVersion, SoQLValue, SoQLID, SoQLType}
-import com.socrata.soql.typed.CoreExpr
+import com.socrata.soql.typed.{ColumnRef, CoreExpr}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.{ConfigFactory, Config}
 import com.typesafe.scalalogging.slf4j.Logging
@@ -135,11 +135,14 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
                                         systemToUserColumnMap,
                                         userToSystemColumnMap,
                                         qryReps)
-          val approxRowCount = Option(0L)
-          logger.info("Got Results!")
+          logger.warn("TODO: Approximating the row count to 1000!")
+          val approxRowCount = Option(1000L)
+
+          val requestColumns =  qrySchema.values map {
+            colInfo => colInfo.userColumnId
+          }
           for ( r  <- results ) {
-            logger.info("Preparing to write CJSON!")
-            CJSONWriter.writeCJson(analysis, readCtx.copyCtx, ColumnIdMap(qrySchema), r, approxRowCount)(resp)
+            CJSONWriter.writeCJson(baseSchema, readCtx.copyCtx, ColumnIdMap(qrySchema), r, systemToUserColumnMap, requestColumns.toSet, approxRowCount)(resp)
           }
         }
       case None =>
@@ -179,7 +182,7 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
           val cinfo = new com.socrata.datacoordinator.truth.metadata.ColumnInfo[pgu.CT](
             latest,
             cid,
-            new UserColumnId(columnName.name),
+            coreExpr.asInstanceOf[ColumnRef[UserColumnId, SoQLType]].column,
             coreExpr.typ,
             columnName.name,
             coreExpr.typ == SoQLID,
