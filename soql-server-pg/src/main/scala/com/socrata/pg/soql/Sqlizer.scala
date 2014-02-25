@@ -1,10 +1,12 @@
 package com.socrata.pg.soql
 
 import com.socrata.datacoordinator.id.UserColumnId
+import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.soql.typed._
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.soql.SoQLAnalysis
-import com.socrata.datacoordinator.truth.sql.SqlColumnRep
+import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
+import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
 import java.sql.PreparedStatement
 import com.socrata.pg.soql.Sqlizer.SetParam
 
@@ -15,7 +17,7 @@ trait Sqlizer[T] {
 
   import Sqlizer._
 
-  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam]): ParametricSql
+  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], idRep: SoQLIDRep, verRep: SoQLVersionRep): ParametricSql
 }
 
 object Sqlizer {

@@ -33,6 +33,7 @@ import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.types.{SoQLVersion, SoQLValue, SoQLID, SoQLType}
 import com.socrata.soql.typed.{ColumnRef, CoreExpr}
+import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.{ConfigFactory, Config}
 import com.typesafe.scalalogging.slf4j.Logging
@@ -122,6 +123,10 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
       pgu.datasetMapReader.datasetInfo(datasetId) match {
       case Some(datasetInfo) =>
         val latest: CopyInfo = pgu.datasetMapReader.latest(datasetInfo)
+        val cryptProvider = new CryptProvider(datasetInfo.obfuscationKey)
+        val idRep = new SoQLID.StringRep(cryptProvider)
+        val verRep = new SoQLVersion.StringRep(cryptProvider)
+
         for (readCtx <- pgu.datasetReader.openDataset(latest)) {
           val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
           val systemToUserColumnMap =  SchemaUtil.systemToUserColumnMap(readCtx.schema)
@@ -130,11 +135,11 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
           val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor(_))
           val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema)
           val sqlReps = querier.getSqlReps(systemToUserColumnMap)
-
-          val results = querier.query(analysis, (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) => (a, tableName).sql(sqlReps, Seq.empty),
-                                        systemToUserColumnMap,
-                                        userToSystemColumnMap,
-                                        qryReps)
+          val results = querier.query(analysis, (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
+              (a, tableName).sql(sqlReps, Seq.empty, idRep, verRep),
+              systemToUserColumnMap,
+              userToSystemColumnMap,
+              qryReps)
           logger.warn("TODO: Approximating the row count to 1000!")
           val approxRowCount = Option(1000L)
 

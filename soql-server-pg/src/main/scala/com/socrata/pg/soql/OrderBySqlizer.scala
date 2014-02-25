@@ -2,15 +2,18 @@ package com.socrata.pg.soql
 
 import com.socrata.soql.typed.OrderBy
 import com.socrata.datacoordinator.id.UserColumnId
-import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
+import com.socrata.soql.types.{SoQLValue, SoQLType}
+import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
+import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
+
 
 class OrderBySqlizer(orderBy: OrderBy[UserColumnId, SoQLType]) extends Sqlizer[OrderBy[UserColumnId, SoQLType]] {
 
   import Sqlizer._
 
-  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam]) = {
-    val ParametricSql(s, setParamsOrderBy) = orderBy.expression.sql(rep, setParams)
+  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], idRep: SoQLIDRep, verRep: SoQLVersionRep) = {
+    val ParametricSql(s, setParamsOrderBy) = orderBy.expression.sql(rep, setParams, idRep, verRep)
     val se = s + (if (orderBy.ascending) "" else " desc") + (if (orderBy.nullLast) " nulls last" else "")
     ParametricSql(se, setParamsOrderBy)
   }
