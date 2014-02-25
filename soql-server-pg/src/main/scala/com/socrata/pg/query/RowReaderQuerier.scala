@@ -2,12 +2,12 @@ package com.socrata.pg.query
 
 import com.rojoma.simplearm.Managed
 import com.rojoma.simplearm.util._
-import com.socrata.datacoordinator.id.UserColumnId
+import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.truth.loader.sql.DataSqlizer
 import com.socrata.datacoordinator.util.CloseableIterator
-import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.store.PGSecondaryRowReader
+import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
 
 trait RowReaderQuerier[CT, CV] {
@@ -17,7 +17,7 @@ trait RowReaderQuerier[CT, CV] {
             toSql: (SoQLAnalysis[UserColumnId, CT], String) => String,
             systemToUserColumnMap: Map[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.id.UserColumnId],
             userToSystemColumnMap: Map[com.socrata.datacoordinator.id.UserColumnId, com.socrata.datacoordinator.id.ColumnId],
-            querySchema: ColumnIdMap[SqlColumnRep[CT, CV]]):
+            querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]]):
             Managed[CloseableIterator[com.socrata.datacoordinator.Row[CV]]] = {
 
     val sqlizerq = sqlizer.asInstanceOf[DataSqlizer[CT, CV] with DataSqlizerQuerier[CT, CV]]

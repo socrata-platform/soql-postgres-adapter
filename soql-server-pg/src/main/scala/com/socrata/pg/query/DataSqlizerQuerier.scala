@@ -1,11 +1,11 @@
 package com.socrata.pg.query
 
 import com.socrata.datacoordinator.truth.loader.sql.AbstractRepBasedDataSqlizer
-import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.MutableRow
 import com.socrata.datacoordinator.util.CloseableIterator
-import com.socrata.datacoordinator.id.UserColumnId
+import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
+import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
 import com.typesafe.scalalogging.slf4j.Logging
 import java.sql.{Connection, ResultSet}
@@ -17,7 +17,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
                toSql: (SoQLAnalysis[UserColumnId, CT], String) => String, // analsysis, tableName
                systemToUserColumnMap: Map[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.id.UserColumnId],
                userToSystemColumnMap: Map[com.socrata.datacoordinator.id.UserColumnId, com.socrata.datacoordinator.id.ColumnId],
-               querySchema: ColumnIdMap[SqlColumnRep[CT, CV]]) :
+               querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]]) :
                CloseableIterator[com.socrata.datacoordinator.Row[CV]] = {
 
     val sql = toSql(analysis, this.dataTableName)
@@ -26,13 +26,12 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     new ResultSetIt(rs, decodeRow(querySchema))
   }
 
-  def decodeRow(schema: ColumnIdMap[SqlColumnRep[CT, CV]])(rs: ResultSet): com.socrata.datacoordinator.Row[CV] = {
+  def decodeRow(schema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]])(rs: ResultSet): com.socrata.datacoordinator.Row[CV] = {
 
     val row = new MutableRow[CV]
     var i = 1
 
-    schema.keys.toSeq.reverse.foreach { cid => // TODO: Remove the need for reverse
-      val rep = schema(cid)
+    schema.foreach { case (cid, rep) =>
       row(cid) = rep.fromResultSet(rs, i)
       i += rep.physColumns.length
     }
