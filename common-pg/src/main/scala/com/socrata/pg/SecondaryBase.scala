@@ -5,6 +5,13 @@ import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.pg.store.{PostgresUniverseCommon, PGSecondaryUniverse}
 import com.socrata.soql.types.{SoQLValue, SoQLType}
+import javax.sql.DataSource
+import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
+import com.rojoma.simplearm.Managed
+import org.postgresql.ds.PGSimpleDataSource
+import com.socrata.thirdparty.typesafeconfig.Propertizer
+import com.mchange.v2.c3p0.DataSources
+import com.socrata.datacoordinator.truth.universe.sql.{PostgresCopyIn, C3P0WrappedPostgresCopyIn}
 
 trait SecondaryBase {
 
@@ -14,8 +21,6 @@ trait SecondaryBase {
 
   @volatile var populatedDb = false
   protected def withDb[T]()(f: (Connection) => T): T = {
-    // TODO: add back loglevel setting, it is handy
-    def loglevel = 0; // 2 = debug, 0 = default
     // TODO: this isn't really the right lifecycle here, recreating this for each withDb call, need to rationalize
     for {
       dsInfo <- DataSourceFromConfig(dsConfig)

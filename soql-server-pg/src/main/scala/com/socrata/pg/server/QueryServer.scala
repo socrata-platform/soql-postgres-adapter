@@ -9,12 +9,11 @@ import com.netflix.curator.retry
 import com.rojoma.json.ast.JString
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
 import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
-import com.socrata.datacoordinator.id.{DatasetId, RowId, UserColumnId}
+import com.socrata.datacoordinator.id.{ColumnId, DatasetId, RowId, UserColumnId}
 import com.socrata.datacoordinator.truth.sql.RepBasedSqlDatasetContext
 import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
-import com.socrata.datacoordinator.truth.metadata.{DatasetCopyContext, ColumnInfo, CopyInfo, Schema}
+import com.socrata.datacoordinator.truth.metadata.{DatasetCopyContext, CopyInfo, Schema}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.http.server.implicits._
 import com.socrata.http.server.responses._
 import com.socrata.http.server.routing.{SimpleRouteContext, SimpleResource}
@@ -43,7 +42,7 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.{Executors, ExecutorService}
 import javax.servlet.http.{HttpServletResponse, HttpServletRequest}
 import java.sql.Connection
-import java.io.ByteArrayInputStream
+import java.io.{Writer, ByteArrayInputStream}
 
 
 class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Logging {
@@ -104,31 +103,26 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
     val schemaHash = req.getParameter("schemaHash")
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserializer(analysisStream)
     val rowCount = Option(req.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
+    logger.info("Performing query on dataset " + datasetId)
 
     withPgu() { pgu =>
       pgu.datasetInternalNameMapReader.datasetIdForInternalName(datasetId) match {
         case Some(dsId) =>
-          val managedRowIt = execQuery(pgu, dsId, analysis)
-          // CJSON follows...
-          for (result <- managedRowIt) {
-            result.foreach(row => println("PG Query Server: " + row.toString))
-          }
-          OK
+          execQuery(dsId, analysis)
         case None =>
           NotFound
       }
     }
   }
 
-  def execQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetId: DatasetId, analysis: SoQLAnalysis[UserColumnId, SoQLType]):
-            Managed[CloseableIterator[com.socrata.datacoordinator.Row[SoQLValue]]] = {
+  def execQuery(datasetId: DatasetId, analysis: SoQLAnalysis[UserColumnId, SoQLType])(resp: HttpServletResponse) = {
 
     import Sqlizer._
-
-    pgu.datasetMapReader.datasetInfo(datasetId) match {
+    withPgu() { pgu =>
+      pgu.datasetMapReader.datasetInfo(datasetId) match {
       case Some(datasetInfo) =>
         val latest: CopyInfo = pgu.datasetMapReader.latest(datasetInfo)
-        for (readCtx <- pgu.datasetReader.openDataset(latest)) yield {
+        for (readCtx <- pgu.datasetReader.openDataset(latest)) {
           val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
           val systemToUserColumnMap =  SchemaUtil.systemToUserColumnMap(readCtx.schema)
           val userToSystemColumnMap = SchemaUtil.userToSystemColumnMap(readCtx.schema)
@@ -144,12 +138,20 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
 
           val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema)
           val sqlReps = querier.getSqlReps(systemToUserColumnMap)
-          querier.query(analysis, (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) => (a, tableName).sql(sqlReps),
-            systemToUserColumnMap, userToSystemColumnMap,
-            qryContextSchema)
+          val results = querier.query(analysis, (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) => (a, tableName).sql(sqlReps),
+                                        systemToUserColumnMap,
+                                        userToSystemColumnMap,
+                                        qryContextSchema)
+          val approxRowCount = Option(0L)
+          logger.info("Got Results!")
+          for ( r  <- results ) {
+            logger.info("Preparing to write CJSON!")
+            CJSONWriter.writeCJson(analysis, readCtx.copyCtx, qryColumnIdMap, r, approxRowCount)(resp)
+          }
         }
       case None =>
-        throw new Exception("Cannot find dataset info.")
+        NotFound(resp)
+    }
     }
   }
 
@@ -201,7 +203,6 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
    * @return Some schema or none
    */
   def latestSchema(ds: String): Option[Schema] = {
-
     withPgu() { pgu =>
       for {
         datasetId <- pgu.datasetInternalNameMapReader.datasetIdForInternalName(ds)

@@ -9,11 +9,13 @@ import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.environment.DatasetContext
 import com.socrata.soql.environment.TypeName
-import com.socrata.soql.types.{SoQLID, SoQLType}
+import com.socrata.soql.types.{SoQLValue, SoQLID, SoQLType}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
 import java.sql.Connection
 import scala.language.reflectiveCalls
+import com.socrata.datacoordinator.util.CloseableIterator
+import com.rojoma.simplearm.Managed
 
 class QueryTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase {
 
@@ -51,7 +53,8 @@ class QueryTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase {
           val schema = columnNameTypeMap
         }
         val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
-        for (result <- qs.execQuery(pgu, copyInfo.datasetInfo.systemId, analysis)) {
+        val (colIdMap, copyCtx, mresult) = qs.execQuery(pgu, copyInfo.datasetInfo.systemId, analysis)
+        for (result <- mresult) {
           result.foreach { row =>
             println(row.toString())
             row.toString should be("{2=SoQLNumber(0),1=SoQLText(Hello World)}")
