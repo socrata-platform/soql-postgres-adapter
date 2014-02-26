@@ -11,7 +11,7 @@ import com.socrata.datacoordinator.common.soql.SoQLTypeContext
 import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
 import com.socrata.datacoordinator.id.{ColumnId, DatasetId, RowId, UserColumnId}
 import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
-import com.socrata.datacoordinator.truth.metadata.{DatasetCopyContext, CopyInfo, Schema}
+import com.socrata.datacoordinator.truth.metadata.{DatasetInfo, DatasetCopyContext, CopyInfo, Schema}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.http.server.implicits._
 import com.socrata.http.server.responses._
@@ -105,56 +105,64 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserializer(analysisStream)
     val rowCount = Option(req.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     logger.info("Performing query on dataset " + datasetId)
+    streamQueryResults(analysis, datasetId)
+  }
 
+  /**
+   * Stream the query results; we need to have the entire HttpServletResponse => Unit
+   * passed back to SocrataHttp so the transaction can be maintained through the duration of the
+   * streaming.
+   */
+  def streamQueryResults(analysis: SoQLAnalysis[UserColumnId, SoQLType], datasetId:String)(resp:HttpServletResponse) = {
     withPgu() { pgu =>
       pgu.datasetInternalNameMapReader.datasetIdForInternalName(datasetId) match {
         case Some(dsId) =>
-          execQuery(dsId, analysis)
+          pgu.datasetMapReader.datasetInfo(dsId) match {
+            case Some(datasetInfo) =>
+              // Very weird separation of concerns between execQuery and streaming. Most likely we will
+              // want yet-another-refactoring where much of execQuery is lifted out into this function.
+              // This will significantly change the tests; however.
+              val (qrySchema, results) = execQuery(pgu, datasetInfo, analysis)
+              logger.warn("TODO: Approximating the row count to 1000!")
+              val approxRowCount = Option(1000L)
+              for (r <- results) yield {
+                CJSONWriter.writeCJson(datasetInfo, qrySchema, r, approxRowCount)(resp)
+              }
+            case None =>
+              NotFound(resp)
+          }
         case None =>
-          NotFound
+          NotFound(resp)
       }
     }
   }
 
-  def execQuery(datasetId: DatasetId, analysis: SoQLAnalysis[UserColumnId, SoQLType])(resp: HttpServletResponse) = {
-
+  def execQuery(pgu:PGSecondaryUniverse[SoQLType, SoQLValue], datasetInfo:DatasetInfo, analysis: SoQLAnalysis[UserColumnId, SoQLType]) = {
     import Sqlizer._
-    withPgu() { pgu =>
-      pgu.datasetMapReader.datasetInfo(datasetId) match {
-      case Some(datasetInfo) =>
-        val latest: CopyInfo = pgu.datasetMapReader.latest(datasetInfo)
-        val cryptProvider = new CryptProvider(datasetInfo.obfuscationKey)
-        val idRep = new SoQLID.StringRep(cryptProvider)
-        val verRep = new SoQLVersion.StringRep(cryptProvider)
+    val latest: CopyInfo = pgu.datasetMapReader.latest(datasetInfo)
+    val cryptProvider = new CryptProvider(datasetInfo.obfuscationKey)
+    val idRep = new SoQLID.StringRep(cryptProvider)
+    val verRep = new SoQLVersion.StringRep(cryptProvider)
 
-        for (readCtx <- pgu.datasetReader.openDataset(latest)) {
-          val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
-          val systemToUserColumnMap =  SchemaUtil.systemToUserColumnMap(readCtx.schema)
-          val userToSystemColumnMap = SchemaUtil.userToSystemColumnMap(readCtx.schema)
-          val qrySchema = querySchema(pgu, analysis, latest)
-          val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor(_))
-          val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema)
-          val sqlReps = querier.getSqlReps(systemToUserColumnMap)
-          val results = querier.query(analysis, (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-              (a, tableName).sql(sqlReps, Seq.empty, idRep, verRep),
-              systemToUserColumnMap,
-              userToSystemColumnMap,
-              qryReps)
-          logger.warn("TODO: Approximating the row count to 1000!")
-          val approxRowCount = Option(1000L)
+    for (readCtx <- pgu.datasetReader.openDataset(latest)) yield {
+      val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
+      val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
+      val userToSystemColumnMap = SchemaUtil.userToSystemColumnMap(readCtx.schema)
+      val qrySchema = querySchema(pgu, analysis, latest)
+      val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor(_))
+      val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema)
+      val sqlReps = querier.getSqlReps(systemToUserColumnMap)
 
-          val requestColumns =  qrySchema.values map {
-            colInfo => colInfo.userColumnId
-          }
-          for ( r  <- results ) {
-            CJSONWriter.writeCJson(datasetInfo, qrySchema, r, approxRowCount)(resp)
-          }
-        }
-      case None =>
-        NotFound(resp)
-    }
+      val results = querier.query(analysis, (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
+        (a, tableName).sql(sqlReps, Seq.empty, idRep, verRep),
+        systemToUserColumnMap,
+        userToSystemColumnMap,
+        qryReps)
+      (qrySchema, results)
     }
   }
+
+
 
   private def readerWithQuery[SoQLType, SoQLValue](conn: Connection,
                                                    pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
