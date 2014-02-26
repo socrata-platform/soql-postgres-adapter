@@ -147,7 +147,7 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
             colInfo => colInfo.userColumnId
           }
           for ( r  <- results ) {
-            CJSONWriter.writeCJson(baseSchema, readCtx.copyCtx, ColumnIdMap(qrySchema), r, systemToUserColumnMap, requestColumns.toSet, approxRowCount)(resp)
+            CJSONWriter.writeCJson(datasetInfo, qrySchema, r, approxRowCount)(resp)
           }
         }
       case None =>
@@ -187,7 +187,7 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
           val cinfo = new com.socrata.datacoordinator.truth.metadata.ColumnInfo[pgu.CT](
             latest,
             cid,
-            coreExpr.asInstanceOf[ColumnRef[UserColumnId, SoQLType]].column,
+            new UserColumnId(columnName.name),
             coreExpr.typ,
             columnName.name,
             coreExpr.typ == SoQLID,

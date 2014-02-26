@@ -3,11 +3,12 @@ package com.socrata.pg.soql
 import org.scalatest.{Matchers, FunSuite}
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import com.socrata.soql.environment.{DatasetContext, ColumnName}
-import com.socrata.soql.types._
-import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
+import com.socrata.soql.collection.OrderedMap
+import com.socrata.soql.environment.{DatasetContext, ColumnName}
 import com.socrata.soql.SoQLAnalysis
+import com.socrata.soql.types._
+import com.socrata.soql.types.obfuscation.CryptProvider
 
 class SqlizerTest extends FunSuite with Matchers {
 
@@ -45,9 +46,13 @@ object SqlizerTest {
 
   import Sqlizer._
 
+  private val cryptProvider = new CryptProvider(CryptProvider.generateKey())
+  private val idRep = new SoQLID.StringRep(cryptProvider)
+  private val verRep = new SoQLVersion.StringRep(cryptProvider)
+
   private def sqlize(soql: String): ParametricSql = {
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
-    (analysis, "t1").sql(Map.empty[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], Seq.empty)
+    (analysis, "t1").sql(Map.empty[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], Seq.empty, idRep, verRep)
   }
 
   private val idMap =  (cn: ColumnName) => new UserColumnId(cn.caseFolded)
