@@ -70,23 +70,24 @@ object CJSONWriter {
           case None => false
         }
     }
-    writeSchema(requestSchema, writer)
+
+    val cjsonSortedSchema = requestSchema.values.toSeq.sortWith(_.userColumnId.underlying < _.userColumnId.underlying)
+    // This maps user column ids to the artifically created column ids consisting of 1,2,3...
+    // which is the order returned by sql query
+    val userIdToQueryColumnIdMap = colIdMap.keys.foldLeft(Map.empty[UserColumnId, ColumnId]) { (map, cid) =>
+      map + (colIdMap(cid).userColumnId -> cid)
+    }
+
+    writeSchema(cjsonSortedSchema, writer)
     writer.write("\n }")
 
     rowData foreach {
       row =>
-        val jsonRowValues: Seq[JValue] = colIdMap.foldLeft(Seq.empty[JValue]) {
-          (acc, colIdTyp) =>
-            val id = colIdTyp._1
-            val rep = jsonReps(colIdTyp._2.typ)
-            //val rep = jsonSchema(colIdTyp._1)
-            if (row.contains(id)) {
-              val cjValue: JValue = rep.toJValue(row(id))
-              acc :+ cjValue
-            } else {
-              logger.warn("Unable to find column " + id + " in row " + row)
-              acc
-            }
+        val jsonRowValues = cjsonSortedSchema.map { (cinfo: ColumnInfo[SoQLType]) =>
+          val rep = jsonReps(cinfo.typ)
+          val columnId = userIdToQueryColumnIdMap(cinfo.userColumnId)
+          val soqlValue = row(columnId)
+          rep.toJValue(soqlValue)
         }
         logger.info("Writing " + JArray(jsonRowValues))
         writer.write("\n,")
@@ -97,11 +98,10 @@ object CJSONWriter {
     writer.close()
   }
 
-  private def writeSchema(schema:ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]], writer: Writer) {
-    val sel = schema.values.map { colInfo => Field(colInfo.userColumnId.underlying, colInfo.typ.toString()) }.toArray
-    val sortedSel = sel.sortWith( _.c < _.c)
+  private def writeSchema(cjsonSortedSchema:Seq[ColumnInfo[SoQLType]], writer: Writer) {
+    val sel = cjsonSortedSchema.map { colInfo => Field(colInfo.userColumnId.underlying, colInfo.typ.toString()) }.toArray
     writer.write("\n ,\"schema\":")
-    JsonUtil.writeJson(writer, sortedSel)
+    JsonUtil.writeJson(writer, sel)
   }
 
   private case class Field(c: String, t: String)
