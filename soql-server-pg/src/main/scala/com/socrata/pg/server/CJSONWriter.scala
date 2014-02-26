@@ -63,21 +63,22 @@ object CJSONWriter {
       val (cid, cInfo) = entry
       map + (cInfo.userColumnId -> cid)
     }
+    val reps = cjsonSortedSchema.map { cinfo => jsonReps(cinfo.typ) }.toArray
+    val cids = cjsonSortedSchema.map { cinfo => qryColumnIdToUserColumnIdMap(cinfo.userColumnId) }.toArray
 
     writeSchema(cjsonSortedSchema, writer)
     writer.write("\n }")
 
-    rowData foreach {
-      row =>
-        val jsonRowValues = cjsonSortedSchema.map { (cinfo: ColumnInfo[SoQLType]) =>
-          val rep = jsonReps(cinfo.typ)
-          val columnId = qryColumnIdToUserColumnIdMap(cinfo.userColumnId)
-          val soqlValue = row(columnId)
-          rep.toJValue(soqlValue)
-        }
-        logger.info("Writing " + JArray(jsonRowValues))
-        writer.write("\n,")
-        CompactJsonWriter.toWriter(writer, JArray(jsonRowValues))
+    for (row <- rowData) {
+      assert(row.size == cids.length)
+      var i = 0
+      var result = new Array[JValue](row.size)
+      while(i != result.length) {
+        result(i) = reps(i).toJValue(row(cids(i)))
+        i += 1
+      }
+      writer.write("\n,")
+      CompactJsonWriter.toWriter(writer, JArray(result))// JArray(jsonRowValues))
     }
     writer.write("\n]\n")
     writer.flush()
