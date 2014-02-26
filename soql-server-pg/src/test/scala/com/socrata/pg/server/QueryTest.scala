@@ -53,7 +53,7 @@ class QueryTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase {
           val schema = columnNameTypeMap
         }
         val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
-        val (requestColumns, systemToUserColumnMap, underlyingSchema, qrySchemaColMap, copyCtx, mresult) =  qs.execQuery(pgu, copyInfo.datasetInfo, analysis)
+        val (requestColumns, mresult) =  qs.execQuery(pgu, copyInfo.datasetInfo, analysis)
         for (result <- mresult) {
           result.foreach { row =>
             println(row.toString())
