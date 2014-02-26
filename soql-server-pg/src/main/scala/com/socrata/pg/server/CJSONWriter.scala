@@ -39,13 +39,29 @@ object CJSONWriter {
   def writeCJson(datasetInfo: DatasetInfo,
                  qrySchema: OrderedMap[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]],
                  rowData:CloseableIterator[com.socrata.datacoordinator.Row[SoQLValue]],
-                 rowCount: Option[Long],
+                 reqRowCount: Boolean,
+                 givenRowCount: Option[Long],
                  locale: String = "en_US") = (r:HttpServletResponse) => {
 
     r.setContentType("application/json")
     r.setCharacterEncoding(scala.io.Codec.UTF8.name)
     val os = r.getOutputStream
     val jsonReps = PostgresUniverseCommon.jsonReps(datasetInfo)
+
+    val (rowCount, rows) = givenRowCount match {
+      case None if reqRowCount =>
+        logger.warn("FIXME: I am brute forcing row count!")
+        val consumedRowData = rowData.toSeq
+        val it = consumedRowData.iterator
+        val cit = new CloseableIterator[com.socrata.datacoordinator.Row[SoQLValue]] {
+          def next() = { it.next() }
+          def hasNext = it.hasNext
+          def close() = { }
+        }
+        (Some(consumedRowData.size.toLong), cit)
+      case rc =>
+        (rc, rowData)
+    }
 
     using(new OutputStreamWriter(os)) { (writer: OutputStreamWriter) =>
       writer.write("[{")
@@ -65,7 +81,7 @@ object CJSONWriter {
       writeSchema(cjsonSortedSchema, writer)
       writer.write("\n }")
 
-      for (row <- rowData) {
+      for (row <- rows) {
         assert(row.size == cids.length)
         var result = new Array[JValue](row.size)
 

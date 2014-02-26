@@ -103,9 +103,9 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
     val analysisStream = new ByteArrayInputStream(analysisParam.getBytes(StandardCharsets.ISO_8859_1))
     val schemaHash = req.getParameter("schemaHash")
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserializer(analysisStream)
-    val rowCount = Option(req.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
+    val reqRowCount = Option(req.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     logger.info("Performing query on dataset " + datasetId)
-    streamQueryResults(analysis, datasetId)
+    streamQueryResults(analysis, datasetId, reqRowCount)
   }
 
   /**
@@ -113,7 +113,7 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
    * passed back to SocrataHttp so the transaction can be maintained through the duration of the
    * streaming.
    */
-  def streamQueryResults(analysis: SoQLAnalysis[UserColumnId, SoQLType], datasetId:String)(resp:HttpServletResponse) = {
+  def streamQueryResults(analysis: SoQLAnalysis[UserColumnId, SoQLType], datasetId:String, reqRowCount: Boolean)(resp:HttpServletResponse) = {
     withPgu() { pgu =>
       pgu.datasetInternalNameMapReader.datasetIdForInternalName(datasetId) match {
         case Some(dsId) =>
@@ -123,10 +123,9 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
               // want yet-another-refactoring where much of execQuery is lifted out into this function.
               // This will significantly change the tests; however.
               val (qrySchema, results) = execQuery(pgu, datasetInfo, analysis)
-              logger.warn("TODO: Approximating the row count to 1000!")
-              val approxRowCount = Option(1000L)
+              val approxRowCount = None
               for (r <- results) yield {
-                CJSONWriter.writeCJson(datasetInfo, qrySchema, r, approxRowCount)(resp)
+                CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, approxRowCount)(resp)
               }
             case None =>
               NotFound(resp)
