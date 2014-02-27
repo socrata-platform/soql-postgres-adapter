@@ -1,13 +1,13 @@
 package com.socrata.pg.soql
 
 import com.socrata.datacoordinator.id.UserColumnId
+import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.soql.functions.SoQLFunctions
-import com.socrata.soql.environment.FunctionName
+import com.socrata.soql.functions.Function
 import com.socrata.soql.types._
 import com.socrata.soql.typed.{NumberLiteral, StringLiteral, FunctionCall}
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
 import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
-import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 
 
 object SqlFunctions {
@@ -18,38 +18,40 @@ object SqlFunctions {
 
   type FunCall = FunctionCall[UserColumnId, SoQLType]
 
-  def apply(functionName: FunctionName) = funMap.get(functionName)
+  type FunCallToSql = (FunCall, Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], Seq[SetParam], SoQLIDRep, SoQLVersionRep) => ParametricSql
 
-  private val funMap = Map(
-    IsNull.name -> formatCall("%s is null") _,
-    IsNotNull.name -> formatCall("%s is not null") _,
-    Not.name -> formatCall("not %s") _,
-    In.name -> naryish("in") _, // TODO - detect and handle row id decryption
-    NotIn.name -> naryish("not in") _, // TODO - detect and handle row id decryption
-    Eq.name -> infix("=") _, // TODO - detect and handle row id decryption
-    EqEq.name -> infix("=") _, // TODO - detect and handle row id decryption
-    TextToFloatingTimestamp.name -> todo _,
-    TextToFixedTimestamp.name -> todo _,
-    Neq.name -> infix("!=") _,
-    BangEq.name -> infix("!=") _,
-    And.name -> infix("and") _,
-    Or.name -> infix("or") _,
-    UnaryMinus.name -> formatCall("-%s") _,
-    NotBetween.name -> formatCall("not %s between %s and %s") _,
-    WithinCircle.name -> todo _,
-    WithinBox.name -> todo _,
-    Between.name -> formatCall("%s between %s and %s") _,
-    Lt.name -> infix("<") _,
-    Lte.name -> infix("<=") _,
-    Gt.name -> infix(">")_,
-    Gte.name -> infix(">=") _,
-    TextToRowIdentifier.name -> decryptString(SoQLID) _,
-    TextToRowVersion.name -> decryptString(SoQLVersion) _,
-    Like.name -> infix("like") _,
-    NotLike.name -> infix("not like") _,
-    StartsWith.name -> infix("like") _, // TODO - Need to add suffix % to the 2nd operand.
-    Contains.name -> infix("like") _,  // TODO - Need to add prefix % and suffix % to the 2nd operand.
-    Concat.name -> infix("||") _
+  def apply(function: Function[SoQLType]) = funMap(function)
+
+  private val funMap = Map[Function[SoQLType], FunCallToSql](
+    IsNull -> formatCall("%s is null") _,
+    IsNotNull -> formatCall("%s is not null") _,
+    Not -> formatCall("not %s") _,
+    In -> naryish("in") _, // TODO - detect and handle row id decryption
+    NotIn -> naryish("not in") _, // TODO - detect and handle row id decryption
+    Eq -> infix("=") _, // TODO - detect and handle row id decryption
+    EqEq -> infix("=") _, // TODO - detect and handle row id decryption
+    TextToFloatingTimestamp -> todo _,
+    TextToFixedTimestamp -> todo _,
+    Neq -> infix("!=") _,
+    BangEq -> infix("!=") _,
+    And -> infix("and") _,
+    Or -> infix("or") _,
+    UnaryMinus -> formatCall("-%s") _,
+    NotBetween -> formatCall("not %s between %s and %s") _,
+    WithinCircle -> todo _,
+    WithinBox -> todo _,
+    Between -> formatCall("%s between %s and %s") _,
+    Lt -> infix("<") _,
+    Lte -> infix("<=") _,
+    Gt -> infix(">")_,
+    Gte -> infix(">=") _,
+    TextToRowIdentifier -> decryptString(SoQLID) _,
+    TextToRowVersion -> decryptString(SoQLVersion) _,
+    Like -> infix("like") _,
+    NotLike -> infix("not like") _,
+    StartsWith -> infix("like") _, // TODO - Need to add suffix % to the 2nd operand.
+    Contains -> infix("like") _,  // TODO - Need to add prefix % and suffix % to the 2nd operand.
+    Concat -> infix("||") _
     // TODO: Complete the function list.
   )
 

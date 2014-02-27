@@ -51,7 +51,7 @@ object NullLiteralSqlizer extends Sqlizer[NullLiteral[SoQLType]] {
 class FunctionCallSqlizer(expr: FunctionCall[UserColumnId, SoQLType]) extends Sqlizer[FunctionCall[UserColumnId, SoQLType]] {
 
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], idRep: SoQLIDRep, verRep: SoQLVersionRep) = {
-    val fn = SqlFunctions(expr.function.name).get
+    val fn = SqlFunctions(expr.function.function)
     fn(expr, rep, setParams, idRep, verRep)
   }
 }
