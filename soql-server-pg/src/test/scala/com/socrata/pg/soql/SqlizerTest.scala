@@ -40,6 +40,15 @@ class SqlizerTest extends FunSuite with Matchers {
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq(1, "cn001"))
   }
+
+  test("starts_with has automatic suffix %") {
+    val soql = "select id where starts_with(case_number, 'cn')"
+    val ParametricSql(sql, setParams) = sqlize(soql)
+    sql should be ("SELECT id FROM t1 WHERE case_number like ? || ?")
+    setParams.length should be (2)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq("cn", "%"))
+  }
 }
 
 object SqlizerTest {

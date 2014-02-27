@@ -2,13 +2,12 @@ package com.socrata.pg.soql
 
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import com.socrata.soql.functions.SoQLFunctions
-import com.socrata.soql.functions.Function
+import com.socrata.soql.functions._
 import com.socrata.soql.types._
 import com.socrata.soql.typed.{NumberLiteral, StringLiteral, FunctionCall}
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
 import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
-
+import scala.util.parsing.input.NoPosition
 
 object SqlFunctions {
 
@@ -49,11 +48,21 @@ object SqlFunctions {
     TextToRowVersion -> decryptString(SoQLVersion) _,
     Like -> infix("like") _,
     NotLike -> infix("not like") _,
-    StartsWith -> infix("like") _, // TODO - Need to add suffix % to the 2nd operand.
+    StartsWith -> infixSuffixWildcard("like") _,
     Contains -> infix("like") _,  // TODO - Need to add prefix % and suffix % to the 2nd operand.
     Concat -> infix("||") _
     // TODO: Complete the function list.
   )
+
+  private val Wildcard = StringLiteral("%", SoQLText)(NoPosition)
+
+  private val SuffixWildcard = {
+    val bindings = SoQLFunctions.Concat.parameters.map {
+      case VariableType(name) =>  (name -> SoQLText)
+      case _ => throw new Exception("Unexpected concat function signature")
+    }.toMap
+    MonomorphicFunction(SoQLFunctions.Concat, bindings)
+  }
 
   private def infix(fnName: String)
                    (fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], idRep: SoQLIDRep, verRep: SoQLVersionRep): ParametricSql = {
@@ -128,6 +137,17 @@ object SqlFunctions {
       }
     }
     ParametricSql(sqlFragsAndParams._1.mkString(","), sqlFragsAndParams._2)
+  }
+
+  private def infixSuffixWildcard(fnName: String)
+                        (fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], idRep: SoQLIDRep, verRep: SoQLVersionRep): ParametricSql = {
+
+    val ParametricSql(l, setParamsL) = fn.parameters(0).sql(rep, setParams, idRep, verRep)
+    val params = Seq(fn.parameters(1), Wildcard)
+    val suffixWildcard = FunctionCall(SuffixWildcard, params)(fn.position, fn.functionNamePosition)
+    val ParametricSql(r, setParamsLR) = suffixWildcard.sql(rep, setParamsL, idRep, verRep)
+    val s = s"$l $fnName $r"
+    ParametricSql(s, setParamsLR)
   }
 
   private def todo(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], idRep: SoQLIDRep, verRep: SoQLVersionRep): ParametricSql = ???
