@@ -25,14 +25,15 @@ import com.socrata.pg.query.{DataSqlizerQuerier, RowReaderQuerier}
 import com.socrata.pg.server.config.QueryServerConfig
 import com.socrata.pg.Schema._
 import com.socrata.pg.SecondaryBase
-import com.socrata.pg.soql.Sqlizer
+import com.socrata.pg.soql.{SqlizerContext, Sqlizer}
+import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.store.{PGSecondaryUniverse, SchemaUtil, PGSecondaryRowReader}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.types.{SoQLVersion, SoQLValue, SoQLID, SoQLType}
-import com.socrata.soql.typed.{ColumnRef, CoreExpr}
+import com.socrata.soql.typed.CoreExpr
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.{ConfigFactory, Config}
@@ -41,9 +42,10 @@ import org.apache.log4j.PropertyConfigurator
 import java.net.{InetAddress, InetSocketAddress}
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.{Executors, ExecutorService}
-import javax.servlet.http.{HttpServletResponse, HttpServletRequest}
 import java.sql.Connection
 import java.io.ByteArrayInputStream
+import javax.servlet.http.{HttpServletResponse, HttpServletRequest}
+import scala.language.existentials
 
 
 class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Logging {
@@ -140,8 +142,10 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
     import Sqlizer._
     val latest: CopyInfo = pgu.datasetMapReader.latest(datasetInfo)
     val cryptProvider = new CryptProvider(datasetInfo.obfuscationKey)
-    val idRep = new SoQLID.StringRep(cryptProvider)
-    val verRep = new SoQLVersion.StringRep(cryptProvider)
+    val sqlCtx = Map[SqlizerContext, Any](
+      SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
+      SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider)
+    )
 
     for (readCtx <- pgu.datasetReader.openDataset(latest)) yield {
       val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
@@ -153,7 +157,7 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
       val sqlReps = querier.getSqlReps(systemToUserColumnMap)
 
       val results = querier.query(analysis, (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-        (a, tableName).sql(sqlReps, Seq.empty, idRep, verRep),
+        (a, tableName).sql(sqlReps, Seq.empty, sqlCtx),
         systemToUserColumnMap,
         userToSystemColumnMap,
         qryReps)

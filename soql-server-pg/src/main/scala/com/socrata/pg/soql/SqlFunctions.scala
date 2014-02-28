@@ -17,7 +17,7 @@ object SqlFunctions {
 
   type FunCall = FunctionCall[UserColumnId, SoQLType]
 
-  type FunCallToSql = (FunCall, Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], Seq[SetParam], SoQLIDRep, SoQLVersionRep) => ParametricSql
+  type FunCallToSql = (FunCall, Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], Seq[SetParam], Sqlizer.Context) => ParametricSql
 
   def apply(function: Function[SoQLType]) = funMap(function)
 
@@ -77,18 +77,18 @@ object SqlFunctions {
   }
 
   private def infix(fnName: String)
-                   (fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], idRep: SoQLIDRep, verRep: SoQLVersionRep): ParametricSql = {
-    val ParametricSql(l, setParamsL) = fn.parameters(0).sql(rep, setParams, idRep, verRep)
-    val ParametricSql(r, setParamsLR) = fn.parameters(1).sql(rep, setParamsL, idRep, verRep)
+                   (fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Sqlizer.Context): ParametricSql = {
+    val ParametricSql(l, setParamsL) = fn.parameters(0).sql(rep, setParams, ctx)
+    val ParametricSql(r, setParamsLR) = fn.parameters(1).sql(rep, setParamsL, ctx)
     val s = s"$l $fnName $r"
     ParametricSql(s, setParamsLR)
   }
 
   private def nary(fnName: String)
-                  (fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], idRep: SoQLIDRep, verRep: SoQLVersionRep): ParametricSql = {
+                  (fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Sqlizer.Context): ParametricSql = {
 
     val sqlFragsAndParams = fn.parameters.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
-      val ParametricSql(sql, newSetParams) = param.sql(rep, acc._2, idRep, verRep)
+      val ParametricSql(sql, newSetParams) = param.sql(rep, acc._2, ctx)
       (acc._1 :+ sql, newSetParams)
     }
 
@@ -96,12 +96,12 @@ object SqlFunctions {
   }
 
   private def naryish(fnName: String)
-                     (fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], idRep: SoQLIDRep, verRep: SoQLVersionRep): ParametricSql = {
+                     (fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Sqlizer.Context): ParametricSql = {
 
-    val ParametricSql(head, setParamsHead) = fn.parameters.head.sql(rep, setParams, idRep, verRep)
+    val ParametricSql(head, setParamsHead) = fn.parameters.head.sql(rep, setParams, ctx)
 
     val sqlFragsAndParams = fn.parameters.tail.foldLeft(Tuple2(Seq.empty[String], setParamsHead)) { (acc, param) =>
-      val ParametricSql(sql, newSetParams) = param.sql(rep, acc._2, idRep, verRep)
+      val ParametricSql(sql, newSetParams) = param.sql(rep, acc._2, ctx)
       (acc._1 :+ sql, newSetParams)
     }
 
@@ -109,10 +109,10 @@ object SqlFunctions {
   }
 
   private def formatCall(template: String)
-                        (fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], idRep: SoQLIDRep, verRep: SoQLVersionRep): ParametricSql = {
+                        (fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Sqlizer.Context): ParametricSql = {
 
     val sqlFragsAndParams = fn.parameters.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
-      val ParametricSql(sql, newSetParams) = param.sql(rep, acc._2, idRep, verRep)
+      val ParametricSql(sql, newSetParams) = param.sql(rep, acc._2, ctx)
       (acc._1 :+ sql, newSetParams)
     }
 
@@ -137,12 +137,14 @@ object SqlFunctions {
     }
   }
 
-  private def decryptString(typ: SoQLType)(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], idRep: SoQLIDRep, verRep: SoQLVersionRep): ParametricSql = {
+  private def decryptString(typ: SoQLType)(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Sqlizer.Context): ParametricSql = {
     val sqlFragsAndParams = fn.parameters.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
       param match {
         case strLit@StringLiteral(value: String, _) =>
+          val idRep = ctx(SqlizerContext.IdRep).asInstanceOf[SoQLIDRep]
+          val verRep = ctx(SqlizerContext.VerRep).asInstanceOf[SoQLVersionRep]
           val numLit = decryptToNumLit(typ)(idRep, verRep, strLit)
-          val ParametricSql(sql, newSetParams) = numLit.sql(rep, acc._2, idRep, verRep)
+          val ParametricSql(sql, newSetParams) = numLit.sql(rep, acc._2, ctx)
           (acc._1 :+ sql, newSetParams)
         case unexpected =>
           throw new Exception("Row id is not string literal")
@@ -152,15 +154,15 @@ object SqlFunctions {
   }
 
   private def infixSuffixWildcard(fnName: String)
-                        (fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], idRep: SoQLIDRep, verRep: SoQLVersionRep): ParametricSql = {
+                        (fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Sqlizer.Context): ParametricSql = {
 
-    val ParametricSql(l, setParamsL) = fn.parameters(0).sql(rep, setParams, idRep, verRep)
+    val ParametricSql(l, setParamsL) = fn.parameters(0).sql(rep, setParams, ctx)
     val params = Seq(fn.parameters(1), Wildcard)
     val suffixWildcard = FunctionCall(SuffixWildcard, params)(fn.position, fn.functionNamePosition)
-    val ParametricSql(r, setParamsLR) = suffixWildcard.sql(rep, setParamsL, idRep, verRep)
+    val ParametricSql(r, setParamsLR) = suffixWildcard.sql(rep, setParamsL, ctx)
     val s = s"$l $fnName $r"
     ParametricSql(s, setParamsLR)
   }
 
-  private def todo(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], idRep: SoQLIDRep, verRep: SoQLVersionRep): ParametricSql = ???
+  private def todo(fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Sqlizer.Context): ParametricSql = ???
 }

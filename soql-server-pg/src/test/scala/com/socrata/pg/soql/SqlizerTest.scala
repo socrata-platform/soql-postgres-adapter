@@ -3,6 +3,7 @@ package com.socrata.pg.soql
 import org.scalatest.{Matchers, FunSuite}
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
+import com.socrata.pg.soql.SqlizerContext._
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{DatasetContext, ColumnName}
@@ -26,28 +27,28 @@ class SqlizerTest extends FunSuite with Matchers {
   test("field in (x, y...)") {
     val soql = "select case_number where case_number in ('ha001', 'ha002', 'ha003') order by case_number offset 1 limit 2"
     val ParametricSql(sql, setParams) = sqlize(soql)
-    sql should be ("SELECT case_number FROM t1 WHERE case_number in(?,?,?) ORDER BY case_number nulls last LIMIT 2 OFFSET 1")
+    sql should be ("SELECT case_number FROM t1 WHERE upper(case_number) in(?,?,?) ORDER BY upper(case_number) nulls last LIMIT 2 OFFSET 1")
     setParams.length should be (3)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("ha001", "ha002", "ha003"))
+    params should be (Seq("HA001", "HA002", "HA003"))
   }
 
   test("expr and expr") {
     val soql = "select id where id = 1 and case_number = 'cn001'"
     val ParametricSql(sql, setParams) = sqlize(soql)
-    sql should be ("SELECT id FROM t1 WHERE id = ? and case_number = ?")
+    sql should be ("SELECT id FROM t1 WHERE id = ? and upper(case_number) = ?")
     setParams.length should be (2)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq(1, "cn001"))
+    params should be (Seq(1, "CN001"))
   }
 
   test("starts_with has automatic suffix %") {
     val soql = "select id where starts_with(case_number, 'cn')"
     val ParametricSql(sql, setParams) = sqlize(soql)
-    sql should be ("SELECT id FROM t1 WHERE case_number like ? || ?")
+    sql should be ("SELECT id FROM t1 WHERE upper(case_number) like ? || ?")
     setParams.length should be (2)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("cn", "%"))
+    params should be (Seq("CN", "%"))
   }
 
   test("between") {
@@ -88,12 +89,14 @@ object SqlizerTest {
   import Sqlizer._
 
   private val cryptProvider = new CryptProvider(CryptProvider.generateKey())
-  private val idRep = new SoQLID.StringRep(cryptProvider)
-  private val verRep = new SoQLVersion.StringRep(cryptProvider)
+  val sqlCtx = Map[SqlizerContext, Any](
+    SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
+    SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider)
+  )
 
   private def sqlize(soql: String): ParametricSql = {
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
-    (analysis, "t1").sql(Map.empty[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], Seq.empty, idRep, verRep)
+    (analysis, "t1").sql(Map.empty[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], Seq.empty, sqlCtx)
   }
 
   private val idMap =  (cn: ColumnName) => new UserColumnId(cn.caseFolded)
