@@ -104,7 +104,7 @@ object SqlFunctions {
       (acc._1 :+ sql, newSetParams)
     }
 
-    ParametricSql(template.format(sqlFragsAndParams._1), sqlFragsAndParams._2)
+    ParametricSql(template.format(sqlFragsAndParams._1:_*), sqlFragsAndParams._2)
   }
 
 

@@ -49,6 +49,16 @@ class SqlizerTest extends FunSuite with Matchers {
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq("cn", "%"))
   }
+
+  test("between") {
+    val soql = "select id where id between 1 and 9"
+    val ParametricSql(sql, setParams) = sqlize(soql)
+    sql should be ("SELECT id FROM t1 WHERE id between ? and ?")
+    setParams.length should be (2)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq(1, 9))
+  }
+
 }
 
 object SqlizerTest {
