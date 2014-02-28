@@ -50,7 +50,19 @@ object SqlFunctions {
     NotLike -> infix("not like") _,
     StartsWith -> infixSuffixWildcard("like") _,
     Contains -> infix("like") _,  // TODO - Need to add prefix % and suffix % to the 2nd operand.
-    Concat -> infix("||") _
+    Concat -> infix("||") _,
+
+    // datatype conversions
+    NumberToText -> formatCall("%s::varchar") _,
+    TextToNumber -> formatCall("%s::numeric") _,
+
+    // aggregate functions
+    Avg -> nary("avg") _,
+    Min -> nary("min") _,
+    Max -> nary("max") _,
+    Sum -> nary("sum") _,
+    Count -> nary("count") _,
+    CountStar -> formatCall("count(*)") _
     // TODO: Complete the function list.
   )
 

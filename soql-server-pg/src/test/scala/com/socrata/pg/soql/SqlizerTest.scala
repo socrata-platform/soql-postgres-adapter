@@ -59,6 +59,28 @@ class SqlizerTest extends FunSuite with Matchers {
     params should be (Seq(1, 9))
   }
 
+  test("select count(*)") {
+    val soql = "select count(*)"
+    val ParametricSql(sql, setParams) = sqlize(soql)
+    sql should be ("SELECT count(*) FROM t1")
+    setParams.length should be (0)
+  }
+
+  test("select aggregate functions") {
+    val soql = "select count(id), avg(id), min(id), max(id), sum(id)"
+    val ParametricSql(sql, setParams) = sqlize(soql)
+    sql should be ("SELECT count(id),avg(id),min(id),max(id),sum(id) FROM t1")
+    setParams.length should be (0)
+  }
+
+  test("select text and number conversions") {
+    val soql = "select 123::text, '123'::number"
+    val ParametricSql(sql, setParams) = sqlize(soql)
+    sql should be ("SELECT ?::varchar,?::numeric FROM t1")
+    setParams.length should be (2)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq(123, "123"))
+  }
 }
 
 object SqlizerTest {
