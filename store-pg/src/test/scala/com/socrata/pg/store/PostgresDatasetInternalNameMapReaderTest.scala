@@ -1,20 +1,16 @@
 package com.socrata.pg.store
 
 import org.scalatest.{Matchers, BeforeAndAfterAll, FunSuite}
-import com.socrata.soql.types.{SoQLValue, SoQLType}
-import java.sql.{DriverManager, Connection}
+import java.sql.Connection
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.datacoordinator.common.StandardObfuscationKeyGenerator
 
-class PostgresDatasetInternalNameMapReaderTest extends FunSuite with Matchers with BeforeAndAfterAll {
-
-  type CT = SoQLType
-  type CV = SoQLValue
-
-  val common = PostgresUniverseCommon
+class PostgresDatasetInternalNameMapReaderTest extends FunSuite with Matchers with BeforeAndAfterAll
+      with PGSecondaryUniverseTestBase with DatabaseTestBase with PGStoreTestBase {
 
   override def beforeAll() {
+    createDatabases()
   }
 
   override def afterAll() {
@@ -51,30 +47,19 @@ class PostgresDatasetInternalNameMapReaderTest extends FunSuite with Matchers wi
     }
   }
 
-  def withDb[T]()(f: (Connection) => T): T = {
-    def loglevel = 0; // 2 = debug, 0 = default
-    using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/secondary_test?loglevel=$loglevel", "blist", "blist")) { conn =>
-      conn.setAutoCommit(false)
-      createSchema(conn)
-      f(conn)
-    }
-  }
-
   test("Reader can determine the DatasetId from a given Dataset Internal Name") {
-    withDb() {
-      conn => {
-        val datasetId: DatasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName("Dataset Name").get
-        datasetId shouldEqual new DatasetId(123)
-      }
-    }
+    withDb() { conn => {
+      createSchema(conn)
+      val datasetId: DatasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName("Dataset Name").get
+      datasetId shouldEqual new DatasetId(123)
+    }}
   }
 
   test("Reader does not raise when Dataset Internal Name cannot be found") {
-    withDb() {
-      conn => {
-        new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName("I do not exist")
-        // TODO Show Randy how to deal with the "None" case return value from the above method
-      }
-    }
+    withDb() { conn => {
+      createSchema(conn)
+      new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName("I do not exist")
+      // TODO Show Randy how to deal with the "None" case return value from the above method
+    }}
   }
 }

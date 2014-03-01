@@ -2,11 +2,11 @@ package com.socrata.pg.store.events
 
 import com.socrata.datacoordinator.secondary.{LifecycleStage, CopyInfo, DatasetInfo => SecondaryDatasetInfo}
 import com.socrata.datacoordinator.id.CopyId
-import com.socrata.pg.store.PGSecondaryTestBase
+import com.socrata.pg.store.{PGStoreTestBase, PGSecondaryTestBase}
 import scala.language.reflectiveCalls
 import com.socrata.datacoordinator.truth.metadata
 
-class WorkingCopyCreatedHandlerTest extends PGSecondaryTestBase {
+class WorkingCopyCreatedHandlerTest extends PGSecondaryTestBase with PGStoreTestBase {
   import com.socrata.pg.store.PGSecondaryUtil._
 
   val datasetInfo = SecondaryDatasetInfo(testInternalName, localeName, obfuscationKey)

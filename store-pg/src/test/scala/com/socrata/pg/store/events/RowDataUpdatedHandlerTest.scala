@@ -3,7 +3,7 @@ package com.socrata.pg.store.events
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.id.{RowId, ColumnId}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.pg.store.{PostgresUniverseCommon, PGSecondaryUniverse, PGSecondaryTestBase}
+import com.socrata.pg.store.{PGStoreTestBase, PostgresUniverseCommon, PGSecondaryUniverse, PGSecondaryTestBase}
 import com.socrata.soql.types._
 import scala.language.reflectiveCalls
 import com.typesafe.scalalogging.slf4j.Logging
@@ -13,7 +13,7 @@ import com.socrata.datacoordinator.secondary.Insert
 import com.socrata.datacoordinator.secondary.Delete
 
 
-class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with Logging {
+class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGStoreTestBase with Logging {
 
   import com.socrata.pg.store.PGSecondaryUtil._
 

@@ -1,24 +1,28 @@
 package com.socrata.pg.server
 
 import com.socrata.datacoordinator.common.DataSourceConfig
-import com.socrata.datacoordinator.id.RowId
-import com.socrata.datacoordinator.id.UserColumnId
+import com.socrata.datacoordinator.id.{RowId, UserColumnId}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.pg.store.{PGSecondaryUniverseTestBase, PGSecondaryTestBase, PGSecondaryUtil}
+import com.socrata.pg.store._
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.environment.DatasetContext
 import com.socrata.soql.environment.TypeName
-import com.socrata.soql.types.{SoQLValue, SoQLID, SoQLType}
+import com.socrata.soql.types.{SoQLID, SoQLType}
 import com.socrata.soql.collection.OrderedMap
+import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.socrata.soql.SoQLAnalysis
 import java.sql.Connection
-import scala.language.existentials
-import scala.language.reflectiveCalls
+import org.apache.log4j.PropertyConfigurator
 
-class QueryTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase {
+class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
 
   import QueryTest._
+
+  override def beforeAll = {
+    PropertyConfigurator.configure(Propertizer("log4j", config.getConfig("log4j")))
+    createDatabases()
+  }
 
   test("select text, number") {
     withDb() { conn =>

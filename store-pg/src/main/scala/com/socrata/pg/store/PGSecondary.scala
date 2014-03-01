@@ -33,8 +33,8 @@ import com.socrata.pg.SecondaryBase
 /**
  * Postgres Secondary Store Implementation
  */
-class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] with SecondaryBase with Logging {
-  val dsConfig = new DataSourceConfig(config, "database")
+class PGSecondary(val config: Config, val database: String = "database") extends Secondary[SoQLType, SoQLValue] with SecondaryBase with Logging {
+  val dsConfig = new DataSourceConfig(config, database)
 
   // Called when this process is shutting down (or being killed)
   def shutdown() {

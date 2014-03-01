@@ -2,7 +2,7 @@ package com.socrata.pg.store
 
 import scala.language.reflectiveCalls
 
-class CurrentCopyNumberTest extends PGSecondaryTestBase {
+class CurrentCopyNumberTest extends PGSecondaryTestBase with PGStoreTestBase {
 
   import com.socrata.pg.store.PGSecondaryUtil._
 

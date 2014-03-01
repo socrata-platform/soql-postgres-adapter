@@ -1,20 +1,16 @@
 package com.socrata.pg.store
 
 import org.scalatest.{Matchers, BeforeAndAfterAll, FunSuite}
-import com.socrata.soql.types.{SoQLValue, SoQLType}
-import java.sql.{DriverManager, Connection}
+import java.sql.Connection
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.datacoordinator.common.StandardObfuscationKeyGenerator
 
-class PostgresDatasetInternalNameMapWriterTest extends FunSuite with Matchers with BeforeAndAfterAll {
-
-  type CT = SoQLType
-  type CV = SoQLValue
-
-  val common = PostgresUniverseCommon
+class PostgresDatasetInternalNameMapWriterTest extends FunSuite with Matchers with BeforeAndAfterAll
+      with PGSecondaryUniverseTestBase with DatabaseTestBase with PGStoreTestBase {
 
   override def beforeAll() {
+    createDatabases()
   }
 
   override def afterAll() {
@@ -41,23 +37,14 @@ class PostgresDatasetInternalNameMapWriterTest extends FunSuite with Matchers wi
     }
   }
 
-  def withDb[T]()(f: (Connection) => T): T = {
-    def loglevel = 0; // 2 = debug, 0 = default
-    using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/secondary_test?loglevel=$loglevel", "blist", "blist")) { conn =>
-      conn.setAutoCommit(false)
-      createSchema(conn)
-      f(conn)
-    }
-  }
-
   test("Writer can insert new rows") {
     withDb() {
       conn => {
+        createSchema(conn)
         new PostgresDatasetInternalNameMapWriter(conn).create("Dataset Name", new DatasetId(123))
         val datasetId: DatasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName("Dataset Name").get
         datasetId shouldEqual new DatasetId(123)
       }
     }
   }
-
 }

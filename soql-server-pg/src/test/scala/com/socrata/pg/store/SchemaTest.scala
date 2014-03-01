@@ -1,15 +1,19 @@
 package com.socrata.pg.store
 
 import com.rojoma.json.util.JsonUtil
-import com.socrata.pg.server.{QueryServerTest, QueryServer}
+import com.socrata.pg.server.{PGQueryServerDatabaseTestBase, QueryServerTest}
 import com.socrata.pg.Schema
-import scala.io.Source
-import scala.language.reflectiveCalls
 import com.socrata.datacoordinator.common.DataSourceConfig
+import scala.language.reflectiveCalls
+import scala.io.Source
 
-class SchemaTest extends PGSecondaryTestBase {
+class SchemaTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
   import com.socrata.pg.store.PGSecondaryUtil._
   import Schema._
+
+  override def beforeAll() {
+    createDatabases()
+  }
 
   test("schema json codec") {
     withPgu() { pgu =>
@@ -26,6 +30,4 @@ class SchemaTest extends PGSecondaryTestBase {
       schema should be (expectedSchema)
     }
   }
-
-
 }

@@ -1,10 +1,10 @@
 package com.socrata.pg.store.events
 
-import com.socrata.pg.store.PGSecondaryTestBase
+import com.socrata.pg.store.{PGStoreTestBase, PGSecondaryTestBase}
 import scala.language.reflectiveCalls
 import com.socrata.datacoordinator.secondary.ColumnCreated
 
-class ColumnCreatedHandlerTest extends PGSecondaryTestBase {
+class ColumnCreatedHandlerTest extends PGSecondaryTestBase with PGStoreTestBase {
 
   import com.socrata.pg.store.PGSecondaryUtil._
 

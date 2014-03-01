@@ -2,11 +2,11 @@ package com.socrata.pg.store.events
 
 import com.socrata.datacoordinator.id.{UserColumnId, ColumnId}
 import com.socrata.datacoordinator.secondary.{SystemRowIdentifierChanged, ColumnCreated, ColumnInfo}
-import com.socrata.pg.store.PGSecondaryTestBase
+import com.socrata.pg.store.{PGStoreTestBase, PGSecondaryTestBase}
 import com.socrata.soql.types.SoQLID
 import scala.language.reflectiveCalls
 
-class SystemRowIdentifierChangedHandlerTest extends PGSecondaryTestBase {
+class SystemRowIdentifierChangedHandlerTest extends PGSecondaryTestBase with PGStoreTestBase {
 
   import com.socrata.pg.store.PGSecondaryUtil._
 

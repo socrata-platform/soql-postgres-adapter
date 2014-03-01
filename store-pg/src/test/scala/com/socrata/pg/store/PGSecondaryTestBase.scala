@@ -17,9 +17,11 @@ import com.socrata.datacoordinator.secondary.ColumnCreated
 import com.socrata.datacoordinator.secondary.SystemRowIdentifierChanged
 import com.socrata.datacoordinator.secondary.DatasetInfo
 
-class PGSecondaryTestBase  extends FunSuite with Matchers with BeforeAndAfterAll {
+abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAndAfterAll with DatabaseTestBase {
+
   override def beforeAll = {
     PropertyConfigurator.configure(Propertizer("log4j", config.getConfig("log4j")))
+    createDatabases()
   }
 
   def workingCopyCreatedFixture =

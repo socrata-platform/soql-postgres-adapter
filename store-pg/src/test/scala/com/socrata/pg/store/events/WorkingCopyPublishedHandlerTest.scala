@@ -1,11 +1,11 @@
 package com.socrata.pg.store.events
 
 import com.socrata.datacoordinator.secondary.{WorkingCopyPublished}
-import com.socrata.pg.store.PGSecondaryTestBase
+import com.socrata.pg.store.{PGStoreTestBase, PGSecondaryTestBase}
 import scala.language.reflectiveCalls
 import com.socrata.datacoordinator.truth.metadata.LifecycleStage
 
-class WorkingCopyPublishedHandlerTest extends PGSecondaryTestBase {
+class WorkingCopyPublishedHandlerTest extends PGSecondaryTestBase with PGStoreTestBase {
 
   import com.socrata.pg.store.PGSecondaryUtil._
 
