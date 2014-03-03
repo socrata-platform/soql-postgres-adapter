@@ -133,8 +133,7 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
 
   private def pushToSecondary(common: SoQLCommon, datasetId: DatasetId) {
     for(u <- common.universe) {
-      println("config: " + config.toString)
-      val secondary = new PGSecondary(config, "test-database")
+      val secondary = new PGTestSecondary(config, "test-database")
       val pb = u.playbackToSecondary
       val secondaryMfst = u.secondaryManifest
       secondaryMfst.addDataset(storeId, datasetId)
