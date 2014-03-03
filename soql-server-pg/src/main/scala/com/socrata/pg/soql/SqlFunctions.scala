@@ -35,7 +35,6 @@ object SqlFunctions {
     BangEq -> infix("!=") _,
     And -> infix("and") _,
     Or -> infix("or") _,
-    UnaryMinus -> formatCall("-%s") _,
     NotBetween -> formatCall("not %s between %s and %s") _,
     WithinCircle -> todo _,
     WithinBox -> todo _,
@@ -51,6 +50,24 @@ object SqlFunctions {
     StartsWith -> infixSuffixWildcard("like") _,
     Contains -> infix("like") _,  // TODO - Need to add prefix % and suffix % to the 2nd operand.
     Concat -> infix("||") _,
+
+    Lower -> nary("lower") _,
+    Upper -> nary("upper") _,
+
+    // Number
+    // http://beta.dev.socrata.com/docs/datatypes/numeric.html
+    UnaryPlus -> formatCall("%s"),
+    UnaryMinus -> formatCall("-%s") _,
+    BinaryPlus -> infix("+") _,
+    BinaryMinus -> infix("-") _,
+    TimesNumNum -> infix("*") _,
+    TimesDoubleDouble -> infix("*") _,
+    TimesNumMoney -> infix("*") _,
+    TimesMoneyNum -> infix("*") _,
+    DivNumNum -> infix("/") _,
+    DivDoubleDouble -> infix("/") _,
+    DivMoneyNum -> infix("/") _,
+    DivMoneyMoney -> infix("/") _,
 
     // datatype conversions
     NumberToText -> formatCall("%s::varchar") _,
