@@ -44,7 +44,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
     }
   }
 
-  ignore("Universe can del columns") {
+  test("Universe can del columns") {
     withDb() { conn =>
       val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
       val types = SoQLType.typesByName filterKeys (!Set(TypeName("json")).contains(_))
@@ -66,7 +66,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
         case pex:PSQLException => println("Failing Query: " + pex.getServerErrorMessage.getHint + " - " + pex.getSQLState); throw pex
       }
 
-      assert(getSchema(pgu, copyInfo).size == 0, "We expect no columns");
+      assert(getSchema(pgu, copyInfo).size == 0, "We expect no columns")
       assert(jdbcColumnCount(conn, copyInfo.dataTableName) == 0, s"Expected table to have no columns")
     }
   }
