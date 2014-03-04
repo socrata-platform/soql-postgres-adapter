@@ -19,7 +19,7 @@ class SoQLBoolFunctionsTest extends PGSecondaryTestBase with PGQueryServerDataba
   }
 
   test("or") {
-    compareSoqlResult("select make, name where make = 'ozone' or make = 'advance' order by name", "where-bool-or.json")
+    compareSoqlResult("select make, name where make = 'ozone' or make = 'gin' order by name", "where-bool-or.json")
   }
 
   test("not") {
