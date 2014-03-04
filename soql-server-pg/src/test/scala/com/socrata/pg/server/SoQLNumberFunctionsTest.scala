@@ -1,15 +1,7 @@
 package com.socrata.pg.server
 
-import com.socrata.pg.store._
 
-class SoQLNumberFunctionsTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
-
-  override def beforeAll = {
-    createDatabases()
-    withDb() { conn =>
-      importDataset(conn)
-    }
-  }
+class SoQLNumberFunctionsTest extends SoQLTest {
 
   test("c < x") {
     compareSoqlResult("select make, name, v_max where v_max < 50 order by v_max, name", "where-num-lt.json")

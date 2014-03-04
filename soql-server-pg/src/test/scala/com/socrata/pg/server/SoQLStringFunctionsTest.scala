@@ -1,15 +1,7 @@
 package com.socrata.pg.server
 
-import com.socrata.pg.store._
 
-class SoQLStringFunctionsTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
-
-  override def beforeAll = {
-    createDatabases()
-    withDb() { conn =>
-      importDataset(conn)
-    }
-  }
+class SoQLStringFunctionsTest extends SoQLTest {
 
   test("select *") {
     compareSoqlResult("select make, name order by make, name", "result.json")

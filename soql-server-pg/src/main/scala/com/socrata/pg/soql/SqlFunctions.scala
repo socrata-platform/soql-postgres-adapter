@@ -25,12 +25,10 @@ object SqlFunctions {
     IsNull -> formatCall("%s is null") _,
     IsNotNull -> formatCall("%s is not null") _,
     Not -> formatCall("not %s") _,
-    In -> naryish("in") _, // TODO - detect and handle row id decryption
-    NotIn -> naryish("not in") _, // TODO - detect and handle row id decryption
-    Eq -> infix("=") _, // TODO - detect and handle row id decryption
-    EqEq -> infix("=") _, // TODO - detect and handle row id decryption
-    TextToFloatingTimestamp -> todo _,
-    TextToFixedTimestamp -> todo _,
+    In -> naryish("in") _,
+    NotIn -> naryish("not in") _,
+    Eq -> infix("=") _,
+    EqEq -> infix("=") _,
     Neq -> infix("!=") _,
     BangEq -> infix("!=") _,
     And -> infix("and") _,
@@ -70,8 +68,15 @@ object SqlFunctions {
     DivMoneyMoney -> infix("/") _,
 
     // datatype conversions
+    // http://beta.dev.socrata.com/docs/datatypes/converting.html
     NumberToText -> formatCall("%s::varchar") _,
     TextToNumber -> formatCall("%s::numeric") _,
+
+    TextToFixedTimestamp -> formatCall("%s::timestamp with time zone") _,
+    TextToFloatingTimestamp -> formatCall("%s::timestamp") _, // without time zone
+
+    TextToBool -> formatCall("%s::boolean") _,
+    BoolToText -> formatCall("%s::varchar") _,
 
     // aggregate functions
     Avg -> nary("avg") _,

@@ -1,0 +1,10 @@
+[{"available_is_not_null":true,"certified_is_not_null":true,"color_is_not_null":true,"make":"OZONE","name":"Buzz","size_is_not_null":true,"spec_is_not_null":true,"three_liner_is_not_null":true,"v_max_is_not_null":true}
+,{"available_is_not_null":true,"certified_is_not_null":true,"color_is_not_null":true,"make":"Skywalk","name":"Chili","size_is_not_null":true,"spec_is_not_null":true,"three_liner_is_not_null":true,"v_max_is_not_null":true}
+,{"available_is_not_null":true,"certified_is_not_null":true,"color_is_not_null":true,"make":"APCO","name":"Karma","size_is_not_null":true,"spec_is_not_null":true,"three_liner_is_not_null":true,"v_max_is_not_null":true}
+,{"available_is_not_null":true,"certified_is_not_null":true,"color_is_not_null":true,"make":"APCO","name":"Karma SP","size_is_not_null":true,"spec_is_not_null":true,"three_liner_is_not_null":true,"v_max_is_not_null":true}
+,{"available_is_not_null":true,"certified_is_not_null":true,"color_is_not_null":true,"make":"Skywalk","name":"Mescal","size_is_not_null":true,"spec_is_not_null":true,"three_liner_is_not_null":true,"v_max_is_not_null":true}
+,{"available_is_not_null":true,"certified_is_not_null":true,"color_is_not_null":true,"make":"OZONE","name":"Rush","size_is_not_null":true,"spec_is_not_null":true,"three_liner_is_not_null":true,"v_max_is_not_null":true}
+,{"available_is_not_null":true,"certified_is_not_null":true,"color_is_not_null":true,"make":"Skywalk","name":"Tequila","size_is_not_null":true,"spec_is_not_null":true,"three_liner_is_not_null":true,"v_max_is_not_null":true}
+,{"available_is_not_null":true,"certified_is_not_null":true,"color_is_not_null":true,"make":"APCO","name":"Vista II SP","size_is_not_null":true,"spec_is_not_null":true,"three_liner_is_not_null":true,"v_max_is_not_null":true}
+,{"available_is_not_null":true,"certified_is_not_null":true,"color_is_not_null":true,"make":"APCO","name":"Zefira","size_is_not_null":true,"spec_is_not_null":true,"three_liner_is_not_null":true,"v_max_is_not_null":true}
+]
