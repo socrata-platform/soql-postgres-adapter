@@ -12,7 +12,7 @@ class SoQLStringFunctionsTest extends PGSecondaryTestBase with PGQueryServerData
   }
 
   test("select *") {
-    compareSoqlResult("select make, name", "result.json")
+    compareSoqlResult("select make, name order by make, name", "result.json")
   }
 
   test("c < x") {
@@ -52,7 +52,7 @@ class SoQLStringFunctionsTest extends PGSecondaryTestBase with PGQueryServerData
   }
 
   test("starts_with(c, x)") {
-    compareSoqlResult("select make, name where starts_with(make, 'Skyw') order by name", "where-starts_with.json")
+    compareSoqlResult("select make, name where starts_with(make, 'Skyw') order by name", "where-str-starts_with.json")
   }
 
   test("contains(c, x)") {

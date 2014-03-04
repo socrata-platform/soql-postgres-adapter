@@ -1,13 +1,12 @@
-[
-{"make":"APCO","name":"Karma"},
-{"make":"APCO","name":"Karma SP"},
-{"make":"APCO","name":"Vista II SP"},
-{"make":"APCO","name":"Zefira"},
-{"make":"Skywalk","name":"Mescal"},
-{"make":"Skywalk","name":"Tequila"},
-{"make":"Skywalk","name":"Chili"},
-{"make":"OZONE","name":"Buzz"},
-{"make":"OZONE","name":"Rush"},
-{"make":"GIN","name":"Atlas"},
-{"make":"GIN","name":"Sprint Evo"}
+[{"make":"APCO","name":"Karma"}
+,{"make":"APCO","name":"Karma SP"}
+,{"make":"APCO","name":"Vista II SP"}
+,{"make":"APCO","name":"Zefira"}
+,{"make":"GIN","name":"Atlas"}
+,{"make":"GIN","name":"Sprint Evo"}
+,{"make":"OZONE","name":"Buzz"}
+,{"make":"OZONE","name":"Rush"}
+,{"make":"Skywalk","name":"Chili"}
+,{"make":"Skywalk","name":"Mescal"}
+,{"make":"Skywalk","name":"Tequila"}
 ]

@@ -1,6 +1,5 @@
-[
-{ "make": "GIN", "name": "Sprint Evo" },
-{ "make": "Skywalk", "name": "Tequila" },
-{ "make": "APCO", "name": "Vista II SP" },
-{ "make": "APCO", "name": "Zefira" }
+[{"make":"GIN","name":"Sprint Evo"}
+,{"make":"Skywalk","name":"Tequila"}
+,{"make":"APCO","name":"Vista II SP"}
+,{"make":"APCO","name":"Zefira"}
 ]
