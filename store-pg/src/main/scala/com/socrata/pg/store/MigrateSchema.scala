@@ -1,11 +1,10 @@
 package com.socrata.pg.store
 
-import com.socrata.pg.store.Migration.MigrationOperation
-
 import java.util.NoSuchElementException
 import com.typesafe.config.ConfigFactory
 import org.apache.log4j.PropertyConfigurator
 import com.socrata.thirdparty.typesafeconfig.Propertizer
+import com.socrata.datacoordinator.truth.migration.Migration.MigrationOperation
 
 /**
  * This object takes Liquibase operations and performs according migrations to the pg-secondary schemas.

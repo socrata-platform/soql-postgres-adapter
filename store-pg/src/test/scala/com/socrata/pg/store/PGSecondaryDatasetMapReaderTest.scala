@@ -17,8 +17,7 @@ class PGSecondaryDatasetMapReaderTest extends FunSuite with Matchers with Before
   }
 
   def createSchema(conn: Connection) {
-    val sql = DatabasePopulator.createSchema()
-    using(conn.createStatement()) { stmt => stmt.execute(sql) }
+    Migration.migrateDb(conn)
     loadFixtureData(conn)
   }
 

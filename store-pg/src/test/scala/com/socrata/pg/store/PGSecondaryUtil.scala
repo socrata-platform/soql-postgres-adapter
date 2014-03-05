@@ -12,10 +12,7 @@ object PGSecondaryUtil {
   val obfuscationKey = "key".getBytes
 
   def populateDatabase(conn: Connection) {
-    val sql = DatabasePopulator.createSchema()
-    using(conn.createStatement()) { stmt =>
-      stmt.execute(sql)
-    }
+    Migration.migrateDb(conn)
   }
 
   def withDb[T]()(f: (Connection) => T): T = {

@@ -6,25 +6,23 @@ import liquibase.resource.ClassLoaderResourceAccessor
 
 import java.sql.Connection
 
-import scala.Enumeration
+import com.socrata.datacoordinator.truth.migration.Migration.MigrationOperation
+import com.socrata.datacoordinator.truth.migration.Migration.MigrationOperation._
 
 /**
  * Interface with the Liquibase library to perform schema migrations on a given database with a given set of changes.
  */
 object Migration {
 
-  object MigrationOperation extends Enumeration {
-    type MigrationOperation = Value
-    val Migrate, Undo, Redo = Value
-  }
-  import MigrationOperation._
-
   /**
    * Performs a Liquibase schema migration operation on a given database.
    */
-  def migrateDb(conn: Connection, operation: MigrationOperation, changeLogPath: String, database: String) {
+  def migrateDb(conn: Connection,
+                operation: MigrationOperation = MigrationOperation.Migrate,
+                changeLogPath: String = MigrationScriptPath) {
 
     val liquibase = new Liquibase(changeLogPath, new ClassLoaderResourceAccessor, new JdbcConnection(conn))
+    val database = conn.getCatalog
 
     operation match {
       case Migrate => liquibase.update(database)
@@ -32,4 +30,6 @@ object Migration {
       case Redo => { liquibase.rollback(1, database); liquibase.update(database) }
     }
   }
+
+  private val MigrationScriptPath = "com/socrata/pg/store/schema/migrate.xml"
 }

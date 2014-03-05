@@ -11,7 +11,6 @@ import com.socrata.datacoordinator.service.Mutator
 import com.socrata.datacoordinator.secondary.NamedSecondary
 import com.socrata.datacoordinator.truth.sql.{DatabasePopulator => TruthDatabasePopulator, DatasetMapLimits}
 import com.socrata.datacoordinator.truth.universe.sql.PostgresCopyIn
-import com.socrata.pg.store.Migration.MigrationOperation
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.soql.environment.ColumnName
 import com.typesafe.config.{ConfigFactory, Config}
@@ -22,6 +21,7 @@ import java.util.concurrent.TimeUnit
 import org.postgresql.ds.PGSimpleDataSource
 import scala.concurrent.duration.Duration
 import scala.io.Codec
+import com.socrata.datacoordinator.truth.migration.Migration.MigrationOperation
 
 /**
  * Recreate test databases of truth and secondary.

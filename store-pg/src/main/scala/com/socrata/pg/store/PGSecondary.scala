@@ -273,14 +273,6 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     cookie
   }
 
-  override protected def populateDatabase(conn: Connection) {
-    val sql = DatabasePopulator.createSchema()
-    using(conn.createStatement()) {
-      stmt =>
-        stmt.execute(sql)
-    }
-  }
-
   private def truthCopyInfo(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInternalName: String): TruthCopyInfo = {
     val datasetId: DatasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetInternalName).get
 

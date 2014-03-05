@@ -21,8 +21,7 @@ class PGSecondaryDatasetMapWriterTest extends PGSecondaryTestBase with PGStoreTe
   }
 
   def createSchema(conn: Connection) {
-    val sql = DatabasePopulator.createSchema()
-    using(conn.createStatement()) { stmt => stmt.execute(sql) }
+    Migration.migrateDb(conn)
     loadFixtureData(conn)
   }
 
