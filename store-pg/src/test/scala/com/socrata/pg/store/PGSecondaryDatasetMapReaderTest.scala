@@ -6,7 +6,7 @@ import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.datacoordinator.common.StandardObfuscationKeyGenerator
 
-class PostgresDatasetInternalNameMapReaderTest extends FunSuite with Matchers with BeforeAndAfterAll
+class PGSecondaryDatasetMapReaderTest extends FunSuite with Matchers with BeforeAndAfterAll
       with PGSecondaryUniverseTestBase with DatabaseTestBase with PGStoreTestBase {
 
   override def beforeAll() {
@@ -50,7 +50,7 @@ class PostgresDatasetInternalNameMapReaderTest extends FunSuite with Matchers wi
   test("Reader can determine the DatasetId from a given Dataset Internal Name") {
     withDb() { conn => {
       createSchema(conn)
-      val datasetId: DatasetId = new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName("Dataset Name").get
+      val datasetId: DatasetId = new PGSecondaryDatasetMapReader(conn).datasetIdForInternalName("Dataset Name").get
       datasetId shouldEqual new DatasetId(123)
     }}
   }
@@ -58,7 +58,7 @@ class PostgresDatasetInternalNameMapReaderTest extends FunSuite with Matchers wi
   test("Reader does not raise when Dataset Internal Name cannot be found") {
     withDb() { conn => {
       createSchema(conn)
-      new PostgresDatasetInternalNameMapReader(conn).datasetIdForInternalName("I do not exist")
+      new PGSecondaryDatasetMapReader(conn).datasetIdForInternalName("I do not exist")
       // TODO Show Randy how to deal with the "None" case return value from the above method
     }}
   }

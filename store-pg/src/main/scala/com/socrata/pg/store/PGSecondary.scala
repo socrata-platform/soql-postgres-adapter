@@ -7,10 +7,10 @@ import com.socrata.pg.store.events._
 import java.sql.{DriverManager, Connection}
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, _}
-import com.socrata.datacoordinator.id.DatasetId
+import com.socrata.datacoordinator.id.{RowId, UserColumnId, DatasetId}
 import com.typesafe.scalalogging.slf4j.Logging
-import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo}
-import com.socrata.datacoordinator.secondary.ColumnInfo
+import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, LifecycleStage => TruthLifecycleStage, DatasetCopyContext}
+import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo}
 import com.socrata.datacoordinator.secondary.VersionColumnChanged
 import com.socrata.datacoordinator.secondary.WorkingCopyCreated
 import com.socrata.pg.store.events.SystemRowIdentifierChangedHandler
@@ -29,6 +29,7 @@ import com.socrata.datacoordinator.secondary.ColumnRemoved
 import com.socrata.pg.store.events.WorkingCopyPublishedHandler
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.pg.SecondaryBase
+import com.rojoma.simplearm.Managed
 
 /**
  * Postgres Secondary Store Implementation
@@ -38,7 +39,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
   // Called when this process is shutting down (or being killed)
   def shutdown() {
-    logger.debug("shutdown (config: {})", config)
+    logger.debug("shutdown")
     // no-op
   }
 
@@ -163,8 +164,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
 
     // now that we have working copy creation out of the way, we can load our
-    // copyInfo with assurance that it is there unless we are out of sync
-    val datasetId = pgu.datasetInternalNameMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName).getOrElse(
+    // secondaryCopyInfo with assurance that it is there unless we are out of sync
+    val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName).getOrElse(
       throw new ResyncSecondaryException(s"Couldn't find mapping for datasetInternalName ${secondaryDatasetInfo.internalName}")
     )
 
@@ -209,12 +210,67 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   // Need to record some state somewhere so that readers can know that a resync is underway
   // Backup code (Receiver class) touches this method as well via the receiveResync method
   // SoQL ID is only ever used for row ID
-  def resync(datasetInfo: DatasetInfo, copyInfo: SecondaryCopyInfo, schema: ColumnIdMap[ColumnInfo[SoQLType]], cookie: Secondary.Cookie, rows: _root_.com.rojoma.simplearm.Managed[Iterator[ColumnIdMap[SoQLValue]]]): Secondary.Cookie = {
+  def resync(datasetInfo: DatasetInfo, secondaryCopyInfo: SecondaryCopyInfo, schema: ColumnIdMap[SecondaryColumnInfo[SoQLType]], cookie: Secondary.Cookie, rows: Managed[Iterator[ColumnIdMap[SoQLValue]]]): Secondary.Cookie = {
     // should tell us the new copy number
     // We need to perform some accounting here to make sure readers know a resync is in process
-    logger.debug("resync (datasetInfo: {}, copyInfo: {}, schema: {}, cookie: {}, rows)",
-      datasetInfo, copyInfo, schema, cookie, rows)
-    throw new UnsupportedOperationException("TODO later")
+    logger.debug("resync (datasetInfo: {}, secondaryCopyInfo: {}, schema: {}, cookie: {})",
+      datasetInfo, secondaryCopyInfo, schema, cookie)
+
+    withPgu() { pgu =>
+      val cookieOut = _resync(pgu, datasetInfo, secondaryCopyInfo, schema, cookie, rows)
+      pgu.commit()
+      cookieOut
+    }
+  }
+
+  def _resync(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+              secondaryDatasetInfo: DatasetInfo,
+              secondaryCopyInfo: SecondaryCopyInfo,
+              newSchema: ColumnIdMap[SecondaryColumnInfo[SoQLType]],
+              cookie: Secondary.Cookie,
+              rows: Managed[Iterator[ColumnIdMap[SoQLValue]]]): Secondary.Cookie =
+  {
+    // create the dataset if it doesn't exist already
+    val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName).getOrElse {
+      val newDatasetId = pgu.secondaryDatasetMapWriter.createDatasetOnly(secondaryDatasetInfo.localeName)
+      pgu.secondaryDatasetMapWriter.createInternalNameMapping(secondaryDatasetInfo.internalName, newDatasetId)
+      newDatasetId
+    }
+
+    val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
+
+    // delete the copy if it exists already
+    pgu.datasetMapReader.copyNumber(truthDatasetInfo, secondaryCopyInfo.copyNumber).foreach(
+      pgu.secondaryDatasetMapWriter.deleteCopy(_)
+    )
+
+    val truthCopyInfo =  pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo,
+        secondaryCopyInfo.systemId,
+        secondaryCopyInfo.copyNumber,
+        TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
+        secondaryCopyInfo.dataVersion)
+
+    val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
+    sLoader.create(truthCopyInfo)
+
+    newSchema.values.foreach { col =>
+      ColumnCreatedHandler(pgu, truthCopyInfo, col)
+    }
+
+    val truthSchema = pgu.datasetMapReader.schema(truthCopyInfo)
+    val copyCtx = new DatasetCopyContext[SoQLType](truthCopyInfo, truthSchema)
+    val loader = pgu.prevettedLoader(copyCtx, pgu.logger(truthCopyInfo.datasetInfo, "test-user"))
+
+    val sidColumnInfo = newSchema.values.find(_.isSystemPrimaryKey == true).get
+
+    for (iter <- rows; row: ColumnIdMap[SoQLValue] <- iter) {
+      logger.trace("adding row: {}", row)
+      val rowId = pgu.commonSupport.typeContext.makeSystemIdFromValue(row.get(sidColumnInfo.systemId).get)
+      loader.insert(rowId, row)
+    }
+    loader.flush
+
+    cookie
   }
 
   override protected def populateDatabase(conn: Connection) {
@@ -226,7 +282,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   }
 
   private def truthCopyInfo(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInternalName: String): TruthCopyInfo = {
-    val datasetId: DatasetId = pgu.datasetInternalNameMapReader.datasetIdForInternalName(datasetInternalName).get
+    val datasetId: DatasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetInternalName).get
 
     val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
     pgu.datasetMapReader.latest(truthDatasetInfo)

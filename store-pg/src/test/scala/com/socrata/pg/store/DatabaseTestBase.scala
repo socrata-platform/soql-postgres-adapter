@@ -98,7 +98,7 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
     truthDatasetId = datasetId
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
     val dsName = s"$dcInstance.${truthDatasetId.underlying.toString}"
-    secDatasetId = pgu.datasetInternalNameMapReader.datasetIdForInternalName(s"$dsName").getOrElse(
+    secDatasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(s"$dsName").getOrElse(
       throw new Exception("Fail to get secondary database id"))
   }
 

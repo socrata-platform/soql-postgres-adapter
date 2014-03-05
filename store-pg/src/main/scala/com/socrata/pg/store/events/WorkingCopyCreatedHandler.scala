@@ -21,7 +21,7 @@ case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
     throw new UnsupportedOperationException("We only support one copy of a dataset!")
   }
 
-  pgu.datasetInternalNameMapWriter.create(datasetInfo.internalName, copyInfoSecondary.datasetInfo.systemId)
+  pgu.secondaryDatasetMapWriter.createInternalNameMapping(datasetInfo.internalName, copyInfoSecondary.datasetInfo.systemId)
 
   private def createDataset(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], locale:String):(TruthCopyInfo, SchemaLoader[SoQLType]) = {
     val copyInfo = pgu.datasetMapWriter.create(locale)
