@@ -52,7 +52,10 @@ class FunctionCallSqlizer(expr: FunctionCall[UserColumnId, SoQLType]) extends Sq
 
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
     val fn = SqlFunctions(expr.function.function)
-    fn(expr, rep, setParams, ctx)
+    val ParametricSql(sql, fnSetParams) = fn(expr, rep, setParams, ctx)
+    // SoQL parsing bakes parenthesis into the ast tree without explicitly spitting out parenthesis.
+    // We add parenthesis to every function call to preserve semantics.
+    ParametricSql(s"($sql)", fnSetParams)
   }
 }
 
