@@ -1,11 +1,11 @@
 package com.socrata.pg.store.events
 
-import com.socrata.pg.store.PGSecondaryTestBase
+import com.socrata.pg.store.{PGStoreTestBase, PGSecondaryTestBase}
 import scala.language.reflectiveCalls
 import com.socrata.datacoordinator.secondary.{ColumnCreated, ColumnRemoved}
 import com.socrata.datacoordinator.id.{UserColumnId, ColumnId}
 
-class ColumnRemovedHandlerTest extends PGSecondaryTestBase {
+class ColumnRemovedHandlerTest extends PGSecondaryTestBase with PGStoreTestBase {
 
   import com.socrata.pg.store.PGSecondaryUtil._
 
@@ -28,8 +28,7 @@ class ColumnRemovedHandlerTest extends PGSecondaryTestBase {
         }
       }
 
-      schema.values.map { ci => (ci.userColumnId, ci.systemId) } should contain theSameElementsAs
-      expectedColumns
+      schema.values.map { ci => (ci.userColumnId, ci.systemId) } should contain theSameElementsAs expectedColumns
     }
   }
 }
