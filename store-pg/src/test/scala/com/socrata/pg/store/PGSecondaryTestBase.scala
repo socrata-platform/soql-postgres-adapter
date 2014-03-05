@@ -50,13 +50,28 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
       )
     }
 
-    def getTruthCopyInfo(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], secondaryDatasetInfo: SecondaryDatasetInfo): TruthCopyInfo = {
-      val datasetId = pgu.datasetInternalNameMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName).getOrElse(
-        throw new ResyncSecondaryException(s"Couldn't find mapping for datasetInternalName ${secondaryDatasetInfo.internalName}")
+  def columnsRemovedFixture =
+    new {
+      val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
+      val dataVersion = 0L
+      val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
+      val pgs = new PGSecondary(config)
+      val testColInfo = ColumnInfo(new ColumnId(9126), new UserColumnId("mycolumn"), SoQLText, false, false, false)
+      val events = Seq(
+        WorkingCopyCreated(copyInfo),
+        ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, false, false, false)),
+        ColumnCreated(ColumnInfo(new ColumnId(9125), new UserColumnId(":version"), SoQLVersion, false, false, true)),
+        ColumnCreated(testColInfo),
+        ColumnRemoved(testColInfo),
+        SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, true, false, false))
       )
-
-      val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
-      pgu.datasetMapReader.latest(truthDatasetInfo)
     }
 
+  def getTruthCopyInfo(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], secondaryDatasetInfo: SecondaryDatasetInfo): TruthCopyInfo = {
+    val datasetId = pgu.datasetInternalNameMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName).getOrElse(
+      throw new ResyncSecondaryException(s"Couldn't find mapping for datasetInternalName ${secondaryDatasetInfo.internalName}")
+    )
+    val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
+    pgu.datasetMapReader.latest(truthDatasetInfo)
+  }
 }

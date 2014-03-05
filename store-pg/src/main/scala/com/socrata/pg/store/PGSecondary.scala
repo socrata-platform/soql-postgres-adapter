@@ -180,7 +180,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       e match {
         case Truncated => throw new UnsupportedOperationException("TODO later")
         case ColumnCreated(secondaryColInfo) => ColumnCreatedHandler(pgu, truthCopyInfo, secondaryColInfo)
-        case ColumnRemoved(info)  => throw new UnsupportedOperationException("TODO NOW optionally")
+        case ColumnRemoved(secondaryColInfo)  => ColumnRemovedHandler(pgu, truthCopyInfo, secondaryColInfo)
         case RowIdentifierSet(info) => Unit // no-op
         case RowIdentifierCleared(info) => Unit // no-op
         case SystemRowIdentifierChanged(secondaryColInfo) => SystemRowIdentifierChangedHandler(pgu, truthCopyInfo, secondaryColInfo)
