@@ -66,6 +66,12 @@ object SqlFunctions {
     DivDoubleDouble -> infix("/") _,
     DivMoneyNum -> infix("/") _,
     DivMoneyMoney -> infix("/") _,
+    ExpNumNum -> infix("^") _,
+    ExpDoubleDouble -> infix("^") _,
+    ModNumNum -> infix("%") _,
+    ModDoubleDouble -> infix("%") _,
+    ModMoneyNum -> infix("%") _,
+    ModMoneyMoney -> infix("%") _,
 
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
