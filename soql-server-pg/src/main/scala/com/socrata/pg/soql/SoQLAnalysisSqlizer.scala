@@ -16,13 +16,15 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
   import Sqlizer._
   import SqlizerContext._
 
+  val underlying = Tuple3(analysis, tableName, allColumnReps)
+
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
 
     // SELECT
-    val ctxSelect = ctx + (SoqlPart -> SoqlSelect)
+    val ctxSelect = ctx + (SoqlPart -> SoqlSelect) + (Analysis -> analysis)
     val (selectPhrase, setParamsSelect) = analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams)) { (t2, columnNameAndcoreExpr) =>
       val (columnName, coreExpr) = columnNameAndcoreExpr
-      val ParametricSql(sql, newSetParams) = coreExpr.sql(rep, t2._2, ctxSelect)
+      val ParametricSql(sql, newSetParams) = coreExpr.sql(rep, t2._2, ctxSelect + (CurrentSelectedColumn -> coreExpr))
       (t2._1 :+ sql, newSetParams)
     }
 

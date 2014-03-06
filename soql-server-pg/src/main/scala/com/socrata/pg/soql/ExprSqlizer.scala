@@ -11,6 +11,9 @@ import java.sql.PreparedStatement
 import Sqlizer._
 
 class StringLiteralSqlizer(lit: StringLiteral[SoQLType]) extends Sqlizer[StringLiteral[SoQLType]] {
+
+  val underlying = lit
+
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
     val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
       val maybeUpperLitVal = toUpper(lit.value, ctx)
@@ -24,6 +27,9 @@ class StringLiteralSqlizer(lit: StringLiteral[SoQLType]) extends Sqlizer[StringL
 }
 
 class NumberLiteralSqlizer(lit: NumberLiteral[SoQLType]) extends Sqlizer[NumberLiteral[SoQLType]] {
+
+  val underlying = lit
+
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
     val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
       stmt.foreach(_.setBigDecimal(pos, lit.value.bigDecimal))
@@ -34,6 +40,9 @@ class NumberLiteralSqlizer(lit: NumberLiteral[SoQLType]) extends Sqlizer[NumberL
 }
 
 class BooleanLiteralSqlizer(lit: BooleanLiteral[SoQLType]) extends Sqlizer[BooleanLiteral[SoQLType]] {
+
+  val underlying = lit
+
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
     val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
       stmt.foreach(_.setBoolean(pos, lit.value))
@@ -43,12 +52,17 @@ class BooleanLiteralSqlizer(lit: BooleanLiteral[SoQLType]) extends Sqlizer[Boole
   }
 }
 
-object NullLiteralSqlizer extends Sqlizer[NullLiteral[SoQLType]] {
+class NullLiteralSqlizer(lit: NullLiteral[SoQLType]) extends Sqlizer[NullLiteral[SoQLType]] {
+
+  val underlying = lit
+
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) =
     ParametricSql("null", setParams)
 }
 
 class FunctionCallSqlizer(expr: FunctionCall[UserColumnId, SoQLType]) extends Sqlizer[FunctionCall[UserColumnId, SoQLType]] {
+
+  val underlying = expr
 
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
     val fn = SqlFunctions(expr.function.function)
@@ -60,6 +74,8 @@ class FunctionCallSqlizer(expr: FunctionCall[UserColumnId, SoQLType]) extends Sq
 }
 
 class ColumnRefSqlizer(expr: ColumnRef[UserColumnId, SoQLType]) extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
+
+  val underlying = expr
 
   def sql(reps: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
     reps.get(expr.column) match {

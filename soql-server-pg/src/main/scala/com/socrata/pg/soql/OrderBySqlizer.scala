@@ -12,6 +12,8 @@ class OrderBySqlizer(orderBy: OrderBy[UserColumnId, SoQLType]) extends Sqlizer[O
 
   import Sqlizer._
 
+  val underlying = orderBy
+
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
     val ParametricSql(s, setParamsOrderBy) = orderBy.expression.sql(rep, setParams, ctx)
     val se = s + (if (orderBy.ascending) "" else " desc") + (if (orderBy.nullLast) " nulls last" else "")

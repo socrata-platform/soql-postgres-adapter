@@ -20,13 +20,28 @@ trait Sqlizer[T] {
 
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context): ParametricSql
 
+  val underlying: T
+
   protected def useUpper(ctx: Context): Boolean = {
     import SqlizerContext._
+
+    val currentSelectedColumn = ctx.get(CurrentSelectedColumn)
+
     ctx(SoqlPart) match {
       case SoqlWhere | SoqlGroup | SoqlOrder | SoqlHaving => true
-      case _ => // SoqlSelect
-        // TODO: we probably want upper if selected expression is in group by only.
-        false
+      case SoqlSelect => // SoqlSelect
+        ctx.get(Analysis) match {
+          case Some(analysis: SoQLAnalysis[_, _]) =>
+            analysis.groupBy match {
+              case Some(groupBy) =>
+                // Use upper in select if this expression or the selected expression it belongs to is found in group by
+                groupBy.exists(expr => (underlying == expr) || currentSelectedColumn.exists(_ == expr))
+              case None => false
+            }
+          case _ => false
+        }
+      case SoqlSearch => false
+      case _ => false
     }
   }
 
@@ -54,7 +69,7 @@ object Sqlizer {
       case lit: StringLiteral[SoQLType] => new StringLiteralSqlizer(lit)
       case lit: NumberLiteral[SoQLType] => new NumberLiteralSqlizer(lit)
       case lit: BooleanLiteral[SoQLType] => new BooleanLiteralSqlizer(lit)
-      case lit: NullLiteral[SoQLType] => NullLiteralSqlizer
+      case lit: NullLiteral[SoQLType] => new NullLiteralSqlizer(lit)
     }
   }
 
@@ -79,4 +94,5 @@ object SqlizerContext extends Enumeration {
   val SoqlSearch = Value("search")
   val IdRep = Value("id-rep")
   val VerRep = Value("ver-rep")
+  val CurrentSelectedColumn = Value("current-selected-column")
 }
