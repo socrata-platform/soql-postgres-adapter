@@ -1,15 +1,19 @@
 package com.socrata.pg.soql
 
 import org.scalatest.{Matchers, FunSuite}
-import com.socrata.datacoordinator.id.UserColumnId
+import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
+import com.socrata.datacoordinator.common.soql.SoQLTypeContext
+import com.socrata.datacoordinator.truth.metadata.ColumnInfo
 import com.socrata.pg.soql.SqlizerContext._
+import com.socrata.pg.store.PostgresUniverseCommon
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{DatasetContext, ColumnName}
+import com.socrata.soql.environment.{ColumnName, DatasetContext}
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
+
 
 class SqlizerTest extends FunSuite with Matchers {
 
@@ -82,6 +86,15 @@ class SqlizerTest extends FunSuite with Matchers {
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq(123, "123"))
   }
+
+  test("search") {
+    val soql = "select id search 'oNe Two'"
+    val ParametricSql(sql, setParams) = sqlize(soql)
+    sql should be ("SELECT id FROM t1 WHERE to_tsvector('english', coalesce(array_13,'') || ' ' || coalesce(case_number_6,'') || ' ' || coalesce(object_12,'') || ' ' || coalesce(primary_type_7,'')) @@ plainto_tsquery(?)")
+    setParams.length should be (1)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq("oNe Two"))
+  }
 }
 
 object SqlizerTest {
@@ -95,7 +108,7 @@ object SqlizerTest {
   )
 
   private def sqlize(soql: String): ParametricSql = {
-    val allColumnReps = Seq.empty[SqlColumnRep[SoQLType, SoQLValue]] // Cannot test "search" without real reps.
+    val allColumnReps = columnInfos.map(PostgresUniverseCommon.repForIndex(_))
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
     (analysis, "t1", allColumnReps).sql(Map.empty[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], Seq.empty, sqlCtx)
   }
@@ -117,6 +130,21 @@ object SqlizerTest {
     ColumnName("object") -> (12, SoQLObject),
     ColumnName("array") -> (13, SoQLArray)
   )
+
+  private val columnInfos = columnMap.foldLeft(Seq.empty[ColumnInfo[SoQLType]]) { (acc, colNameAndType) => colNameAndType match {
+    case (columnName: ColumnName, (id, typ)) =>
+      val cinfo = new com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType](
+        null,
+        new ColumnId(id),
+        new UserColumnId(columnName.caseFolded),
+        typ,
+        columnName.caseFolded,
+        typ == SoQLID,
+        false, // isUserKey
+        typ == SoQLVersion
+      )(SoQLTypeContext.typeNamespace, null)
+      acc :+ cinfo
+  }}
 
   private val datasetCtx: DatasetContext[SoQLType] = new DatasetContext[SoQLType] {
     val schema = new OrderedMap[ColumnName, SoQLType](columnMap,  columnMap.keys.toVector)

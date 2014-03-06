@@ -16,6 +16,7 @@ import com.socrata.datacoordinator.util.NoopTimingReport
 import com.socrata.soql.types.obfuscation.CryptProvider
 import scala.concurrent.duration.Duration
 import com.socrata.datacoordinator.truth.sql.DatasetMapLimits
+import com.socrata.pg.store.index.{FullTextSearch, IndexSupport, SoQLIndexableRep}
 
 object StandardDatasetMapLimits extends DatasetMapLimits
 
@@ -40,10 +41,15 @@ object SoQLSystemColumns {
 }
 
 
-object PostgresUniverseCommon extends PostgresCommonSupport[SoQLType, SoQLValue] {
+
+object PostgresUniverseCommon extends PostgresCommonSupport[SoQLType, SoQLValue]
+  with IndexSupport[SoQLType, SoQLValue] with FullTextSearch {
   val typeContext = SoQLTypeContext
 
-  val repFor = SoQLRep.sqlRep _
+  val repForIndex = SoQLIndexableRep.sqlRep _
+
+  val repFor = repForIndex
+
 
   def tmpDir = File.createTempFile("pg-store", "pg").getParentFile
   val SystemColumns = SoQLSystemColumns

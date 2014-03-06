@@ -6,6 +6,7 @@ import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo}
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo}
 import com.socrata.soql.brita.AsciiIdentifierFilter
 import com.socrata.datacoordinator.id.UserColumnId
+import com.rojoma.simplearm.util._
 
 
 // TODO2 we should be batching these
@@ -26,6 +27,14 @@ case class ColumnCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], t
 
   sLoader.addColumns(Seq(truthColInfo))
   if (truthColInfo.isSystemPrimaryKey) sLoader.makeSystemPrimaryKey(truthColInfo)
+
+  // Create indexes
+  val repIdx = pgu.commonSupport.repForIndex(truthColInfo)
+  for (createIndexSql <- repIdx.createIndex(truthCopyInfo.dataTableName)) {
+    using(pgu.conn.prepareStatement(createIndexSql)) { stmt =>
+      stmt.executeUpdate()
+    }
+  }
 
   // TODO this is copy and paste from SoQLCommon ...
   private def physicalColumnBaseBase(nameHint: String, systemColumn: Boolean): String =

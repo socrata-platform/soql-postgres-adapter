@@ -7,12 +7,12 @@ import com.socrata.soql.types._
 import com.socrata.soql.typed.{StringLiteral, OrderBy, CoreExpr}
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
 import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
+import com.socrata.pg.store.PostgresUniverseCommon
 import scala.util.parsing.input.NoPosition
 
 class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableName: String, allColumnReps: Seq[SqlColumnRep[SoQLType, SoQLValue]])
       extends Sqlizer[Tuple3[SoQLAnalysis[UserColumnId, SoQLType], String, Seq[SqlColumnRep[SoQLType, SoQLValue]]]] {
 
-  import SoQLAnalysisSqlizer._
   import Sqlizer._
   import SqlizerContext._
 
@@ -36,12 +36,15 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     val search = analysis.search.map { search =>
       val searchLit = StringLiteral(search, SoQLText)(NoPosition)
       val ParametricSql(searchSql, searchSetParams) = searchLit.sql(rep, setParamsWhere, ctx + (SoqlPart -> SoqlSearch))
-      val andOrWhere = if (where.isDefined) " AND " else " WHERE "
-      val fts = allColumnReps.filter(r => SearchableTypes.contains(r.representedType)).map {
-        (rep: SqlColumnRep[SoQLType, SoQLValue]) =>
-          rep.physColumns.map(pc => s"coalesce($pc, '')").mkString(" || ' ' || ")
-        }.mkString(andOrWhere + "to_tsvector('english', ", " || ' ' || ", s") @@ plainto_tsquery($searchSql)")
-      ParametricSql(fts, searchSetParams)
+
+      PostgresUniverseCommon.searchVector(allColumnReps) match {
+        case Some(sv) =>
+          val andOrWhere = if (where.isDefined) " AND" else " WHERE"
+          val fts = s"$andOrWhere $sv @@ plainto_tsquery($searchSql)"
+          ParametricSql(fts, searchSetParams)
+        case None =>
+          ParametricSql("", setParamsWhere)
+      }
     }
     val setParamsSearch = search.map(_.setParams).getOrElse(setParamsWhere)
 
@@ -77,11 +80,4 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
       analysis.offset.map(" OFFSET " + _.toString).getOrElse("")
     ParametricSql(select, setParamsOrderBy)
   }
-}
-
-
-object SoQLAnalysisSqlizer {
-
-  private val SearchableTypes: Set[SoQLType] = Set(SoQLText, SoQLObject, SoQLArray)
-
 }

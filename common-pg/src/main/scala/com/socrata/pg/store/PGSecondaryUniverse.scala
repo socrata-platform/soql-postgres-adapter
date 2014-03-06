@@ -16,12 +16,14 @@ import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.rojoma.simplearm.SimpleArm
 import com.socrata.datacoordinator.truth.{LowLevelDatabaseReader, DatasetReader, DatasetMutator}
 import com.socrata.datacoordinator.truth.metadata.SchemaFinder
+import com.socrata.pg.store.index.IndexSupport
 
 /**
  *
  */
-class PGSecondaryUniverse[SoQLType, SoQLValue](val conn: Connection,
-                                               val commonSupport: PostgresCommonSupport[SoQLType, SoQLValue])
+class PGSecondaryUniverse[SoQLType, SoQLValue](
+  val conn: Connection,
+  val commonSupport: PostgresCommonSupport[SoQLType, SoQLValue] with IndexSupport[SoQLType, SoQLValue])
   extends Universe[SoQLType, SoQLValue]
   with Commitable
   with SchemaLoaderProvider

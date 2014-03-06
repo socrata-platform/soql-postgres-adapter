@@ -4,12 +4,11 @@ import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.typesafe.config.Config
 import com.socrata.pg.store.events._
-import java.sql.{DriverManager, Connection}
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, _}
 import com.socrata.datacoordinator.id.{RowId, UserColumnId, DatasetId}
 import com.typesafe.scalalogging.slf4j.Logging
-import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, LifecycleStage => TruthLifecycleStage, DatasetCopyContext}
+import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, LifecycleStage => TruthLifecycleStage, ColumnInfo, DatasetCopyContext}
 import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo}
 import com.socrata.datacoordinator.secondary.VersionColumnChanged
 import com.socrata.datacoordinator.secondary.WorkingCopyCreated
@@ -176,29 +175,53 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       throw new ResyncSecondaryException(s"Current version ${truthCopyInfo.dataVersion}, next version ${newDataVersion} but should be ${truthCopyInfo.dataVersion+1}")
     }
 
-    remainingEvents.foreach { e =>
+    val rebuildIndex = remainingEvents.foldLeft(false) { (rebuildIndex, e) =>
       logger.debug("got event: {}", e)
       e match {
-        case Truncated => throw new UnsupportedOperationException("TODO later")
-        case ColumnCreated(secondaryColInfo) => ColumnCreatedHandler(pgu, truthCopyInfo, secondaryColInfo)
-        case ColumnRemoved(secondaryColInfo)  => ColumnRemovedHandler(pgu, truthCopyInfo, secondaryColInfo)
-        case RowIdentifierSet(info) => Unit // no-op
-        case RowIdentifierCleared(info) => Unit // no-op
-        case SystemRowIdentifierChanged(secondaryColInfo) => SystemRowIdentifierChangedHandler(pgu, truthCopyInfo, secondaryColInfo)
-        case VersionColumnChanged(secondaryColInfo) => VersionColumnChangedHandler(pgu, truthCopyInfo, secondaryColInfo)
+        case Truncated => // TODO: throw new UnsupportedOperationException("TODO later")
+          rebuildIndex
+        case ColumnCreated(secondaryColInfo) =>
+          ColumnCreatedHandler(pgu, truthCopyInfo, secondaryColInfo)
+          true
+        case ColumnRemoved(secondaryColInfo) =>
+          ColumnRemovedHandler(pgu, truthCopyInfo, secondaryColInfo)
+          true
+        case RowIdentifierSet(info) =>  // no-op
+          rebuildIndex
+        case RowIdentifierCleared(info) =>  // no-op
+          rebuildIndex
+        case SystemRowIdentifierChanged(secondaryColInfo) =>
+          SystemRowIdentifierChangedHandler(pgu, truthCopyInfo, secondaryColInfo)
+          rebuildIndex
+        case VersionColumnChanged(secondaryColInfo) =>
+          VersionColumnChangedHandler(pgu, truthCopyInfo, secondaryColInfo)
+          rebuildIndex
         // TODO when dealing with dropped, figure out what version we have to updated afterwards and how that works...
         // maybe workingcopydropped is guaranteed to be the last event in a batch, and then we can skip updating the
         // version anywhere... ?
-        case WorkingCopyDropped => throw new UnsupportedOperationException("TODO later")
-        case DataCopied => throw new UnsupportedOperationException("TODO later")
-        case SnapshotDropped(info) => throw new UnsupportedOperationException("TODO later")
-        case WorkingCopyPublished => WorkingCopyPublishedHandler(pgu, truthCopyInfo)
-        case RowDataUpdated(ops) => RowDataUpdatedHandler(pgu, truthCopyInfo, ops)
-        case otherOps => throw new UnsupportedOperationException("Unexpected operation")
+        case WorkingCopyDropped =>
+          throw new UnsupportedOperationException("TODO later")
+        case DataCopied =>
+          throw new UnsupportedOperationException("TODO later")
+        case SnapshotDropped(info) =>
+          throw new UnsupportedOperationException("TODO later")
+        case WorkingCopyPublished =>
+          WorkingCopyPublishedHandler(pgu, truthCopyInfo)
+          rebuildIndex
+        case RowDataUpdated(ops) =>
+          RowDataUpdatedHandler(pgu, truthCopyInfo, ops)
+          rebuildIndex
+        case otherOps =>
+          throw new UnsupportedOperationException("Unexpected operation")
       }
     }
 
     pgu.datasetMapWriter.updateDataVersion(truthCopyInfo, newDataVersion)
+
+    if (rebuildIndex) {
+      val schema = pgu.datasetMapReader.schema(truthCopyInfo)
+      pgu.secondaryDatasetMapWriter.createFullTextSearchIndex(truthCopyInfo, schema, pgu.commonSupport.repFor)
+    }
 
     cookie
   }
@@ -213,7 +236,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   def resync(datasetInfo: DatasetInfo, secondaryCopyInfo: SecondaryCopyInfo, schema: ColumnIdMap[SecondaryColumnInfo[SoQLType]], cookie: Secondary.Cookie, rows: Managed[Iterator[ColumnIdMap[SoQLValue]]]): Secondary.Cookie = {
     // should tell us the new copy number
     // We need to perform some accounting here to make sure readers know a resync is in process
-    logger.debug("resync (datasetInfo: {}, secondaryCopyInfo: {}, schema: {}, cookie: {})",
+    logger.info("resync (datasetInfo: {}, secondaryCopyInfo: {}, schema: {}, cookie: {})",
       datasetInfo, secondaryCopyInfo, schema, cookie)
 
     withPgu() { pgu =>
@@ -257,7 +280,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       ColumnCreatedHandler(pgu, truthCopyInfo, col)
     }
 
-    val truthSchema = pgu.datasetMapReader.schema(truthCopyInfo)
+    val truthSchema: ColumnIdMap[ColumnInfo[SoQLType]] = pgu.datasetMapReader.schema(truthCopyInfo)
     val copyCtx = new DatasetCopyContext[SoQLType](truthCopyInfo, truthSchema)
     val loader = pgu.prevettedLoader(copyCtx, pgu.logger(truthCopyInfo.datasetInfo, "test-user"))
 
@@ -269,6 +292,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       loader.insert(rowId, row)
     }
     loader.flush
+
+    pgu.secondaryDatasetMapWriter.createFullTextSearchIndex(truthCopyInfo, truthSchema, pgu.commonSupport.repFor)
 
     cookie
   }
