@@ -157,7 +157,7 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
       val sqlReps = querier.getSqlReps(systemToUserColumnMap)
 
       val results = querier.query(analysis, (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-        (a, tableName).sql(sqlReps, Seq.empty, sqlCtx),
+        (a, tableName, sqlReps.values.toSeq).sql(sqlReps, Seq.empty, sqlCtx),
         systemToUserColumnMap,
         userToSystemColumnMap,
         qryReps)

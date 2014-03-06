@@ -3,18 +3,19 @@ package com.socrata.pg.soql
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.soql.SoQLAnalysis
-import com.socrata.soql.types.{SoQLValue, SoQLType}
-import com.socrata.soql.typed.{OrderBy, CoreExpr}
+import com.socrata.soql.types._
+import com.socrata.soql.typed.{StringLiteral, OrderBy, CoreExpr}
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
 import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
+import scala.util.parsing.input.NoPosition
 
+class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableName: String, allColumnReps: Seq[SqlColumnRep[SoQLType, SoQLValue]])
+      extends Sqlizer[Tuple3[SoQLAnalysis[UserColumnId, SoQLType], String, Seq[SqlColumnRep[SoQLType, SoQLValue]]]] {
 
-class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) extends Sqlizer[Tuple2[SoQLAnalysis[UserColumnId, SoQLType], String]] {
-
+  import SoQLAnalysisSqlizer._
   import Sqlizer._
   import SqlizerContext._
 
-  // TODO: Search
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
 
     // SELECT
@@ -29,13 +30,26 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     val where = analysis.where.map(_.sql(rep, setParamsSelect, ctx + (SoqlPart -> SoqlWhere)))
     val setParamsWhere = where.map(_.setParams).getOrElse(setParamsSelect)
 
+    // SEARCH
+    val search = analysis.search.map { search =>
+      val searchLit = StringLiteral(search, SoQLText)(NoPosition)
+      val ParametricSql(searchSql, searchSetParams) = searchLit.sql(rep, setParamsWhere, ctx + (SoqlPart -> SoqlSearch))
+      val andOrWhere = if (where.isDefined) " AND " else " WHERE "
+      val fts = allColumnReps.filter(r => SearchableTypes.contains(r.representedType)).map {
+        (rep: SqlColumnRep[SoQLType, SoQLValue]) =>
+          rep.physColumns.map(pc => s"coalesce($pc, '')").mkString(" || ' ' || ")
+        }.mkString(andOrWhere + "to_tsvector('english', ", " || ' ' || ", s") @@ plainto_tsquery($searchSql)")
+      ParametricSql(fts, searchSetParams)
+    }
+    val setParamsSearch = search.map(_.setParams).getOrElse(setParamsWhere)
+
     // GROUP BY
     val groupBy = analysis.groupBy.map { (groupBys: Seq[CoreExpr[UserColumnId, SoQLType]]) =>
-      groupBys.foldLeft(Tuple2(Seq.empty[String], setParamsWhere)) { (t2, gb: CoreExpr[UserColumnId, SoQLType]) =>
+      groupBys.foldLeft(Tuple2(Seq.empty[String], setParamsSearch)) { (t2, gb: CoreExpr[UserColumnId, SoQLType]) =>
       val ParametricSql(sql, newSetParams) = gb.sql(rep, t2._2, ctx + (SoqlPart -> SoqlGroup))
       (t2._1 :+ sql, newSetParams)
     }}
-    val setParamsGroupBy = groupBy.map(_._2).getOrElse(setParamsWhere)
+    val setParamsGroupBy = groupBy.map(_._2).getOrElse(setParamsSearch)
 
     // HAVING
     val having = analysis.having.map(_.sql(rep, setParamsGroupBy, ctx + (SoqlPart -> SoqlHaving)))
@@ -53,6 +67,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     val select = selectPhrase.mkString("SELECT ", ",", "") +
       s" FROM $tableName" +
       where.map(" WHERE " +  _.sql).getOrElse("") +
+      search.map(_.sql).getOrElse("") +
       groupBy.map(_._1.mkString(" GROUP BY ", ",", "")).getOrElse("") +
       having.map(" HAVING " +  _.sql).getOrElse("") +
       orderBy.map(_._1.mkString(" ORDER BY ", ",", "")).getOrElse("") +
@@ -60,4 +75,11 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
       analysis.offset.map(" OFFSET " + _.toString).getOrElse("")
     ParametricSql(select, setParamsOrderBy)
   }
+}
+
+
+object SoQLAnalysisSqlizer {
+
+  private val SearchableTypes: Set[SoQLType] = Set(SoQLText, SoQLObject, SoQLArray)
+
 }

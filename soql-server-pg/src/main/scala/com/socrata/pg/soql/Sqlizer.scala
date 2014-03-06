@@ -62,8 +62,8 @@ object Sqlizer {
     new OrderBySqlizer(ob)
   }
 
-  implicit def analysisSqlizer(analysisTable: Tuple2[SoQLAnalysis[UserColumnId, SoQLType], String]): Sqlizer[Tuple2[SoQLAnalysis[UserColumnId, SoQLType], String]] = {
-    new SoQLAnalysisSqlizer(analysisTable._1, analysisTable._2)
+  implicit def analysisSqlizer(analysisTable: Tuple3[SoQLAnalysis[UserColumnId, SoQLType], String, Seq[SqlColumnRep[SoQLType, SoQLValue]]]) = {
+    new SoQLAnalysisSqlizer(analysisTable._1, analysisTable._2, analysisTable._3)
   }
 }
 
@@ -76,6 +76,7 @@ object SqlizerContext extends Enumeration {
   val SoqlGroup = Value("group")
   val SoqlHaving = Value("having")
   val SoqlOrder = Value("order")
+  val SoqlSearch = Value("search")
   val IdRep = Value("id-rep")
   val VerRep = Value("ver-rep")
 }

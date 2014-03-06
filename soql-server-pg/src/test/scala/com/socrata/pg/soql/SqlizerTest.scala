@@ -95,8 +95,9 @@ object SqlizerTest {
   )
 
   private def sqlize(soql: String): ParametricSql = {
+    val allColumnReps = Seq.empty[SqlColumnRep[SoQLType, SoQLValue]] // Cannot test "search" without real reps.
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
-    (analysis, "t1").sql(Map.empty[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], Seq.empty, sqlCtx)
+    (analysis, "t1", allColumnReps).sql(Map.empty[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], Seq.empty, sqlCtx)
   }
 
   private val idMap =  (cn: ColumnName) => new UserColumnId(cn.caseFolded)
