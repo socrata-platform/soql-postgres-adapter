@@ -33,13 +33,6 @@ trait PGSecondaryUniverseTestBase {
   override def afterAll() {
   }
 
-  def populateDatabase(conn: Connection) {
-    val sql = TruthDatabasePopulator.metadataTablesCreate(DatasetMapLimits())
-    using(conn.createStatement()) { stmt =>
-      stmt.execute(sql)
-    }
-  }
-
   def withDb[T]()(f: (Connection) => T): T = {
     def loglevel = 0; // 2 = debug, 0 = default
     using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/secondary_test?loglevel=$loglevel", "blist", "blist")) { conn =>

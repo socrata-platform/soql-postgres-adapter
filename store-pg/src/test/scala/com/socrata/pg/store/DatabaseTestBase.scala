@@ -162,10 +162,7 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
   private def populateTruth(dbName: String) {
     using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/$dbName", "blist", "blist")) { conn =>
       conn.setAutoCommit(true)
-      val sql = TruthDatabasePopulator.metadataTablesCreate(DatasetMapLimits())
-      using(conn.createStatement()) { stmt =>
-        stmt.execute(sql)
-      }
+      com.socrata.datacoordinator.truth.migration.Migration.migrateDb(conn)
     }
   }
 
