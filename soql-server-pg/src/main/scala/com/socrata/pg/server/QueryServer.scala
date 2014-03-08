@@ -124,10 +124,9 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
               // Very weird separation of concerns between execQuery and streaming. Most likely we will
               // want yet-another-refactoring where much of execQuery is lifted out into this function.
               // This will significantly change the tests; however.
-              val (qrySchema, results) = execQuery(pgu, datasetInfo, analysis)
-              val approxRowCount = None
+              val (qrySchema, results) = execQuery(pgu, datasetInfo, analysis, reqRowCount)
               for (r <- results) yield {
-                CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, approxRowCount)(resp)
+                CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, r.rowCount)(resp)
               }
             case None =>
               NotFound(resp)
@@ -138,8 +137,9 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
     }
   }
 
-  def execQuery(pgu:PGSecondaryUniverse[SoQLType, SoQLValue], datasetInfo:DatasetInfo, analysis: SoQLAnalysis[UserColumnId, SoQLType]) = {
+  def execQuery(pgu:PGSecondaryUniverse[SoQLType, SoQLValue], datasetInfo:DatasetInfo, analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
     import Sqlizer._
+
     val latest: CopyInfo = pgu.datasetMapReader.latest(datasetInfo)
     val cryptProvider = new CryptProvider(datasetInfo.obfuscationKey)
     val sqlCtx = Map[SqlizerContext, Any](
@@ -156,8 +156,13 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
       val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema)
       val sqlReps = querier.getSqlReps(systemToUserColumnMap)
 
-      val results = querier.query(analysis, (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-        (a, tableName, sqlReps.values.toSeq).sql(sqlReps, Seq.empty, sqlCtx),
+      val results = querier.query(
+        analysis,
+        (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
+          (a, tableName, sqlReps.values.toSeq).sql(sqlReps, Seq.empty, sqlCtx),
+        (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
+          (a, tableName, sqlReps.values.toSeq).rowCountSql(sqlReps, Seq.empty, sqlCtx),
+        rowCount,
         systemToUserColumnMap,
         userToSystemColumnMap,
         qryReps)

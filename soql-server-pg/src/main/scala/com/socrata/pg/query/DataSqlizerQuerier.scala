@@ -1,5 +1,6 @@
 package com.socrata.pg.query
 
+import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.truth.loader.sql.AbstractRepBasedDataSqlizer
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.MutableRow
@@ -9,18 +10,36 @@ import com.socrata.pg.soql.ParametricSql
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
 import com.typesafe.scalalogging.slf4j.Logging
-import java.sql.{Connection, ResultSet}
+import java.sql.{PreparedStatement, Connection, ResultSet}
 
 trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
   this: AbstractRepBasedDataSqlizer[CT, CV] =>
 
   def query(conn: Connection, analysis: SoQLAnalysis[UserColumnId, CT],
                toSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
+               toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
+               reqRowCount: Boolean,
                systemToUserColumnMap: Map[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.id.UserColumnId],
                userToSystemColumnMap: Map[com.socrata.datacoordinator.id.UserColumnId, com.socrata.datacoordinator.id.ColumnId],
                querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]]) :
-               CloseableIterator[com.socrata.datacoordinator.Row[CV]] = {
+               CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
 
+    // get row count
+    val rowCount: Option[Long] =
+      if (reqRowCount) {
+        val ParametricSql(sql, setParams) = toRowCountSql(analysis, this.dataTableName)
+        logger.debug("rowcount sql: {}", sql)
+        using(conn.prepareStatement(sql)) { stmt: PreparedStatement =>
+          setParams.zipWithIndex.foreach { case (setParamFn, idx) => setParamFn(Some(stmt), idx + 1) }
+          val rs = stmt.executeQuery()
+          rs.next()
+          Some(rs.getLong(1))
+        }
+      } else {
+        None
+      }
+
+    // get rows
     val ParametricSql(sql, setParams) = toSql(analysis, this.dataTableName)
     logger.debug("sql: {}", sql)
     val stmt = conn.prepareStatement(sql) // To be closed on closeable iterator close.
@@ -28,7 +47,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
       setParamFn(Some(stmt), idx + 1)
     }
     val rs = stmt.executeQuery()
-    new ResultSetIt(rs, decodeRow(querySchema))
+    new ResultSetIt(rowCount, rs, decodeRow(querySchema))
   }
 
   def decodeRow(schema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]])(rs: ResultSet): com.socrata.datacoordinator.Row[CV] = {
@@ -43,7 +62,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     row.freeze()
   }
 
-  class ResultSetIt(rs: ResultSet, toRow: (ResultSet) => com.socrata.datacoordinator.Row[CV]) extends CloseableIterator[com.socrata.datacoordinator.Row[CV]] {
+  class ResultSetIt(val rowCount: Option[Long], rs: ResultSet, toRow: (ResultSet) => com.socrata.datacoordinator.Row[CV])
+    extends CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount {
 
     private var _hasNext: Option[Boolean] = None
 
@@ -73,4 +93,10 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
       }
     }
   }
+}
+
+trait RowCount {
+
+  val rowCount: Option[Long]
+
 }

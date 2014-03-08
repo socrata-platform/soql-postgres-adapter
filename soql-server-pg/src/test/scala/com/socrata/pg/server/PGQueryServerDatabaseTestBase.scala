@@ -26,7 +26,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
 
   val storeId: String = "pg"
 
-  def compareSoqlResult(soql: String, expectedFixture: String) {
+  def compareSoqlResult(soql: String, expectedFixture: String, expectedRowCount: Option[Long] = None) {
     withDb() { conn =>
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon)
       val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secDatasetId).get)
@@ -39,7 +39,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
           val schema = columnNameTypeMap
         }
         val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
-        val (qrySchema, mresult) =  qs.execQuery(pgu, copyInfo.datasetInfo, analysis)
+        val (qrySchema, mresult) =  qs.execQuery(pgu, copyInfo.datasetInfo, analysis, expectedRowCount.isDefined)
         val jsonReps = PostgresUniverseCommon.jsonReps(copyInfo.datasetInfo)
         val qryReps = qrySchema.mapValues( cinfo => jsonReps(cinfo.typ))
 
@@ -57,6 +57,8 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
             remainingResult
           }
           whatLeft.hasNext should be (false)
+          // check row count
+          result.rowCount should be (expectedRowCount)
         }
       }
     }

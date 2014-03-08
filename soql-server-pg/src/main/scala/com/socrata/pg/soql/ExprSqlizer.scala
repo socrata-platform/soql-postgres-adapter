@@ -9,18 +9,26 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import java.sql.PreparedStatement
 
 import Sqlizer._
+import SqlizerContext._
 
 class StringLiteralSqlizer(lit: StringLiteral[SoQLType]) extends Sqlizer[StringLiteral[SoQLType]] {
 
   val underlying = lit
 
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
-    val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
-      val maybeUpperLitVal = toUpper(lit.value, ctx)
-      stmt.foreach(_.setString(pos, maybeUpperLitVal))
-      Some(maybeUpperLitVal)
+
+    ctx.get(SoqlPart) match {
+      case Some(SoqlHaving) | Some(SoqlGroup) =>
+        val v = toUpper(lit.value.replaceAllLiterally("'", "''"), ctx)
+        ParametricSql(v, setParams)
+      case _ =>
+        val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
+          val maybeUpperLitVal = toUpper(lit.value, ctx)
+          stmt.foreach(_.setString(pos, maybeUpperLitVal))
+          Some(maybeUpperLitVal)
+        }
+        ParametricSql(ParamPlaceHolder, setParams :+ setParam)
     }
-    ParametricSql(ParamPlaceHolder, setParams :+ setParam)
   }
 
   private def toUpper(lit: String, ctx: Context): String = if (useUpper(ctx)) lit.toUpperCase else lit
@@ -31,11 +39,17 @@ class NumberLiteralSqlizer(lit: NumberLiteral[SoQLType]) extends Sqlizer[NumberL
   val underlying = lit
 
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
-    val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
-      stmt.foreach(_.setBigDecimal(pos, lit.value.bigDecimal))
-      Some(lit.value)
+
+    ctx.get(SoqlPart) match {
+      case Some(SoqlHaving) | Some(SoqlGroup) =>
+        ParametricSql(lit.value.bigDecimal.toPlainString, setParams)
+      case _ =>
+        val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
+          stmt.foreach(_.setBigDecimal(pos, lit.value.bigDecimal))
+          Some(lit.value)
+        }
+        ParametricSql(ParamPlaceHolder, setParams :+ setParam)
     }
-    ParametricSql(ParamPlaceHolder, setParams :+ setParam)
   }
 }
 
@@ -44,11 +58,17 @@ class BooleanLiteralSqlizer(lit: BooleanLiteral[SoQLType]) extends Sqlizer[Boole
   val underlying = lit
 
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
-    val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
-      stmt.foreach(_.setBoolean(pos, lit.value))
-      Some(lit.value)
+
+    ctx.get(SoqlPart) match {
+      case Some(SoqlHaving) | Some(SoqlGroup) =>
+        ParametricSql(lit.toString, setParams)
+      case _ =>
+        val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
+          stmt.foreach(_.setBoolean(pos, lit.value))
+          Some(lit.value)
+        }
+        ParametricSql(ParamPlaceHolder, setParams :+ setParam)
     }
-    ParametricSql(ParamPlaceHolder, setParams :+ setParam)
   }
 }
 
