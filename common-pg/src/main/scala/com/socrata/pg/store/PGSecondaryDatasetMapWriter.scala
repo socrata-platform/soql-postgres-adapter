@@ -3,13 +3,10 @@ package com.socrata.pg.store
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.datacoordinator.id.sql._
-import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo}
+import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.socrata.datacoordinator.truth.DatabaseInReadOnlyMode
-import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.soql.types.{SoQLValue, SoQLType}
-import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.typesafe.scalalogging.slf4j.Logging
-import java.sql.{Statement, Connection}
+import java.sql.Connection
 import org.postgresql.util.PSQLException
 
 class PGSecondaryDatasetMapWriter(val conn: Connection, val obfuscationKeyGenerator: () => Array[Byte], val initialCounterValue: Long) extends Logging {
@@ -77,18 +74,6 @@ class PGSecondaryDatasetMapWriter(val conn: Connection, val obfuscationKeyGenera
       // hackish workarounds that we could use here ended up looking ugly
       // and complicating the logic... possibly to be revisited.
       stmt.execute("DROP TABLE IF EXISTS " + copyInfo.dataTableName)
-    }
-  }
-
-  def createFullTextSearchIndex(copyInfo: CopyInfo, schema: ColumnIdMap[ColumnInfo[SoQLType]], repFor: (ColumnInfo[SoQLType]) => SqlColumnRep[SoQLType, SoQLValue]) {
-    PostgresUniverseCommon.searchVector(schema.values.map(repFor).toSeq) match {
-      case Some(allColumnsVector) =>
-        val ttable = copyInfo.dataTableName
-        using(conn.createStatement()) { (stmt: Statement) =>
-          stmt.execute(s"DROP INDEX IF EXISTS idx_search_${ttable}")
-          stmt.execute(s"CREATE INDEX idx_search_${ttable} on ${ttable} USING GIN ($allColumnsVector)")
-        }
-      case None => // nothing to do
     }
   }
 

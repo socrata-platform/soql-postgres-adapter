@@ -112,17 +112,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
    * @param a original query analysis
    * @return Analysis for generating row count sql.
    */
-  private def rowCountAnalysis(a: SoQLAnalysis[UserColumnId, SoQLType]): SoQLAnalysis[UserColumnId, SoQLType] = {
-    SoQLAnalysis[UserColumnId, SoQLType](
-      a.isGrouped,
-      a.selection.empty, // select removed.
-      a.where,
-      a.groupBy,
-      a.having,
-      None, // order removed
-      None, // limit removed
-      None, // offset removed
-      a.search
-    )
-  }
+  private def rowCountAnalysis(a: SoQLAnalysis[UserColumnId, SoQLType]): SoQLAnalysis[UserColumnId, SoQLType] =
+    a.copy(selection = a.selection.empty, orderBy =  None, limit = None, offset = None)
+
 }

@@ -16,14 +16,14 @@ import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.rojoma.simplearm.SimpleArm
 import com.socrata.datacoordinator.truth.{LowLevelDatabaseReader, DatasetReader, DatasetMutator}
 import com.socrata.datacoordinator.truth.metadata.SchemaFinder
-import com.socrata.pg.store.index.IndexSupport
+import com.socrata.pg.store.index.{FullTextSearch, IndexSupport}
 
 /**
  *
  */
 class PGSecondaryUniverse[SoQLType, SoQLValue](
   val conn: Connection,
-  val commonSupport: PostgresCommonSupport[SoQLType, SoQLValue] with IndexSupport[SoQLType, SoQLValue])
+  val commonSupport: PostgresCommonSupport[SoQLType, SoQLValue] with IndexSupport[SoQLType, SoQLValue] with FullTextSearch[SoQLType])
   extends Universe[SoQLType, SoQLValue]
   with Commitable
   with SchemaLoaderProvider
@@ -65,7 +65,8 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
     )
   }
 
-  def schemaLoader(logger: Logger[SoQLType, SoQLValue]) = new RepBasedPostgresSchemaLoader(conn, logger, repFor, tablespace)
+  def schemaLoader(logger: Logger[SoQLType, SoQLValue]) =
+    new SecondarySchemaLoader(conn, logger, repForIndex, tablespace, commonSupport)
 
   //def loader(copyCtx: DatasetCopyContext[SoQLType], rowIdProvider: RowIdProvider, rowVersionProvider: RowVersionProvider, logger: Logger[SoQLType, SoQLValue], reportWriter: ReportWriter[SoQLValue], replaceUpdatedRows: Boolean) =
   //  managed(loaderProvider(conn, copyCtx, rowPreparer(transactionStart, copyCtx, replaceUpdatedRows), rowIdProvider, rowVersionProvider, logger, reportWriter, timingReport))

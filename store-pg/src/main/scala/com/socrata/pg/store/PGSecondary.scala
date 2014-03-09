@@ -220,7 +220,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
     if (rebuildIndex) {
       val schema = pgu.datasetMapReader.schema(truthCopyInfo)
-      pgu.secondaryDatasetMapWriter.createFullTextSearchIndex(truthCopyInfo, schema, pgu.commonSupport.repFor)
+      val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
+      sLoader.createFullTextSearchIndex(schema.values)
     }
 
     cookie
@@ -293,7 +294,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
     loader.flush
 
-    pgu.secondaryDatasetMapWriter.createFullTextSearchIndex(truthCopyInfo, truthSchema, pgu.commonSupport.repFor)
+    sLoader.createFullTextSearchIndex(truthSchema.values)
 
     cookie
   }

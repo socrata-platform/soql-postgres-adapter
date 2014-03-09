@@ -43,13 +43,15 @@ object SoQLSystemColumns {
 
 
 object PostgresUniverseCommon extends PostgresCommonSupport[SoQLType, SoQLValue]
-  with IndexSupport[SoQLType, SoQLValue] with FullTextSearch {
+  with IndexSupport[SoQLType, SoQLValue] with FullTextSearch[SoQLType] {
+
   val typeContext = SoQLTypeContext
 
   val repForIndex = SoQLIndexableRep.sqlRep _
 
   val repFor = repForIndex
 
+  protected val SearchableTypes: Set[SoQLType] = Set(SoQLText, SoQLObject, SoQLArray)
 
   def tmpDir = File.createTempFile("pg-store", "pg").getParentFile
   val SystemColumns = SoQLSystemColumns

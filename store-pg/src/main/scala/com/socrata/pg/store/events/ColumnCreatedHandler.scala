@@ -28,14 +28,6 @@ case class ColumnCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], t
   sLoader.addColumns(Seq(truthColInfo))
   if (truthColInfo.isSystemPrimaryKey) sLoader.makeSystemPrimaryKey(truthColInfo)
 
-  // Create indexes
-  val repIdx = pgu.commonSupport.repForIndex(truthColInfo)
-  for (createIndexSql <- repIdx.createIndex(truthCopyInfo.dataTableName)) {
-    using(pgu.conn.prepareStatement(createIndexSql)) { stmt =>
-      stmt.executeUpdate()
-    }
-  }
-
   // TODO this is copy and paste from SoQLCommon ...
   private def physicalColumnBaseBase(nameHint: String, systemColumn: Boolean): String =
     AsciiIdentifierFilter(List(if(systemColumn) "s" else "u", nameHint)).
