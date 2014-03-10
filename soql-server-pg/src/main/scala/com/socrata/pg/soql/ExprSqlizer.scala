@@ -2,8 +2,6 @@ package com.socrata.pg.soql
 
 import com.socrata.soql.typed._
 import com.socrata.soql.types.{SoQLValue, SoQLType, SoQLText}
-import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
-import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import java.sql.PreparedStatement
@@ -19,7 +17,10 @@ class StringLiteralSqlizer(lit: StringLiteral[SoQLType]) extends Sqlizer[StringL
 
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
-        val v = toUpper(lit.value.replaceAllLiterally("'", "''"), ctx)
+        val v = toUpper(quote(lit.value), ctx)
+        ParametricSql(v, setParams)
+      case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(ctx) =>
+        val v = toUpper(quote(lit.value), ctx)
         ParametricSql(v, setParams)
       case _ =>
         val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
@@ -30,6 +31,8 @@ class StringLiteralSqlizer(lit: StringLiteral[SoQLType]) extends Sqlizer[StringL
         ParametricSql(ParamPlaceHolder, setParams :+ setParam)
     }
   }
+
+  private def quote(s: String) = "'" + s.replaceAllLiterally("'", "''") + "'"
 
   private def toUpper(lit: String, ctx: Context): String = if (useUpper(ctx)) lit.toUpperCase else lit
 }
@@ -42,6 +45,8 @@ class NumberLiteralSqlizer(lit: NumberLiteral[SoQLType]) extends Sqlizer[NumberL
 
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
+        ParametricSql(lit.value.bigDecimal.toPlainString, setParams)
+      case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(ctx) =>
         ParametricSql(lit.value.bigDecimal.toPlainString, setParams)
       case _ =>
         val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
@@ -61,6 +66,8 @@ class BooleanLiteralSqlizer(lit: BooleanLiteral[SoQLType]) extends Sqlizer[Boole
 
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
+        ParametricSql(lit.toString, setParams)
+      case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(ctx) =>
         ParametricSql(lit.toString, setParams)
       case _ =>
         val setParam = (stmt: Option[PreparedStatement], pos: Int) => {

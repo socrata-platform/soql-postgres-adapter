@@ -29,12 +29,13 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     sql(true, rep, setParams, ctx)
   }
 
-  private def sql(reqRowCount: Boolean, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
+  private def sql(reqRowCount: Boolean, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], context: Context) = {
 
     val ana = if (reqRowCount) rowCountAnalysis(analysis) else analysis
+    val ctx = context + (Analysis -> analysis)
 
     // SELECT
-    val ctxSelect = ctx + (SoqlPart -> SoqlSelect) + (Analysis -> analysis)
+    val ctxSelect = ctx + (SoqlPart -> SoqlSelect)
     val (selectPhrase, setParamsSelect) =
       if (reqRowCount && analysis.groupBy.isEmpty) (Seq("count(*)"), setParams)
       else select(rep, setParams, ctxSelect)
@@ -74,7 +75,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     // ORDER BY
     val orderBy = ana.orderBy.map { (orderBys: Seq[OrderBy[UserColumnId, SoQLType]]) =>
       orderBys.foldLeft(Tuple2(Seq.empty[String], setParamsHaving)) { (t2, ob: OrderBy[UserColumnId, SoQLType]) =>
-        val ParametricSql(sql, newSetParams) = ob.sql(rep, t2._2, ctx + (SoqlPart -> SoqlOrder))
+        val ParametricSql(sql, newSetParams) = ob.sql(rep, t2._2, ctx + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression))
         (t2._1 :+ sql, newSetParams)
       }}
     val setParamsOrderBy = orderBy.map(_._2).getOrElse(setParamsHaving)
@@ -101,7 +102,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
   private def select(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
     analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams)) { (t2, columnNameAndcoreExpr) =>
       val (columnName, coreExpr) = columnNameAndcoreExpr
-      val ParametricSql(sql, newSetParams) = coreExpr.sql(rep, t2._2, ctx + (CurrentSelectedColumn -> coreExpr))
+      val ParametricSql(sql, newSetParams) = coreExpr.sql(rep, t2._2, ctx + (RootExpr -> coreExpr))
       (t2._1 :+ sql, newSetParams)
     }
   }

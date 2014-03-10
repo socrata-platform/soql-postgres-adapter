@@ -17,25 +17,31 @@ case class ParametricSql(sql: String, setParams: Seq[SetParam])
 trait Sqlizer[T] {
 
   import Sqlizer._
+  import SqlizerContext._
 
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context): ParametricSql
 
   val underlying: T
 
   protected def useUpper(ctx: Context): Boolean = {
-    import SqlizerContext._
-
-    val currentSelectedColumn = ctx.get(CurrentSelectedColumn)
-
     ctx(SoqlPart) match {
       case SoqlWhere | SoqlGroup | SoqlOrder | SoqlHaving => true
-      case SoqlSelect => // SoqlSelect
+      case SoqlSelect => usedInGroupBy(ctx)
+      case SoqlSearch => false
+      case _ => false
+    }
+  }
+
+  protected def usedInGroupBy(ctx: Context): Boolean = {
+    val rootExpr = ctx.get(RootExpr)
+    ctx(SoqlPart) match {
+      case SoqlSelect | SoqlOrder =>
         ctx.get(Analysis) match {
           case Some(analysis: SoQLAnalysis[_, _]) =>
             analysis.groupBy match {
               case Some(groupBy) =>
                 // Use upper in select if this expression or the selected expression it belongs to is found in group by
-                groupBy.exists(expr => (underlying == expr) || currentSelectedColumn.exists(_ == expr))
+                groupBy.exists(expr => (underlying == expr) || rootExpr.exists(_ == expr))
               case None => false
             }
           case _ => false
@@ -94,5 +100,5 @@ object SqlizerContext extends Enumeration {
   val SoqlSearch = Value("search")
   val IdRep = Value("id-rep")
   val VerRep = Value("ver-rep")
-  val CurrentSelectedColumn = Value("current-selected-column")
+  val RootExpr = Value("root-expr")
 }
