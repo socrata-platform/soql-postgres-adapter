@@ -17,6 +17,7 @@ import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.ConfigFactory
 import java.sql.{DriverManager, Connection}
 import org.scalatest.{BeforeAndAfterAll, Matchers}
+import com.socrata.datacoordinator.secondary.DatasetInfo
 
 trait PGSecondaryUniverseTestBase {
   this : Matchers with BeforeAndAfterAll =>
@@ -41,8 +42,8 @@ trait PGSecondaryUniverseTestBase {
     }
   }
 
-  def createTable(conn:Connection):(PGSecondaryUniverse[SoQLType, SoQLValue], CopyInfo, SchemaLoader[SoQLType]) = {
-    val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
+  def createTable(conn:Connection, datasetInfo:Option[DatasetInfo] = None):(PGSecondaryUniverse[SoQLType, SoQLValue], CopyInfo, SchemaLoader[SoQLType]) = {
+    val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon, datasetInfo)
     val copyInfo = pgu.datasetMapWriter.create("us") // locale
     val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
     sLoader.create(copyInfo)

@@ -5,6 +5,7 @@ import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.pg.store.{PostgresUniverseCommon, PGSecondaryUniverse}
 import com.socrata.soql.types.{SoQLValue, SoQLType}
+import com.socrata.datacoordinator.secondary.DatasetInfo
 
 trait SecondaryBase {
 
@@ -23,9 +24,9 @@ trait SecondaryBase {
     }
   }
 
-  protected def withPgu[T]()(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
+  protected def withPgu[T](truthStoreDatasetInfo:Option[DatasetInfo])(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
     withDb() { conn =>
-      val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
+      val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon, truthStoreDatasetInfo)
       f(pgu)
     }
   }

@@ -10,6 +10,7 @@ import com.socrata.soql.environment.TypeName
 import org.postgresql.util.PSQLException
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.truth.universe.sql.SqlTableCleanup
+import com.socrata.datacoordinator.secondary
 
 /**
  *
@@ -26,6 +27,15 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
       val (pgu, copyInfo, _) = createTable(conn:Connection)
       val blankTableSchema = getSchema(pgu, copyInfo)
       assert(blankTableSchema.size == 0, "We expect no columns")
+    }
+  }
+
+  test("Universe creates table with passed-in obfuscation key") {
+    val expected = "super secret".getBytes()
+    val dsInfo = new secondary.DatasetInfo("not-used", "not-used", expected)
+    withDb() { conn =>
+      val (pgu, copyInfo, _) = createTable(conn:Connection, Some(dsInfo))
+      assert(copyInfo.datasetInfo.obfuscationKey == expected, "Expected that the dataset used our obfuscation key")
     }
   }
 

@@ -59,7 +59,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   }
 
   def currentVersion(datasetInternalName: String, cookie: Secondary.Cookie): Long = {
-    withPgu() { pgu =>
+    withPgu(truthStoreDatasetInfo = None) { pgu =>
       _currentVersion(pgu, datasetInternalName, cookie)
     }
   }
@@ -75,7 +75,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   }
 
   def currentCopyNumber(datasetInternalName: String, cookie: Secondary.Cookie): Long = {
-    withPgu() { pgu =>
+    withPgu(truthStoreDatasetInfo = None) { pgu =>
       _currentCopyNumber(pgu, datasetInternalName, cookie)
     }
   }
@@ -115,7 +115,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
 
   def version(datasetInfo: DatasetInfo, dataVersion: Long, cookie: Secondary.Cookie, events: Iterator[Event[SoQLType, SoQLValue]]): Secondary.Cookie = {
-    withPgu() { pgu =>
+    withPgu(Some(datasetInfo)) { pgu =>
      val cookieOut = _version(pgu, datasetInfo, dataVersion, cookie, events)
      pgu.commit()
      cookieOut
@@ -240,7 +240,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     logger.info("resync (datasetInfo: {}, secondaryCopyInfo: {}, schema: {}, cookie: {})",
       datasetInfo, secondaryCopyInfo, schema, cookie)
 
-    withPgu() { pgu =>
+    withPgu(Some(datasetInfo)) { pgu =>
       val cookieOut = _resync(pgu, datasetInfo, secondaryCopyInfo, schema, cookie, rows)
       pgu.commit()
       cookieOut

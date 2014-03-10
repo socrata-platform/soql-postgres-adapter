@@ -116,7 +116,7 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
    * streaming.
    */
   def streamQueryResults(analysis: SoQLAnalysis[UserColumnId, SoQLType], datasetId:String, reqRowCount: Boolean)(resp:HttpServletResponse) = {
-    withPgu() { pgu =>
+    withPgu(truthStoreDatasetInfo = None) { pgu =>
       pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetId) match {
         case Some(dsId) =>
           pgu.datasetMapReader.datasetInfo(dsId) match {
@@ -221,7 +221,7 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
    * @return Some schema or none
    */
   def latestSchema(ds: String): Option[Schema] = {
-    withPgu() { pgu =>
+    withPgu(truthStoreDatasetInfo = None) { pgu =>
       for {
         datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds)
         datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)

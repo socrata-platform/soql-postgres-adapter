@@ -17,13 +17,16 @@ import com.rojoma.simplearm.SimpleArm
 import com.socrata.datacoordinator.truth.{LowLevelDatabaseReader, DatasetReader, DatasetMutator}
 import com.socrata.datacoordinator.truth.metadata.SchemaFinder
 import com.socrata.pg.store.index.{FullTextSearch, IndexSupport}
+import com.socrata.datacoordinator.secondary
+import com.socrata.soql.types.obfuscation.CryptProvider
 
 /**
  *
  */
 class PGSecondaryUniverse[SoQLType, SoQLValue](
   val conn: Connection,
-  val commonSupport: PostgresCommonSupport[SoQLType, SoQLValue] with IndexSupport[SoQLType, SoQLValue] with FullTextSearch[SoQLType])
+  val commonSupport: PostgresCommonSupport[SoQLType, SoQLValue] with IndexSupport[SoQLType, SoQLValue] with FullTextSearch[SoQLType],
+  val truthStoreDatasetInfo:Option[secondary.DatasetInfo] = None)
   extends Universe[SoQLType, SoQLValue]
   with Commitable
   with SchemaLoaderProvider
@@ -68,6 +71,11 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
   def schemaLoader(logger: Logger[SoQLType, SoQLValue]) =
     new SecondarySchemaLoader(conn, logger, repForIndex, tablespace, commonSupport)
 
+  def obfuscationKeyGenerator() = truthStoreDatasetInfo match {
+    case Some(dsi) => dsi.obfuscationKey
+    case None => CryptProvider.generateKey()
+  }
+
   //def loader(copyCtx: DatasetCopyContext[SoQLType], rowIdProvider: RowIdProvider, rowVersionProvider: RowVersionProvider, logger: Logger[SoQLType, SoQLValue], reportWriter: ReportWriter[SoQLValue], replaceUpdatedRows: Boolean) =
   //  managed(loaderProvider(conn, copyCtx, rowPreparer(transactionStart, copyCtx, replaceUpdatedRows), rowIdProvider, rowVersionProvider, logger, reportWriter, timingReport))
 
@@ -75,6 +83,7 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
   // lazy val datasetMapWriter: DatasetMapWriter[SoQLType] =
   lazy val datasetMapWriter: BackupDatasetMap[SoQLType] =
     new PostgresDatasetMapWriter(conn, typeContext.typeNamespace, timingReport, obfuscationKeyGenerator, initialCounterValue)
+
 
   lazy val datasetMapReader: DatasetMapReader[SoQLType] =
     new PostgresDatasetMapReader(conn, typeContext.typeNamespace, timingReport)
