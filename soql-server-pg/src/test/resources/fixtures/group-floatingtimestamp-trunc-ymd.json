@@ -1,0 +1,9 @@
+[{"count":1,"date_trunc_ymd_available":"2008-08-01T00:00:00.000"}
+,{"count":1,"date_trunc_ymd_available":"2010-08-01T00:00:00.000"}
+,{"count":1,"date_trunc_ymd_available":"2011-07-01T00:00:00.000"}
+,{"count":1,"date_trunc_ymd_available":"2011-08-01T00:00:00.000"}
+,{"count":1,"date_trunc_ymd_available":"2012-07-01T00:00:00.000"}
+,{"count":2,"date_trunc_ymd_available":"2012-08-01T00:00:00.000"}
+,{"count":1,"date_trunc_ymd_available":"2013-07-01T00:00:00.000"}
+,{"count":1,"date_trunc_ymd_available":"2013-08-01T00:00:00.000"}
+]

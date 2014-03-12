@@ -73,6 +73,10 @@ object SqlFunctions {
     ModMoneyNum -> infix("%") _,
     ModMoneyMoney -> infix("%") _,
 
+    FloatingTimeStampTruncYmd -> formatCall("date_trunc('day', %s)") _,
+    FloatingTimeStampTruncYm -> formatCall("date_trunc('month', %s)") _,
+    FloatingTimeStampTruncY -> formatCall("date_trunc('year', %s)") _,
+
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
     NumberToText -> formatCall("%s::varchar") _,

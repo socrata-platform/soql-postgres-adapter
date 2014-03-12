@@ -14,7 +14,7 @@ import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.socrata.soql.SoQLAnalysis
 import java.sql.Connection
 import org.apache.log4j.PropertyConfigurator
-import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
+import scala.language.existentials
 
 class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
 

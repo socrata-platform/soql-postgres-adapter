@@ -1,0 +1,7 @@
+[{"count":1,"date_trunc_y_available":"2008-01-01T00:00:00.000"}
+,{"count":1,"date_trunc_y_available":"2010-01-01T00:00:00.000"}
+,{"count":2,"date_trunc_y_available":"2011-01-01T00:00:00.000"}
+,{"count":3,"date_trunc_y_available":"2012-01-01T00:00:00.000"}
+,{"count":2,"date_trunc_y_available":"2013-01-01T00:00:00.000"}
+,{"count":2,"date_trunc_y_available":null}
+]
