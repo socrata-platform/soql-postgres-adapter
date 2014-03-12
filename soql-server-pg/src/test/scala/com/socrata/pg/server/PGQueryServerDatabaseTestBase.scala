@@ -11,7 +11,7 @@ import com.socrata.soql.environment.{DatasetContext, ColumnName}
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
-import com.socrata.datacoordinator.common.DataSourceConfig
+import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
 import org.scalatest.{BeforeAndAfterAll, Matchers}
 import scala.language.existentials
 
@@ -39,7 +39,11 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
           val schema = columnNameTypeMap
         }
         val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
-        val (qrySchema, mresult) =  qs.execQuery(pgu, copyInfo.datasetInfo, analysis, expectedRowCount.isDefined)
+        val (qrySchema, mresult) =
+          for (dsInfo <- ds) yield {
+            val qs = new QueryServer(dsInfo)
+            qs.execQuery(pgu, copyInfo.datasetInfo, analysis, expectedRowCount.isDefined)
+          }
         val jsonReps = PostgresUniverseCommon.jsonReps(copyInfo.datasetInfo)
         val qryReps = qrySchema.mapValues( cinfo => jsonReps(cinfo.typ))
 
@@ -70,6 +74,5 @@ object PGQueryServerDatabaseTestBase {
   private val config = PGSecondaryUtil.config
 
   private val datasourceConfig = new DataSourceConfig(config, "test-database")
-
-  private val qs = new QueryServer(datasourceConfig)
+  private val ds = DataSourceFromConfig(datasourceConfig)
 }

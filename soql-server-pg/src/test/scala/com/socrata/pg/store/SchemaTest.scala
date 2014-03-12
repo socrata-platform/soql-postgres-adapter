@@ -3,7 +3,7 @@ package com.socrata.pg.store
 import com.rojoma.json.util.JsonUtil
 import com.socrata.pg.server.{PGQueryServerDatabaseTestBase, QueryServerTest}
 import com.socrata.pg.Schema
-import com.socrata.datacoordinator.common.DataSourceConfig
+import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
 import scala.language.reflectiveCalls
 import scala.io.Source
 
@@ -16,11 +16,13 @@ class SchemaTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase 
   }
 
   test("schema json codec") {
-    withPgu() { pgu =>
+    val dsConfig = new DataSourceConfig(config, "test-database")
+    val ds = DataSourceFromConfig(dsConfig)
+    for (dsInfo <- ds) {
+      withPgu() { pgu =>
       val f = columnsCreatedFixture
       f.pgs._version(pgu, f.datasetInfo, f.dataVersion+1, None, f.events.iterator)
-      val dsConfig = new DataSourceConfig(config, "test-database")
-      val qs = new QueryServerTest(dsConfig, pgu)
+      val qs = new QueryServerTest(dsInfo, pgu)
       val schema = qs.latestSchema(testInternalName).get
       val schemaj = JsonUtil.renderJson(schema)
       val schemaRoundTrip = JsonUtil.parseJson[com.socrata.datacoordinator.truth.metadata.Schema](schemaj).get
@@ -28,6 +30,7 @@ class SchemaTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase 
       val expected = Source.fromURL(getClass.getResource("/fixtures/schema.json"))
       val expectedSchema = JsonUtil.readJson[com.socrata.datacoordinator.truth.metadata.Schema](expected.reader()).get
       schema should be (expectedSchema)
+      }
     }
   }
 }

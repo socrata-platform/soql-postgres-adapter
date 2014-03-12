@@ -1,6 +1,5 @@
 package com.socrata.pg.server
 
-import com.rojoma.simplearm.Managed
 import com.rojoma.simplearm.util._
 import com.rojoma.json.util.JsonUtil
 import com.netflix.curator.x.discovery.{ServiceDiscoveryBuilder, ServiceInstanceBuilder}
@@ -9,7 +8,7 @@ import com.netflix.curator.retry
 import com.rojoma.json.ast.JString
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
 import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
-import com.socrata.datacoordinator.id.{ColumnId, DatasetId, RowId, UserColumnId}
+import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
 import com.socrata.datacoordinator.truth.metadata.{DatasetInfo, DatasetCopyContext, CopyInfo, Schema}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
@@ -46,9 +45,11 @@ import java.sql.Connection
 import java.io.ByteArrayInputStream
 import javax.servlet.http.{HttpServletResponse, HttpServletRequest}
 import scala.language.existentials
+import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 
 
-class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Logging {
+class QueryServer(val dsInfo: DSInfo) extends SecondaryBase with Logging {
+  val dsConfig: DataSourceConfig = null // unused
 
   private val routerSet = locally {
     import SimpleRouteContext._
@@ -116,7 +117,7 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
    * streaming.
    */
   def streamQueryResults(analysis: SoQLAnalysis[UserColumnId, SoQLType], datasetId:String, reqRowCount: Boolean)(resp:HttpServletResponse) = {
-    withPgu(truthStoreDatasetInfo = None) { pgu =>
+    withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetId) match {
         case Some(dsId) =>
           pgu.datasetMapReader.datasetInfo(dsId) match {
@@ -221,7 +222,7 @@ class QueryServer(val dsConfig: DataSourceConfig) extends SecondaryBase with Log
    * @return Some schema or none
    */
   def latestSchema(ds: String): Option[Schema] = {
-    withPgu(truthStoreDatasetInfo = None) { pgu =>
+    withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       for {
         datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds)
         datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
@@ -286,7 +287,7 @@ object QueryServer extends Logging {
       curator.start()
       discovery.start()
       pong.start()
-      val queryServer = new QueryServer(datasourceConfig)
+      val queryServer = new QueryServer(dsInfo)
       val auxData = new AuxiliaryData(livenessCheckInfo = Some(pong.livenessCheckInfo))
       val curatorBroker = new CuratorBroker(discovery, address, config.advertisement.name + "." + config.instance, Some(auxData))
       val handler = ThreadRenamingHandler(LoggingHandler(queryServer.route))

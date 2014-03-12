@@ -34,7 +34,7 @@ import com.rojoma.simplearm.Managed
  * Postgres Secondary Store Implementation
  */
 class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] with SecondaryBase with Logging {
-  val dsConfig = new DataSourceConfig(config, "database")
+  override val dsConfig = new DataSourceConfig(config, "database")
 
   // Called when this process is shutting down (or being killed)
   def shutdown() {

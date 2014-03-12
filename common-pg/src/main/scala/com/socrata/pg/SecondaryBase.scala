@@ -2,10 +2,11 @@ package com.socrata.pg
 
 import java.sql.Connection
 import com.rojoma.simplearm.util._
-import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
+import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
 import com.socrata.pg.store.{PostgresUniverseCommon, PGSecondaryUniverse}
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.secondary.DatasetInfo
+import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 
 trait SecondaryBase {
 
@@ -13,10 +14,8 @@ trait SecondaryBase {
 
   protected def populateDatabase(conn: Connection) { }
 
-  protected def withDb[T]()(f: (Connection) => T): T = {
-    // TODO: this isn't really the right lifecycle here, recreating this for each withDb call, need to rationalize
+  protected def withDb[T](dsInfo:DSInfo)(f: (Connection) => T): T = {
     for {
-      dsInfo <- DataSourceFromConfig(dsConfig)
       conn <- managed(dsInfo.dataSource.getConnection)
     } yield {
       conn.setAutoCommit(false)
@@ -24,10 +23,20 @@ trait SecondaryBase {
     }
   }
 
-  protected def withPgu[T](truthStoreDatasetInfo:Option[DatasetInfo])(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
-    withDb() { conn =>
+  protected def withPgu[T](dsInfo:DSInfo, truthStoreDatasetInfo:Option[DatasetInfo])(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
+    withDb(dsInfo) { conn =>
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon, truthStoreDatasetInfo)
       f(pgu)
+    }
+  }
+
+  protected def withPgu[T](truthStoreDatasetInfo:Option[DatasetInfo])(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
+    for {
+      dsInfo <- DataSourceFromConfig(dsConfig)
+    } yield {
+      withPgu(dsInfo, truthStoreDatasetInfo) {
+        pgu => f(pgu)
+      }
     }
   }
 }

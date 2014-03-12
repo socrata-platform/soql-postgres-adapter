@@ -1,6 +1,6 @@
 package com.socrata.pg.server
 
-import com.socrata.datacoordinator.common.DataSourceConfig
+import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
 import com.socrata.datacoordinator.id.{RowId, UserColumnId}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.store._
@@ -14,6 +14,7 @@ import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.socrata.soql.SoQLAnalysis
 import java.sql.Connection
 import org.apache.log4j.PropertyConfigurator
+import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 
 class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
 
@@ -55,7 +56,11 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
           val schema = columnNameTypeMap
         }
         val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
-        val (_, mresult) =  qs.execQuery(pgu, copyInfo.datasetInfo, analysis, false)
+        val (requestColumns, mresult) =
+          for (dsInfo <- ds) yield {
+            val qs = new QueryServer(dsInfo)
+            qs.execQuery(pgu, copyInfo.datasetInfo, analysis, false)
+          }
         for (result <- mresult) {
           result.foreach { row =>
             println(row.toString())
@@ -72,6 +77,6 @@ object QueryTest {
   private val config = PGSecondaryUtil.config
 
   private val datasourceConfig = new DataSourceConfig(config, "test-database")
+  private val ds = DataSourceFromConfig(datasourceConfig)
 
-  private val qs = new QueryServer(datasourceConfig)
 }
