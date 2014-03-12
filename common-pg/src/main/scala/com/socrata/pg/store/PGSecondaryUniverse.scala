@@ -2,23 +2,26 @@ package com.socrata.pg.store
 
 import java.sql.Connection
 import com.socrata.datacoordinator.truth.universe._
-import com.socrata.datacoordinator.truth.universe.sql.PostgresCommonSupport
+import com.socrata.datacoordinator.truth.universe.sql.{SqlTableCleanup, PostgresCommonSupport}
 import com.socrata.datacoordinator.truth.loader.{ReportWriter, Logger}
 import com.socrata.datacoordinator.truth.metadata._
-import com.socrata.datacoordinator.util.{NullCache, TransferrableContextTimingReport, RowVersionProvider, RowIdProvider}
+import com.socrata.datacoordinator.util.NullCache
 import com.rojoma.simplearm.util._
-import com.socrata.datacoordinator.truth.loader.sql.{DataSqlizer, PostgresRepBasedDataSqlizer, SqlPrevettedLoader, RepBasedPostgresSchemaLoader}
+import com.socrata.datacoordinator.truth.loader.sql._
 import org.joda.time.DateTime
-import com.socrata.datacoordinator.truth.metadata.sql.{PostgresDatasetMapReader, PostgresDatasetMapWriter}
-import com.socrata.datacoordinator.truth.sql.{PostgresDatabaseReader, PostgresDatabaseMutator, RepBasedSqlDatasetContext}
+import com.socrata.datacoordinator.truth.metadata.sql.PostgresDatasetMapReader
+import com.socrata.datacoordinator.truth.sql.{PostgresDatabaseReader, RepBasedSqlDatasetContext}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.datacoordinator.truth.metadata.CopyInfo
-import com.rojoma.simplearm.SimpleArm
-import com.socrata.datacoordinator.truth.{LowLevelDatabaseReader, DatasetReader, DatasetMutator}
+import com.socrata.datacoordinator.truth.DatasetReader
 import com.socrata.datacoordinator.truth.metadata.SchemaFinder
 import com.socrata.pg.store.index.{FullTextSearch, IndexSupport}
 import com.socrata.datacoordinator.secondary
 import com.socrata.soql.types.obfuscation.CryptProvider
+import com.socrata.datacoordinator.truth.metadata.ColumnInfo
+import com.socrata.datacoordinator.truth.metadata.DatasetInfo
+import com.socrata.datacoordinator.truth.metadata.CopyInfo
+import com.socrata.datacoordinator.id.DatasetId
+
 
 /**
  *
@@ -36,6 +39,8 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
   with DatasetReaderProvider
   with LoggerProvider
   with RowReaderProvider[SoQLType, SoQLValue]
+  with DatasetDropperProvider
+  with TableCleanupProvider
 {
   import commonSupport._
   private val txnStart = DateTime.now()
@@ -80,17 +85,15 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
   //  managed(loaderProvider(conn, copyCtx, rowPreparer(transactionStart, copyCtx, replaceUpdatedRows), rowIdProvider, rowVersionProvider, logger, reportWriter, timingReport))
 
   // TODO: is it legit to expose the BackupDatasetMap (writer) here?  Need it to set ids...
-  // lazy val datasetMapWriter: DatasetMapWriter[SoQLType] =
-  lazy val datasetMapWriter: BackupDatasetMap[SoQLType] =
-    new PostgresDatasetMapWriter(conn, typeContext.typeNamespace, timingReport, obfuscationKeyGenerator, initialCounterValue)
-
+  lazy val datasetMapWriter: PGSecondaryDatasetMapWriter[SoQLType]  =
+    new PGSecondaryDatasetMapWriter(conn, typeContext.typeNamespace, timingReport, obfuscationKeyGenerator, initialCounterValue)
 
   lazy val datasetMapReader: DatasetMapReader[SoQLType] =
     new PostgresDatasetMapReader(conn, typeContext.typeNamespace, timingReport)
 
   lazy val secondaryDatasetMapReader = new PGSecondaryDatasetMapReader(conn)
 
-  lazy val secondaryDatasetMapWriter = new PGSecondaryDatasetMapWriter(conn, obfuscationKeyGenerator, initialCounterValue)
+  lazy val secondaryDatasetMapWriter = datasetMapWriter // TODO: remove this alias
 
   lazy val datasetReader = DatasetReader(lowLevelDatabaseReader)
 
@@ -106,6 +109,13 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
     // Skip schema cache for query coordinator already provides caching.
     new com.socrata.datacoordinator.service.SchemaFinder(commonSupport.typeContext.typeNamespace.userTypeForType _, NullCache)
 
+  lazy val datasetDropper =
+    new SqlDatasetDropper(conn, writeLockTimeout, datasetMapWriter) {
+      override def updateSecondaryAndBackupInfo(datasetId: DatasetId, fakeVersion: Long) {
+        // Does not apply to secondary.  Suppress what data coordinator implementation does.
+      }
+    }
+
+  lazy val tableCleanup: TableCleanup =
+    new SqlTableCleanup(conn, 0)
 }
-
-

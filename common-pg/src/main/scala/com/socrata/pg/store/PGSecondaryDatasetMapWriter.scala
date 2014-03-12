@@ -3,15 +3,26 @@ package com.socrata.pg.store
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.datacoordinator.id.sql._
-import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.socrata.datacoordinator.truth.DatabaseInReadOnlyMode
+import com.socrata.datacoordinator.truth.metadata.{DatasetInfo, TypeNamespace, CopyInfo}
+import com.socrata.datacoordinator.truth.metadata.sql.PostgresDatasetMapWriter
+import com.socrata.datacoordinator.util.TimingReport
 import com.typesafe.scalalogging.slf4j.Logging
 import java.sql.Connection
 import org.postgresql.util.PSQLException
 
-class PGSecondaryDatasetMapWriter(val conn: Connection, val obfuscationKeyGenerator: () => Array[Byte], val initialCounterValue: Long) extends Logging {
 
-  def createQuery_internalNameMap = "INSERT INTO dataset_internal_name_map (dataset_internal_name, dataset_system_id) VALUES (?, ?)"
+class PGSecondaryDatasetMapWriter[CT](override val conn: Connection, tns: TypeNamespace[CT], timingReport: TimingReport, override val obfuscationKeyGenerator: () => Array[Byte], override val initialCounterValue: Long) extends
+  PostgresDatasetMapWriter(conn, tns, timingReport, obfuscationKeyGenerator, initialCounterValue) with Logging {
+
+  private val createQuery_internalNameMap = "INSERT INTO dataset_internal_name_map (dataset_internal_name, dataset_system_id) VALUES (?, ?)"
+
+  private val deleteQuery_internalNameMap = "DELETE FROM dataset_internal_name_map where dataset_system_id = ?"
+
+  override def delete(tableInfo: DatasetInfo) {
+    deleteInternalNameMapping(tableInfo.systemId)
+    super.delete(tableInfo)
+  }
 
   def createInternalNameMapping(datasetInternalName: String, datasetSystemId: DatasetId) {
     using(conn.prepareStatement(createQuery_internalNameMap)) { stmt =>
@@ -21,6 +32,12 @@ class PGSecondaryDatasetMapWriter(val conn: Connection, val obfuscationKeyGenera
     }
   }
 
+  def deleteInternalNameMapping(datasetSystemId: DatasetId) {
+    using(conn.prepareStatement(deleteQuery_internalNameMap)) { stmt =>
+      stmt.setLong(1, datasetSystemId.underlying)
+      stmt.execute()
+    }
+  }
 
   def createDatasetOnlyQuery_tableMap = "INSERT INTO dataset_map (next_counter_value, locale_name, obfuscation_key) VALUES (?, ?, ?) RETURNING system_id"
 
@@ -76,10 +93,4 @@ class PGSecondaryDatasetMapWriter(val conn: Connection, val obfuscationKeyGenera
       stmt.execute("DROP TABLE IF EXISTS " + copyInfo.dataTableName)
     }
   }
-
-  def readOnlySqlTransactionState = "25006"
-
-  def isReadOnlyTransaction(e: PSQLException): Boolean =
-    e.getSQLState == readOnlySqlTransactionState
-
 }

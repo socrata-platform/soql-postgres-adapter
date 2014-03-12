@@ -44,7 +44,8 @@ class PGSecondaryDatasetMapWriterTest extends PGSecondaryTestBase with PGStoreTe
     withDb() {
       conn => {
         createSchema(conn)
-        new PGSecondaryDatasetMapWriter(conn, noopKeyGen, ZeroID).createInternalNameMapping("Dataset Name", new DatasetId(123))
+        val datasetMapWriter = new PGSecondaryDatasetMapWriter(conn, PostgresUniverseCommon.typeContext.typeNamespace, PostgresUniverseCommon.timingReport, noopKeyGen, ZeroID)
+        datasetMapWriter.createInternalNameMapping("Dataset Name", new DatasetId(123))
         val datasetId: DatasetId = new PGSecondaryDatasetMapReader(conn).datasetIdForInternalName("Dataset Name").get
         datasetId shouldEqual new DatasetId(123)
       }

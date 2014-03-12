@@ -29,6 +29,7 @@ import com.socrata.pg.store.events.WorkingCopyPublishedHandler
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.pg.SecondaryBase
 import com.rojoma.simplearm.Managed
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 /**
  * Postgres Secondary Store Implementation
@@ -36,10 +37,15 @@ import com.rojoma.simplearm.Managed
 class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] with SecondaryBase with Logging {
   override val dsConfig = new DataSourceConfig(config, "database")
 
+  private val finished = new CountDownLatch(1)
+
+  private val tableDropper = startTableDropper()
+
   // Called when this process is shutting down (or being killed)
   def shutdown() {
     logger.debug("shutdown")
-    // no-op
+    finished.countDown()
+    tableDropper.join()
   }
 
   // Return true to get all the events from the stream of updates from the data-coordinator
@@ -55,7 +61,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   def dropDataset(datasetInternalName: String, cookie: Secondary.Cookie) {
     // last thing you will get for a dataset.
     logger.debug(s"dropDataset '${datasetInternalName}' (cookie : ${cookie}) ")
-    throw new UnsupportedOperationException("TODO later")
+    withPgu(None) { pgu =>
+      val copyInfo = truthCopyInfo(pgu, datasetInternalName)
+      val datasetId = copyInfo.datasetInfo.systemId
+      pgu.datasetDropper.dropDataset(datasetId)
+      pgu.commit()
+    }
   }
 
   def currentVersion(datasetInternalName: String, cookie: Secondary.Cookie): Long = {
@@ -304,5 +315,27 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
     val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
     pgu.datasetMapReader.latest(truthDatasetInfo)
+  }
+
+  private def startTableDropper() = {
+    val tableDropper = new Thread() {
+      setName("pg-sec-table-dropper")
+      override def run() {
+        while(!finished.await(60, TimeUnit.SECONDS)) {
+          try {
+            withPgu(None) { pgu =>
+              while(finished.getCount > 0 && pgu.tableCleanup.cleanupPendingDrops()) {
+                pgu.commit()
+              }
+            }
+          } catch {
+            case e: Exception =>
+              logger.error("Unexpected error while dropping secondary tables", e)
+          }
+        }
+      }
+    }
+    tableDropper.start()
+    tableDropper
   }
 }

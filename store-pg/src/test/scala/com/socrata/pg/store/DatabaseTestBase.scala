@@ -39,6 +39,8 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
 
   val secondaryDb = "secondary_test"
 
+  val TestDatabaseConfigKey = "test-database"
+
   val config: Config = ConfigFactory.load().getConfig("com.socrata.pg.store")
 
   var truthDatasetId: DatasetId = _
@@ -97,7 +99,7 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
 
     truthDatasetId = datasetId
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
-    val dsName = s"$dcInstance.${truthDatasetId.underlying.toString}"
+    val dsName = s"$dcInstance.${truthDatasetId.underlying}"
     secDatasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(s"$dsName").getOrElse(
       throw new Exception("Fail to get secondary database id"))
   }
@@ -133,7 +135,7 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
 
   private def pushToSecondary(common: SoQLCommon, datasetId: DatasetId) {
     for(u <- common.universe) {
-      val secondary = new PGTestSecondary(config, "test-database")
+      val secondary = new PGTestSecondary(config, TestDatabaseConfigKey)
       val pb = u.playbackToSecondary
       val secondaryMfst = u.secondaryManifest
       secondaryMfst.addDataset(storeId, datasetId)
