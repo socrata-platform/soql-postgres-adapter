@@ -9,6 +9,7 @@ import com.socrata.datacoordinator.common.SoQLCommon
 import com.socrata.datacoordinator.util.{IndexedTempFile, NullCache, NoopTimingReport}
 import com.socrata.datacoordinator.service.Mutator
 import com.socrata.datacoordinator.secondary.NamedSecondary
+import com.socrata.datacoordinator.truth.migration.Migration.MigrationOperation
 import com.socrata.datacoordinator.truth.sql.{DatabasePopulator => TruthDatabasePopulator, DatasetMapLimits}
 import com.socrata.datacoordinator.truth.universe.sql.PostgresCopyIn
 import com.socrata.soql.types.{SoQLValue, SoQLType}
@@ -18,10 +19,11 @@ import com.typesafe.scalalogging.slf4j.Logging
 import java.io.{InputStreamReader, FileInputStream, File}
 import java.sql.{DriverManager, Connection}
 import java.util.concurrent.TimeUnit
+import java.util.UUID
 import org.postgresql.ds.PGSimpleDataSource
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{FiniteDuration, Duration}
 import scala.io.Codec
-import com.socrata.datacoordinator.truth.migration.Migration.MigrationOperation
+
 
 /**
  * Recreate test databases of truth and secondary.
@@ -138,10 +140,15 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
       val secondary = new PGTestSecondary(config, TestDatabaseConfigKey)
       val pb = u.playbackToSecondary
       val secondaryMfst = u.secondaryManifest
+      val claimantId = UUID.randomUUID()
+      val claimTimeout = FiniteDuration(1, TimeUnit.MINUTES)
       secondaryMfst.addDataset(storeId, datasetId)
-      for(job <- secondaryMfst.findDatasetsNeedingReplication(storeId)) {
-        println(s"${datasetIdToInternal(job.datasetId)} v${job.startingDataVersion}")
-        pb(NamedSecondary(storeId, secondary), job)
+      for(job <- secondaryMfst.claimDatasetNeedingReplication(storeId, claimantId, claimTimeout)) {
+        try {
+          pb(NamedSecondary(storeId, secondary), job)
+        } finally {
+          secondaryMfst.releaseClaimedDataset(job)
+        }
       }
     }
   }
