@@ -24,12 +24,14 @@ trait Sqlizer[T] {
   val underlying: T
 
   protected def useUpper(ctx: Context): Boolean = {
-    ctx(SoqlPart) match {
-      case SoqlWhere | SoqlGroup | SoqlOrder | SoqlHaving => true
-      case SoqlSelect => usedInGroupBy(ctx)
-      case SoqlSearch => false
-      case _ => false
-    }
+    if (caseInsensitive(ctx))
+      ctx(SoqlPart) match {
+        case SoqlWhere | SoqlGroup | SoqlOrder | SoqlHaving => true
+        case SoqlSelect => usedInGroupBy(ctx)
+        case SoqlSearch => false
+        case _ => false
+      }
+    else false
   }
 
   protected def usedInGroupBy(ctx: Context): Boolean = {
@@ -52,6 +54,9 @@ trait Sqlizer[T] {
   }
 
   protected val ParamPlaceHolder: String = "?"
+
+  private def caseInsensitive(ctx: Context): Boolean =
+    ctx.contains(CaseInsensitive) && ctx(CaseInsensitive) == true
 }
 
 object Sqlizer {
@@ -101,4 +106,5 @@ object SqlizerContext extends Enumeration {
   val IdRep = Value("id-rep")
   val VerRep = Value("ver-rep")
   val RootExpr = Value("root-expr")
+  val CaseInsensitive = Value("case-insensitive")
 }

@@ -48,7 +48,7 @@ import scala.language.existentials
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 
 
-class QueryServer(val dsInfo: DSInfo) extends SecondaryBase with Logging {
+class QueryServer(val dsInfo: DSInfo, val caseInsensitive: Boolean) extends SecondaryBase with Logging {
   val dsConfig: DataSourceConfig = null // unused
 
   private val routerSet = locally {
@@ -145,7 +145,8 @@ class QueryServer(val dsInfo: DSInfo) extends SecondaryBase with Logging {
     val cryptProvider = new CryptProvider(datasetInfo.obfuscationKey)
     val sqlCtx = Map[SqlizerContext, Any](
       SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
-      SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider)
+      SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
+      SqlizerContext.CaseInsensitive -> true
     )
 
     for (readCtx <- pgu.datasetReader.openDataset(latest)) yield {
@@ -287,7 +288,7 @@ object QueryServer extends Logging {
       curator.start()
       discovery.start()
       pong.start()
-      val queryServer = new QueryServer(dsInfo)
+      val queryServer = new QueryServer(dsInfo, false)
       val auxData = new AuxiliaryData(livenessCheckInfo = Some(pong.livenessCheckInfo))
       val curatorBroker = new CuratorBroker(discovery, address, config.advertisement.name + "." + config.instance, Some(auxData))
       val handler = ThreadRenamingHandler(LoggingHandler(queryServer.route))

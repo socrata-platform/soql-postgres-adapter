@@ -58,7 +58,7 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
         val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
         val (requestColumns, mresult) =
           for (dsInfo <- ds) yield {
-            val qs = new QueryServer(dsInfo)
+            val qs = new QueryServer(dsInfo, false)
             qs.execQuery(pgu, copyInfo.datasetInfo, analysis, false)
           }
         for (result <- mresult) {

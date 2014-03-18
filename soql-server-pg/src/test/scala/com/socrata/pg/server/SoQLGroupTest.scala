@@ -3,11 +3,20 @@ package com.socrata.pg.server
 class SoQLGroupTest extends SoQLTest {
 
   test("group by text") {
-    compareSoqlResult("select make, count(name) group by make order by make", "group-text.json")
+    compareSoqlResult("select upper(make) as umake, count(name) group by upper(make) order by upper(make)", "group-text.json")
   }
 
+  test("group by text ci") {
+    compareSoqlResult("select make as umake, count(name) group by make order by make", "group-text.json", caseInsensitive = CaseInsensitive)
+  }
+
+
   test("group by text order by count") {
-    compareSoqlResult("select make, count(name) group by make order by count(name) desc", "group-text-order-count.json")
+    compareSoqlResult("select upper(make) as umake, count(name) group by upper(make) order by count(name) desc", "group-text-order-count.json")
+  }
+
+  test("group by text order by count ci") {
+    compareSoqlResult("select make as umake, count(name) group by make order by count(name) desc", "group-text-order-count.json", caseInsensitive = CaseInsensitive)
   }
 
   test("group by text, numeric fn where having") {

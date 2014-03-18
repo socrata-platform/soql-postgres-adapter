@@ -1,11 +1,12 @@
 package com.socrata.pg.server
 
 import com.rojoma.simplearm.util._
+import com.socrata.pg.soql.CaseSensitivity
 import com.socrata.pg.store.{PostgresUniverseCommon, PGSecondaryUniverse, PGTestSecondary, PGSecondaryTestBase}
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import java.sql.PreparedStatement
 
-abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
+abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase with CaseSensitivity {
 
   override def beforeAll = {
     createDatabases()
