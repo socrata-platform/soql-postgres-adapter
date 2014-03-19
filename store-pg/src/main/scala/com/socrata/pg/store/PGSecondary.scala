@@ -222,6 +222,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         case RowDataUpdated(ops) =>
           RowDataUpdatedHandler(pgu, truthCopyInfo, ops)
           rebuildIndex
+        case LastModifiedChanged(lastModified) =>
+          pgu.datasetMapWriter.updateLastModified(truthCopyInfo, lastModified)
+          rebuildIndex
         case otherOps =>
           throw new UnsupportedOperationException("Unexpected operation")
       }

@@ -6,6 +6,8 @@ import com.socrata.datacoordinator.truth.metadata.ColumnInfo
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import scala.Some
 import com.typesafe.scalalogging.slf4j.Logging
+import org.joda.time.DateTime
+import org.joda.time.format.ISODateTimeFormat
 
 class PGSecondaryLogger[CT, CV] extends Logger[CT, CV] with Logging {
 
@@ -26,6 +28,8 @@ class PGSecondaryLogger[CT, CV] extends Logger[CT, CV] with Logging {
   def versionColumnSet(info: ColumnInfo[CT]) = { logger.debug("versionColumnSet: " + info)}
 
   def workingCopyCreated(info: CopyInfo) = { logger.debug("workingCopyCreated: " + info)}
+
+  def lastModifiedChanged(lastModified: DateTime) = { logger.debug("lastModifiedChanged: " + ISODateTimeFormat.dateTime.print(lastModified)) }
 
   def dataCopied() = logger.debug("dataCopied")
 
