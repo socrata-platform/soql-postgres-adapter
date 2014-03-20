@@ -15,7 +15,7 @@ import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
 
 
-class SqlizerTest extends FunSuite with Matchers with CaseSensitivity {
+class SqlizerTest extends FunSuite with Matchers {
 
   import SqlizerTest._
 
@@ -134,10 +134,10 @@ object SqlizerTest {
     SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider)
   )
 
-  private def sqlize(soql: String, caseInsensitive: Boolean): ParametricSql = {
+  private def sqlize(soql: String, caseSensitivity: CaseSensitivity): ParametricSql = {
     val allColumnReps = columnInfos.map(PostgresUniverseCommon.repForIndex(_))
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
-    (analysis, "t1", allColumnReps).sql(Map.empty[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], Seq.empty, sqlCtx + (SqlizerContext.CaseInsensitive -> caseInsensitive))
+    (analysis, "t1", allColumnReps).sql(Map.empty[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], Seq.empty, sqlCtx + (SqlizerContext.CaseSensitivity -> caseSensitivity))
   }
 
   private val idMap =  (cn: ColumnName) => new UserColumnId(cn.caseFolded)

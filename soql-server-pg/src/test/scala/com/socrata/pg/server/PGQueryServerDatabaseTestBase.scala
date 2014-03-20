@@ -14,6 +14,7 @@ import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
 import org.scalatest.{BeforeAndAfterAll, Matchers}
 import scala.language.existentials
+import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity}
 
 trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUniverseTestBase {
   this : Matchers with BeforeAndAfterAll =>
@@ -26,7 +27,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
 
   val storeId: String = "pg"
 
-  def compareSoqlResult(soql: String, expectedFixture: String, expectedRowCount: Option[Long] = None, caseInsensitive: Boolean = false) {
+  def compareSoqlResult(soql: String, expectedFixture: String, expectedRowCount: Option[Long] = None, caseSensitivity: CaseSensitivity = CaseSensitive) {
     withDb() { conn =>
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon)
       val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secDatasetId).get)
@@ -41,7 +42,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
         val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
         val (qrySchema, mresult) =
           for (dsInfo <- ds) yield {
-            val qs = new QueryServer(dsInfo, caseInsensitive)
+            val qs = new QueryServer(dsInfo, caseSensitivity)
             qs.execQuery(pgu, copyInfo.datasetInfo, analysis, expectedRowCount.isDefined)
           }
         val jsonReps = PostgresUniverseCommon.jsonReps(copyInfo.datasetInfo)
@@ -56,6 +57,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
           }
           val expected = fixtureRows(expectedFixture)
           val whatLeft = expected.foldLeft(resultJo) { (remainingResult, expectedRow ) =>
+            remainingResult.hasNext should be (true)
             val next = remainingResult.next
             next should be (expectedRow)
             remainingResult

@@ -8,39 +8,35 @@ class SoQLStringFunctionsTest extends SoQLTest {
   }
 
   test("c < x") {
-    compareSoqlResult("select make, name where name < 'buzz' order by name", "where-str-lt.json")
+    compareSoqlResult("select make, name where name < 'Buzz' order by name", "where-str-lt.json")
   }
 
   test("c <= x") {
-    compareSoqlResult("select make, name where name <= 'buzz' order by name", "where-str-le.json")
+    compareSoqlResult("select make, name where name <= 'Buzz' order by name", "where-str-le.json")
   }
 
   test("c = x") {
-    compareSoqlResult("select make, name where make = 'apco' order by name", "where-str-eq.json")
+    compareSoqlResult("select make, name where make = 'APCO' order by name", "where-str-eq.json")
   }
 
   test("c != x") {
-    compareSoqlResult("select make, name where make != 'apco' order by name", "where-str-ne.json")
+    compareSoqlResult("select make, name where make != 'APCO' order by name", "where-str-ne.json")
   }
 
   test("c > x") {
-    compareSoqlResult("select make, name where name > 'sprint evo' order by name", "where-str-gt.json")
+    compareSoqlResult("select make, name where name > 'Sprint Evo' order by name", "where-str-gt.json")
   }
 
   test("c >= x") {
-    compareSoqlResult("select make, name where name >= 'sprint evo' order by name", "where-str-ge.json")
+    compareSoqlResult("select make, name where name >= 'Sprint Evo' order by name", "where-str-ge.json")
   }
 
-  // Demonstrate using lower in select.
-  // TODO: Not sure if we want to use lower in where to suppress case insensitivity.
   test("lower(c)") {
-    compareSoqlResult("select make, lower(name) where name = 'atlas'", "where-str-lower.json")
+    compareSoqlResult("select make, lower(name) where name = 'Atlas'", "where-str-lower.json")
   }
 
-  // Demonstrate using upper in select.
-  // TODO: Not sure if we want to use upper in where to suppress case insensitivity.
   test("upper(c)") {
-    compareSoqlResult("select make, upper(name) where name = 'atlas'", "where-str-upper.json")
+    compareSoqlResult("select make, upper(name) where name = 'Atlas'", "where-str-upper.json")
   }
 
   test("starts_with(c, x)") {

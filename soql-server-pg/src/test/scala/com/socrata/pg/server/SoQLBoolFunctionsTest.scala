@@ -11,7 +11,7 @@ class SoQLBoolFunctionsTest extends SoQLTest {
   }
 
   test("or") {
-    compareSoqlResult("select make, name where make = 'ozone' or make = 'gin' order by name", "where-bool-or.json")
+    compareSoqlResult("select make, name where make = 'OZONE' or make = 'GIN' order by name", "where-bool-or.json")
   }
 
   test("not") {

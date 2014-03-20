@@ -15,6 +15,7 @@ import com.socrata.soql.SoQLAnalysis
 import java.sql.Connection
 import org.apache.log4j.PropertyConfigurator
 import scala.language.existentials
+import com.socrata.pg.soql.CaseSensitive
 
 class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
 
@@ -58,7 +59,7 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
         val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
         val (requestColumns, mresult) =
           for (dsInfo <- ds) yield {
-            val qs = new QueryServer(dsInfo, false)
+            val qs = new QueryServer(dsInfo, CaseSensitive)
             qs.execQuery(pgu, copyInfo.datasetInfo, analysis, false)
           }
         for (result <- mresult) {

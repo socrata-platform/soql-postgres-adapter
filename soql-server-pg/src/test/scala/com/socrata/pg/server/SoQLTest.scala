@@ -6,7 +6,7 @@ import com.socrata.pg.store.{PostgresUniverseCommon, PGSecondaryUniverse, PGTest
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import java.sql.PreparedStatement
 
-abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase with CaseSensitivity {
+abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
 
   override def beforeAll = {
     createDatabases()

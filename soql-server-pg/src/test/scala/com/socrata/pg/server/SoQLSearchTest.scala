@@ -1,5 +1,7 @@
 package com.socrata.pg.server
 
+import com.socrata.pg.soql.CaseInsensitive
+
 class SoQLSearchTest extends SoQLTest {
 
 
@@ -16,6 +18,6 @@ class SoQLSearchTest extends SoQLTest {
   }
 
   test("search and where ci") {
-    compareSoqlResult("select name, make, color where make = 'apco' search 'blue' order by name", "search-and-where.json", caseInsensitive = CaseInsensitive)
+    compareSoqlResult("select name, make, color where make = 'apco' search 'blue' order by name", "search-and-where.json", caseSensitivity = CaseInsensitive)
   }
 }

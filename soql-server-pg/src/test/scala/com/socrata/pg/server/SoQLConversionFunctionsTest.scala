@@ -12,11 +12,11 @@ class SoQLConversionFunctionsTest extends SoQLTest {
   }
 
   test("text::num") {
-    compareSoqlResult("select name, make, code where code::number=14200 and name = 'karma'", "where-conv-txt2num.json")
+    compareSoqlResult("select name, make, code where code::number=14200 and upper(name) = 'KARMA'", "where-conv-txt2num.json")
   }
 
   test("text::bool") {
-    compareSoqlResult("select make, name, three_liner where make = 'ozone' and '1'::boolean = three_liner or (make = 'apco' and '0'::boolean = three_liner) order by make, name", "where-conv-txt2bool.json")
+    compareSoqlResult("select make, name, three_liner where make = 'OZONE' and '1'::boolean = three_liner or (make = 'APCO' and '0'::boolean = three_liner) order by make, name", "where-conv-txt2bool.json")
   }
 
   test("text::floating_timestamp") { // ::floating_timestamp is optional if it is a string literal that match a specific pattern.

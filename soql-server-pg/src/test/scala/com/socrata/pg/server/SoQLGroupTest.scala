@@ -1,5 +1,7 @@
 package com.socrata.pg.server
 
+import com.socrata.pg.soql.CaseInsensitive
+
 class SoQLGroupTest extends SoQLTest {
 
   test("group by text") {
@@ -7,7 +9,7 @@ class SoQLGroupTest extends SoQLTest {
   }
 
   test("group by text ci") {
-    compareSoqlResult("select make as umake, count(name) group by make order by make", "group-text.json", caseInsensitive = CaseInsensitive)
+    compareSoqlResult("select make as umake, count(name) group by make order by make", "group-text.json", caseSensitivity = CaseInsensitive)
   }
 
 
@@ -16,14 +18,14 @@ class SoQLGroupTest extends SoQLTest {
   }
 
   test("group by text order by count ci") {
-    compareSoqlResult("select make as umake, count(name) group by make order by count(name) desc", "group-text-order-count.json", caseInsensitive = CaseInsensitive)
+    compareSoqlResult("select make as umake, count(name) group by make order by count(name) desc", "group-text-order-count.json", caseSensitivity = CaseInsensitive)
   }
 
   test("group by text, numeric fn where having") {
-    compareSoqlResult("select make, v_max > 50 as fast, count(name) where v_max is not null group by make, v_max > 50 having count(:id) > 1 order by v_max > 50 ", "group-text-expr-w-h.json")
+    compareSoqlResult("select make, v_max > 50 as fast, count(name) where v_max is not null group by make, v_max > 50 having count(:id) > 1 order by v_max > 50 ", "group-text-expr-w-h.json", caseSensitivity = CaseInsensitive)
   }
 
   test("group by text fn") {
-    compareSoqlResult("select country || '''s ' || make as brand_made, count(name) group by country || '''s ' || make order by country || '''s ' || make", "group-text-expr.json")
+    compareSoqlResult("select country || '''s ' || make as brand_made, count(name) group by country || '''s ' || make order by country || '''s ' || make", "group-text-expr.json", caseSensitivity = CaseInsensitive)
   }
 }

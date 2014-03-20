@@ -56,7 +56,7 @@ trait Sqlizer[T] {
   protected val ParamPlaceHolder: String = "?"
 
   private def caseInsensitive(ctx: Context): Boolean =
-    ctx.contains(CaseInsensitive) && ctx(CaseInsensitive) == true
+    ctx.contains(CaseSensitivity) && ctx(CaseSensitivity) == CaseInsensitive
 }
 
 object Sqlizer {
@@ -106,5 +106,11 @@ object SqlizerContext extends Enumeration {
   val IdRep = Value("id-rep")
   val VerRep = Value("ver-rep")
   val RootExpr = Value("root-expr")
-  val CaseInsensitive = Value("case-insensitive")
+  val CaseSensitivity = Value("case-sensitivity")
 }
+
+sealed trait CaseSensitivity
+
+object CaseInsensitive extends CaseSensitivity
+
+object CaseSensitive extends CaseSensitivity

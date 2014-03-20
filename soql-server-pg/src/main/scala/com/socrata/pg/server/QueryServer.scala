@@ -24,7 +24,7 @@ import com.socrata.pg.query.{DataSqlizerQuerier, RowReaderQuerier}
 import com.socrata.pg.server.config.QueryServerConfig
 import com.socrata.pg.Schema._
 import com.socrata.pg.SecondaryBase
-import com.socrata.pg.soql.{SqlizerContext, Sqlizer}
+import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity, SqlizerContext, Sqlizer}
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.store.{PGSecondaryUniverse, SchemaUtil, PGSecondaryRowReader}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
@@ -48,7 +48,7 @@ import scala.language.existentials
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 
 
-class QueryServer(val dsInfo: DSInfo, val caseInsensitive: Boolean) extends SecondaryBase with Logging {
+class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase with Logging {
   val dsConfig: DataSourceConfig = null // unused
 
   private val routerSet = locally {
@@ -146,7 +146,7 @@ class QueryServer(val dsInfo: DSInfo, val caseInsensitive: Boolean) extends Seco
     val sqlCtx = Map[SqlizerContext, Any](
       SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
       SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
-      SqlizerContext.CaseInsensitive -> true
+      SqlizerContext.CaseSensitivity -> caseSensitivity
     )
 
     for (readCtx <- pgu.datasetReader.openDataset(latest)) yield {
@@ -288,7 +288,7 @@ object QueryServer extends Logging {
       curator.start()
       discovery.start()
       pong.start()
-      val queryServer = new QueryServer(dsInfo, false)
+      val queryServer = new QueryServer(dsInfo, CaseSensitive)
       val auxData = new AuxiliaryData(livenessCheckInfo = Some(pong.livenessCheckInfo))
       val curatorBroker = new CuratorBroker(discovery, address, config.advertisement.name + "." + config.instance, Some(auxData))
       val handler = ThreadRenamingHandler(LoggingHandler(queryServer.route))
