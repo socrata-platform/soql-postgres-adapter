@@ -189,7 +189,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     val rebuildIndex = remainingEvents.foldLeft(false) { (rebuildIndex, e) =>
       logger.debug("got event: {}", e)
       e match {
-        case Truncated => // TODO: throw new UnsupportedOperationException("TODO later")
+        case Truncated =>
+          TruncateHandler(pgu, truthCopyInfo)
           rebuildIndex
         case ColumnCreated(secondaryColInfo) =>
           ColumnCreatedHandler(pgu, truthCopyInfo, secondaryColInfo)

@@ -39,6 +39,7 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
   with DatasetReaderProvider
   with LoggerProvider
   with RowReaderProvider[SoQLType, SoQLValue]
+  with TruncatorProvider
   with DatasetDropperProvider
   with TableCleanupProvider
 {
@@ -108,6 +109,8 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
   def schemaFinder: SchemaFinder[PGSecondaryUniverse[SoQLType, SoQLValue]#CT] =
     // Skip schema cache for query coordinator already provides caching.
     new com.socrata.datacoordinator.service.SchemaFinder(commonSupport.typeContext.typeNamespace.userTypeForType _, NullCache)
+
+  lazy val truncator = new SqlTruncator(conn)
 
   lazy val datasetDropper =
     new SqlDatasetDropper(conn, writeLockTimeout, datasetMapWriter) {
