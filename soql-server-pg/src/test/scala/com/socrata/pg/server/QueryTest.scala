@@ -77,7 +77,7 @@ object QueryTest {
 
   private val config = PGSecondaryUtil.config
 
-  private val datasourceConfig = new DataSourceConfig(config, "database")
+  private val datasourceConfig = new DataSourceConfig(config, "test-database")
   private val ds = DataSourceFromConfig(datasourceConfig)
 
 }

@@ -16,7 +16,7 @@ class SchemaTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase 
   }
 
   test("schema json codec") {
-    val dsConfig = new DataSourceConfig(config, "database")
+    val dsConfig = new DataSourceConfig(config, "test-database")
     val ds = DataSourceFromConfig(dsConfig)
     for (dsInfo <- ds) {
       withPgu() { pgu =>

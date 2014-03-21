@@ -6,7 +6,7 @@ import com.typesafe.config.{ConfigFactory, Config}
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 
 object PGSecondaryUtil {
-  val config:Config = ConfigFactory.load().getConfig("com.socrata.pg.common")
+  val config:Config = ConfigFactory.load().getConfig("com.socrata.pg.store")
   val testInternalName = "test-dataset"
   val localeName = "us"
   val obfuscationKey = "key".getBytes

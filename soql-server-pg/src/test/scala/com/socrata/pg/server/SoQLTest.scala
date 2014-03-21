@@ -1,7 +1,8 @@
 package com.socrata.pg.server
 
 import com.rojoma.simplearm.util._
-import com.socrata.pg.store.{PGSecondary, PostgresUniverseCommon, PGSecondaryUniverse, PGSecondaryTestBase}
+import com.socrata.pg.soql.CaseSensitivity
+import com.socrata.pg.store.{PostgresUniverseCommon, PGSecondaryUniverse, PGTestSecondary, PGSecondaryTestBase}
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import java.sql.PreparedStatement
 
@@ -21,7 +22,7 @@ abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTe
 
   protected def dropDataset() = {
     withDb() { conn =>
-      val secondary = new PGSecondary(config)
+      val secondary = new PGTestSecondary(config, TestDatabaseConfigKey)
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon )
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val tableName = pgu.datasetMapReader.latest(datasetInfo).dataTableName
