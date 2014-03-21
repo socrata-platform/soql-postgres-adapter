@@ -41,9 +41,7 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
 
   val secondaryDb = "secondary_test"
 
-  val TestDatabaseConfigKey = "test-database"
-
-  val config: Config = ConfigFactory.load().getConfig("com.socrata.pg.store")
+  val config: Config = ConfigFactory.load().getConfig("com.socrata.pg.common")
 
   var truthDatasetId: DatasetId = _
 
@@ -67,7 +65,7 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
         // migrate truth db
         populateTruth(truthDb)
         // migrate secondary db
-        SchemaMigrator("test-database", MigrationOperation.Migrate, PGSecondaryUtil.config)
+        SchemaMigrator("database", MigrationOperation.Migrate, PGSecondaryUtil.config)
       }
     }
   }
@@ -137,7 +135,7 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
 
   private def pushToSecondary(common: SoQLCommon, datasetId: DatasetId) {
     for(u <- common.universe) {
-      val secondary = new PGTestSecondary(config, TestDatabaseConfigKey)
+      val secondary = new PGSecondary(config)
       val pb = u.playbackToSecondary
       val secondaryMfst = u.secondaryManifest
       val claimantId = UUID.randomUUID()
