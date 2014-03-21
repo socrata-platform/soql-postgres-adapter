@@ -10,6 +10,7 @@ import com.rojoma.simplearm.SimpleArm
 import com.socrata.datacoordinator.secondary.ColumnInfo
 import com.socrata.datacoordinator.secondary.CopyInfo
 import com.socrata.datacoordinator.secondary.DatasetInfo
+import org.joda.time.DateTime
 
 
 class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSecondaryUniverseTestBase {
@@ -20,7 +21,7 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
     withPgu() { pgu =>
       val pgs = new PGSecondary(config)
       val secondaryDatasetInfo = DatasetInfo("monkey", "locale", "obfuscate".getBytes)
-      val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55)
+      val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55, new DateTime())
       val cookie = Option("monkey")
 
       val newSchema = ColumnIdMap[ColumnInfo[SoQLType]](

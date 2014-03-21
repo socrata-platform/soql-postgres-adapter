@@ -16,6 +16,7 @@ import com.socrata.datacoordinator.secondary.ResyncSecondaryException
 import com.socrata.datacoordinator.secondary.ColumnCreated
 import com.socrata.datacoordinator.secondary.SystemRowIdentifierChanged
 import com.socrata.datacoordinator.secondary.DatasetInfo
+import org.joda.time.DateTime
 
 abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAndAfterAll with DatabaseTestBase {
 
@@ -28,7 +29,7 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
     new {
       val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
       val dataVersion = 0L
-      val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
+      val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
       val pgs = new PGSecondary(config)
       val events = Seq(
         WorkingCopyCreated(copyInfo)
@@ -39,7 +40,7 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
     new {
       val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
       val dataVersion = 0L
-      val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
+      val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
       val pgs = new PGSecondary(config)
       val events = Seq(
         WorkingCopyCreated(copyInfo),
@@ -54,7 +55,7 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
     new {
       val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
       val dataVersion = 0L
-      val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion)
+      val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
       val pgs = new PGSecondary(config)
       val testColInfo = ColumnInfo(new ColumnId(9126), new UserColumnId("mycolumn"), SoQLText, false, false, false)
       val events = Seq(
