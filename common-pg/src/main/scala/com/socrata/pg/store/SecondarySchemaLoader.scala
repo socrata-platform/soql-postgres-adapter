@@ -6,13 +6,17 @@ import com.socrata.datacoordinator.truth.loader.Logger
 import com.socrata.datacoordinator.truth.metadata.ColumnInfo
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.pg.store.index.{FullTextSearch, Indexable}
+import com.typesafe.scalalogging.slf4j.Logging
 import java.sql.{Statement, Connection}
+import org.postgresql.util.PSQLException
 
-class SecondarySchemaLoader[CT, CV](conn: Connection, logger: Logger[CT, CV],
+class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
                                     repFor: ColumnInfo[CT] => SqlColumnRep[CT, CV] with Indexable[CT],
                                     tablespace: String => Option[String],
                                     fullTextSearch: FullTextSearch[CT]) extends
-  RepBasedPostgresSchemaLoader[CT, CV](conn, logger, repFor, tablespace) {
+  RepBasedPostgresSchemaLoader[CT, CV](conn, dsLogger, repFor, tablespace) with Logging {
+
+  import SecondarySchemaLoader._
 
   override def addColumns(columnInfos: Iterable[ColumnInfo[CT]]) {
     if(columnInfos.isEmpty) return; // ok? copied from parent schema loader
@@ -22,14 +26,42 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, logger: Logger[CT, CV],
 
   def createFullTextSearchIndex(columnInfos: Iterable[ColumnInfo[CT]]) {
     if(columnInfos.isEmpty) return
+    dropFullTextSearchIndex(columnInfos)
     val table = tableName(columnInfos)
     fullTextSearch.searchVector(columnInfos.map(repFor).toSeq) match {
       case Some(allColumnsVector) =>
         using(conn.createStatement()) { (stmt: Statement) =>
-          stmt.execute(s"DROP INDEX IF EXISTS idx_search_${table}")
           stmt.execute(s"CREATE INDEX idx_search_${table} on ${table} USING GIN ($allColumnsVector)")
         }
       case None => // nothing to do
+    }
+  }
+
+  def deoptimize(columnInfos: Iterable[ColumnInfo[CT]]) {
+    dropFullTextSearchIndex(columnInfos)
+    dropIndexes(columnInfos)
+  }
+
+  def optimize(columnInfos: Iterable[ColumnInfo[CT]]) {
+    createFullTextSearchIndex(columnInfos)
+    createIndexes(columnInfos)
+  }
+
+  protected def dropFullTextSearchIndex(columnInfos: Iterable[ColumnInfo[CT]]) {
+    if(columnInfos.isEmpty) return
+    val table = tableName(columnInfos)
+    using(conn.createStatement()) { (stmt: Statement) =>
+      stmt.execute(s"DROP INDEX IF EXISTS idx_search_${table}")
+    }
+  }
+
+  protected def dropIndexes(columnInfos: Iterable[ColumnInfo[CT]]) {
+    val table = tableName(columnInfos)
+    using(conn.createStatement()) { stmt =>
+      for {
+        ci <- columnInfos
+        indexSql <- repFor(ci).dropIndex(table)
+      } stmt.execute(indexSql)
     }
   }
 
@@ -39,9 +71,30 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, logger: Logger[CT, CV],
       for {
         ci <- columnInfos
         createIndexSql <- repFor(ci).createIndex(table)
-      } stmt.execute(createIndexSql)
+      } {
+        val savepoint = Option(conn.setSavepoint())
+        try {
+          stmt.execute(createIndexSql)
+        } catch {
+          case ex: PSQLException =>
+            ex.getServerErrorMessage.getMessage match {
+              case IndexRowSizeError(_, _, index) =>
+                // The offending index will not be constructed.  But it moves on.
+                logger.warn(s"index row size buffer exceeded $index")
+              case msg =>
+                throw ex
+            }
+            savepoint.foreach(conn.rollback(_))
+        } finally {
+          savepoint.foreach(conn.releaseSavepoint)
+        }
+      }
     }
   }
 
   private def tableName(columnInfo: Iterable[ColumnInfo[CT]]) = columnInfo.head.copyInfo.dataTableName
+}
+
+object SecondarySchemaLoader {
+  val IndexRowSizeError = """index row size (\d+) exceeds maximum (\d+) for index (.*)""".r
 }

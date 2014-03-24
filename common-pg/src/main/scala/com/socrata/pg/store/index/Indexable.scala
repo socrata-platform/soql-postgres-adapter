@@ -9,11 +9,15 @@ trait Indexable[Type] { this: SqlColumnCommonRep[Type] =>
 
   def createIndex(tableName: String): Option[String]
 
+  def dropIndex(tableName: String): Option[String]
+
 }
 
 trait NoIndex[Type] extends Indexable[Type] { this: SqlColumnCommonRep[Type] =>
 
   def createIndex(tableName: String): Option[String] = None
+
+  def dropIndex(tableName: String): Option[String] = None
 
 }
 
@@ -34,15 +38,37 @@ trait TextIndexable[Type] extends Indexable[Type] { this: SqlColumnCommonRep[Typ
     }.mkString(";")
     Some(sql)
   }
+
+  def dropIndex(tableName: String): Option[String] = {
+    val sql = this.physColumns.map { phyCol =>
+      s"""
+      DROP INDEX IF EXISTS idx_${tableName}_$phyCol;
+      DROP INDEX IF EXISTS idx_${tableName}_u_$phyCol;
+      DROP INDEX IF EXISTS idx_${tableName}_nl_$phyCol;
+      DROP INDEX IF EXISTS idx_${tableName}_nf_$phyCol;
+      DROP INDEX IF EXISTS idx_${tableName}_unl_$phyCol;
+      DROP INDEX IF EXISTS idx_${tableName}_unf_$phyCol"""
+    }.mkString(";")
+    Some(sql)
+  }
 }
 
 trait BaseIndexable[Type] extends Indexable[Type] { this: SqlColumnCommonRep[Type] =>
 
-  override def createIndex(tableName: String) : Option[String] = {
+  override def createIndex(tableName: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
       s"""
       CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last);
       CREATE INDEX idx_${tableName}_nf_$phyCol on $tableName USING BTREE ($phyCol nulls first)"""
+    }.mkString(";")
+    Some(sql)
+  }
+
+  def dropIndex(tableName: String): Option[String] = {
+    val sql = this.physColumns.map { phyCol =>
+      s"""
+      DROP INDEX IF EXISTS idx_${tableName}_nl_$phyCol;
+      DROP INDEX IF EXISTS idx_${tableName}_nf_$phyCol"""
     }.mkString(";")
     Some(sql)
   }

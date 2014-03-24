@@ -163,8 +163,19 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     if (wccEvents.hasNext) {
       val e = wccEvents.next
       logger.debug("got working copy event: {}", e)
+
+      val datasetExists =
+        for {
+          datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName)
+          datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
+        } yield {
+          true
+        }
+
       e match {
-        case WorkingCopyCreated(copyInfo) => WorkingCopyCreatedHandler(pgu, secondaryDatasetInfo, copyInfo)
+        case WorkingCopyCreated(copyInfo) =>
+          if (datasetExists.getOrElse(false)) throw new ResyncSecondaryException("Dataset already exists")
+          else WorkingCopyCreatedHandler(pgu, secondaryDatasetInfo, copyInfo)
         case otherOps => throw new UnsupportedOperationException("Unexpected operation")
       }
     }
@@ -298,6 +309,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
     val truthSchema: ColumnIdMap[ColumnInfo[SoQLType]] = pgu.datasetMapReader.schema(truthCopyInfo)
     val copyCtx = new DatasetCopyContext[SoQLType](truthCopyInfo, truthSchema)
+    sLoader.deoptimize(truthSchema.values)
     val loader = pgu.prevettedLoader(copyCtx, pgu.logger(truthCopyInfo.datasetInfo, "test-user"))
 
     val sidColumnInfo = newSchema.values.find(_.isSystemPrimaryKey == true).get
@@ -309,7 +321,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
     loader.flush
 
-    sLoader.createFullTextSearchIndex(truthSchema.values)
+    sLoader.optimize(truthSchema.values)
 
     cookie
   }
