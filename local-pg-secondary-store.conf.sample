@@ -1,0 +1,13 @@
+com.socrata.pg.store {
+  database {
+    app-name = "pg-secondary-store"
+    host = "localhost"
+    port = 5432
+    database = secondary
+    username = "blist"
+    password = "password"
+    c3p0 {}
+  }
+
+  tablespace = """(format "ts%05d" (rand-int 1000))"""
+}

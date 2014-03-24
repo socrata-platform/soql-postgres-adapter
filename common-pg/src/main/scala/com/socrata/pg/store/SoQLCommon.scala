@@ -40,9 +40,7 @@ object SoQLSystemColumns {
     name.underlying.startsWith(":") && !name.underlying.startsWith(":@")
 }
 
-
-
-object PostgresUniverseCommon extends PostgresCommonSupport[SoQLType, SoQLValue]
+class PostgresUniverseCommon(val tablespace: String => Option[String]) extends PostgresCommonSupport[SoQLType, SoQLValue]
   with IndexSupport[SoQLType, SoQLValue] with FullTextSearch[SoQLType] {
 
   val typeContext = SoQLTypeContext
@@ -148,12 +146,12 @@ object PostgresUniverseCommon extends PostgresCommonSupport[SoQLType, SoQLValue]
   val executor: ExecutorService = Executors.newCachedThreadPool()
   val obfuscationKeyGenerator: () => Array[Byte] = generateObfuscationKey _
   val initialCounterValue: Long = 0L
-  val tablespace: (String) => Option[String] = {
-    _ => None
-  }
   val copyInProvider: (Connection, String, OutputStream => Unit) => Long = PostgresCopyIn
 
   val timingReport = NoopTimingReport
 }
 
-
+/**
+ * This instance of PostgresUniverseCommon ignore tablespace configuration.
+ */
+object PostgresUniverseCommon extends PostgresUniverseCommon((s: String) => None)

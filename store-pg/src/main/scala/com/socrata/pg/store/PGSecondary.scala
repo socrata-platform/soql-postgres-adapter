@@ -30,12 +30,18 @@ import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfi
 import com.socrata.pg.SecondaryBase
 import com.rojoma.simplearm.Managed
 import java.util.concurrent.{CountDownLatch, TimeUnit}
+import com.socrata.pg.config.StoreConfig
 
 /**
  * Postgres Secondary Store Implementation
  */
 class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] with SecondaryBase with Logging {
-  override val dsConfig = new DataSourceConfig(config, "database")
+
+  val storeConfig = new StoreConfig(config, "")
+
+  override val dsConfig =  storeConfig.database
+
+  val postgresUniverseCommon = new PostgresUniverseCommon(TablespaceFunction(storeConfig.tablespace))
 
   private val finished = new CountDownLatch(1)
 

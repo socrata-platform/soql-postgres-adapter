@@ -26,7 +26,7 @@ import com.socrata.pg.Schema._
 import com.socrata.pg.SecondaryBase
 import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity, SqlizerContext, Sqlizer}
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
-import com.socrata.pg.store.{PGSecondaryUniverse, SchemaUtil, PGSecondaryRowReader}
+import com.socrata.pg.store.{PostgresUniverseCommon, PGSecondaryUniverse, SchemaUtil, PGSecondaryRowReader}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.ColumnName
@@ -51,6 +51,8 @@ import com.socrata.http.server.util.StrongEntityTag
 
 class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase with Logging {
   val dsConfig: DataSourceConfig = null // unused
+
+  val postgresUniverseCommon = PostgresUniverseCommon
 
   private val routerSet = locally {
     import SimpleRouteContext._

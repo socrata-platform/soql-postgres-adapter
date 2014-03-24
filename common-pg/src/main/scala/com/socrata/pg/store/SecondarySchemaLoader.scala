@@ -27,10 +27,12 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
     if(columnInfos.isEmpty) return
     dropFullTextSearchIndex(columnInfos)
     val table = tableName(columnInfos)
+    val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
+      throw new Exception(table + " does not exist when creating search index.")))
     fullTextSearch.searchVector(columnInfos.map(repFor).toSeq) match {
       case Some(allColumnsVector) =>
         using(conn.createStatement()) { (stmt: Statement) =>
-          stmt.execute(s"CREATE INDEX idx_search_${table} on ${table} USING GIN ($allColumnsVector)")
+          stmt.execute(s"CREATE INDEX idx_search_${table} on ${table} USING GIN ($allColumnsVector) $tablespace")
         }
       case None => // nothing to do
     }
@@ -66,10 +68,12 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
 
   protected def createIndexes(columnInfos: Iterable[ColumnInfo[CT]]) {
     val table = tableName(columnInfos)
+    val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
+      throw new Exception(table + " does not exist when creating index.")))
     using(conn.createStatement()) { stmt =>
       for {
         ci <- columnInfos
-        createIndexSql <- repFor(ci).createIndex(table)
+        createIndexSql <- repFor(ci).createIndex(table, tablespace)
       } {
         sqlErrorHandler.guard(conn) {
           stmt.execute(createIndexSql)
@@ -79,4 +83,8 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
   }
 
   private def tableName(columnInfo: Iterable[ColumnInfo[CT]]) = columnInfo.head.copyInfo.dataTableName
+
+  private def tablespaceSqlPart(tablespace: Option[String]): String = {
+    tablespace.map(" TABLESPACE " + _).getOrElse("")
+  }
 }

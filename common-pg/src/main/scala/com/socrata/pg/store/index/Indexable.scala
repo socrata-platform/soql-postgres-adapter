@@ -7,7 +7,7 @@ import com.socrata.soql.types._
 
 trait Indexable[Type] { this: SqlColumnCommonRep[Type] =>
 
-  def createIndex(tableName: String): Option[String]
+  def createIndex(tableName: String, tablespace: String): Option[String]
 
   def dropIndex(tableName: String): Option[String]
 
@@ -15,7 +15,7 @@ trait Indexable[Type] { this: SqlColumnCommonRep[Type] =>
 
 trait NoIndex[Type] extends Indexable[Type] { this: SqlColumnCommonRep[Type] =>
 
-  def createIndex(tableName: String): Option[String] = None
+  def createIndex(tableName: String, tablespace: String): Option[String] = None
 
   def dropIndex(tableName: String): Option[String] = None
 
@@ -23,18 +23,18 @@ trait NoIndex[Type] extends Indexable[Type] { this: SqlColumnCommonRep[Type] =>
 
 trait TextIndexable[Type] extends Indexable[Type] { this: SqlColumnCommonRep[Type] =>
 
-  override def createIndex(tableName: String) : Option[String] = {
+  override def createIndex(tableName: String, tablespace: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
       // nl for order by col asc nulls lasts and col desc nulls first
       // nf for order by col asc nulls first and col desc nulls last
       // text_pattern_ops for like 'prefix%'
       s"""
-      CREATE INDEX idx_${tableName}_$phyCol on $tableName USING BTREE ($phyCol text_pattern_ops);
-      CREATE INDEX idx_${tableName}_u_$phyCol on $tableName USING BTREE (upper($phyCol) text_pattern_ops);
-      CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last);
-      CREATE INDEX idx_${tableName}_nf_$phyCol on $tableName USING BTREE ($phyCol nulls first);
-      CREATE INDEX idx_${tableName}_unl_$phyCol on $tableName USING BTREE (upper($phyCol) nulls last);
-      CREATE INDEX idx_${tableName}_unf_$phyCol on $tableName USING BTREE (upper($phyCol) nulls first)"""
+      CREATE INDEX idx_${tableName}_$phyCol on $tableName USING BTREE ($phyCol text_pattern_ops)$tablespace;
+      CREATE INDEX idx_${tableName}_u_$phyCol on $tableName USING BTREE (upper($phyCol) text_pattern_ops)$tablespace;
+      CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last)$tablespace;
+      CREATE INDEX idx_${tableName}_nf_$phyCol on $tableName USING BTREE ($phyCol nulls first)$tablespace;
+      CREATE INDEX idx_${tableName}_unl_$phyCol on $tableName USING BTREE (upper($phyCol) nulls last)$tablespace;
+      CREATE INDEX idx_${tableName}_unf_$phyCol on $tableName USING BTREE (upper($phyCol) nulls first)$tablespace"""
     }.mkString(";")
     Some(sql)
   }
@@ -55,11 +55,11 @@ trait TextIndexable[Type] extends Indexable[Type] { this: SqlColumnCommonRep[Typ
 
 trait BaseIndexable[Type] extends Indexable[Type] { this: SqlColumnCommonRep[Type] =>
 
-  override def createIndex(tableName: String): Option[String] = {
+  override def createIndex(tableName: String, tablespace: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
       s"""
-      CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last);
-      CREATE INDEX idx_${tableName}_nf_$phyCol on $tableName USING BTREE ($phyCol nulls first)"""
+      CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last)$tablespace;
+      CREATE INDEX idx_${tableName}_nf_$phyCol on $tableName USING BTREE ($phyCol nulls first)$tablespace"""
     }.mkString(";")
     Some(sql)
   }
@@ -74,9 +74,9 @@ trait BaseIndexable[Type] extends Indexable[Type] { this: SqlColumnCommonRep[Typ
   }
 }
 
-trait NumberLikeIndexable[Type] extends BaseIndexable[Type]  { this: SqlColumnCommonRep[Type] => }
+trait NumberLikeIndexable[Type] extends BaseIndexable[Type] { this: SqlColumnCommonRep[Type] => }
 
-trait TimestampLikeIndexable[Type] extends BaseIndexable[Type]  { this: SqlColumnCommonRep[Type] => }
+trait TimestampLikeIndexable[Type] extends BaseIndexable[Type] { this: SqlColumnCommonRep[Type] => }
 
 trait BooleanIndexable[Type] extends BaseIndexable[Type] { this: SqlColumnCommonRep[Type] => }
 
