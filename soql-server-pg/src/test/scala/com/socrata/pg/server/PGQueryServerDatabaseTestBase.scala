@@ -40,7 +40,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
           val schema = columnNameTypeMap
         }
         val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
-        val (qrySchema, dataVersion, lastModified, mresult) =
+        val (qrySchema, dataVersion, lastModified, etag, mresult) =
           for (dsInfo <- ds) yield {
             val qs = new QueryServer(dsInfo, caseSensitivity)
             qs.execQuery(pgu, copyInfo.datasetInfo, analysis, expectedRowCount.isDefined)

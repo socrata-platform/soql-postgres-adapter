@@ -46,6 +46,7 @@ import java.io.ByteArrayInputStream
 import javax.servlet.http.{HttpServletResponse, HttpServletRequest}
 import scala.language.existentials
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
+import com.socrata.http.server.util.StrongEntityTag
 
 
 class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase with Logging {
@@ -125,7 +126,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
               // Very weird separation of concerns between execQuery and streaming. Most likely we will
               // want yet-another-refactoring where much of execQuery is lifted out into this function.
               // This will significantly change the tests; however.
-              val (qrySchema, version, lastModified, results) = execQuery(pgu, datasetInfo, analysis, reqRowCount)
+              val (qrySchema, version, lastModified, etag, results) = execQuery(pgu, datasetInfo, analysis, reqRowCount)
+              ETag(etag)(resp)
               for (r <- results) yield {
                 CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, r.rowCount, version, lastModified)(resp)
               }
@@ -168,7 +170,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         systemToUserColumnMap,
         userToSystemColumnMap,
         qryReps)
-      (qrySchema, latest.dataVersion, latest.lastModified, results)
+      // ETag is a hash based on systemId_copyNumber_version
+      val etagContents = s"${datasetInfo.systemId.underlying.toString}_${latest.copyNumber.toString}_${latest.dataVersion.toString}"
+      val etag = StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
+      (qrySchema, latest.dataVersion, latest.lastModified, etag, results)
     }
   }
 
