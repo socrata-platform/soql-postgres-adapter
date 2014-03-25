@@ -18,7 +18,8 @@ object CommonPG {
       coordinatorlib,
       typesafeConfig,
       slf4j,
-      typesafeScalaLogging
+      typesafeScalaLogging,
+      rojomaJson
     )
   )
 }

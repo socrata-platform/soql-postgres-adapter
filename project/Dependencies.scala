@@ -20,6 +20,7 @@ object Dependencies {
     val typesafeConfig = "1.0.0"
     val dataCoordinator = "0.0.1-SNAPSHOT"
     val typesafeScalaLogging = "1.1.0"
+    val rojomaJson = "2.4.0"
   }
 
   val commonsCli = "commons-cli" % "commons-cli" % versions.commonsCli
@@ -57,4 +58,5 @@ object Dependencies {
 
   val typesafeScalaLogging = "com.typesafe" %% "scalalogging-slf4j" % versions.typesafeScalaLogging
 
+  val rojomaJson = "com.rojoma" %% "rojoma-json" % versions.rojomaJson
 }
