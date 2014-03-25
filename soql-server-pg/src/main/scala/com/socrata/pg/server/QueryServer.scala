@@ -171,7 +171,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         userToSystemColumnMap,
         qryReps)
       // ETag is a hash based on systemId_copyNumber_version
-      val etagContents = s"${datasetInfo.systemId.underlying.toString}_${latest.copyNumber.toString}_${latest.dataVersion.toString}"
+      val etagContents = s"${datasetInfo.systemId.underlying}_${latest.copyNumber}_${latest.dataVersion}"
       val etag = StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
       (qrySchema, latest.dataVersion, latest.lastModified, etag, results)
     }
