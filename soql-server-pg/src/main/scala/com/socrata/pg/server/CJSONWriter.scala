@@ -12,6 +12,8 @@ import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.types._
 import com.typesafe.scalalogging.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.joda.time.DateTime
+import org.joda.time.format.ISODateTimeFormat
 import java.io.{OutputStreamWriter, Writer}
 import javax.servlet.http.HttpServletResponse
 
@@ -20,6 +22,8 @@ import javax.servlet.http.HttpServletResponse
  *  [
  *    {
  *      approximate_row_count: x,
+ *      data_version: y,
+ *      last_modified: ISODateTime,
  *      locale: en,
  *      "pk"
  *      schema: [
@@ -36,11 +40,15 @@ object CJSONWriter {
   val logger: Logger =
     Logger(LoggerFactory getLogger getClass.getName)
 
+  val dateTimeFormat = ISODateTimeFormat.dateTime
+
   def writeCJson(datasetInfo: DatasetInfo,
                  qrySchema: OrderedMap[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]],
                  rowData:CloseableIterator[com.socrata.datacoordinator.Row[SoQLValue]],
                  reqRowCount: Boolean,
                  givenRowCount: Option[Long],
+                 dataVersion: Long,
+                 lastModified: DateTime,
                  locale: String = "en_US") = (r:HttpServletResponse) => {
 
     r.setContentType("application/json")
@@ -68,6 +76,8 @@ object CJSONWriter {
       rowCount.map { rc =>
         writer.write("\"approximate_row_count\": %s\n,".format(JNumber(rc).toString))
       }
+      writer.write("\"data_version\":%d\n,".format(dataVersion))
+      writer.write("\"last_modified\":\"%s\"\n,".format(dateTimeFormat.print(lastModified)))
       writer.write("\"locale\":\"%s\"".format(locale))
 
       val cjsonSortedSchema = qrySchema.values.toSeq.sortWith(_.userColumnId.underlying < _.userColumnId.underlying)

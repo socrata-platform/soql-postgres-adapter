@@ -125,9 +125,9 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
               // Very weird separation of concerns between execQuery and streaming. Most likely we will
               // want yet-another-refactoring where much of execQuery is lifted out into this function.
               // This will significantly change the tests; however.
-              val (qrySchema, results) = execQuery(pgu, datasetInfo, analysis, reqRowCount)
+              val (qrySchema, version, lastModified, results) = execQuery(pgu, datasetInfo, analysis, reqRowCount)
               for (r <- results) yield {
-                CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, r.rowCount)(resp)
+                CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, r.rowCount, version, lastModified)(resp)
               }
             case None =>
               NotFound(resp)
@@ -168,7 +168,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         systemToUserColumnMap,
         userToSystemColumnMap,
         qryReps)
-      (qrySchema, results)
+      (qrySchema, latest.dataVersion, latest.lastModified, results)
     }
   }
 
