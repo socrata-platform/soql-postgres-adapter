@@ -21,6 +21,7 @@ import com.socrata.datacoordinator.truth.metadata.ColumnInfo
 import com.socrata.datacoordinator.truth.metadata.DatasetInfo
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.socrata.datacoordinator.id.DatasetId
+import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
 
 
 /**
@@ -75,7 +76,7 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
   }
 
   def schemaLoader(logger: Logger[SoQLType, SoQLValue]) =
-    new SecondarySchemaLoader(conn, logger, repForIndex, tablespace, commonSupport)
+    new SecondarySchemaLoader(conn, logger, repForIndex, tablespace, commonSupport, RowSizeBufferSqlErrorContinue)
 
   def obfuscationKeyGenerator() = truthStoreDatasetInfo match {
     case Some(dsi) => dsi.obfuscationKey

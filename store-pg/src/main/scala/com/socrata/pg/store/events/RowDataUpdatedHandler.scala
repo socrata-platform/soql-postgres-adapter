@@ -5,6 +5,7 @@ import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.secondary.{Insert, Delete, Update, Operation}
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, DatasetCopyContext}
 import com.typesafe.scalalogging.slf4j.Logging
+import com.socrata.pg.error.RowSizeBufferSqlErrorResync
 
 
 case class RowDataUpdatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], truthCopyInfo: TruthCopyInfo, ops: Seq[Operation[SoQLValue]]) extends Logging {
@@ -22,5 +23,7 @@ case class RowDataUpdatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], 
         case Delete(sid) => loader.delete(sid, None)
       }
   }
-  loader.flush()
+  RowSizeBufferSqlErrorResync.guard(loader.conn) {
+    loader.flush()
+  }
 }

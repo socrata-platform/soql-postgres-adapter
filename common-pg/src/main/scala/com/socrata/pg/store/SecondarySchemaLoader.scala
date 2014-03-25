@@ -8,15 +8,14 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.pg.store.index.{FullTextSearch, Indexable}
 import com.typesafe.scalalogging.slf4j.Logging
 import java.sql.{Statement, Connection}
-import org.postgresql.util.PSQLException
+import com.socrata.pg.error.SqlErrorHandler
 
 class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
                                     repFor: ColumnInfo[CT] => SqlColumnRep[CT, CV] with Indexable[CT],
                                     tablespace: String => Option[String],
-                                    fullTextSearch: FullTextSearch[CT]) extends
+                                    fullTextSearch: FullTextSearch[CT],
+                                    sqlErrorHandler: SqlErrorHandler) extends
   RepBasedPostgresSchemaLoader[CT, CV](conn, dsLogger, repFor, tablespace) with Logging {
-
-  import SecondarySchemaLoader._
 
   override def addColumns(columnInfos: Iterable[ColumnInfo[CT]]) {
     if(columnInfos.isEmpty) return; // ok? copied from parent schema loader
@@ -72,29 +71,12 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
         ci <- columnInfos
         createIndexSql <- repFor(ci).createIndex(table)
       } {
-        val savepoint = Option(conn.setSavepoint())
-        try {
+        sqlErrorHandler.guard(conn) {
           stmt.execute(createIndexSql)
-        } catch {
-          case ex: PSQLException =>
-            ex.getServerErrorMessage.getMessage match {
-              case IndexRowSizeError(_, _, index) =>
-                // The offending index will not be constructed.  But it moves on.
-                logger.warn(s"index row size buffer exceeded $index")
-              case msg =>
-                throw ex
-            }
-            savepoint.foreach(conn.rollback(_))
-        } finally {
-          savepoint.foreach(conn.releaseSavepoint)
         }
       }
     }
   }
 
   private def tableName(columnInfo: Iterable[ColumnInfo[CT]]) = columnInfo.head.copyInfo.dataTableName
-}
-
-object SecondarySchemaLoader {
-  val IndexRowSizeError = """index row size (\d+) exceeds maximum (\d+) for index (.*)""".r
 }
