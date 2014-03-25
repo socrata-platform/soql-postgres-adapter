@@ -93,7 +93,7 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
       NullCache
     )
 
-    val (datasetId, _) = processMutationCreate(common, fixtureFile("mutate-create.json"))
+    val (datasetId, _, _, _) = processMutationCreate(common, fixtureFile("mutate-create.json"))
     processMutation(common, fixtureFile("mutate-publish.json"), datasetId)
     pushToSecondary(common, datasetId)
 
