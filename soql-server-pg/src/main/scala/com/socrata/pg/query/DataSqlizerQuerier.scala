@@ -40,14 +40,19 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
       }
 
     // get rows
-    val ParametricSql(sql, setParams) = toSql(analysis, this.dataTableName)
-    logger.debug("sql: {}", sql)
-    val stmt = conn.prepareStatement(sql) // To be closed on closeable iterator close.
-    setParams.zipWithIndex.foreach { case (setParamFn, idx) =>
-      setParamFn(Some(stmt), idx + 1)
+    if (analysis.selection.size > 0) {
+      val ParametricSql(sql, setParams) = toSql(analysis, this.dataTableName)
+      logger.debug("sql: {}", sql)
+      val stmt = conn.prepareStatement(sql) // To be closed on closeable iterator close.
+      setParams.zipWithIndex.foreach { case (setParamFn, idx) =>
+        setParamFn(Some(stmt), idx + 1)
+      }
+      val rs = stmt.executeQuery()
+      new ResultSetIt(rowCount, rs, decodeRow(querySchema))
+    } else {
+      logger.debug("Queried a dataset with no user columns")
+      EmptyIt
     }
-    val rs = stmt.executeQuery()
-    new ResultSetIt(rowCount, rs, decodeRow(querySchema))
   }
 
   def decodeRow(schema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]])(rs: ResultSet): com.socrata.datacoordinator.Row[CV] = {
@@ -92,6 +97,13 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
         rs.close()
       }
     }
+  }
+
+  object EmptyIt extends CloseableIterator[Nothing] with RowCount {
+    val rowCount = Some(0L)
+    def hasNext = false
+    def next() = throw new Exception("Called next() on an empty iterator")
+    def close() {}
   }
 }
 
