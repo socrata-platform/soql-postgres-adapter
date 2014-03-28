@@ -10,7 +10,7 @@ import com.socrata.pg.soql.ParametricSql
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
 import com.typesafe.scalalogging.slf4j.Logging
-import java.sql.{PreparedStatement, Connection, ResultSet}
+import java.sql.{SQLException, PreparedStatement, Connection, ResultSet}
 
 trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
   this: AbstractRepBasedDataSqlizer[CT, CV] =>
@@ -27,13 +27,13 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     // get row count
     val rowCount: Option[Long] =
       if (reqRowCount) {
-        val ParametricSql(sql, setParams) = toRowCountSql(analysis, this.dataTableName)
-        logger.debug("rowcount sql: {}", sql)
-        using(conn.prepareStatement(sql)) { stmt: PreparedStatement =>
-          setParams.zipWithIndex.foreach { case (setParamFn, idx) => setParamFn(Some(stmt), idx + 1) }
-          val rs = stmt.executeQuery()
-          rs.next()
-          Some(rs.getLong(1))
+        using(executeSql(conn, toRowCountSql(analysis, dataTableName))) { rs =>
+          try {
+            rs.next()
+            Some(rs.getLong(1))
+          } finally {
+            rs.getStatement.close()
+          }
         }
       } else {
         None
@@ -41,13 +41,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 
     // get rows
     if (analysis.selection.size > 0) {
-      val ParametricSql(sql, setParams) = toSql(analysis, this.dataTableName)
-      logger.debug("sql: {}", sql)
-      val stmt = conn.prepareStatement(sql) // To be closed on closeable iterator close.
-      setParams.zipWithIndex.foreach { case (setParamFn, idx) =>
-        setParamFn(Some(stmt), idx + 1)
-      }
-      val rs = stmt.executeQuery()
+      val rs = executeSql(conn, toSql(analysis, dataTableName))
+      // Statement and resultset are closed by the iterator.
       new ResultSetIt(rowCount, rs, decodeRow(querySchema))
     } else {
       logger.debug("Queried a dataset with no user columns")
@@ -65,6 +60,22 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
       i += rep.physColumns.length
     }
     row.freeze()
+  }
+
+  private def executeSql(conn: Connection, pSql: ParametricSql): ResultSet = {
+    try {
+      logger.debug("sql: {}", pSql.sql)
+      // Statement to be closed by caller
+      val stmt = conn.prepareStatement(pSql.sql)
+      pSql.setParams.zipWithIndex.foreach { case (setParamFn, idx) =>
+        setParamFn(Some(stmt), idx + 1)
+      }
+      stmt.executeQuery()
+    } catch {
+      case ex: SQLException =>
+        logger.error(s"SQL Exception on ${pSql}")
+        throw ex
+    }
   }
 
   class ResultSetIt(val rowCount: Option[Long], rs: ResultSet, toRow: (ResultSet) => com.socrata.datacoordinator.Row[CV])
