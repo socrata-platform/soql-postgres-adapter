@@ -8,6 +8,7 @@ import com.socrata.soql.typed.{NumberLiteral, StringLiteral, FunctionCall}
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
 import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
 import scala.util.parsing.input.NoPosition
+import com.socrata.soql.ast.SpecialFunctions
 
 object SqlFunctions {
 
@@ -96,7 +97,8 @@ object SqlFunctions {
     Count -> nary("count") _,
     CountStar -> formatCall("count(*)") _
     // TODO: Complete the function list.
-  )
+  ) ++ castIdentities.map(castIdentity => Tuple2(castIdentity, formatCall("%s") _))
+
 
   private val Wildcard = StringLiteral("%", SoQLText)(NoPosition)
 

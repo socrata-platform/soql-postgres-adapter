@@ -26,4 +26,13 @@ class SoQLConversionFunctionsTest extends SoQLTest {
   test("text::fixed_timestamp") { // ::fixed_timestamp is optional if it is a string literal that match a specific pattern.
     compareSoqlResult("select name, make, certified where certified between '2010-03-01' and '2010-03-01T18:11:23Z'::fixed_timestamp order by certified, name", "where-conv-txt2fix_ts.json")
   }
+
+  test("text::text") {
+    compareSoqlResult("select name, make::text as make_ident, code where code::number=14200 and upper(name) = 'KARMA'", "where-conv-txt2txt.json")
+  }
+
+  test("num::num") {
+    compareSoqlResult("select make, name, v_max::number as v_max_ident where make = 'APCO' order by name", "where-conv-num2num.json")
+  }
+
 }
