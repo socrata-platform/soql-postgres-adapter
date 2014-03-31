@@ -341,7 +341,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
   private def startTableDropper() = {
     val tableDropper = new Thread() {
-      setName("pg-sec-table-dropper")
+      setName(s"pg-sec-table-dropper-${storeConfig.database.host}")
       override def run() {
         while(!finished.await(60, TimeUnit.SECONDS)) {
           try {
