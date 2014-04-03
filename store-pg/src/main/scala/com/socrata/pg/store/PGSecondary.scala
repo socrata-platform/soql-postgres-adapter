@@ -16,6 +16,7 @@ import com.socrata.pg.store.events.SystemRowIdentifierChangedHandler
 import com.socrata.datacoordinator.secondary.RowIdentifierSet
 import com.socrata.datacoordinator.secondary.ColumnCreated
 import com.socrata.datacoordinator.secondary.RowIdentifierCleared
+import com.socrata.pg.config.StoreConfig
 import com.socrata.pg.store.events.VersionColumnChangedHandler
 import com.socrata.pg.store.events.WorkingCopyCreatedHandler
 import com.socrata.datacoordinator.secondary.SystemRowIdentifierChanged
@@ -26,11 +27,10 @@ import com.socrata.datacoordinator.secondary.RowDataUpdated
 import com.socrata.datacoordinator.secondary.ResyncSecondaryException
 import com.socrata.datacoordinator.secondary.ColumnRemoved
 import com.socrata.pg.store.events.WorkingCopyPublishedHandler
-import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
-import com.socrata.pg.SecondaryBase
+import com.socrata.pg.{Version, SecondaryBase}
+import com.rojoma.json.util.JsonUtil
 import com.rojoma.simplearm.Managed
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-import com.socrata.pg.config.StoreConfig
 
 /**
  * Postgres Secondary Store Implementation
@@ -40,6 +40,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   val storeConfig = new StoreConfig(config, "")
 
   override val dsConfig =  storeConfig.database
+
+  logger.info(JsonUtil.renderJson(Version("store-pg")))
 
   val postgresUniverseCommon = new PostgresUniverseCommon(TablespaceFunction(storeConfig.tablespace))
 

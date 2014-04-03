@@ -23,7 +23,7 @@ import com.socrata.http.server._
 import com.socrata.pg.query.{DataSqlizerQuerier, RowReaderQuerier}
 import com.socrata.pg.server.config.QueryServerConfig
 import com.socrata.pg.Schema._
-import com.socrata.pg.SecondaryBase
+import com.socrata.pg.{Version, SecondaryBase}
 import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity, SqlizerContext, Sqlizer}
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.store.{PostgresUniverseCommon, PGSecondaryUniverse, SchemaUtil, PGSecondaryRowReader}
@@ -73,12 +73,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   }
 
   object VersionResource extends SimpleResource {
-    val version = for {
-      stream <- managed(getClass.getClassLoader.getResourceAsStream("soql-pg-version.json"))
-      reader <- managed(new java.io.InputStreamReader(stream, StandardCharsets.UTF_8))
-    } yield com.rojoma.json.io.JsonReader.fromReader(reader)
-
-    val response = OK ~> ContentType("application/json; charset=utf-8") ~> Content(version.toString)
+    val response = OK ~> ContentType("application/json; charset=utf-8") ~> Content(JsonUtil.renderJson(Version("soql-server-pg")))
 
     override val get = { req: HttpServletRequest => response }
   }
