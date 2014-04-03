@@ -40,7 +40,8 @@ object SoQLSystemColumns {
     name.underlying.startsWith(":") && !name.underlying.startsWith(":@")
 }
 
-class PostgresUniverseCommon(val tablespace: String => Option[String]) extends PostgresCommonSupport[SoQLType, SoQLValue]
+class PostgresUniverseCommon(val tablespace: String => Option[String],
+                             val copyInProvider: (Connection, String, OutputStream => Unit) => Long) extends PostgresCommonSupport[SoQLType, SoQLValue]
   with IndexSupport[SoQLType, SoQLValue] with FullTextSearch[SoQLType] {
 
   val typeContext = SoQLTypeContext
@@ -146,12 +147,12 @@ class PostgresUniverseCommon(val tablespace: String => Option[String]) extends P
   val executor: ExecutorService = Executors.newCachedThreadPool()
   val obfuscationKeyGenerator: () => Array[Byte] = generateObfuscationKey _
   val initialCounterValue: Long = 0L
-  val copyInProvider: (Connection, String, OutputStream => Unit) => Long = PostgresCopyIn
-
   val timingReport = NoopTimingReport
 }
 
 /**
- * This instance of PostgresUniverseCommon ignore tablespace configuration.
+ * This instance of PostgresUniverseCommon ignores tablespace configuration.
+ * It also ignores PG connection specific copyIn that is needed by secondary watcher.
+ * Look for C3P0WrappedPostgresCopyIn and DatasourceFromConfig for details.
  */
-object PostgresUniverseCommon extends PostgresUniverseCommon((s: String) => None)
+object PostgresUniverseCommon extends PostgresUniverseCommon((s: String) => None, PostgresCopyIn)

@@ -31,6 +31,7 @@ import com.socrata.pg.{Version, SecondaryBase}
 import com.rojoma.json.util.JsonUtil
 import com.rojoma.simplearm.Managed
 import java.util.concurrent.{CountDownLatch, TimeUnit}
+import com.socrata.datacoordinator.common.DataSourceFromConfig
 
 /**
  * Postgres Secondary Store Implementation
@@ -43,7 +44,10 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
   logger.info(JsonUtil.renderJson(Version("store-pg")))
 
-  val postgresUniverseCommon = new PostgresUniverseCommon(TablespaceFunction(storeConfig.tablespace))
+  val postgresUniverseCommon = for (dsInfo <- DataSourceFromConfig(dsConfig)) yield {
+    new PostgresUniverseCommon(TablespaceFunction(storeConfig.tablespace), dsInfo.copyIn)
+  }
+
 
   private val finished = new CountDownLatch(1)
 
