@@ -354,7 +354,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       override def run() {
         while(!finished.await(60, TimeUnit.SECONDS)) {
           try {
-            withPgu(None) { pgu =>
+            withPgu(dsInfo, None) { pgu =>
               while(finished.getCount > 0 && pgu.tableCleanup.cleanupPendingDrops()) {
                 pgu.commit()
               }
