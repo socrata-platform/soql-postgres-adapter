@@ -1,24 +1,23 @@
 package com.socrata.pg.store
 
+import com.mchange.v2.c3p0.DataSources
+import com.rojoma.json.util.JsonUtil
+import com.rojoma.simplearm.Managed
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.typesafe.config.Config
-import com.socrata.pg.store.events._
-import com.rojoma.simplearm.util._
+import com.socrata.datacoordinator.common.DataSourceConfig
+import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, _}
-import com.socrata.datacoordinator.id.{RowId, UserColumnId, DatasetId}
-import com.typesafe.scalalogging.slf4j.Logging
+import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, LifecycleStage => TruthLifecycleStage, ColumnInfo, DatasetCopyContext}
 import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo}
 import com.socrata.datacoordinator.secondary.VersionColumnChanged
 import com.socrata.datacoordinator.secondary.WorkingCopyCreated
-import com.socrata.pg.store.events.SystemRowIdentifierChangedHandler
 import com.socrata.datacoordinator.secondary.RowIdentifierSet
 import com.socrata.datacoordinator.secondary.ColumnCreated
 import com.socrata.datacoordinator.secondary.RowIdentifierCleared
 import com.socrata.pg.config.StoreConfig
-import com.socrata.pg.store.events.VersionColumnChangedHandler
-import com.socrata.pg.store.events.WorkingCopyCreatedHandler
+import com.socrata.pg.store.events._
 import com.socrata.datacoordinator.secondary.SystemRowIdentifierChanged
 import com.socrata.datacoordinator.secondary.SnapshotDropped
 import com.socrata.datacoordinator.secondary.DatasetInfo
@@ -26,12 +25,16 @@ import com.socrata.pg.store.events.ColumnCreatedHandler
 import com.socrata.datacoordinator.secondary.RowDataUpdated
 import com.socrata.datacoordinator.secondary.ResyncSecondaryException
 import com.socrata.datacoordinator.secondary.ColumnRemoved
+import com.socrata.datacoordinator.truth.universe.sql.{PostgresCopyIn, C3P0WrappedPostgresCopyIn}
 import com.socrata.pg.store.events.WorkingCopyPublishedHandler
 import com.socrata.pg.{Version, SecondaryBase}
-import com.rojoma.json.util.JsonUtil
-import com.rojoma.simplearm.Managed
+import com.socrata.thirdparty.typesafeconfig.Propertizer
+import com.typesafe.config.Config
+import com.typesafe.scalalogging.slf4j.Logging
+import java.io.Closeable
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-import com.socrata.datacoordinator.common.DataSourceFromConfig
+import org.postgresql.ds.PGSimpleDataSource
+
 
 /**
  * Postgres Secondary Store Implementation
@@ -44,10 +47,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
   logger.info(JsonUtil.renderJson(Version("store-pg")))
 
-  val postgresUniverseCommon = for (dsInfo <- DataSourceFromConfig(dsConfig)) yield {
-    new PostgresUniverseCommon(TablespaceFunction(storeConfig.tablespace), dsInfo.copyIn)
-  }
+  private val dsInfo = dataSourceFromConfig(dsConfig)
 
+  val postgresUniverseCommon = new PostgresUniverseCommon(TablespaceFunction(storeConfig.tablespace), dsInfo.copyIn)
 
   private val finished = new CountDownLatch(1)
 
@@ -58,6 +60,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     logger.debug("shutdown")
     finished.countDown()
     tableDropper.join()
+    dsInfo.close()
   }
 
   // Return true to get all the events from the stream of updates from the data-coordinator
@@ -73,7 +76,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   def dropDataset(datasetInternalName: String, cookie: Secondary.Cookie) {
     // last thing you will get for a dataset.
     logger.debug(s"dropDataset '${datasetInternalName}' (cookie : ${cookie}) ")
-    withPgu(None) { pgu =>
+    withPgu(dsInfo, None) { pgu =>
       val copyInfo = truthCopyInfo(pgu, datasetInternalName)
       val datasetId = copyInfo.datasetInfo.systemId
       pgu.datasetDropper.dropDataset(datasetId)
@@ -82,7 +85,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   }
 
   def currentVersion(datasetInternalName: String, cookie: Secondary.Cookie): Long = {
-    withPgu(truthStoreDatasetInfo = None) { pgu =>
+    withPgu(dsInfo, None) { pgu =>
       _currentVersion(pgu, datasetInternalName, cookie)
     }
   }
@@ -98,7 +101,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   }
 
   def currentCopyNumber(datasetInternalName: String, cookie: Secondary.Cookie): Long = {
-    withPgu(truthStoreDatasetInfo = None) { pgu =>
+    withPgu(dsInfo, None) { pgu =>
       _currentCopyNumber(pgu, datasetInternalName, cookie)
     }
   }
@@ -138,7 +141,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
 
   def version(datasetInfo: DatasetInfo, dataVersion: Long, cookie: Secondary.Cookie, events: Iterator[Event[SoQLType, SoQLValue]]): Secondary.Cookie = {
-    withPgu(Some(datasetInfo)) { pgu =>
+    withPgu(dsInfo, Some(datasetInfo)) { pgu =>
      val cookieOut = _version(pgu, datasetInfo, dataVersion, cookie, events)
      pgu.commit()
      cookieOut
@@ -278,7 +281,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     logger.info("resync (datasetInfo: {}, secondaryCopyInfo: {}, schema: {}, cookie: {})",
       datasetInfo, secondaryCopyInfo, schema, cookie)
 
-    withPgu(Some(datasetInfo)) { pgu =>
+    withPgu(dsInfo, Some(datasetInfo)) { pgu =>
       val cookieOut = _resync(pgu, datasetInfo, secondaryCopyInfo, schema, cookie, rows)
       pgu.commit()
       cookieOut
@@ -365,5 +368,29 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
     tableDropper.start()
     tableDropper
+  }
+
+  private def dataSourceFromConfig(config: DataSourceConfig): DSInfo with Closeable = {
+    val dataSource = new PGSimpleDataSource
+    dataSource.setServerName(config.host)
+    dataSource.setPortNumber(config.port)
+    dataSource.setDatabaseName(config.database)
+    dataSource.setUser(config.username)
+    dataSource.setPassword(config.password)
+    dataSource.setApplicationName(config.applicationName)
+    config.poolOptions match {
+      case Some(poolOptions) =>
+        val overrideProps = Propertizer("", poolOptions)
+        val pooled = DataSources.pooledDataSource(dataSource, null, overrideProps)
+        new DSInfo(pooled, C3P0WrappedPostgresCopyIn) with Closeable {
+          def close() {
+            DataSources.destroy(pooled)
+          }
+        }
+      case None =>
+        new DSInfo(dataSource, PostgresCopyIn) with Closeable {
+          def close() {}
+        }
+    }
   }
 }
