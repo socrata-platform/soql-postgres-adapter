@@ -77,10 +77,15 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     // last thing you will get for a dataset.
     logger.debug(s"dropDataset '${datasetInternalName}' (cookie : ${cookie}) ")
     withPgu(dsInfo, None) { pgu =>
-      val copyInfo = truthCopyInfo(pgu, datasetInternalName)
-      val datasetId = copyInfo.datasetInfo.systemId
-      pgu.datasetDropper.dropDataset(datasetId)
-      pgu.commit()
+      truthCopyInfo(pgu, datasetInternalName) match {
+        case Some(copyInfo) =>
+          val datasetId = copyInfo.datasetInfo.systemId
+          pgu.datasetDropper.dropDataset(datasetId)
+          pgu.commit()
+        case None =>
+          // TODO: Clean possible orphaned dataset internal name map
+          logger.warn("drop dataset called but cannot find a copy {}", datasetInternalName)
+      }
     }
   }
 
@@ -97,7 +102,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     // What happens when this is wrong? Almost certainly should turn into a resync
     logger.debug(s"currentVersion '${datasetInternalName}', (cookie: ${cookie})")
 
-     truthCopyInfo(pgu, datasetInternalName).dataVersion
+    truthCopyInfo(pgu, datasetInternalName) match {
+      case Some(copy) => copy.dataVersion
+      case None =>
+        logger.warn("current version called but cannot find a copy {}", datasetInternalName)
+        0
+    }
   }
 
   def currentCopyNumber(datasetInternalName: String, cookie: Secondary.Cookie): Long = {
@@ -120,7 +130,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     // What happens if this is wrong? almost certainly it would turn into a resync
     logger.debug(s"currentCopyNumber '${datasetInternalName}' (cookie: ${cookie})")
 
-    truthCopyInfo(pgu, datasetInternalName).copyNumber
+    truthCopyInfo(pgu, datasetInternalName) match {
+      case Some(copy) => copy.copyNumber
+      case None =>
+        logger.warn("current copy number called but cannot find a copy {}", datasetInternalName)
+        0
+    }
   }
 
   // Currently there are zero-or-more snapshots, which are what you get when you publish a working copy when there is
@@ -351,11 +366,13 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     cookie
   }
 
-  private def truthCopyInfo(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInternalName: String): TruthCopyInfo = {
-    val datasetId: DatasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetInternalName).get
-
-    val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
-    pgu.datasetMapReader.latest(truthDatasetInfo)
+  private def truthCopyInfo(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInternalName: String): Option[TruthCopyInfo] = {
+    for {
+      datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetInternalName)
+      truthDatasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
+    } yield {
+      pgu.datasetMapReader.latest(truthDatasetInfo)
+    }
   }
 
   private def startTableDropper() = {
