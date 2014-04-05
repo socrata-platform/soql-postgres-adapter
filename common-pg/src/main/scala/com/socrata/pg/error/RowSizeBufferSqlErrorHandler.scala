@@ -35,11 +35,17 @@ object RowSizeBufferSqlErrorHandler extends Logging {
             savepoint.foreach(conn.rollback(_))
             exceptionClass.foreach(exClass => throw exClass.getDeclaredConstructor(classOf[String]).newInstance(msg))
           case None =>
+            logger.info("got some PSQL exception, trying to roll back...", ex)
             savepoint.foreach(conn.rollback(_))
             throw ex
         }
     } finally {
-      savepoint.foreach(conn.releaseSavepoint)
+      try {
+        savepoint.foreach(conn.releaseSavepoint)
+      } catch {
+        case ex: PSQLException =>
+          logger.error("release savepoint", ex)
+      }
     }
   }
 
