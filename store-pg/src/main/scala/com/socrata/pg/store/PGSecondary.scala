@@ -295,26 +295,36 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
               cookie: Secondary.Cookie,
               rows: Managed[Iterator[ColumnIdMap[SoQLValue]]]): Secondary.Cookie =
   {
-    // create the dataset if it doesn't exist already
-    val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName).getOrElse {
-      val newDatasetId = pgu.secondaryDatasetMapWriter.createDatasetOnly(secondaryDatasetInfo.localeName)
-      pgu.secondaryDatasetMapWriter.createInternalNameMapping(secondaryDatasetInfo.internalName, newDatasetId)
-      newDatasetId
+    val truthCopyInfo = pgu.secondaryDatasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName) match {
+      case None =>
+        // The very top record - dataset_internal_name_map is missing.  Start everything new from new dataset id.
+        // To use this resync, run this sql:
+        //   UPDATE truth.secondary_manifest SET broken_at = null, latest_secondary_data_version = 0, latest_secondary_lifecycle_stage = 'Unpublished' WHERE dataset_system_id = ? -- 20
+        //   DELETE from falth.dataset_internal_name_map WHERE dataset_internal_name = ? -- 'alpha.20'
+        logger.info("re-creating secondary dataset with new id")
+        val newCopyInfo = pgu.datasetMapWriter.create(secondaryDatasetInfo.localeName)
+        val newDatasetId = newCopyInfo.datasetInfo.systemId
+        logger.info("new secondary dataset {} {}", secondaryDatasetInfo.internalName, newDatasetId.toString)
+        pgu.secondaryDatasetMapWriter.createInternalNameMapping(secondaryDatasetInfo.internalName, newDatasetId)
+        newCopyInfo
+      case Some(dsId) =>
+        // Find the very top record - dataset_internal_name_map.
+        // Delete and recreate the copy with the same dataset id.
+        // To use this resync, run this sql:
+        //   UPDATE truth.secondary_manifest SET broken_at = null, latest_secondary_data_version = 0, latest_secondary_lifecycle_stage = 'Unpublished' WHERE dataset_system_id = ? -- 20
+        pgu.datasetMapReader.datasetInfo(dsId).map { truthDatasetInfo =>
+          pgu.datasetMapWriter.copyNumber(truthDatasetInfo, secondaryCopyInfo.copyNumber).map { copyInfo =>
+            logger.info(s"delete existing copy so that a new one can be created with the same ids ${truthDatasetInfo.systemId} ${secondaryCopyInfo.copyNumber}")
+            pgu.secondaryDatasetMapWriter.deleteCopy(copyInfo)
+            val newCopyInfo = pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, copyInfo.systemId, copyInfo.copyNumber,
+              TruthLifecycleStage.valueOf(copyInfo.lifecycleStage.toString),
+              copyInfo.dataVersion)
+            newCopyInfo
+          }.getOrElse(throw new Exception(s"Cannot find existing copy info.  You may manually delete dataset_internal_name_map record and start fresh ${secondaryDatasetInfo.internalName} ${dsId}"))
+        }.getOrElse(throw new Exception(s"Cannot find existing dataset info.  You may manually delete dataset_internal_name_map record and start fresh ${secondaryDatasetInfo.internalName} ${dsId}"))
     }
 
-    val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
-
-    // delete the copy if it exists already
-    pgu.datasetMapReader.copyNumber(truthDatasetInfo, secondaryCopyInfo.copyNumber).foreach(
-      pgu.secondaryDatasetMapWriter.deleteCopy(_)
-    )
-
-    val truthCopyInfo =  pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo,
-        secondaryCopyInfo.systemId,
-        secondaryCopyInfo.copyNumber,
-        TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
-        secondaryCopyInfo.dataVersion)
-
+    // TODO figure out best way to avoid creating unused log and audit tables.
     val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
     sLoader.create(truthCopyInfo)
 
@@ -334,7 +344,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       val rowId = pgu.commonSupport.typeContext.makeSystemIdFromValue(row.get(sidColumnInfo.systemId).get)
       loader.insert(rowId, row)
     }
-    loader.flush
+    loader.flush()
 
     sLoader.optimize(truthSchema.values)
 
