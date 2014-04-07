@@ -4,6 +4,7 @@ import com.rojoma.simplearm.util._
 import java.sql.{Statement, DriverManager, Connection}
 import org.postgresql.util.PSQLException
 import org.scalatest.{BeforeAndAfterAll, Matchers, FunSuite}
+import com.socrata.pg.store.SecondarySchemaLoader
 
 
 class RowSizeBufferSqlErrorHandlerTest extends FunSuite with Matchers with BeforeAndAfterAll {
@@ -45,6 +46,29 @@ class RowSizeBufferSqlErrorHandlerTest extends FunSuite with Matchers with Befor
         resultSet.getString(1) should be ("two")
         resultSet.next() should be (true)
         resultSet.getString(1) should be ("can insert after row size buffer error")
+        conn.commit()
+      }
+    }
+  }
+
+  test("row is too big") {
+    val range = Seq.range(1, 1000)
+    val createColumns = range.map(n => s"c$n text").mkString(",")
+    val allColumns = range.map(n => s"coalesce(c$n)").mkString("to_tsvector('english', ", " || ' ' || ", ")")
+    val fullTextIndex = s"CREATE INDEX idx_search_t2 on t2 USING GIN ($allColumns)"
+    withConnection(dbName) { conn =>
+      using(conn.createStatement()) { stmt: Statement =>
+        conn.setAutoCommit(false)
+        stmt.execute(s"create table t2 ($createColumns)")
+        val thrown = intercept[PSQLException] {
+          stmt.execute(fullTextIndex)
+        }
+        thrown.getSQLState should be ("54000")
+        conn.rollback()
+        stmt.execute(s"create table t2 ($createColumns)")
+        SecondarySchemaLoader.fullTextIndexCreateSqlErrorHandler.guard(conn) {
+          stmt.execute(fullTextIndex)
+        }
         conn.commit()
       }
     }

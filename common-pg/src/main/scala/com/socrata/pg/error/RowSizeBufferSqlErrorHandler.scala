@@ -21,7 +21,7 @@ object RowSizeBufferSqlErrorHandler extends Logging {
   /**
    * Catch index row size buffer exception and optionally rethrow another exception or just ignore it.
    */
-  def guard[E <: Exception](conn: Connection, exceptionClass: Option[Class[E]])(f : => Unit) = {
+  def guard[E <: Exception](conn: Connection, exceptionClass: Option[Class[E]])(f : => Unit) {
 
     val savepoint = Option(conn.setSavepoint())
     try {

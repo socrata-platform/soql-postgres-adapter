@@ -6,9 +6,9 @@ import com.socrata.datacoordinator.truth.loader.Logger
 import com.socrata.datacoordinator.truth.metadata.ColumnInfo
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.pg.store.index.{FullTextSearch, Indexable}
+import com.socrata.pg.error.{SqlErrorPattern, SqlErrorHandler, SqlErrorHelper}
 import com.typesafe.scalalogging.slf4j.Logging
 import java.sql.{Statement, Connection}
-import com.socrata.pg.error.SqlErrorHandler
 
 class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
                                     repFor: ColumnInfo[CT] => SqlColumnRep[CT, CV] with Indexable[CT],
@@ -32,7 +32,9 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
     fullTextSearch.searchVector(columnInfos.map(repFor).toSeq) match {
       case Some(allColumnsVector) =>
         using(conn.createStatement()) { (stmt: Statement) =>
-          stmt.execute(s"CREATE INDEX idx_search_${table} on ${table} USING GIN ($allColumnsVector) $tablespace")
+          SecondarySchemaLoader.fullTextIndexCreateSqlErrorHandler.guard(stmt) {
+            stmt.execute(s"CREATE INDEX idx_search_${table} on ${table} USING GIN ($allColumnsVector) $tablespace")
+          }
         }
       case None => // nothing to do
     }
@@ -86,5 +88,18 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
 
   private def tablespaceSqlPart(tablespace: Option[String]): String = {
     tablespace.map(" TABLESPACE " + _).getOrElse("")
+  }
+}
+
+object SecondarySchemaLoader {
+
+  val fullTextIndexCreateSqlErrorHandler = new SqlErrorHandler {
+
+    // Example: ERROR: row is too big: size 17880, maximum size 8160
+    private val rowIsTooBig = new SqlErrorHelper(SqlErrorPattern("54000", "^row is too big".r))
+
+    def guard(conn: Connection)(f: => Unit) {
+      rowIsTooBig.guard(conn, None)(f)
+    }
   }
 }
