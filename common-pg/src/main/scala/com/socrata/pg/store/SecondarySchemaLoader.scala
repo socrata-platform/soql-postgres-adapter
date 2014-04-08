@@ -1,10 +1,10 @@
 package com.socrata.pg.store
 
 import com.rojoma.simplearm.util._
-import com.socrata.datacoordinator.truth.loader.sql.RepBasedPostgresSchemaLoader
+import com.socrata.datacoordinator.truth.loader.sql.{SqlLogger, RepBasedPostgresSchemaLoader}
 import com.socrata.datacoordinator.truth.loader.Logger
-import com.socrata.datacoordinator.truth.metadata.ColumnInfo
-import com.socrata.datacoordinator.truth.sql.SqlColumnRep
+import com.socrata.datacoordinator.truth.metadata.{CopyInfo, ColumnInfo}
+import com.socrata.datacoordinator.truth.sql.{DatabasePopulator, SqlColumnRep}
 import com.socrata.pg.store.index.{FullTextSearch, Indexable}
 import com.socrata.pg.error.{SqlErrorPattern, SqlErrorHandler, SqlErrorHelper}
 import com.typesafe.scalalogging.slf4j.Logging
@@ -21,6 +21,22 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
     if(columnInfos.isEmpty) return; // ok? copied from parent schema loader
     super.addColumns(columnInfos)
     createIndexes(columnInfos)
+  }
+
+  override def create(copyInfo: CopyInfo) {
+    // we don't create audit or log tables because we don't need them.
+
+    // TODO: this means we no longer keep copies of a dataset in the same tablespace.
+    // This is a moot point right now, because we only support one copy.  When and if
+    // we do so, we may need another solution for keeping copies in the same tablespace
+    // depending on what tablespace/storage model we may adopt.
+    val ts: Option[String] =
+      tablespace(copyInfo.dataTableName)
+
+    using(conn.createStatement()) { stmt =>
+      stmt.execute("CREATE TABLE " + copyInfo.dataTableName + " ()" + tablespaceSqlPart(ts))
+    }
+    dsLogger.workingCopyCreated(copyInfo)
   }
 
   def createFullTextSearchIndex(columnInfos: Iterable[ColumnInfo[CT]]) {
