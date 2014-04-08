@@ -14,7 +14,7 @@ import java.sql.Connection
 import java.io.{File, OutputStream}
 import com.socrata.datacoordinator.util.NoopTimingReport
 import com.socrata.soql.types.obfuscation.CryptProvider
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{FiniteDuration, Duration}
 import com.socrata.datacoordinator.truth.sql.DatasetMapLimits
 import com.socrata.pg.store.index.{FullTextSearch, IndexSupport, SoQLIndexableRep}
 
@@ -53,6 +53,10 @@ class PostgresUniverseCommon(val tablespace: String => Option[String],
   protected val SearchableTypes: Set[SoQLType] = Set(SoQLText, SoQLObject, SoQLArray)
 
   def tmpDir = File.createTempFile("pg-store", "pg").getParentFile
+  // unused
+  def logTableCleanupDeleteEvery: FiniteDuration = ???
+  def logTableCleanupDeleteOlderThan: FiniteDuration = ???
+
   val SystemColumns = SoQLSystemColumns
 
   val newRowCodec = newRowLogCodec _
