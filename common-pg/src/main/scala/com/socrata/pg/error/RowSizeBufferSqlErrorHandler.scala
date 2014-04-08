@@ -50,9 +50,14 @@ object RowSizeBufferSqlErrorHandler extends Logging {
   }
 
   def isIndexRowSizeError(ex: PSQLException): Option[String] = {
-    ex.getServerErrorMessage.getMessage match {
-      case IndexRowSizeError(_, _, index) =>
-        Some(index)
+    ex.getSQLState match {
+      case "54000" =>
+        ex.getServerErrorMessage.getMessage match {
+          case IndexRowSizeError(_, _, index) =>
+            Some(index)
+          case _ =>
+            None
+        }
       case _ =>
         None
     }
