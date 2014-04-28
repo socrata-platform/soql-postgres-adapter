@@ -2,9 +2,9 @@ package com.socrata.pg.server
 
 import com.rojoma.simplearm.util._
 import com.rojoma.json.util.JsonUtil
-import com.netflix.curator.x.discovery.{ServiceDiscoveryBuilder, ServiceInstanceBuilder}
-import com.netflix.curator.framework.CuratorFrameworkFactory
-import com.netflix.curator.retry
+import org.apache.curator.x.discovery.{ServiceDiscoveryBuilder, ServiceInstanceBuilder}
+import org.apache.curator.framework.CuratorFrameworkFactory
+import org.apache.curator.retry
 import com.rojoma.json.ast.JString
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
 import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}

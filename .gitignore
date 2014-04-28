@@ -11,3 +11,8 @@
 /**/*iml
 /**/*class
 /**/target/
+/target/
+/project/target/
+/project/project/target/
+/.idea/
+/.idea_modules/
