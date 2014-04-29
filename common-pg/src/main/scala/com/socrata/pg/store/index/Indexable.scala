@@ -26,22 +26,19 @@ trait TextIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
 
   override def createIndex(tableName: String, tablespace: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
-      // nl for order by col asc nulls lasts and col desc nulls first
-      // nf for order by col asc nulls first and col desc nulls last
-      // text_pattern_ops for like 'prefix%'
+      // nl for order by col asc nulls lasts and col desc nulls first and range scans
+      // text_pattern_ops for like 'prefix%' or equality
       s"""
-      CREATE INDEX idx_${tableName}_$phyCol on $tableName USING BTREE ($phyCol text_pattern_ops)$tablespace;
       CREATE INDEX idx_${tableName}_u_$phyCol on $tableName USING BTREE (upper($phyCol) text_pattern_ops)$tablespace;
       CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last)$tablespace;
-      CREATE INDEX idx_${tableName}_nf_$phyCol on $tableName USING BTREE ($phyCol nulls first)$tablespace;
-      CREATE INDEX idx_${tableName}_unl_$phyCol on $tableName USING BTREE (upper($phyCol) nulls last)$tablespace;
-      CREATE INDEX idx_${tableName}_unf_$phyCol on $tableName USING BTREE (upper($phyCol) nulls first)$tablespace"""
+      CREATE INDEX idx_${tableName}_unl_$phyCol on $tableName USING BTREE (upper($phyCol) nulls last)$tablespace"""
     }.mkString(";")
     Some(sql)
   }
 
   def dropIndex(tableName: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
+      // we used to create nulls first indexes, so drop those if exist
       s"""
       DROP INDEX IF EXISTS idx_${tableName}_$phyCol;
       DROP INDEX IF EXISTS idx_${tableName}_u_$phyCol;
@@ -59,14 +56,14 @@ trait BaseIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
   override def createIndex(tableName: String, tablespace: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
       s"""
-      CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last)$tablespace;
-      CREATE INDEX idx_${tableName}_nf_$phyCol on $tableName USING BTREE ($phyCol nulls first)$tablespace"""
+      CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last)$tablespace"""
     }.mkString(";")
     Some(sql)
   }
 
   def dropIndex(tableName: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
+      // we used to create a nulls first index, so also drop it if exists
       s"""
       DROP INDEX IF EXISTS idx_${tableName}_nl_$phyCol;
       DROP INDEX IF EXISTS idx_${tableName}_nf_$phyCol"""
