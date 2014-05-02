@@ -46,7 +46,8 @@ import java.io.ByteArrayInputStream
 import javax.servlet.http.{HttpServletResponse, HttpServletRequest}
 import scala.language.existentials
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
-import com.socrata.http.server.util.StrongEntityTag
+import com.socrata.http.server.util.{Precondition, EntityTag, StrongEntityTag}
+import com.socrata.http.server.util.Precondition.{FailedBecauseMatch, Passed}
 
 
 class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase with Logging {
@@ -97,6 +98,12 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     override val post = query _
   }
 
+  def etagFromCopy(copy: CopyInfo): EntityTag = {
+    // ETag is a hash based on systemId_copyNumber_version
+    val etagContents = s"${copy.datasetInfo.systemId.underlying}_${copy.copyNumber}_${copy.dataVersion}"
+    StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
+  }
+
   def query(req: HttpServletRequest): HttpServletResponse => Unit =  {
 
     val datasetId = req.getParameter("dataset")
@@ -106,7 +113,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserializer(analysisStream)
     val reqRowCount = Option(req.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     logger.info("Performing query on dataset " + datasetId)
-    streamQueryResults(analysis, datasetId, reqRowCount)
+    streamQueryResults(analysis, datasetId, reqRowCount, req.precondition)
   }
 
   /**
@@ -114,19 +121,34 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
    * passed back to SocrataHttp so the transaction can be maintained through the duration of the
    * streaming.
    */
-  def streamQueryResults(analysis: SoQLAnalysis[UserColumnId, SoQLType], datasetId:String, reqRowCount: Boolean)(resp:HttpServletResponse) = {
+  def streamQueryResults(
+    analysis: SoQLAnalysis[UserColumnId, SoQLType],
+    datasetId:String,
+    reqRowCount: Boolean,
+    precondition: Precondition
+  ) (resp:HttpServletResponse) = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetId) match {
         case Some(dsId) =>
           pgu.datasetMapReader.datasetInfo(dsId) match {
             case Some(datasetInfo) =>
-              // Very weird separation of concerns between execQuery and streaming. Most likely we will
-              // want yet-another-refactoring where much of execQuery is lifted out into this function.
-              // This will significantly change the tests; however.
-              val (qrySchema, version, lastModified, etag, results) = execQuery(pgu, datasetInfo, analysis, reqRowCount)
-              ETag(etag)(resp)
-              for (r <- results) yield {
-                CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, r.rowCount, version, lastModified)(resp)
+              val latestCopy = pgu.datasetMapReader.latest(datasetInfo)
+              val etag = etagFromCopy(latestCopy)
+              val lastModified = latestCopy.lastModified
+              precondition.check(Some(etag), sideEffectFree = true) match {
+                case Passed =>
+                  // Very weird separation of concerns between execQuery and streaming. Most likely we will
+                  // want yet-another-refactoring where much of execQuery is lifted out into this function.
+                  // This will significantly change the tests; however.
+                  val (qrySchema, version, results) = execQuery(pgu, datasetInfo, analysis, reqRowCount)
+                  ETag(etag)(resp)
+                  for (r <- results) yield {
+                    CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, r.rowCount, version, lastModified)(resp)
+                  }
+                case FailedBecauseMatch(matchedTag) =>
+                  val setResponse =
+                    NotModified ~> ETags(matchedTag)
+                  setResponse(resp)
               }
             case None =>
               NotFound(resp)
@@ -167,10 +189,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         systemToUserColumnMap,
         userToSystemColumnMap,
         qryReps)
-      // ETag is a hash based on systemId_copyNumber_version
-      val etagContents = s"${datasetInfo.systemId.underlying}_${latest.copyNumber}_${latest.dataVersion}"
-      val etag = StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
-      (qrySchema, latest.dataVersion, latest.lastModified, etag, results)
+      (qrySchema, latest.dataVersion, results)
     }
   }
 
