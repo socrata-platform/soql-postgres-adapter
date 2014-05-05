@@ -339,7 +339,6 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         }.getOrElse(throw new Exception(s"Cannot find existing dataset info.  You may manually delete dataset_internal_name_map record and start fresh ${secondaryDatasetInfo.internalName} ${dsId}"))
     }
 
-    // TODO figure out best way to avoid creating unused log and audit tables.
     val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
     sLoader.create(truthCopyInfo)
 
