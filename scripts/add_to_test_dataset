@@ -6,7 +6,7 @@ if [ -z "$ds_name" ]; then
 fi
 
 echo "Posting data to dataset..."
-curl -s -X POST --data-binary @- -H 'Content-type: application/json' "http://localhost:8081/resource/${ds_name}" <<EOD
+curl -s -X POST --data-binary @- -H 'Content-type: application/json' "http://localhost:6010/resource/${ds_name}" <<EOD
 [{key:1,value:"one"}
 ,{key:2,value:"two"}
 ,{key:3,value:"three"}
