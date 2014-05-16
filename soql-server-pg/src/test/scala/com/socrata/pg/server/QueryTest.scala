@@ -16,6 +16,7 @@ import java.sql.Connection
 import org.apache.log4j.PropertyConfigurator
 import scala.language.existentials
 import com.socrata.pg.soql.CaseSensitive
+import com.socrata.http.server.util.NoPrecondition
 
 class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
 
@@ -60,7 +61,10 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
         val (requestColumns, version, mresult) =
           for (dsInfo <- ds) yield {
             val qs = new QueryServer(dsInfo, CaseSensitive)
-            qs.execQuery(pgu, copyInfo.datasetInfo, analysis, false)
+            qs.execQuery(pgu, copyInfo.datasetInfo, analysis, false, NoPrecondition, None) match {
+              case QueryServer.Success(schema, version, results, etag, lastModified) =>
+                (schema, version, results)
+            }
           }
         for (result <- mresult) {
           result.foreach { row =>

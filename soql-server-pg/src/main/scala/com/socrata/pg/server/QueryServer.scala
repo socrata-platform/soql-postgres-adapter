@@ -1,16 +1,19 @@
 package com.socrata.pg.server
 
 import com.rojoma.simplearm.util._
+import com.rojoma.simplearm.Managed
 import com.rojoma.json.util.JsonUtil
 import org.apache.curator.x.discovery.{ServiceDiscoveryBuilder, ServiceInstanceBuilder}
 import org.apache.curator.framework.CuratorFrameworkFactory
 import org.apache.curator.retry
 import com.rojoma.json.ast.JString
+import com.socrata.datacoordinator.Row
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
 import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
-import com.socrata.datacoordinator.id.UserColumnId
+import com.socrata.datacoordinator.id.{UserColumnId, ColumnId}
 import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
-import com.socrata.datacoordinator.truth.metadata.{DatasetInfo, DatasetCopyContext, CopyInfo, Schema}
+import com.socrata.datacoordinator.truth.metadata.{DatasetInfo, DatasetCopyContext, CopyInfo, Schema, ColumnInfo}
+import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.http.server.implicits._
 import com.socrata.http.server.responses._
@@ -20,7 +23,7 @@ import com.socrata.http.server.livenesscheck.LivenessCheckResponder
 import com.socrata.http.server.curator.CuratorBroker
 import com.socrata.http.server.util.handlers.{LoggingHandler, ThreadRenamingHandler}
 import com.socrata.http.server._
-import com.socrata.pg.query.{DataSqlizerQuerier, RowReaderQuerier}
+import com.socrata.pg.query.{DataSqlizerQuerier, RowReaderQuerier, RowCount}
 import com.socrata.pg.server.config.QueryServerConfig
 import com.socrata.pg.Schema._
 import com.socrata.pg.{Version, SecondaryBase}
@@ -46,11 +49,14 @@ import java.io.ByteArrayInputStream
 import javax.servlet.http.{HttpServletResponse, HttpServletRequest}
 import scala.language.existentials
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
-import com.socrata.http.server.util.{Precondition, EntityTag, StrongEntityTag}
-import com.socrata.http.server.util.Precondition.{FailedBecauseMatch, Passed}
+import com.socrata.http.server.util.{NoPrecondition, Precondition, EntityTag, StrongEntityTag}
+import com.socrata.http.server.util.Precondition._
+import org.joda.time.DateTime
 
 
 class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase with Logging {
+  import QueryServer._
+
   val dsConfig: DataSourceConfig = null // unused
 
   val postgresUniverseCommon = PostgresUniverseCommon
@@ -113,7 +119,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserializer(analysisStream)
     val reqRowCount = Option(req.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     logger.info("Performing query on dataset " + datasetId)
-    streamQueryResults(analysis, datasetId, reqRowCount, req.precondition)
+    streamQueryResults(analysis, datasetId, reqRowCount, req.precondition, req.dateTimeHeader("If-Modified-Since"))
   }
 
   /**
@@ -125,30 +131,29 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     analysis: SoQLAnalysis[UserColumnId, SoQLType],
     datasetId:String,
     reqRowCount: Boolean,
-    precondition: Precondition
+    precondition: Precondition,
+    ifModifiedSince: Option[DateTime]
   ) (resp:HttpServletResponse) = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetId) match {
         case Some(dsId) =>
           pgu.datasetMapReader.datasetInfo(dsId) match {
             case Some(datasetInfo) =>
-              val latestCopy = pgu.datasetMapReader.latest(datasetInfo)
-              val etag = etagFromCopy(latestCopy)
-              val lastModified = latestCopy.lastModified
-              precondition.check(Some(etag), sideEffectFree = true) match {
-                case Passed =>
+              def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
+
+              execQuery(pgu, datasetInfo, analysis, reqRowCount, precondition, ifModifiedSince) match {
+                case Success(qrySchema, dataVersion, results, etag, lastModified) =>
                   // Very weird separation of concerns between execQuery and streaming. Most likely we will
                   // want yet-another-refactoring where much of execQuery is lifted out into this function.
                   // This will significantly change the tests; however.
-                  val (qrySchema, version, results) = execQuery(pgu, datasetInfo, analysis, reqRowCount)
                   ETag(etag)(resp)
                   for (r <- results) yield {
-                    CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, r.rowCount, version, lastModified)(resp)
+                    CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, r.rowCount, dataVersion, lastModified)(resp)
                   }
-                case FailedBecauseMatch(matchedTag) =>
-                  val setResponse =
-                    NotModified ~> ETags(matchedTag)
-                  setResponse(resp)
+                case NotModified(etags) =>
+                  notModified(etags)(resp)
+                case PreconditionFailed =>
+                  responses.PreconditionFailed(resp)
               }
             case None =>
               NotFound(resp)
@@ -159,37 +164,66 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     }
   }
 
-  def execQuery(pgu:PGSecondaryUniverse[SoQLType, SoQLValue], datasetInfo:DatasetInfo, analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
+  def execQuery(
+    pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+    datasetInfo: DatasetInfo,
+    analysis: SoQLAnalysis[UserColumnId, SoQLType],
+    rowCount: Boolean,
+    precondition: Precondition,
+    ifModifiedSince: Option[DateTime]
+  ): QueryResult = {
     import Sqlizer._
 
+    def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], latestCopy: CopyInfo, analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
+      val cryptProvider = new CryptProvider(latestCopy.datasetInfo.obfuscationKey)
+      val sqlCtx = Map[SqlizerContext, Any](
+        SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
+        SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
+        SqlizerContext.CaseSensitivity -> caseSensitivity
+      )
+
+      for (readCtx <- pgu.datasetReader.openDataset(latestCopy)) yield {
+        val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
+        val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
+        val userToSystemColumnMap = SchemaUtil.userToSystemColumnMap(readCtx.schema)
+        val qrySchema = querySchema(pgu, analysis, latestCopy)
+        val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor(_))
+        val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema)
+        val sqlReps = querier.getSqlReps(systemToUserColumnMap)
+
+        val results = querier.query(
+          analysis,
+          (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
+            (a, tableName, sqlReps.values.toSeq).sql(sqlReps, Seq.empty, sqlCtx),
+          (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
+            (a, tableName, sqlReps.values.toSeq).rowCountSql(sqlReps, Seq.empty, sqlCtx),
+          rowCount,
+          systemToUserColumnMap,
+          userToSystemColumnMap,
+          qryReps)
+        (qrySchema, latestCopy.dataVersion, results)
+      }
+    }
+
     val latest: CopyInfo = pgu.datasetMapReader.latest(datasetInfo)
-    val cryptProvider = new CryptProvider(datasetInfo.obfuscationKey)
-    val sqlCtx = Map[SqlizerContext, Any](
-      SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
-      SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
-      SqlizerContext.CaseSensitivity -> caseSensitivity
-    )
+    val etag = etagFromCopy(latest)
+    val lastModified = latest.lastModified
 
-    for (readCtx <- pgu.datasetReader.openDataset(latest)) yield {
-      val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
-      val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
-      val userToSystemColumnMap = SchemaUtil.userToSystemColumnMap(readCtx.schema)
-      val qrySchema = querySchema(pgu, analysis, latest)
-      val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor(_))
-      val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema)
-      val sqlReps = querier.getSqlReps(systemToUserColumnMap)
-
-      val results = querier.query(
-        analysis,
-        (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-          (a, tableName, sqlReps.values.toSeq).sql(sqlReps, Seq.empty, sqlCtx),
-        (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-          (a, tableName, sqlReps.values.toSeq).rowCountSql(sqlReps, Seq.empty, sqlCtx),
-        rowCount,
-        systemToUserColumnMap,
-        userToSystemColumnMap,
-        qryReps)
-      (qrySchema, latest.dataVersion, results)
+    // Conditional GET handling
+    precondition.check(Some(etag), sideEffectFree = true) match {
+      case Passed =>
+        ifModifiedSince match {
+          case Some(ims) if !lastModified.minusMillis(lastModified.getMillisOfSecond).isAfter(ims)
+                            && precondition == NoPrecondition =>
+            NotModified(Seq(etag))
+          case Some(_) | None =>
+            val (qrySchema, version, results) = runQuery(pgu, latest, analysis, rowCount)
+            Success(qrySchema, version, results, etag, lastModified)
+        }
+      case FailedBecauseMatch(etags) =>
+        NotModified(etags)
+      case FailedBecauseNoMatch =>
+        PreconditionFailed
     }
   }
 
@@ -257,6 +291,18 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
 }
 
 object QueryServer extends Logging {
+
+  sealed abstract class QueryResult
+  case class NotModified(etags: Seq[EntityTag]) extends QueryResult
+  case object PreconditionFailed extends QueryResult
+  case class Success(
+    qrySchema: OrderedMap[ColumnId, ColumnInfo[SoQLType]],
+    dataVersion: Long,
+    results: Managed[CloseableIterator[Row[SoQLValue]] with RowCount],
+    etag: EntityTag,
+    lastModified: DateTime
+  ) extends QueryResult
+
 
   def withDefaultAddress(config: Config): Config = {
     val ifaces = ServiceInstanceBuilder.getAllLocalIPs

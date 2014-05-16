@@ -15,6 +15,7 @@ import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfi
 import org.scalatest.{BeforeAndAfterAll, Matchers}
 import scala.language.existentials
 import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity}
+import com.socrata.http.server.util.NoPrecondition
 
 trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUniverseTestBase {
   this : Matchers with BeforeAndAfterAll =>
@@ -43,7 +44,10 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
         val (qrySchema, dataVersion, mresult) =
           for (dsInfo <- ds) yield {
             val qs = new QueryServer(dsInfo, caseSensitivity)
-            qs.execQuery(pgu, copyInfo.datasetInfo, analysis, expectedRowCount.isDefined)
+            qs.execQuery(pgu, copyInfo.datasetInfo, analysis, expectedRowCount.isDefined, NoPrecondition, None) match {
+              case QueryServer.Success(schema, version, results, etag, lastModified) =>
+                (schema, version, results)
+            }
           }
         val jsonReps = PostgresUniverseCommon.jsonReps(copyInfo.datasetInfo)
         val qryReps = qrySchema.mapValues( cinfo => jsonReps(cinfo.typ))
