@@ -4,6 +4,7 @@ import com.socrata.datacoordinator.common.soql.sqlreps._
 import com.socrata.datacoordinator.truth.sql.{SqlColumnRep, SqlColumnCommonRep}
 import com.socrata.datacoordinator.truth.metadata.ColumnInfo
 import com.socrata.soql.types._
+import com.vividsolutions.jts.geom.{LineString, Polygon, Point}
 
 trait Indexable[Type] { this: SqlColumnCommonRep[Type] =>
 
@@ -97,7 +98,10 @@ object SoQLIndexableRep {
     SoQLLocation -> (ci => new LocationRep(ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
     SoQLDouble -> (ci => new DoubleRep(ci.physicalColumnBase) with NumberLikeIndexable[SoQLType]),
     SoQLObject -> (ci => new ObjectRep(ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLArray -> (ci => new ArrayRep(ci.physicalColumnBase) with NoIndex[SoQLType]) // TODO: Revisit index need
+    SoQLArray -> (ci => new ArrayRep(ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
+    SoQLPoint -> (ci =>  new GeometryLikeRep[Point](SoQLPoint, _.asInstanceOf[SoQLPoint].value, SoQLPoint(_), ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
+    SoQLLine -> (ci => new GeometryLikeRep[LineString](SoQLLine, _.asInstanceOf[SoQLLine].value, SoQLLine(_), ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
+    SoQLPolygon -> (ci => new GeometryLikeRep[Polygon](SoQLPolygon, _.asInstanceOf[SoQLPolygon].value, SoQLPolygon(_), ci.physicalColumnBase) with NoIndex[SoQLType]) // TODO: Revisit index need
   )
 
   def sqlRep(columnInfo: ColumnInfo[SoQLType]): SqlColumnRep[SoQLType, SoQLValue] with Indexable[SoQLType] =

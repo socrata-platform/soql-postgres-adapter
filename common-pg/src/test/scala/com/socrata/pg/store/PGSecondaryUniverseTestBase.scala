@@ -174,6 +174,9 @@ trait PGSecondaryUniverseTestBase {
           case SoQLArray => SoQLArray(new JArray(Seq(JString("there"))))
           case SoQLJson => SoQLJson(new JArray(Seq(JString("there"))))
           case SoQLLocation => SoQLLocation(0.1, 0.2)
+          case SoQLPoint => SoQLPoint(SoQLPoint.WktRep.unapply("POINT(47.6303 -122.3148)").get)
+          case SoQLLine => SoQLLine(SoQLLine.WktRep.unapply("LINESTRING(102 0,103 1,104 0,105 1)").get)
+          case SoQLPolygon => SoQLPolygon(SoQLPolygon.WktRep.unapply("POLYGON((100 0,101 0,101 1,100 1,100 0))").get)
           case SoQLNull => SoQLNull
         }
         (name, dummyVal)

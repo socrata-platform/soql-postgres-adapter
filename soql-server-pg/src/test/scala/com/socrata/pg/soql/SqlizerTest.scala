@@ -46,6 +46,13 @@ class SqlizerTest extends FunSuite with Matchers {
     params should be (Seq("HA001", "HA002", "HA003"))
   }
 
+  test("point/line/polygon") {
+    val soql = "select case_number, point, line, polygon"
+    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT case_number,ST_AsGeoJson(point),ST_AsGeoJson(line),ST_AsGeoJson(polygon) FROM t1")
+    setParams.length should be (0)
+  }
+
   test("expr and expr") {
     val soql = "select id where id = 1 and case_number = 'cn001'"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
@@ -155,7 +162,10 @@ object SqlizerTest {
     ColumnName("updated_on") -> (10, SoQLFloatingTimestamp),
     ColumnName("location") -> (11, SoQLLocation),
     ColumnName("object") -> (12, SoQLObject),
-    ColumnName("array") -> (13, SoQLArray)
+    ColumnName("array") -> (13, SoQLArray),
+    ColumnName("point") -> (14, SoQLPoint),
+    ColumnName("line") -> (15, SoQLLine),
+    ColumnName("polygon") -> (16, SoQLPolygon)
   )
 
   private val columnInfos = columnMap.foldLeft(Seq.empty[ColumnInfo[SoQLType]]) { (acc, colNameAndType) => colNameAndType match {

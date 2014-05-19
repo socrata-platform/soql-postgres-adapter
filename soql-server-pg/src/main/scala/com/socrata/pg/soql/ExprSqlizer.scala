@@ -1,11 +1,10 @@
 package com.socrata.pg.soql
 
 import com.socrata.soql.typed._
-import com.socrata.soql.types.{SoQLValue, SoQLType, SoQLText}
+import com.socrata.soql.types._
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import java.sql.PreparedStatement
-
 import Sqlizer._
 import SqlizerContext._
 
@@ -108,13 +107,22 @@ class ColumnRefSqlizer(expr: ColumnRef[UserColumnId, SoQLType]) extends Sqlizer[
     reps.get(expr.column) match {
       case Some(rep) =>
         val maybeUpperPhysColumns = rep.physColumns.map(toUpper(_, ctx))
-        ParametricSql(maybeUpperPhysColumns.mkString(","), setParams)
-      case None =>
-        ParametricSql(toUpper(expr.column.underlying, ctx), setParams) // for tests
+        val columnsWithGeoSqlized = maybeUpperPhysColumns.map(sqlizeGeoColumnRef(_, ctx))
+        ParametricSql(columnsWithGeoSqlized.mkString(","), setParams)
+      case None => {
+        ParametricSql(sqlizeGeoColumnRef(toUpper(expr.column.underlying, ctx), ctx), setParams) // for tests
+      }
     }
   }
 
   private def toUpper(phyColumn: String, ctx: Context): String =
     if (expr.typ == SoQLText && useUpper(ctx) ) s"upper($phyColumn)"
     else phyColumn
+
+  private def sqlizeGeoColumnRef(phyColumn: String, ctx: Context): String =
+    if ((expr.typ == SoQLPoint || expr.typ == SoQLLine || expr.typ == SoQLPolygon) &&
+        ctx.get(SoqlPart) == Some(SoqlSelect))
+      s"ST_AsGeoJson($phyColumn)"
+    else
+      phyColumn
 }
