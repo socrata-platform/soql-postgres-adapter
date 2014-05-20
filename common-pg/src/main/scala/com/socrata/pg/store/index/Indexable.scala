@@ -81,6 +81,23 @@ trait TimestampLikeIndexable[Type] extends BaseIndexable[Type] { this: SqlColumn
 
 trait BooleanIndexable[Type] extends BaseIndexable[Type] { this: SqlColumnCommonRep[Type] => }
 
+trait GeoIndexable[Type] extends BaseIndexable[Type] { this: SqlColumnCommonRep[Type] =>
+
+  override def createIndex(tableName: String, tablespace: String): Option[String] = {
+    val sql = this.physColumns.map { phyCol =>
+      s"""CREATE index idx_${tableName}_${phyCol}_gist ON ${tableName} USING GIST(${phyCol})"""
+    }.mkString(";")
+    Some(sql)
+  }
+
+  override def dropIndex(tableName: String): Option[String] = {
+    val sql = this.physColumns.map { phyCol =>
+      s"""DROP INDEX IF EXISTS idx_${tableName}_${phyCol}_gist"""
+    }.mkString((";"))
+    Some(sql)
+  }
+}
+
 
 object SoQLIndexableRep {
 
@@ -99,9 +116,9 @@ object SoQLIndexableRep {
     SoQLDouble -> (ci => new DoubleRep(ci.physicalColumnBase) with NumberLikeIndexable[SoQLType]),
     SoQLObject -> (ci => new ObjectRep(ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
     SoQLArray -> (ci => new ArrayRep(ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLPoint -> (ci =>  new GeometryLikeRep[Point](SoQLPoint, _.asInstanceOf[SoQLPoint].value, SoQLPoint(_), ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLLine -> (ci => new GeometryLikeRep[LineString](SoQLLine, _.asInstanceOf[SoQLLine].value, SoQLLine(_), ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLPolygon -> (ci => new GeometryLikeRep[Polygon](SoQLPolygon, _.asInstanceOf[SoQLPolygon].value, SoQLPolygon(_), ci.physicalColumnBase) with NoIndex[SoQLType]) // TODO: Revisit index need
+    SoQLPoint -> (ci =>  new GeometryLikeRep[Point](SoQLPoint, _.asInstanceOf[SoQLPoint].value, SoQLPoint(_), ci.physicalColumnBase) with GeoIndexable[SoQLType]),
+    SoQLLine -> (ci => new GeometryLikeRep[LineString](SoQLLine, _.asInstanceOf[SoQLLine].value, SoQLLine(_), ci.physicalColumnBase) with GeoIndexable[SoQLType]),
+    SoQLPolygon -> (ci => new GeometryLikeRep[Polygon](SoQLPolygon, _.asInstanceOf[SoQLPolygon].value, SoQLPolygon(_), ci.physicalColumnBase) with GeoIndexable[SoQLType])
   )
 
   def sqlRep(columnInfo: ColumnInfo[SoQLType]): SqlColumnRep[SoQLType, SoQLValue] with Indexable[SoQLType] =

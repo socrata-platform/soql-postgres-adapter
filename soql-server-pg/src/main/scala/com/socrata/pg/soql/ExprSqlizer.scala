@@ -119,10 +119,14 @@ class ColumnRefSqlizer(expr: ColumnRef[UserColumnId, SoQLType]) extends Sqlizer[
     if (expr.typ == SoQLText && useUpper(ctx) ) s"upper($phyColumn)"
     else phyColumn
 
-  private def sqlizeGeoColumnRef(phyColumn: String, ctx: Context): String =
-    if ((expr.typ == SoQLPoint || expr.typ == SoQLLine || expr.typ == SoQLPolygon) &&
-        ctx.get(SoqlPart) == Some(SoqlSelect))
+  private def sqlizeGeoColumnRef(phyColumn: String, ctx: Context): String = {
+    if (isGeoColumn && ctx.get(SoqlPart) == Some(SoqlSelect)) {
       s"ST_AsGeoJson($phyColumn)"
-    else
+    }
+    else {
       phyColumn
+    }
+  }
+
+  private def isGeoColumn = expr.typ == SoQLPoint || expr.typ == SoQLLine || expr.typ == SoQLPolygon
 }
