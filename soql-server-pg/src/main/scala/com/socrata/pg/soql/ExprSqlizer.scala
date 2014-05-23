@@ -128,5 +128,5 @@ class ColumnRefSqlizer(expr: ColumnRef[UserColumnId, SoQLType]) extends Sqlizer[
     }
   }
 
-  private def isGeoColumn = expr.typ == SoQLPoint || expr.typ == SoQLLine || expr.typ == SoQLPolygon
+  private def isGeoColumn = expr.typ == SoQLPoint || expr.typ == SoQLMultiLine || expr.typ == SoQLMultiPolygon
 }
