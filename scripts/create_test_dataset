@@ -6,12 +6,12 @@ if [ -z "$ds_name" ]; then
 fi
 
 echo "Creating dataset..."
-curl -X POST --data-binary @- -H 'Content-type: application/json' http://localhost:8081/dataset <<EOD
+curl -X POST --data-binary @- -H 'Content-type: application/json' http://localhost:6010/dataset <<EOD
 {resource_name:"$ds_name",name:"Hello World!",columns:[{field_name:"key",datatype:"number",name:"identifier"},{field_name:"value",datatype:"text",name:"thing",description:"something interesting, dunno what"}],row_identifier:"key"}
 EOD
 
 echo "Posting data to dataset..."
-curl -s -X POST --data-binary @- -H 'Content-type: application/json' "http://localhost:8081/resource/${ds_name}" <<EOD
+curl -s -X POST --data-binary @- -H 'Content-type: application/json' "http://localhost:6010/resource/${ds_name}" <<EOD
 [{key:1,value:"one"}
 ,{key:2,value:"two"}
 ,{key:3,value:"three"}
@@ -21,8 +21,8 @@ curl -s -X POST --data-binary @- -H 'Content-type: application/json' "http://loc
 EOD
 
 echo "Publishing dataset..."
-curl -X PUT http://localhost:8081/dataset-copy/${ds_name}
+curl -X PUT http://localhost:6010/dataset-copy/${ds_name}
 
 
 echo "Sending dataset to pg..."
-curl -X POST http://localhost:8081/dataset-copy/${ds_name}/pg
+curl -X POST http://localhost:6010/dataset-copy/${ds_name}/pg
