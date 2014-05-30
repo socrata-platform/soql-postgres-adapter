@@ -121,7 +121,7 @@ class ColumnRefSqlizer(expr: ColumnRef[UserColumnId, SoQLType]) extends Sqlizer[
 
   private def sqlizeGeoColumnRef(phyColumn: String, ctx: Context): String = {
     if (isGeoColumn && ctx.get(SoqlPart) == Some(SoqlSelect)) {
-      s"ST_AsGeoJson($phyColumn)"
+      s"ST_AsText($phyColumn)"
     }
     else {
       phyColumn

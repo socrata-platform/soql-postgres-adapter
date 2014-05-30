@@ -6,7 +6,7 @@ import com.socrata.datacoordinator.truth.metadata.ColumnInfo
 import com.socrata.soql.types._
 import com.vividsolutions.jts.geom.{MultiLineString, MultiPolygon, Point}
 
-trait Indexable[Type] { this: SqlColumnCommonRep[Type] =>
+trait Indexable[T] { this: SqlColumnCommonRep[T] =>
 
   def createIndex(tableName: String, tablespace: String): Option[String]
 
@@ -14,7 +14,7 @@ trait Indexable[Type] { this: SqlColumnCommonRep[Type] =>
 
 }
 
-trait NoIndex[Type] extends Indexable[Type] { this: SqlColumnCommonRep[Type] =>
+trait NoIndex[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
 
   def createIndex(tableName: String, tablespace: String): Option[String] = None
 
@@ -22,7 +22,7 @@ trait NoIndex[Type] extends Indexable[Type] { this: SqlColumnCommonRep[Type] =>
 
 }
 
-trait TextIndexable[Type] extends Indexable[Type] { this: SqlColumnCommonRep[Type] =>
+trait TextIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
 
   override def createIndex(tableName: String, tablespace: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
@@ -54,7 +54,7 @@ trait TextIndexable[Type] extends Indexable[Type] { this: SqlColumnCommonRep[Typ
   }
 }
 
-trait BaseIndexable[Type] extends Indexable[Type] { this: SqlColumnCommonRep[Type] =>
+trait BaseIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
 
   override def createIndex(tableName: String, tablespace: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
@@ -75,13 +75,13 @@ trait BaseIndexable[Type] extends Indexable[Type] { this: SqlColumnCommonRep[Typ
   }
 }
 
-trait NumberLikeIndexable[Type] extends BaseIndexable[Type] { this: SqlColumnCommonRep[Type] => }
+trait NumberLikeIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] => }
 
-trait TimestampLikeIndexable[Type] extends BaseIndexable[Type] { this: SqlColumnCommonRep[Type] => }
+trait TimestampLikeIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] => }
 
-trait BooleanIndexable[Type] extends BaseIndexable[Type] { this: SqlColumnCommonRep[Type] => }
+trait BooleanIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] => }
 
-trait GeoIndexable[Type] extends BaseIndexable[Type] { this: SqlColumnCommonRep[Type] =>
+trait GeoIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] =>
 
   override def createIndex(tableName: String, tablespace: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
@@ -106,8 +106,18 @@ object SoQLIndexableRep {
     SoQLVersion -> (ci => new VersionRep(ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
     SoQLText -> (ci => new TextRep(ci.physicalColumnBase) with TextIndexable[SoQLType]),
     SoQLBoolean -> (ci => new BooleanRep(ci.physicalColumnBase) with BooleanIndexable[SoQLType]),
-    SoQLNumber -> (ci => new NumberLikeRep(SoQLNumber, _.asInstanceOf[SoQLNumber].value, SoQLNumber(_), ci.physicalColumnBase) with NumberLikeIndexable[SoQLType]),
-    SoQLMoney -> (ci => new NumberLikeRep(SoQLNumber, _.asInstanceOf[SoQLMoney].value, SoQLMoney(_), ci.physicalColumnBase) with NumberLikeIndexable[SoQLType]),
+    SoQLNumber -> (ci =>
+      new NumberLikeRep(
+        SoQLNumber,
+        _.asInstanceOf[SoQLNumber].value,
+        SoQLNumber(_),
+        ci.physicalColumnBase) with NumberLikeIndexable[SoQLType]),
+    SoQLMoney -> (ci =>
+      new NumberLikeRep(
+        SoQLNumber,
+        _.asInstanceOf[SoQLMoney].value,
+        SoQLMoney(_),
+        ci.physicalColumnBase) with NumberLikeIndexable[SoQLType]),
     SoQLFixedTimestamp -> (ci => new FixedTimestampRep(ci.physicalColumnBase) with TimestampLikeIndexable[SoQLType]),
     SoQLFloatingTimestamp -> (ci => new FloatingTimestampRep(ci.physicalColumnBase) with TimestampLikeIndexable[SoQLType]),
     SoQLDate -> (ci => new DateRep(ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
@@ -116,9 +126,24 @@ object SoQLIndexableRep {
     SoQLDouble -> (ci => new DoubleRep(ci.physicalColumnBase) with NumberLikeIndexable[SoQLType]),
     SoQLObject -> (ci => new ObjectRep(ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
     SoQLArray -> (ci => new ArrayRep(ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLPoint -> (ci =>  new GeometryLikeRep[Point](SoQLPoint, _.asInstanceOf[SoQLPoint].value, SoQLPoint(_), ci.physicalColumnBase) with GeoIndexable[SoQLType]),
-    SoQLMultiLine -> (ci => new GeometryLikeRep[MultiLineString](SoQLMultiLine, _.asInstanceOf[SoQLMultiLine].value, SoQLMultiLine(_), ci.physicalColumnBase) with GeoIndexable[SoQLType]),
-    SoQLMultiPolygon -> (ci => new GeometryLikeRep[MultiPolygon](SoQLMultiPolygon, _.asInstanceOf[SoQLMultiPolygon].value, SoQLMultiPolygon(_), ci.physicalColumnBase) with GeoIndexable[SoQLType])
+    SoQLPoint -> (ci =>
+      new GeometryLikeRep[Point](
+        SoQLPoint,
+        _.asInstanceOf[SoQLPoint].value,
+        SoQLPoint(_),
+        ci.physicalColumnBase) with GeoIndexable[SoQLType]),
+    SoQLMultiLine -> (ci =>
+      new GeometryLikeRep[MultiLineString](
+        SoQLMultiLine,
+        _.asInstanceOf[SoQLMultiLine].value,
+        SoQLMultiLine(_),
+        ci.physicalColumnBase) with GeoIndexable[SoQLType]),
+    SoQLMultiPolygon -> (ci =>
+      new GeometryLikeRep[MultiPolygon](
+        SoQLMultiPolygon,
+        _.asInstanceOf[SoQLMultiPolygon].value,
+        SoQLMultiPolygon(_),
+        ci.physicalColumnBase) with GeoIndexable[SoQLType])
   )
 
   def sqlRep(columnInfo: ColumnInfo[SoQLType]): SqlColumnRep[SoQLType, SoQLValue] with Indexable[SoQLType] =

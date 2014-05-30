@@ -49,7 +49,7 @@ class SqlizerTest extends FunSuite with Matchers {
   test("point/line/polygon") {
     val soql = "select case_number, point, line, polygon"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT case_number,ST_AsGeoJson(point),ST_AsGeoJson(line),ST_AsGeoJson(polygon) FROM t1")
+    sql should be ("SELECT case_number,ST_AsText(point),ST_AsText(line),ST_AsText(polygon) FROM t1")
     setParams.length should be (0)
   }
 
