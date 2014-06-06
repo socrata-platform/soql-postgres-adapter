@@ -166,6 +166,13 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
         stmt.execute(sql)
       }
     }
+    using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/$dbName", "blist", "blist")) { conn =>
+      conn.setAutoCommit(true)
+      val sql = "create extension postgis;"
+      using(conn.createStatement()) { stmt =>
+        stmt.execute(sql)
+      }
+    }
   }
 
   private def populateTruth(dbName: String) {
