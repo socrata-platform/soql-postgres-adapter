@@ -17,6 +17,17 @@ createdb -O blist -E utf-8 secondary
 sbt test package assembly
 ```
 
+## Running the service
+
+For active development, when you always want the latest up to date code in your repo, you will probably be executing this from an SBT shell:
+
+    soql-postgres-adapter/run
+
+For running the soql-postgres-adapter as one of several microservices, it might
+be better to build the assembly and run it to save on memory:
+
+    bin/start_pg_adapter.sh
+
 ## Run the Database migrations
 
 To run the migrations:
