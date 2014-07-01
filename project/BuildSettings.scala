@@ -10,7 +10,6 @@ object BuildSettings {
   val buildSettings: Seq[Setting[_]] =
     SocrataCloudbeesSbt.socrataBuildSettings ++ Seq(
     scalaVersion := "2.10.4",
-    version := "0.0.19-SNAPSHOT",
     fork in test := true,
     scalacOptions ++= Seq("-language:implicitConversions")
   )
