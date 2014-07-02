@@ -104,9 +104,9 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     override val post = query _
   }
 
-  def etagFromCopy(copy: CopyInfo): EntityTag = {
-    // ETag is a hash based on systemId_copyNumber_version
-    val etagContents = s"${copy.datasetInfo.systemId.underlying}_${copy.copyNumber}_${copy.dataVersion}"
+  def etagFromCopy(datasetInternalName: String, copy: CopyInfo): EntityTag = {
+    // ETag is a hash based on datasetInternalName_copyNumber_version
+    val etagContents = s"${datasetInternalName}_${copy.copyNumber}_${copy.dataVersion}"
     StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
   }
 
@@ -141,7 +141,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
             case Some(datasetInfo) =>
               def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
 
-              execQuery(pgu, datasetInfo, analysis, reqRowCount, precondition, ifModifiedSince) match {
+              execQuery(pgu, datasetId, datasetInfo, analysis, reqRowCount, precondition, ifModifiedSince) match {
                 case Success(qrySchema, dataVersion, results, etag, lastModified) =>
                   // Very weird separation of concerns between execQuery and streaming. Most likely we will
                   // want yet-another-refactoring where much of execQuery is lifted out into this function.
@@ -166,6 +166,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
 
   def execQuery(
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+    datasetInternalName: String,
     datasetInfo: DatasetInfo,
     analysis: SoQLAnalysis[UserColumnId, SoQLType],
     rowCount: Boolean,
@@ -206,7 +207,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     }
 
     val latest: CopyInfo = pgu.datasetMapReader.latest(datasetInfo)
-    val etag = etagFromCopy(latest)
+    val etag = etagFromCopy(datasetInternalName, latest)
     val lastModified = latest.lastModified
 
     // Conditional GET handling
