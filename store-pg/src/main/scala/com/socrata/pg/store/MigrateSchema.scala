@@ -13,13 +13,13 @@ object MigrateSchema extends App {
   /**
    * Performs a Liquibase schema migration.
    * @param args(0) Migration operation to perform.
-   *        args(1) Database tree (located in config) to migrate.
+   *        args(1) Optional dotted path reference the database config tree to migrate
    * */
   override def main(args: Array[String]) {
     // Verify that two arguments were passed
-    if (args.length != 2)
+    if (args.length < 1 || args.length > 2)
       throw new IllegalArgumentException(
-        s"Incorrect number of arguments - expected 2 but received ${args.length}")
+        s"Usage: com.socrata.pg.store.MigrateSchema ${MigrationOperation.values.mkString("|")} [<dotted path reference to database config in config>]")
 
     // Verify that the argument provided is actually a valid operation
     val operation = {
@@ -32,9 +32,14 @@ object MigrateSchema extends App {
               s"Available operations are [${MigrationOperation.values.mkString(", ")}]")
       }
     }
-    val config = ConfigFactory.load.getConfig("com.socrata.pg.store")
-    PropertyConfigurator.configure(Propertizer("log4j", config.getConfig("log4j")))
+    val config = ConfigFactory.load
+    val dbConfigPath = args.length match {
+      case 1 => "com.socrata.pg.store.database"
+      case 2 => args(1)
+    }
 
-    SchemaMigrator(args(1), operation, config)
+    PropertyConfigurator.configure(Propertizer("log4j", config.getConfig("com.socrata.pg.store.log4j")))
+
+    SchemaMigrator(dbConfigPath, operation, config)
   }
 }
