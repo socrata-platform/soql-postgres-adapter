@@ -4,7 +4,7 @@ import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.soql.functions._
 import com.socrata.soql.types._
-import com.socrata.soql.typed.{NumberLiteral, StringLiteral, FunctionCall}
+import com.socrata.soql.typed.{CoreExpr, NumberLiteral, StringLiteral, FunctionCall}
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
 import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
 import scala.util.parsing.input.NoPosition
@@ -35,7 +35,8 @@ object SqlFunctions {
     And -> infix("and") _,
     Or -> infix("or") _,
     NotBetween -> formatCall("not %s between %s and %s") _,
-    WithinCircle -> todo _,
+    WithinCircle -> formatCall("ST_within(%s, ST_Buffer(ST_MakePoint(%s, %s)::geography, %s)::geometry)", Some(Seq(0, 2, 1, 3))) _,
+    WithinPolygon -> formatCall("ST_within(%s, %s)") _,
     WithinBox -> todo _,
     Between -> formatCall("%s between %s and %s") _,
     Lt -> infix("<") _,
@@ -88,6 +89,10 @@ object SqlFunctions {
 
     TextToBool -> formatCall("%s::boolean") _,
     BoolToText -> formatCall("%s::varchar") _,
+
+    TextToPoint -> formatCall("ST_GeomFromText(%s, 4326)") _,
+    TextToMultiLine -> formatCall("ST_GeomFromText(%s, 4326)") _,
+    TextToMultiPolygon -> formatCall("ST_GeomFromText(%s, 4326)") _,
 
     // aggregate functions
     Avg -> nary("avg") _,
@@ -142,10 +147,17 @@ object SqlFunctions {
     ParametricSql(sqlFragsAndParams._1.mkString(head + " " + fnName + "(", ",", ")"), sqlFragsAndParams._2)
   }
 
-  private def formatCall(template: String)
+  private def formatCall(template: String, paramPosition: Option[Seq[Int]] = None)
                         (fn: FunCall, rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Sqlizer.Context): ParametricSql = {
 
-    val sqlFragsAndParams = fn.parameters.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
+    val fnParams = paramPosition match {
+      case Some(pos) =>
+        pos.foldLeft(Seq.empty[CoreExpr[UserColumnId, SoQLType]]) { (acc, param) =>
+          acc :+ fn.parameters(param)
+        }
+      case None => fn.parameters
+    }
+    val sqlFragsAndParams = fnParams.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
       val ParametricSql(sql, newSetParams) = param.sql(rep, acc._2, ctx)
       (acc._1 :+ sql, newSetParams)
     }
