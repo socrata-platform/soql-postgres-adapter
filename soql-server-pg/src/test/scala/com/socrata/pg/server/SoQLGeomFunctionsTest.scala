@@ -17,4 +17,16 @@ class SoQLGeomFunctionsTest extends SoQLTest {
   test("within_polygon no matches") {
     compareSoqlResult("select make, name, point where within_polygon(point, 'MULTIPOLYGON(((1 1, 2 1, 2 2, 1 2, 1 1)))') order by name", "empty.json")
   }
+
+  test("point conversion") {
+    compareSoqlResult("select name, 'point (1.1 2.2)'::point as northeast, 'pOInt(-1.1 -2.2)'::point as southwest where name = 'Chili'", "select-point-lit.json")
+  }
+
+  test("multipolygon conversion") {
+    compareSoqlResult("select name, 'multipolygon(((1 1, 2 1, 2 2, 1 2, 1 1)))'::multipolygon as multipolygon where name = 'Chili'", "select-mpolygon-lit.json")
+  }
+
+  test("multiline conversion") {
+    compareSoqlResult("select name, 'multilinestring((10.123456 -20.123456, -30.654321 40.654321))'::multiline as multiline where name = 'Chili'", "select-mline-lit.json")
+  }
 }

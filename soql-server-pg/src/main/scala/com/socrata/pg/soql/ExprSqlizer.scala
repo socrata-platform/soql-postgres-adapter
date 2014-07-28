@@ -93,9 +93,10 @@ class FunctionCallSqlizer(expr: FunctionCall[UserColumnId, SoQLType]) extends Sq
   def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
     val fn = SqlFunctions(expr.function.function)
     val ParametricSql(sql, fnSetParams) = fn(expr, rep, setParams, ctx)
+    val sqlMaybeGeo = toGeoText(sql, expr.typ, ctx)
     // SoQL parsing bakes parenthesis into the ast tree without explicitly spitting out parenthesis.
     // We add parenthesis to every function call to preserve semantics.
-    ParametricSql(s"($sql)", fnSetParams)
+    ParametricSql(s"($sqlMaybeGeo)", fnSetParams)
   }
 }
 
@@ -107,10 +108,10 @@ class ColumnRefSqlizer(expr: ColumnRef[UserColumnId, SoQLType]) extends Sqlizer[
     reps.get(expr.column) match {
       case Some(rep) =>
         val maybeUpperPhysColumns = rep.physColumns.map(toUpper(_, ctx))
-        val columnsWithGeoSqlized = maybeUpperPhysColumns.map(sqlizeGeoColumnRef(_, ctx))
+        val columnsWithGeoSqlized = maybeUpperPhysColumns.map(toGeoText(_, expr.typ, ctx))
         ParametricSql(columnsWithGeoSqlized.mkString(","), setParams)
       case None => {
-        ParametricSql(sqlizeGeoColumnRef(toUpper(expr.column.underlying, ctx), ctx), setParams) // for tests
+        ParametricSql(toGeoText(toUpper(expr.column.underlying, ctx), expr.typ, ctx), setParams) // for tests
       }
     }
   }
@@ -118,15 +119,4 @@ class ColumnRefSqlizer(expr: ColumnRef[UserColumnId, SoQLType]) extends Sqlizer[
   private def toUpper(phyColumn: String, ctx: Context): String =
     if (expr.typ == SoQLText && useUpper(ctx) ) s"upper($phyColumn)"
     else phyColumn
-
-  private def sqlizeGeoColumnRef(phyColumn: String, ctx: Context): String = {
-    if (isGeoColumn && ctx.get(SoqlPart) == Some(SoqlSelect)) {
-      s"ST_AsText($phyColumn)"
-    }
-    else {
-      phyColumn
-    }
-  }
-
-  private def isGeoColumn = expr.typ == SoQLPoint || expr.typ == SoQLMultiLine || expr.typ == SoQLMultiPolygon
 }

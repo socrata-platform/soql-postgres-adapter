@@ -1,13 +1,13 @@
 package com.socrata.pg.soql
 
+import java.sql.PreparedStatement
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import com.socrata.soql.typed._
-import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.soql.SoQLAnalysis
+import com.socrata.soql.typed._
+import com.socrata.soql.types._
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
 import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
-import java.sql.PreparedStatement
 import com.socrata.pg.soql.Sqlizer.SetParam
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 
@@ -91,6 +91,14 @@ object Sqlizer {
   implicit def analysisSqlizer(analysisTable: Tuple3[SoQLAnalysis[UserColumnId, SoQLType], String, Seq[SqlColumnRep[SoQLType, SoQLValue]]]) = {
     new SoQLAnalysisSqlizer(analysisTable._1, analysisTable._2, analysisTable._3)
   }
+
+  def toGeoText(sql: String, typ: SoQLType, ctx: Context): String = {
+    import SqlizerContext._
+    if (GeoTypes.contains(typ) && ctx.get(SoqlPart) == Some(SoqlSelect)) s"ST_AsText($sql)"
+    else sql
+  }
+
+  private val GeoTypes: Set[SoQLType] = Set(SoQLPoint, SoQLMultiLine, SoQLMultiPolygon)
 }
 
 object SqlizerContext extends Enumeration {
