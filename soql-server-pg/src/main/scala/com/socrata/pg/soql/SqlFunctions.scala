@@ -37,7 +37,9 @@ object SqlFunctions {
     NotBetween -> formatCall("not %s between %s and %s") _,
     WithinCircle -> formatCall("ST_within(%s, ST_Buffer(ST_MakePoint(%s, %s)::geography, %s)::geometry)", Some(Seq(0, 2, 1, 3))) _,
     WithinPolygon -> formatCall("ST_within(%s, %s)") _,
-    WithinBox -> todo _,
+    // ST_MakeEnvelope(double precision xmin, double precision ymin, double precision xmax, double precision ymax, integer srid=unknown)
+    // within_box(location_col_identifier, top_left_latitude, top_left_longitude, bottom_right_latitude, bottom_right_longitude)
+    WithinBox -> formatCall("ST_MakeEnvelope(%s, %s, %s, %s, 4326) ~ %s", Some(Seq(2, 3, 4, 1, 0))) _,
     Between -> formatCall("%s between %s and %s") _,
     Lt -> infix("<") _,
     Lte -> infix("<=") _,

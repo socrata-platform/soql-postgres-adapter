@@ -18,6 +18,15 @@ class SoQLGeomFunctionsTest extends SoQLTest {
     compareSoqlResult("select make, name, point where within_polygon(point, 'MULTIPOLYGON(((1 1, 2 1, 2 2, 1 2, 1 1)))') order by name", "empty.json")
   }
 
+  test("within_box(point, lat_tl, lon_tl, lat_br, lon_br)") {
+    // sharing the same result file as within-circle
+    compareSoqlResult("select make, name, point where within_box(point, 33, 34, 32, 35) order by name", "where-within-circle.json")
+  }
+
+  test("within_box lat lon reversed") {
+    compareSoqlResult("select make, name, point where within_box(point, 34, 33, 35, 32)", "empty.json")
+  }
+
   test("point conversion") {
     compareSoqlResult("select name, 'point (1.1 2.2)'::point as northeast, 'pOInt(-1.1 -2.2)'::point as southwest where name = 'Chili'", "select-point-lit.json")
   }
