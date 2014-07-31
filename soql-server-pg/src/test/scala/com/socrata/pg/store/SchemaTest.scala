@@ -23,7 +23,7 @@ class SchemaTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase 
       val f = columnsCreatedFixture
       f.pgs._version(pgu, f.datasetInfo, f.dataVersion+1, None, f.events.iterator)
       val qs = new QueryServerTest(dsInfo, pgu)
-      val schema = qs.latestSchema(testInternalName).get
+      val schema = qs.getSchema(testInternalName, None).get
       val schemaj = JsonUtil.renderJson(schema)
       val schemaRoundTrip = JsonUtil.parseJson[com.socrata.datacoordinator.truth.metadata.Schema](schemaj).get
       schema should be (schemaRoundTrip)

@@ -4,24 +4,38 @@ import com.socrata.pg.store.{PGSecondaryLogger, PGSecondaryUniverse}
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.truth.loader.SchemaLoader
 import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, DatasetInfo => SecondaryDatasetInfo}
-import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo }
+import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, LifecycleStage}
+import com.rojoma.simplearm.util._
 
 /**
  * Handles WorkingCopyCreated Event
  */
-case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInfo:SecondaryDatasetInfo, copyInfo:SecondaryCopyInfo) {
+case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                                     datasetId: Option[com.socrata.datacoordinator.id.DatasetId],
+                                     datasetInfo:SecondaryDatasetInfo,
+                                     copyInfo:SecondaryCopyInfo) {
 
-  if (copyInfo.copyNumber != 1) {
-    throw new UnsupportedOperationException("Cannot support making working copies beyond the first copy")
+  copyInfo.copyNumber match {
+    case 1 =>
+      val (copyInfoSecondary:TruthCopyInfo, sLoader) = createDataset(pgu, datasetInfo.localeName)
+      pgu.secondaryDatasetMapWriter.createInternalNameMapping(datasetInfo.internalName, copyInfoSecondary.datasetInfo.systemId)
+    case copyNumBeyondOne =>
+      pgu.datasetMapReader.datasetInfo(datasetId.get).map { truthDatasetInfo =>
+        val copyIdFromSequence = using(pgu.conn.prepareStatement("select nextval('copy_map_system_id_seq')")) { stmt =>
+          val rs = stmt.executeQuery()
+          if (rs.next()) new com.socrata.datacoordinator.id.CopyId(rs.getLong(1))
+          else throw new Exception("cannot get new copy id from sequence")
+        }
+        val newCopyInfo = pgu.datasetMapWriter.unsafeCreateCopy(
+          truthDatasetInfo,
+          copyIdFromSequence,
+          copyNumBeyondOne,
+          com.socrata.datacoordinator.truth.metadata.LifecycleStage.valueOf(copyInfo.lifecycleStage.toString),
+          copyInfo.dataVersion)
+        val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
+        sLoader.create(newCopyInfo)
+      }
   }
-
-  val (copyInfoSecondary:TruthCopyInfo, sLoader) = createDataset(pgu, datasetInfo.localeName)
-
-  if (copyInfoSecondary.copyNumber != 1) {
-    throw new UnsupportedOperationException("We only support one copy of a dataset!")
-  }
-
-  pgu.secondaryDatasetMapWriter.createInternalNameMapping(datasetInfo.internalName, copyInfoSecondary.datasetInfo.systemId)
 
   private def createDataset(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], locale:String):(TruthCopyInfo, SchemaLoader[SoQLType]) = {
     val copyInfo = pgu.datasetMapWriter.create(locale)
@@ -30,5 +44,4 @@ case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
     sLoader.create(copyInfo)
     (copyInfo, sLoader)
   }
-
 }

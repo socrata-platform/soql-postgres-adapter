@@ -4,10 +4,10 @@ import com.socrata.datacoordinator.id.{UserColumnId, ColumnId, CopyId}
 import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, _}
 import com.socrata.datacoordinator.secondary.{DatasetInfo => SecondaryDatasetInfo}
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo}
+import com.socrata.datacoordinator.truth.metadata.{DatasetInfo => TruthDatasetInfo}
 import com.socrata.pg.store.PGSecondaryUtil._
 import com.socrata.soql.types._
 import com.socrata.thirdparty.typesafeconfig.Propertizer
-import com.typesafe.config.ConfigFactory
 import org.apache.log4j.PropertyConfigurator
 import org.scalatest.{Matchers, BeforeAndAfterAll, FunSuite}
 import com.socrata.datacoordinator.secondary.ColumnInfo
@@ -68,12 +68,18 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
       )
     }
 
-  def getTruthCopyInfo(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], secondaryDatasetInfo: SecondaryDatasetInfo): TruthCopyInfo = {
+  def getTruthDatasetInfo(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], secondaryDatasetInfo: SecondaryDatasetInfo): TruthDatasetInfo = {
     val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName).getOrElse(
       throw new ResyncSecondaryException(s"Couldn't find mapping for datasetInternalName ${secondaryDatasetInfo.internalName}")
     )
+    pgu.datasetMapReader.datasetInfo(datasetId).get
+  }
 
-    val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
-    pgu.datasetMapReader.latest(truthDatasetInfo)
+  def getTruthCopyInfo(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], secondaryDatasetInfo: SecondaryDatasetInfo): TruthCopyInfo = {
+    pgu.datasetMapReader.latest(getTruthDatasetInfo(pgu, secondaryDatasetInfo))
+  }
+
+  def getTruthCopies(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], secondaryDatasetInfo: SecondaryDatasetInfo): Iterable[TruthCopyInfo] = {
+    pgu.datasetMapReader.allCopies(getTruthDatasetInfo(pgu, secondaryDatasetInfo))
   }
 }

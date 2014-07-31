@@ -3,6 +3,7 @@ package com.socrata.pg.store
 import com.mchange.v2.c3p0.DataSources
 import com.rojoma.json.util.JsonUtil
 import com.rojoma.simplearm.Managed
+import com.rojoma.simplearm.util._
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.common.DataSourceConfig
@@ -150,10 +151,10 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
   // Is only ever called as part of a resync.
   def dropCopy(datasetInternalName: String, copyNumber: Long, cookie: Secondary.Cookie): Secondary.Cookie = {
-    logger.debug(s"dropCopy '${datasetInternalName}' (cookie: ${cookie}})")
-    throw new UnsupportedOperationException("TODO later")
+    // TODO: dropCopy
+    logger.warn(s"TODO: dropCopy '${datasetInternalName}' (cookie: ${cookie}})")
+    cookie
   }
-
 
   def version(datasetInfo: DatasetInfo, dataVersion: Long, cookie: Secondary.Cookie, events: Iterator[Event[SoQLType, SoQLValue]]): Secondary.Cookie = {
     withPgu(dsInfo, Some(datasetInfo)) { pgu =>
@@ -162,6 +163,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
      cookieOut
     }
   }
+
   // The main method by which data will be sent to this API.
   // workingCopyCreated event is the (first) event by which this method will be called
   // "You always update the latest copy through the version method"
@@ -182,7 +184,6 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     //     - ignore this if the newDataVersion <= currentVersion
     //     - stored in copy_map
     logger.debug(s"version (secondaryDatasetInfo: ${secondaryDatasetInfo}}, newDataVersion: ${newDataVersion}}, cookie: ${cookie}, events: ${events})")
-
     // if we have a WorkingCopyCreated event, it is supposed to be the first event in the version,
     // and the only WorkingCopyCreated event in the version.
     val (wccEvents, remainingEvents) = events.span {
@@ -194,19 +195,32 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       val e = wccEvents.next
       logger.debug("got working copy event: {}", e)
 
-      val datasetExists =
+      val existingDataset =
         for {
           datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName)
           datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
         } yield {
-          true
+          datasetInfo
         }
 
       e match {
         case WorkingCopyCreated(copyInfo) =>
-          if (datasetExists.getOrElse(false)) throw new ResyncSecondaryException("Dataset already exists")
-          else WorkingCopyCreatedHandler(pgu, secondaryDatasetInfo, copyInfo)
-        case otherOps => throw new UnsupportedOperationException("Unexpected operation")
+          val theCopy = existingDataset match {
+            case Some(dsInfo) =>
+              val allCopies = pgu.datasetMapReader.allCopies(dsInfo)
+              allCopies.find(existingCopyInfo => existingCopyInfo.copyNumber == copyInfo.copyNumber)
+            case None =>
+              None
+          }
+          if (theCopy.isDefined) {
+            logger.info("dataset {} working copy {} already existed, resync", secondaryDatasetInfo.internalName, theCopy.get.copyNumber.toString)
+            throw new ResyncSecondaryException("Dataset already exists")
+          } else {
+            val truthDatasetInfo = pgu.secondaryDatasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName)
+            WorkingCopyCreatedHandler(pgu, truthDatasetInfo, secondaryDatasetInfo, copyInfo)
+          }
+        case otherOps =>
+          throw new UnsupportedOperationException("Unexpected operation")
       }
     }
 
@@ -253,11 +267,21 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         // maybe workingcopydropped is guaranteed to be the last event in a batch, and then we can skip updating the
         // version anywhere... ?
         case WorkingCopyDropped =>
-          throw new UnsupportedOperationException("TODO later")
+          WorkingCopyDroppedHandler(pgu, truthDatasetInfo)
+          rebuildIndex
         case DataCopied =>
-          throw new UnsupportedOperationException("TODO later")
+          val msg = s"DataCopy triggers resync dataset ${secondaryDatasetInfo.internalName} $datasetId copy-${truthCopyInfo.copyNumber} data-ver-${truthCopyInfo.dataVersion}"
+          logger.info(msg)
+          throw new ResyncSecondaryException(msg)
         case SnapshotDropped(info) =>
-          throw new UnsupportedOperationException("TODO later")
+          logger.info("drop snapshot system id - {}, copy number - {}", info.systemId.toString(), info.copyNumber.toString)
+          pgu.datasetMapReader.copyNumber(truthDatasetInfo, info.copyNumber) match {
+            case Some(ci) =>
+              CopyDroppedHandler(pgu, ci)
+            case None =>
+              throw new Exception("cannot find copy to drop")
+          }
+          rebuildIndex
         case WorkingCopyPublished =>
           WorkingCopyPublishedHandler(pgu, truthCopyInfo)
           rebuildIndex
@@ -268,7 +292,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           pgu.datasetMapWriter.updateLastModified(truthCopyInfo, lastModified)
           rebuildIndex
         case otherOps =>
-          throw new UnsupportedOperationException("Unexpected operation")
+          throw new UnsupportedOperationException(s"Unexpected operation $otherOps")
       }
     }
 
@@ -293,9 +317,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   def resync(datasetInfo: DatasetInfo, secondaryCopyInfo: SecondaryCopyInfo, schema: ColumnIdMap[SecondaryColumnInfo[SoQLType]], cookie: Secondary.Cookie, rows: Managed[Iterator[ColumnIdMap[SoQLValue]]]): Secondary.Cookie = {
     // should tell us the new copy number
     // We need to perform some accounting here to make sure readers know a resync is in process
-    logger.info("resync (datasetInfo: {}, secondaryCopyInfo: {}, schema: {}, cookie: {})",
-      datasetInfo, secondaryCopyInfo, schema, cookie)
-
+    logger.info("resync (datasetInfo: {}, secondaryCopyInfo: {}, schema: {}, cookie: {})", datasetInfo, secondaryCopyInfo, schema, cookie)
     withPgu(dsInfo, Some(datasetInfo)) { pgu =>
       val cookieOut = _resync(pgu, datasetInfo, secondaryCopyInfo, schema, cookie, rows)
       pgu.commit()
@@ -328,14 +350,24 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         // To use this resync, run this sql:
         //   UPDATE truth.secondary_manifest SET broken_at = null, latest_secondary_data_version = 0, latest_secondary_lifecycle_stage = 'Unpublished' WHERE dataset_system_id = ? -- 20
         pgu.datasetMapReader.datasetInfo(dsId).map { truthDatasetInfo =>
-          pgu.datasetMapWriter.copyNumber(truthDatasetInfo, secondaryCopyInfo.copyNumber).map { copyInfo =>
-            logger.info(s"delete existing copy so that a new one can be created with the same ids ${truthDatasetInfo.systemId} ${secondaryCopyInfo.copyNumber}")
-            pgu.secondaryDatasetMapWriter.deleteCopy(copyInfo)
-            val newCopyInfo = pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, copyInfo.systemId, copyInfo.copyNumber,
-              TruthLifecycleStage.valueOf(copyInfo.lifecycleStage.toString),
-              copyInfo.dataVersion)
-            newCopyInfo
-          }.getOrElse(throw new Exception(s"Cannot find existing copy info.  You may manually delete dataset_internal_name_map record and start fresh ${secondaryDatasetInfo.internalName} ${dsId}"))
+          pgu.datasetMapWriter.copyNumber(truthDatasetInfo, secondaryCopyInfo.copyNumber) match {
+            case Some(copyInfo) =>
+              logger.info(s"delete existing copy so that a new one can be created with the same ids ${truthDatasetInfo.systemId} ${secondaryCopyInfo.copyNumber}")
+              pgu.secondaryDatasetMapWriter.deleteCopy(copyInfo)
+              pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, copyInfo.systemId, copyInfo.copyNumber,
+                TruthLifecycleStage.valueOf(copyInfo.lifecycleStage.toString),
+                copyInfo.dataVersion)
+            case None =>
+              val secCopyId = using(pgu.conn.prepareStatement("select nextval('copy_map_system_id_seq')")) { stmt =>
+                val rs = stmt.executeQuery()
+                if (rs.next()) new com.socrata.datacoordinator.id.CopyId(rs.getLong(1))
+                else throw new Exception("cannot get new copy id from sequence")
+              }
+              pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, secCopyId,
+                secondaryCopyInfo.copyNumber,
+                TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
+                secondaryCopyInfo.dataVersion)
+          }
         }.getOrElse(throw new Exception(s"Cannot find existing dataset info.  You may manually delete dataset_internal_name_map record and start fresh ${secondaryDatasetInfo.internalName} ${dsId}"))
     }
 
