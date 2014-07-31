@@ -8,6 +8,7 @@ import com.socrata.datacoordinator.id.{UserColumnId, DatasetId}
 import com.socrata.datacoordinator.common.SoQLCommon
 import com.socrata.datacoordinator.util.{IndexedTempFile, NullCache, NoopTimingReport}
 import com.socrata.datacoordinator.service.Mutator
+import com.socrata.datacoordinator.service.ProcessCreationReturns
 import com.socrata.datacoordinator.secondary.NamedSecondary
 import com.socrata.datacoordinator.truth.migration.Migration.MigrationOperation
 import com.socrata.datacoordinator.truth.sql.{DatabasePopulator => TruthDatabasePopulator, DatasetMapLimits}
@@ -95,7 +96,7 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
       NullCache
     )
 
-    val (datasetId, _, _, _) = processMutationCreate(common, fixtureFile("mutate-create.json"))
+    val ProcessCreationReturns(datasetId, _, _, _) = processMutationCreate(common, fixtureFile("mutate-create.json"))
     processMutation(common, fixtureFile("mutate-publish.json"), datasetId)
     pushToSecondary(common, datasetId)
 

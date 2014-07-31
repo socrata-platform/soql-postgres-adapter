@@ -1,58 +1,59 @@
 package com.socrata.pg.server
 
-import com.rojoma.simplearm.util._
-import com.rojoma.simplearm.Managed
-import com.rojoma.json.util.JsonUtil
-import org.apache.curator.x.discovery.{ServiceDiscoveryBuilder, ServiceInstanceBuilder}
-import org.apache.curator.framework.CuratorFrameworkFactory
-import org.apache.curator.retry
+import java.io.ByteArrayInputStream
+import java.net.{InetAddress, InetSocketAddress}
+import java.nio.charset.StandardCharsets
+import java.sql.Connection
+import java.util.concurrent.{ExecutorService, Executors}
+
+import scala.language.existentials
+
 import com.rojoma.json.ast.JString
+import com.rojoma.json.util.JsonUtil
+import com.rojoma.simplearm.Managed
+import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.Row
+import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
+import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
-import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
-import com.socrata.datacoordinator.id.{UserColumnId, ColumnId}
+import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
-import com.socrata.datacoordinator.truth.metadata.{DatasetInfo, DatasetCopyContext, CopyInfo, Schema, ColumnInfo}
+import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, DatasetCopyContext, DatasetInfo, Schema}
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.http.server.implicits._
-import com.socrata.http.server.responses._
-import com.socrata.http.server.routing.{SimpleRouteContext, SimpleResource}
 import com.socrata.http.common.AuxiliaryData
-import com.socrata.http.server.livenesscheck.LivenessCheckResponder
-import com.socrata.http.server.curator.CuratorBroker
-import com.socrata.http.server.util.handlers.{LoggingHandler, ThreadRenamingHandler}
 import com.socrata.http.server._
-import com.socrata.pg.query.{DataSqlizerQuerier, RowReaderQuerier, RowCount}
-import com.socrata.pg.server.config.QueryServerConfig
+import com.socrata.http.server.curator.CuratorBroker
+import com.socrata.http.server.implicits._
+import com.socrata.http.server.livenesscheck.LivenessCheckResponder
+import com.socrata.http.server.responses._
+import com.socrata.http.server.routing.{SimpleResource, SimpleRouteContext}
+import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, StrongEntityTag}
+import com.socrata.http.server.util.Precondition._
+import com.socrata.http.server.util.handlers.{LoggingHandler, ThreadRenamingHandler}
+import com.socrata.pg.{SecondaryBase, Version}
 import com.socrata.pg.Schema._
-import com.socrata.pg.{Version, SecondaryBase}
-import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity, SqlizerContext, Sqlizer}
+import com.socrata.pg.query.{DataSqlizerQuerier, RowCount, RowReaderQuerier}
+import com.socrata.pg.server.config.QueryServerConfig
+import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity, Sqlizer, SqlizerContext}
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
-import com.socrata.pg.store.{PostgresUniverseCommon, PGSecondaryUniverse, SchemaUtil, PGSecondaryRowReader}
+import com.socrata.pg.store._
+import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.ColumnName
-import com.socrata.soql.SoQLAnalysis
-import com.socrata.soql.types.{SoQLVersion, SoQLValue, SoQLID, SoQLType}
 import com.socrata.soql.typed.CoreExpr
+import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.thirdparty.typesafeconfig.Propertizer
-import com.typesafe.config.{ConfigFactory, Config}
+import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.slf4j.Logging
+import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
+import org.apache.curator.retry
+import org.apache.curator.framework.CuratorFrameworkFactory
+import org.apache.curator.x.discovery.{ServiceDiscoveryBuilder, ServiceInstanceBuilder}
 import org.apache.log4j.PropertyConfigurator
-import java.net.{InetAddress, InetSocketAddress}
-import java.nio.charset.StandardCharsets
-import java.util.concurrent.{Executors, ExecutorService}
-import java.sql.Connection
-import java.io.ByteArrayInputStream
-import javax.servlet.http.{HttpServletResponse, HttpServletRequest}
-import scala.language.existentials
-import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
-import com.socrata.http.server.util.{NoPrecondition, Precondition, EntityTag, StrongEntityTag}
-import com.socrata.http.server.util.Precondition._
 import org.joda.time.DateTime
-
 
 class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase with Logging {
   import QueryServer._
@@ -91,7 +92,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
 
   def schema(req: HttpServletRequest): HttpResponse = {
     val ds = req.getParameter("ds")
-    latestSchema(ds) match {
+    val copy = Option(req.getParameter("copy"))
+    getSchema(ds, copy) match {
       case Some(schema) =>
         OK ~> ContentType("application/json; charset=utf-8") ~> Write(JsonUtil.writeJson(_, schema, buffer = true))
       case None =>
@@ -118,8 +120,9 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val schemaHash = req.getParameter("schemaHash")
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserializer(analysisStream)
     val reqRowCount = Option(req.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
+    val copy = Option(req.getParameter("copy"))
     logger.info("Performing query on dataset " + datasetId)
-    streamQueryResults(analysis, datasetId, reqRowCount, req.precondition, req.dateTimeHeader("If-Modified-Since"))
+    streamQueryResults(analysis, datasetId, reqRowCount, copy, req.precondition, req.dateTimeHeader("If-Modified-Since"))
   }
 
   /**
@@ -131,6 +134,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     analysis: SoQLAnalysis[UserColumnId, SoQLType],
     datasetId:String,
     reqRowCount: Boolean,
+    copy: Option[String],
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
   ) (resp:HttpServletResponse) = {
@@ -141,7 +145,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
             case Some(datasetInfo) =>
               def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
 
-              execQuery(pgu, datasetId, datasetInfo, analysis, reqRowCount, precondition, ifModifiedSince) match {
+              execQuery(pgu, datasetId, datasetInfo, analysis, reqRowCount, copy, precondition, ifModifiedSince) match {
                 case Success(qrySchema, dataVersion, results, etag, lastModified) =>
                   // Very weird separation of concerns between execQuery and streaming. Most likely we will
                   // want yet-another-refactoring where much of execQuery is lifted out into this function.
@@ -170,6 +174,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     datasetInfo: DatasetInfo,
     analysis: SoQLAnalysis[UserColumnId, SoQLType],
     rowCount: Boolean,
+    reqCopy: Option[String],
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
   ): QueryResult = {
@@ -206,9 +211,9 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
       }
     }
 
-    val latest: CopyInfo = pgu.datasetMapReader.latest(datasetInfo)
-    val etag = etagFromCopy(datasetInternalName, latest)
-    val lastModified = latest.lastModified
+    val copy = getCopy(pgu, datasetInfo, reqCopy)
+    val etag = etagFromCopy(datasetInternalName, copy)
+    val lastModified = copy.lastModified
 
     // Conditional GET handling
     precondition.check(Some(etag), sideEffectFree = true) match {
@@ -218,7 +223,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
                             && precondition == NoPrecondition =>
             NotModified(Seq(etag))
           case Some(_) | None =>
-            val (qrySchema, version, results) = runQuery(pgu, latest, analysis, rowCount)
+            val (qrySchema, version, results) = runQuery(pgu, copy, analysis, rowCount)
             Success(qrySchema, version, results, etag, lastModified)
         }
       case FailedBecauseMatch(etags) =>
@@ -227,8 +232,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         PreconditionFailed
     }
   }
-
-
 
   private def readerWithQuery[SoQLType, SoQLValue](conn: Connection,
                                                    pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
@@ -278,15 +281,32 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
    * @param ds Data coordinator dataset id
    * @return Some schema or none
    */
-  def latestSchema(ds: String): Option[Schema] = {
+  def getSchema(ds: String, reqCopy: Option[String]): Option[Schema] = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       for {
         datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds)
         datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
       } yield {
-        val latest = pgu.datasetMapReader.latest(datasetInfo)
-        pgu.datasetReader.openDataset(latest).map(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
+        val copy = getCopy(pgu, datasetInfo, reqCopy)
+        pgu.datasetReader.openDataset(copy).map(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
       }
+    }
+  }
+
+  private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInfo: DatasetInfo, reqCopy: Option[String]): CopyInfo = {
+    val intRx = "^[0-9]+$".r
+    val rd = pgu.datasetMapReader
+    reqCopy match {
+      case Some("latest") =>
+        rd.latest(datasetInfo)
+      case Some("published") | None =>
+        rd.published(datasetInfo).getOrElse(rd.latest(datasetInfo))
+      case Some("unpublished") | None =>
+        rd.unpublished(datasetInfo).getOrElse(rd.latest(datasetInfo))
+      case Some(intRx(num)) =>
+        rd.copyNumber(datasetInfo, num.toLong).getOrElse(rd.latest(datasetInfo))
+      case Some(unknown) =>
+        throw new IllegalArgumentException(s"invalid copy value $unknown")
     }
   }
 }

@@ -1,7 +1,7 @@
 package com.socrata.pg.store.events
 
 import com.socrata.datacoordinator.secondary.{LifecycleStage, CopyInfo, DatasetInfo => SecondaryDatasetInfo}
-import com.socrata.datacoordinator.id.CopyId
+import com.socrata.datacoordinator.id.{DatasetId, CopyId}
 import com.socrata.pg.store.{PGStoreTestBase, PGSecondaryTestBase}
 import scala.language.reflectiveCalls
 import com.socrata.datacoordinator.truth.metadata
@@ -17,22 +17,44 @@ class WorkingCopyCreatedHandlerTest extends PGSecondaryTestBase with PGStoreTest
   test("can handle working copy event") {
     withPgu() { pgu =>
       val datasetInfo = SecondaryDatasetInfo(testInternalName, localeName, obfuscationKey)
+      val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(testInternalName)
       val dataVersion = 0L
       val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
-      WorkingCopyCreatedHandler(pgu, datasetInfo, copyInfo)
+      WorkingCopyCreatedHandler(pgu, datasetId, datasetInfo, copyInfo)
 
       val truthCopyInfo = getTruthCopyInfo(pgu, datasetInfo)
       truthCopyInfo.lifecycleStage should be (metadata.LifecycleStage.Unpublished)
     }
   }
 
-  test("refuse to create copies with copy ids != 1; we do not support working copies") {
-    val copyInfo = CopyInfo(new CopyId(-1), -1, LifecycleStage.Published, dataVersion, new DateTime())
+  test("publish and create another working copy") {
     withPgu() { pgu =>
-      intercept[UnsupportedOperationException] {
-        WorkingCopyCreatedHandler(pgu,datasetInfo, copyInfo)
-      }
+      val datasetInfo = SecondaryDatasetInfo(testInternalName, localeName, obfuscationKey)
+
+      val dataVersion = 0L
+      val copyId = new CopyId(100)
+
+      val copyInfo = CopyInfo(copyId, 1, LifecycleStage.Published, dataVersion, new DateTime())
+
+      WorkingCopyCreatedHandler(pgu, None, datasetInfo, copyInfo)
+      val firstCopy = getTruthCopyInfo(pgu, datasetInfo)
+      firstCopy.lifecycleStage should be (metadata.LifecycleStage.Unpublished)
+      firstCopy.copyNumber should be (1L)
+
+      val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(testInternalName)
+      datasetId.isDefined should be (true)
+      WorkingCopyPublishedHandler(pgu, firstCopy)
+      val firstCopyPublished = getTruthCopyInfo(pgu, datasetInfo)
+      firstCopyPublished.lifecycleStage should be (metadata.LifecycleStage.Published)
+
+      val secondCopyInfo = CopyInfo(copyId, 2, LifecycleStage.Unpublished, dataVersion, new DateTime())
+      WorkingCopyCreatedHandler(pgu, datasetId, datasetInfo, secondCopyInfo)
+      val secondCopy = getTruthCopyInfo(pgu, datasetInfo)
+      secondCopy.lifecycleStage should be (metadata.LifecycleStage.Unpublished)
+      secondCopy.copyNumber should be (2L)
+
+      val allCopies = getTruthCopies(pgu, datasetInfo).toSeq
+      allCopies should be (Seq(firstCopyPublished, secondCopy))
     }
   }
-
 }
