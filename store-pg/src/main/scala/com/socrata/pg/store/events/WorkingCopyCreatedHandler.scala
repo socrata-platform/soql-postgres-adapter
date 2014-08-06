@@ -26,7 +26,6 @@ case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
   private def createDataset(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], locale:String):(TruthCopyInfo, SchemaLoader[SoQLType]) = {
     val copyInfo = pgu.datasetMapWriter.create(locale)
     val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
-    // TODO figure out best way to avoid creating unused log and audit tables.
     sLoader.create(copyInfo)
     (copyInfo, sLoader)
   }
