@@ -2,8 +2,7 @@ package com.socrata.pg.store
 
 import com.socrata.datacoordinator.truth.loader.Logger
 import com.socrata.datacoordinator.id.RowId
-import com.socrata.datacoordinator.truth.metadata.ColumnInfo
-import com.socrata.datacoordinator.truth.metadata.CopyInfo
+import com.socrata.datacoordinator.truth.metadata.{RollupInfo, ColumnInfo, CopyInfo}
 import scala.Some
 import com.typesafe.scalalogging.slf4j.Logging
 import org.joda.time.DateTime
@@ -48,4 +47,8 @@ class PGSecondaryLogger[CT, CV] extends Logger[CT, CV] with Logging {
   def delete(systemID: RowId, oldRow: Option[_root_.com.socrata.datacoordinator.Row[CV]]) = { logger.debug("delete: " + systemID + " oldRow: " + oldRow); }
 
   def counterUpdated(nextCounter: Long) = { logger.debug("counterUpdated")}
+
+  def rollupCreatedOrUpdated(info: RollupInfo) = { logger.debug(s"rollupCreatedOrUpdated: ${info}")}
+
+  def rollupDropped(info: RollupInfo): Unit = { logger.debug(s"rollupDropped: ${info}")}
 }

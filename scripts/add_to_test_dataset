@@ -7,10 +7,10 @@ fi
 
 echo "Posting data to dataset..."
 curl -s -X POST --data-binary @- -H 'Content-type: application/json' "http://localhost:6010/resource/${ds_name}" <<EOD
-[{key:1,value:"one"}
-,{key:2,value:"two"}
-,{key:3,value:"three"}
-,{key:4,value:"four"}
-,{key:5,value:"five"}
+[{key:$RANDOM,value:"one"}
+,{key:$RANDOM,value:"two"}
+,{key:$RANDOM,value:"three"}
+,{key:$RANDOM,value:"four"}
+,{key:$RANDOM,value:"five"}
 ]
 EOD

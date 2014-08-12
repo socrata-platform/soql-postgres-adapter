@@ -80,6 +80,10 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       truthCopyInfo(pgu, datasetInternalName) match {
         case Some(copyInfo) =>
           val datasetId = copyInfo.datasetInfo.systemId
+          for (copy <- pgu.datasetMapReader.allCopies(copyInfo.datasetInfo)) {
+            val rm = new RollupManager(pgu, copy)
+            rm.dropRollups()
+          }
           pgu.datasetDropper.dropDataset(datasetId)
           pgu.commit()
         case None =>
@@ -267,6 +271,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         case LastModifiedChanged(lastModified) =>
           pgu.datasetMapWriter.updateLastModified(truthCopyInfo, lastModified)
           rebuildIndex
+        case RollupCreatedOrUpdated(rollupInfo) =>
+          RollupCreatedOrUpdatedHandler(pgu, truthCopyInfo, rollupInfo)
+          rebuildIndex
+        case RollupDropped(rollupInfo) =>
+          RollupDroppedHandler(pgu, truthCopyInfo, rollupInfo)
+          rebuildIndex
         case otherOps =>
           throw new UnsupportedOperationException("Unexpected operation")
       }
@@ -279,6 +289,16 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
       sLoader.createFullTextSearchIndex(schema.values)
     }
+
+    // Right now we take the naive approach and rebuild every rollup after every
+    // version event.  This simplifies tracking what has changed and also
+    // simplifies cleaning up old versions of rollups.  Obviously this can be
+    // improved on when and if warranted.
+    val rm = new RollupManager(pgu, truthCopyInfo)
+    pgu.datasetMapReader.rollups(truthCopyInfo).foreach { ri =>
+      rm.updateRollup(ri, newDataVersion)
+    }
+
 
     cookie
   }
