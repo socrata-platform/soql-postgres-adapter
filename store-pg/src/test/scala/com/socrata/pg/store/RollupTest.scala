@@ -24,7 +24,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase {
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
       val dsName = s"$dcInstance.${truthDatasetId.underlying}"
       // TODO MS fix up geometry columns so we can make rollups on them, low priority
-      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"), "select * (EXCEPT point)")
+      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"), "select * (EXCEPT _point)")
 
       val rm = new RollupManager(pgu, copyInfo)
       rm.updateRollup(rollupInfo, copyInfo.dataVersion)
@@ -45,7 +45,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase {
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
       val dsName = s"$dcInstance.${truthDatasetId.underlying}"
       val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"),
-        "select make, avg(aspect_ratio) AS avg_asp WHERE v_min >20 GROUP BY make HAVING avg_asp > 4 ORDER BY make limit 100 offset 1")
+        "select _make, avg(_aspect_ratio) AS _avg_asp WHERE _v_min >20 GROUP BY _make HAVING _avg_asp > 4 ORDER BY _make limit 100 offset 1")
 
       val rm = new RollupManager(pgu, copyInfo)
       rm.updateRollup(rollupInfo, copyInfo.dataVersion)

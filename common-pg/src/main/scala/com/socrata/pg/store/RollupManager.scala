@@ -5,7 +5,7 @@ import java.security.MessageDigest
 import java.sql.{Connection, SQLException}
 
 import com.rojoma.simplearm.util.using
-import com.socrata.datacoordinator.id.UserColumnId
+import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.loader.sql.SqlTableDropper
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, RollupInfo}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
@@ -44,6 +44,30 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
   private val time = pgu.commonSupport.timingReport
 
   /**
+   * For analyzing the rollup query, we need to map the dataset schema column ids to the "_" prefixed
+   * version of the name that we get, designed to ensure the column name is valid soql
+   * and doesn't start with a number.
+   */
+  private def columnIdToPrefixeNameMap(cid: UserColumnId): ColumnName = {
+    val name = cid.underlying
+    name(0) match {
+      case ':' => new ColumnName(name)
+      case _ => new ColumnName("_" + name)
+    }
+  }
+
+  /**
+   * Once we have the analyzed rollup query with column names, we need to remove the leading "_" on non-system
+   * columns to make the names match up with the underlying dataset schema.
+   */
+  private def columnNameRemovePrefixMap(cn: ColumnName): ColumnName = {
+    cn.name(0) match {
+      case ':' => cn
+      case _ => new ColumnName(cn.name.drop(1))
+    }
+  }
+
+  /**
    * Rebuilds the given rollup table, and also schedules the previous version
    * of the rollup table for dropping, if it exists.
    *
@@ -59,23 +83,30 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
       val analyzer = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
 
+      val prefixedDsContext = new DatasetContext[SoQLAnalysisType] {
+        val schema: OrderedMap[ColumnName, SoQLAnalysisType] =
+          OrderedMap((dsSchema.values.map(x => (columnIdToPrefixeNameMap(x.userColumnId), x.typ))).toSeq.sortBy(_._1): _*)
+      }
+
       // Normally if something blows up we just blow up and mark the dataset as broken so we can
       // investigate, but in this case an analysis failure can be caused by user actions, even though the
       // rollup is initially validated by soda fountain.  eg. define rollup successfully, then
       // remove column used in the rollup.  We don't want to disable the rollup entirely since it could
       // become valid again, eg. if they then add the column back.  It would be ideal if we had a better
       // way to communicate this failure upwards.
-      val rollupAnalysis: Try[SoQLAnalysis[ColumnName, SoQLAnalysisType]] = Try (analyzer.analyzeFullQuery(rollupInfo.soql)(dsContext))
+      val prefixedRollupAnalysis: Try[SoQLAnalysis[ColumnName, SoQLAnalysisType]] = Try (analyzer.analyzeFullQuery(rollupInfo.soql)(prefixedDsContext))
 
-      rollupAnalysis match {
-        case Success(ra) =>
+
+      prefixedRollupAnalysis match {
+        case Success(pra) =>
+          val rollupAnalysis = pra.mapColumnIds(columnNameRemovePrefixMap)
           // We are naming columns simply c1 .. c<n> based on the order they are in to avoid having to maintain a mapping or
           // deal with edge cases such as length and :system columns.
           val rollupReps: Seq[SqlColumnRep[SoQLType, SoQLValue] with Indexable[SoQLType]] =
-            ra.selection.values.zipWithIndex.map(c => SoQLIndexableRep.sqlRep(c._1.typ.canonical, "c" + (c._2 + 1))).toSeq
+            rollupAnalysis.selection.values.zipWithIndex.map(c => SoQLIndexableRep.sqlRep(c._1.typ.canonical, "c" + (c._2 + 1))).toSeq
 
           createRollupTable(rollupReps, newTableName, rollupInfo)
-          populateRollupTable(newTableName, rollupInfo, ra, rollupReps)
+          populateRollupTable(newTableName, rollupInfo, rollupAnalysis, rollupReps)
           createIndexes(newTableName, rollupInfo, rollupReps)
         case Failure(e) =>
           e match {
