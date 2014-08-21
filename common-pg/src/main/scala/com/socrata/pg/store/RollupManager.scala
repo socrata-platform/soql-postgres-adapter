@@ -48,12 +48,9 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    * version of the name that we get, designed to ensure the column name is valid soql
    * and doesn't start with a number.
    */
-  private def columnIdToPrefixeNameMap(cid: UserColumnId): ColumnName = {
+  private def columnIdToPrefixNameMap(cid: UserColumnId): ColumnName = {
     val name = cid.underlying
-    name(0) match {
-      case ':' => new ColumnName(name)
-      case _ => new ColumnName("_" + name)
-    }
+    new ColumnName(if (name(0) == ':') name else "_" + name)
   }
 
   /**
@@ -85,16 +82,18 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
       val prefixedDsContext = new DatasetContext[SoQLAnalysisType] {
         val schema: OrderedMap[ColumnName, SoQLAnalysisType] =
-          OrderedMap((dsSchema.values.map(x => (columnIdToPrefixeNameMap(x.userColumnId), x.typ))).toSeq.sortBy(_._1): _*)
+          OrderedMap((dsSchema.values.map(x => (columnIdToPrefixNameMap(x.userColumnId), x.typ))).toSeq.sortBy(_._1): _*)
       }
 
-      // Normally if something blows up we just blow up and mark the dataset as broken so we can
-      // investigate, but in this case an analysis failure can be caused by user actions, even though the
-      // rollup is initially validated by soda fountain.  eg. define rollup successfully, then
-      // remove column used in the rollup.  We don't want to disable the rollup entirely since it could
-      // become valid again, eg. if they then add the column back.  It would be ideal if we had a better
-      // way to communicate this failure upwards.
-      val prefixedRollupAnalysis: Try[SoQLAnalysis[ColumnName, SoQLAnalysisType]] = Try (analyzer.analyzeFullQuery(rollupInfo.soql)(prefixedDsContext))
+      // In most of the secondary update code, if something unexpectedly blows up we just blow up, roll back
+      // the whole transaction, and mark the dataset as broken so we can investigate.  For doing the soql
+      // analysis, however, an failure can be caused by user actions, even though the rollup soql is initially
+      // validated by soda fountain.  eg. define rollup successfully, then remove a column used in the rollup.
+      // We don't want to disable the rollup entirely since it could become valid again, eg. if they then add
+      // the column back.  It would be ideal if we had a better way to communicate this failure upwards through
+      // the stack.
+      val prefixedRollupAnalysis: Try[SoQLAnalysis[ColumnName, SoQLAnalysisType]] =
+        Try (analyzer.analyzeFullQuery(rollupInfo.soql)(prefixedDsContext))
 
 
       prefixedRollupAnalysis match {
@@ -102,19 +101,17 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
           val rollupAnalysis = pra.mapColumnIds(columnNameRemovePrefixMap)
           // We are naming columns simply c1 .. c<n> based on the order they are in to avoid having to maintain a mapping or
           // deal with edge cases such as length and :system columns.
-          val rollupReps: Seq[SqlColumnRep[SoQLType, SoQLValue] with Indexable[SoQLType]] =
-            rollupAnalysis.selection.values.zipWithIndex.map(c => SoQLIndexableRep.sqlRep(c._1.typ.canonical, "c" + (c._2 + 1))).toSeq
+          val rollupReps = rollupAnalysis.selection.values.zipWithIndex.map { case (colRep, idx) =>
+              SoQLIndexableRep.sqlRep(colRep.typ.canonical, "c" + (idx + 1))
+            }.toSeq
 
           createRollupTable(rollupReps, newTableName, rollupInfo)
           populateRollupTable(newTableName, rollupInfo, rollupAnalysis, rollupReps)
           createIndexes(newTableName, rollupInfo, rollupReps)
+        case e @ (Failure(_:SoQLException) | Failure(_:StandaloneLexerException)) =>
+          logger.warn(s"Error updating ${copyInfo}, ${rollupInfo}, skipping building rollup", e)
         case Failure(e) =>
-          e match {
-            case e @ (_:SoQLException | _:StandaloneLexerException) =>
-              logger.warn(s"Error updating ${copyInfo}, ${rollupInfo}, skipping building rollup", e)
-            case _ =>
-              throw e
-          }
+          throw e
       }
 
       // drop the old rollup regardless so it doesn't leak, because we have no way to use or track old rollups at
@@ -144,11 +141,17 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     scheduleRollupTablesForDropping(rollupTableName(ri, copyInfo.dataVersion))
   }
 
+  /**
+   * Create the rollup table, but don't add indexes since we want to populate it first.  We are
+   * creating it explicitly instead of just doing a CREATE TABLE AS SELECT so we can ensure the
+   * column types match what the soql type is and so we can control that, instead of having
+   * postgres infer what type to use using its type system.
+   */
   private def createRollupTable(rollupReps: Seq[SqlColumnRep[SoQLType, SoQLValue]], tableName: String, rollupInfo: RollupInfo) {
     time("create-rollup-table", "dataset_id" -> copyInfo.datasetInfo.systemId.underlying, "rollupName" -> rollupInfo.name.underlying) {
       // Note that we aren't doing the work to figure out which columns should be not null
       // or unique since that is of marginal use for us.
-      val colDdls: Seq[String] = for {
+      val colDdls = for {
         rep <- rollupReps
         (colName, colType) <- rep.physColumns.zip(rep.sqlTypes)
       } yield (s"${colName} ${colType} NULL")
@@ -219,7 +222,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     }
   }
 
-  private def executeParamSqlUpdate(conn: Connection, pSql: ParametricSql): Integer = {
+  private def executeParamSqlUpdate(conn: Connection, pSql: ParametricSql): Int = {
     try {
       using(conn.prepareStatement(pSql.sql)) { stmt =>
         val stmt = conn.prepareStatement(pSql.sql)

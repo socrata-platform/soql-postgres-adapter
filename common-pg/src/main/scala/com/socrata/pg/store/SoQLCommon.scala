@@ -1,6 +1,7 @@
 package com.socrata.pg.store
 
 import com.socrata.datacoordinator.{Row, MutableRow}
+import com.socrata.pg.store.index.SoQLIndexableRep.IndexableSqlColumnRep
 import com.socrata.soql.types._
 import com.socrata.datacoordinator.common.soql.{SoQLRowLogCodec, SoQLRep, SoQLTypeContext}
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, DatasetCopyContext, DatasetInfo, AbstractColumnInfoLike}
@@ -46,7 +47,7 @@ class PostgresUniverseCommon(val tablespace: String => Option[String],
 
   val typeContext = SoQLTypeContext
 
-  val repForIndex: (ColumnInfo[SoQLType]) => SqlColumnRep[SoQLType, SoQLValue] with Indexable[SoQLType] = SoQLIndexableRep.sqlRep _
+  val repForIndex: ColumnInfo[SoQLType] => IndexableSqlColumnRep = SoQLIndexableRep.sqlRep _
 
   val repFor = repForIndex
 

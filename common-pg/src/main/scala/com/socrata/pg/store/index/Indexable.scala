@@ -97,8 +97,9 @@ trait GeoIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] =>
 
 
 object SoQLIndexableRep {
+  type IndexableSqlColumnRep = SqlColumnRep[SoQLType, SoQLValue] with Indexable[SoQLType]
 
-  private val sqlRepFactories = Map[SoQLType, String => SqlColumnRep[SoQLType, SoQLValue] with Indexable[SoQLType]](
+  private val sqlRepFactories = Map[SoQLType, String => IndexableSqlColumnRep] (
     SoQLID -> (base => new IDRep(base)  with NoIndex[SoQLType]), // Already indexed
     SoQLVersion -> (base => new VersionRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
     SoQLText -> (base => new TextRep(base) with TextIndexable[SoQLType]),
