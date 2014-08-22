@@ -50,6 +50,7 @@ object BuildSettings {
               sources.map(_._1.name).sorted match {
                 case Seq("commons-beanutils-1.7.0.jar", "commons-collections-3.2.jar") => pick("commons-collections-3.2.jar")
                 case Seq("netty-3.2.2.Final.jar", "netty-3.4.4.Final.jar") => pick("netty-3.4.4.Final.jar")
+                case Seq("netty-3.2.2.Final.jar", "netty-3.6.3.Final.jar") => pick("netty-3.6.3.Final.jar")
                 case _ => originalStrat(args)
               }
             } else {
