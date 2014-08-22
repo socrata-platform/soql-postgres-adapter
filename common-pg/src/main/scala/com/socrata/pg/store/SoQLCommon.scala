@@ -1,9 +1,10 @@
 package com.socrata.pg.store
 
 import com.socrata.datacoordinator.{Row, MutableRow}
+import com.socrata.pg.store.index.SoQLIndexableRep.IndexableSqlColumnRep
 import com.socrata.soql.types._
 import com.socrata.datacoordinator.common.soql.{SoQLRowLogCodec, SoQLRep, SoQLTypeContext}
-import com.socrata.datacoordinator.truth.metadata.{DatasetCopyContext, DatasetInfo, AbstractColumnInfoLike}
+import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, DatasetCopyContext, DatasetInfo, AbstractColumnInfoLike}
 import java.util.concurrent.{Executors, TimeUnit, ExecutorService}
 import com.socrata.datacoordinator.truth.universe.sql.{PostgresCopyIn, PostgresCommonSupport}
 import org.joda.time.DateTime
@@ -12,11 +13,11 @@ import com.socrata.datacoordinator.truth.loader.RowPreparer
 import com.socrata.datacoordinator.id.{UserColumnId, DatasetId, RowVersion, RowId}
 import java.sql.Connection
 import java.io.{File, OutputStream}
-import com.socrata.datacoordinator.util.NoopTimingReport
+import com.socrata.datacoordinator.util.{StackedTimingReport, LoggedTimingReport}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import scala.concurrent.duration.{FiniteDuration, Duration}
-import com.socrata.datacoordinator.truth.sql.DatasetMapLimits
-import com.socrata.pg.store.index.{FullTextSearch, IndexSupport, SoQLIndexableRep}
+import com.socrata.datacoordinator.truth.sql.{SqlColumnRep, DatasetMapLimits}
+import com.socrata.pg.store.index.{Indexable, FullTextSearch, IndexSupport, SoQLIndexableRep}
 
 object StandardDatasetMapLimits extends DatasetMapLimits
 
@@ -46,7 +47,7 @@ class PostgresUniverseCommon(val tablespace: String => Option[String],
 
   val typeContext = SoQLTypeContext
 
-  val repForIndex = SoQLIndexableRep.sqlRep _
+  val repForIndex: ColumnInfo[SoQLType] => IndexableSqlColumnRep = SoQLIndexableRep.sqlRep _
 
   val repFor = repForIndex
 
@@ -151,7 +152,7 @@ class PostgresUniverseCommon(val tablespace: String => Option[String],
   val executor: ExecutorService = Executors.newCachedThreadPool()
   val obfuscationKeyGenerator: () => Array[Byte] = generateObfuscationKey _
   val initialCounterValue: Long = 0L
-  val timingReport = NoopTimingReport
+  val timingReport = new LoggedTimingReport(org.slf4j.LoggerFactory.getLogger("timing-report")) with StackedTimingReport
 }
 
 /**

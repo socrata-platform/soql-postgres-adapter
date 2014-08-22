@@ -97,52 +97,56 @@ trait GeoIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] =>
 
 
 object SoQLIndexableRep {
+  type IndexableSqlColumnRep = SqlColumnRep[SoQLType, SoQLValue] with Indexable[SoQLType]
 
-  private val sqlRepFactories = Map[SoQLType, ColumnInfo[SoQLType] => SqlColumnRep[SoQLType, SoQLValue] with Indexable[SoQLType]](
-    SoQLID -> (ci => new IDRep(ci.physicalColumnBase)  with NoIndex[SoQLType]), // Already indexed
-    SoQLVersion -> (ci => new VersionRep(ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLText -> (ci => new TextRep(ci.physicalColumnBase) with TextIndexable[SoQLType]),
-    SoQLBoolean -> (ci => new BooleanRep(ci.physicalColumnBase) with BooleanIndexable[SoQLType]),
-    SoQLNumber -> (ci =>
+  private val sqlRepFactories = Map[SoQLType, String => IndexableSqlColumnRep] (
+    SoQLID -> (base => new IDRep(base)  with NoIndex[SoQLType]), // Already indexed
+    SoQLVersion -> (base => new VersionRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
+    SoQLText -> (base => new TextRep(base) with TextIndexable[SoQLType]),
+    SoQLBoolean -> (base => new BooleanRep(base) with BooleanIndexable[SoQLType]),
+    SoQLNumber -> (base =>
       new NumberLikeRep(
         SoQLNumber,
         _.asInstanceOf[SoQLNumber].value,
         SoQLNumber(_),
-        ci.physicalColumnBase) with NumberLikeIndexable[SoQLType]),
-    SoQLMoney -> (ci =>
+        base) with NumberLikeIndexable[SoQLType]),
+    SoQLMoney -> (base =>
       new NumberLikeRep(
         SoQLNumber,
         _.asInstanceOf[SoQLMoney].value,
         SoQLMoney(_),
-        ci.physicalColumnBase) with NumberLikeIndexable[SoQLType]),
-    SoQLFixedTimestamp -> (ci => new FixedTimestampRep(ci.physicalColumnBase) with TimestampLikeIndexable[SoQLType]),
-    SoQLFloatingTimestamp -> (ci => new FloatingTimestampRep(ci.physicalColumnBase) with TimestampLikeIndexable[SoQLType]),
-    SoQLDate -> (ci => new DateRep(ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLTime -> (ci => new TimeRep(ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLLocation -> (ci => new LocationRep(ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLDouble -> (ci => new DoubleRep(ci.physicalColumnBase) with NumberLikeIndexable[SoQLType]),
-    SoQLObject -> (ci => new ObjectRep(ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLArray -> (ci => new ArrayRep(ci.physicalColumnBase) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLPoint -> (ci =>
+        base) with NumberLikeIndexable[SoQLType]),
+    SoQLFixedTimestamp -> (base => new FixedTimestampRep(base) with TimestampLikeIndexable[SoQLType]),
+    SoQLFloatingTimestamp -> (base => new FloatingTimestampRep(base) with TimestampLikeIndexable[SoQLType]),
+    SoQLDate -> (base => new DateRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
+    SoQLTime -> (base => new TimeRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
+    SoQLLocation -> (base => new LocationRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
+    SoQLDouble -> (base => new DoubleRep(base) with NumberLikeIndexable[SoQLType]),
+    SoQLObject -> (base => new ObjectRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
+    SoQLArray -> (base => new ArrayRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
+    SoQLPoint -> (base =>
       new GeometryLikeRep[Point](
         SoQLPoint,
         _.asInstanceOf[SoQLPoint].value,
         SoQLPoint(_),
-        ci.physicalColumnBase) with GeoIndexable[SoQLType]),
-    SoQLMultiLine -> (ci =>
+        base) with GeoIndexable[SoQLType]),
+    SoQLMultiLine -> (base =>
       new GeometryLikeRep[MultiLineString](
         SoQLMultiLine,
         _.asInstanceOf[SoQLMultiLine].value,
         SoQLMultiLine(_),
-        ci.physicalColumnBase) with GeoIndexable[SoQLType]),
-    SoQLMultiPolygon -> (ci =>
+        base) with GeoIndexable[SoQLType]),
+    SoQLMultiPolygon -> (base =>
       new GeometryLikeRep[MultiPolygon](
         SoQLMultiPolygon,
         _.asInstanceOf[SoQLMultiPolygon].value,
         SoQLMultiPolygon(_),
-        ci.physicalColumnBase) with GeoIndexable[SoQLType])
+        base) with GeoIndexable[SoQLType])
   )
 
   def sqlRep(columnInfo: ColumnInfo[SoQLType]): SqlColumnRep[SoQLType, SoQLValue] with Indexable[SoQLType] =
-    sqlRepFactories(columnInfo.typ)(columnInfo)
+    sqlRepFactories(columnInfo.typ)(columnInfo.physicalColumnBase)
+
+  def sqlRep(typ: SoQLType, baseName: String) =
+    sqlRepFactories(typ)(baseName)
 }

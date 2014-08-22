@@ -98,6 +98,12 @@ trait PGSecondaryUniverseTestBase {
     rs.getRow
   }
 
+  def jdbcRowCount(conn: Connection, tableName: String): Integer = {
+    val rs = conn.prepareStatement(s"SELECT COUNT(*) FROM ${tableName}").executeQuery()
+    rs.next()
+    rs.getInt(1)
+  }
+
   def insertDummyRow(id:RowId, values:Map[TypeName, SoQLValue], pgu:PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo:CopyInfo, schema:ColumnIdMap[ColumnInfo[SoQLType]]) {
     // Setup our row data with column Ids
     val colIdMap = schema.foldLeft(ColumnIdMap[SoQLValue]())  { (acc, kv) =>
