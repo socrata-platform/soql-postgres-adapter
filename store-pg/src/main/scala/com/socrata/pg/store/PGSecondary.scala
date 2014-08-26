@@ -271,7 +271,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           logger.info(msg)
           throw new ResyncSecondaryException(msg)
         case SnapshotDropped(info) =>
-          logger.info("drop snapshot system id - {}, copy number - {}", info.systemId.toString(), info.copyNumber.toString)
+          logger.info("drop snapshot system id - {}, copy number - {}", info.systemId.toString, info.copyNumber.toString)
           pgu.datasetMapReader.copyNumber(truthDatasetInfo, info.copyNumber) match {
             case Some(ci) =>
               CopyDroppedHandler(pgu, ci)
@@ -349,7 +349,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         pgu.datasetMapReader.datasetInfo(dsId).map { truthDatasetInfo =>
           pgu.datasetMapWriter.copyNumber(truthDatasetInfo, secondaryCopyInfo.copyNumber) match {
             case Some(copyInfo) =>
-              logger.info(s"delete existing copy so that a new one can be created with the same ids ${truthDatasetInfo.systemId} ${secondaryCopyInfo.copyNumber}")
+              logger.info("delete existing copy so that a new one can be created with the same ids {} {}", truthDatasetInfo.systemId.toString, secondaryCopyInfo.copyNumber.toString)
               pgu.secondaryDatasetMapWriter.deleteCopy(copyInfo)
               pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, copyInfo.systemId, copyInfo.copyNumber,
                 TruthLifecycleStage.valueOf(copyInfo.lifecycleStage.toString),
