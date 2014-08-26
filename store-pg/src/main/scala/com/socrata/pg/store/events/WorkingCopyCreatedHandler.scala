@@ -21,11 +21,7 @@ case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
       pgu.secondaryDatasetMapWriter.createInternalNameMapping(datasetInfo.internalName, copyInfoSecondary.datasetInfo.systemId)
     case copyNumBeyondOne =>
       pgu.datasetMapReader.datasetInfo(datasetId.get).map { truthDatasetInfo =>
-        val copyIdFromSequence = using(pgu.conn.prepareStatement("select nextval('copy_map_system_id_seq')")) { stmt =>
-          val rs = stmt.executeQuery()
-          if (rs.next()) new com.socrata.datacoordinator.id.CopyId(rs.getLong(1))
-          else throw new Exception("cannot get new copy id from sequence")
-        }
+        val copyIdFromSequence = pgu.secondaryDatasetMapWriter.allocateCopyId()
         val newCopyInfo = pgu.datasetMapWriter.unsafeCreateCopy(
           truthDatasetInfo,
           copyIdFromSequence,

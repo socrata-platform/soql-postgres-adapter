@@ -1,7 +1,7 @@
 package com.socrata.pg.store
 
 import com.rojoma.simplearm.util._
-import com.socrata.datacoordinator.id.DatasetId
+import com.socrata.datacoordinator.id.{CopyId, DatasetId}
 import com.socrata.datacoordinator.id.sql._
 import com.socrata.datacoordinator.truth.DatabaseInReadOnlyMode
 import com.socrata.datacoordinator.truth.metadata.{DatasetInfo, TypeNamespace, CopyInfo}
@@ -91,6 +91,14 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection, tns: TypeNa
       // hackish workarounds that we could use here ended up looking ugly
       // and complicating the logic... possibly to be revisited.
       stmt.execute("DROP TABLE IF EXISTS " + copyInfo.dataTableName)
+    }
+  }
+
+  def allocateCopyId(): CopyId = {
+    using(conn.prepareStatement("select nextval('copy_map_system_id_seq')")) { stmt =>
+      val rs = stmt.executeQuery()
+      if (rs.next()) new com.socrata.datacoordinator.id.CopyId(rs.getLong(1))
+      else throw new Exception("cannot get new copy id from sequence")
     }
   }
 }

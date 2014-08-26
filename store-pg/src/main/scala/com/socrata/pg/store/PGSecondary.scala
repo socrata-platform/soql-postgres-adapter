@@ -358,11 +358,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
                 TruthLifecycleStage.valueOf(copyInfo.lifecycleStage.toString),
                 copyInfo.dataVersion)
             case None =>
-              val secCopyId = using(pgu.conn.prepareStatement("select nextval('copy_map_system_id_seq')")) { stmt =>
-                val rs = stmt.executeQuery()
-                if (rs.next()) new com.socrata.datacoordinator.id.CopyId(rs.getLong(1))
-                else throw new Exception("cannot get new copy id from sequence")
-              }
+              val secCopyId = pgu.secondaryDatasetMapWriter.allocateCopyId()
               pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, secCopyId,
                 secondaryCopyInfo.copyNumber,
                 TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
