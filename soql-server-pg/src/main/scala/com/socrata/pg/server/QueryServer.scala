@@ -305,8 +305,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         rd.unpublished(datasetInfo).getOrElse(rd.latest(datasetInfo))
       case Some(intRx(num)) =>
         rd.copyNumber(datasetInfo, num.toLong).getOrElse(rd.latest(datasetInfo))
-      case _ =>
-        rd.published(datasetInfo).getOrElse(rd.latest(datasetInfo))
+      case Some(unknown) =>
+        throw new IllegalArgumentException(s"invalid copy value $unknown")
     }
   }
 }
