@@ -16,6 +16,7 @@ object CommonPG {
       liquibaseCore,
       liquibasePlugin,
       socrataUtil,
+      socrataThirdPartyUtil,
       soqlStdlib,
       secondarylib,
       coordinatorlib,
