@@ -16,6 +16,7 @@ object CommonPG {
       jodaTime,
       liquibaseCore,
       liquibasePlugin,
+      postgresql,
       socrataUtil,
       socrataThirdPartyUtil,
       soqlStdlib,
