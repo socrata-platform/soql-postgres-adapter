@@ -9,6 +9,7 @@ object CommonPG {
   lazy val settings: Seq[Setting[_]] = BuildSettings.projectSettings() ++ Seq(
     resolvers += "Open Source Geospatial Foundation Repository" at "http://download.osgeo.org/webdav/geotools",
     libraryDependencies ++= Seq(
+      c3p0,
       commonsCodec,
       commonsIo,
       jodaConvert,

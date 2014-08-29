@@ -2,6 +2,7 @@ import sbt._
 
 object Dependencies {
   object versions {
+    val c3p0 = "0.9.5-pre8"
     val commonsCli = "1.2"
     val commonsCodec = "1.5"
     val commonsIo = "1.4"
@@ -22,6 +23,8 @@ object Dependencies {
     val typesafeScalaLogging = "1.1.0"
     val rojomaJson = "[2.4.3,3.0.0)"
   }
+
+  val c3p0 = "com.mchange" % "c3p0" % versions.c3p0
 
   val commonsCli = "commons-cli" % "commons-cli" % versions.commonsCli
 

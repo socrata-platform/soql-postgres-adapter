@@ -11,9 +11,10 @@ object SqlUtils {
     */
   def escapeString(conn: Connection, in: String): String = {
     conn match {
-      case c: BaseConnection => c.escapeString(in)
-      case c: Connection if c.isWrapperFor(classOf[Connection]) => escapeString(c.unwrap(classOf[Connection]), in)
-      case _ => throw new Exception("Unsupported connection class: " + conn.getClass)
+      case c: Connection if c.isWrapperFor(classOf[BaseConnection]) =>
+        c.unwrap(classOf[BaseConnection]).escapeString(in)
+      case _ => throw new RuntimeException("Unsupported connection class: " + conn.getClass)
+
     }
   }
 }
