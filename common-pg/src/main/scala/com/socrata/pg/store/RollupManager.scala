@@ -72,7 +72,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    *                       transaction completes.
    */
   def updateRollup(rollupInfo: RollupInfo, newDataVersion: Long) {
-    logger.info("Updating copy ${copyInfo}, rollup ${rollupInfo}")
+    logger.info(s"Updating copy ${copyInfo}, rollup ${rollupInfo}")
     time("update-rollup", "dataset_id" -> copyInfo.datasetInfo.systemId, "rollupName" -> rollupInfo.name) {
 
       val newTableName = rollupTableName(rollupInfo, newDataVersion)
