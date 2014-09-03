@@ -2,6 +2,7 @@ import sbt._
 
 object Dependencies {
   object versions {
+    val c3p0 = "0.9.5-pre8"
     val commonsCli = "1.2"
     val commonsCodec = "1.5"
     val commonsIo = "1.4"
@@ -10,6 +11,7 @@ object Dependencies {
     val jodaTime = "2.1"
     val liquibaseCore = "2.0.0"
     val liquibasePlugin = "1.9.5.0"
+    val postgresql = "9.3-1102-jdbc41"
     val scalaTest = "2.1.0-RC2"
     val simpleArm = "[1.1.10,2.0.0)"
     val slf4j = "1.7.5"
@@ -22,6 +24,8 @@ object Dependencies {
     val typesafeScalaLogging = "1.1.0"
     val rojomaJson = "[2.4.3,3.0.0)"
   }
+
+  val c3p0 = "com.mchange" % "c3p0" % versions.c3p0
 
   val commonsCli = "commons-cli" % "commons-cli" % versions.commonsCli
 
@@ -38,6 +42,8 @@ object Dependencies {
   val liquibaseCore = "org.liquibase" % "liquibase-core" % versions.liquibaseCore
 
   val liquibasePlugin = "org.liquibase" % "liquibase-plugin" % versions.liquibasePlugin
+
+  val postgresql = "org.postgresql" % "postgresql" % versions.postgresql
 
   val scalaTest = "org.scalatest" %% "scalatest" % versions.scalaTest
 
