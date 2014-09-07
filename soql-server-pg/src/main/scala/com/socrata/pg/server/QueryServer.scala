@@ -16,9 +16,9 @@ import com.socrata.datacoordinator.Row
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
-import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
+import com.socrata.datacoordinator.id.{RollupName, ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
-import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, DatasetCopyContext, DatasetInfo, Schema}
+import com.socrata.datacoordinator.truth.metadata._
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.http.common.AuxiliaryData
@@ -66,6 +66,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     import SimpleRouteContext._
     Routes(
       Route("/schema", SchemaResource),
+      Route("/rollups", RollupResource),
       Route("/query", QueryResource),
       Route("/version", VersionResource)
     )
@@ -101,6 +102,21 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     }
   }
 
+  object RollupResource extends SimpleResource {
+    override val get = rollups _
+  }
+
+  def rollups(req: HttpServletRequest): HttpResponse = {
+    val ds = req.getParameter("ds")
+    val copy = Option(req.getParameter("copy"))
+    getRollups(ds, copy) match {
+      case Some(rollups) =>
+        OK ~> ContentType("application/json; charset=utf-8") ~> Write(JsonUtil.writeJson(_, rollups.map(r => r.unanchored).toSeq, buffer = true))
+      case None =>
+        NotFound
+    }
+  }
+
   object QueryResource extends SimpleResource {
     override val get = query _
     override val post = query _
@@ -121,8 +137,13 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserializer(analysisStream)
     val reqRowCount = Option(req.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     val copy = Option(req.getParameter("copy"))
+    val rollupName = req.getParameter("rollupName") match {
+      case null => None
+      case s: String => Some(new RollupName(s))
+    }
+
     logger.info("Performing query on dataset " + datasetId)
-    streamQueryResults(analysis, datasetId, reqRowCount, copy, req.precondition, req.dateTimeHeader("If-Modified-Since"))
+    streamQueryResults(analysis, datasetId, reqRowCount, copy, rollupName, req.precondition, req.dateTimeHeader("If-Modified-Since"))
   }
 
   /**
@@ -135,6 +156,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     datasetId:String,
     reqRowCount: Boolean,
     copy: Option[String],
+    rollupName: Option[RollupName],
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
   ) (resp:HttpServletResponse) = {
@@ -145,12 +167,13 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
             case Some(datasetInfo) =>
               def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
 
-              execQuery(pgu, datasetId, datasetInfo, analysis, reqRowCount, copy, precondition, ifModifiedSince) match {
+              execQuery(pgu, datasetId, datasetInfo, analysis, reqRowCount, copy, rollupName, precondition, ifModifiedSince) match {
                 case Success(qrySchema, dataVersion, results, etag, lastModified) =>
                   // Very weird separation of concerns between execQuery and streaming. Most likely we will
                   // want yet-another-refactoring where much of execQuery is lifted out into this function.
                   // This will significantly change the tests; however.
                   ETag(etag)(resp)
+                  rollupName.foreach(r => Header("X-SODA2-Rollup", r.underlying)(resp))
                   for (r <- results) yield {
                     CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, r.rowCount, dataVersion, lastModified)(resp)
                   }
@@ -175,6 +198,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     analysis: SoQLAnalysis[UserColumnId, SoQLType],
     rowCount: Boolean,
     reqCopy: Option[String],
+    rollupName: Option[RollupName],
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
   ): QueryResult = {
@@ -191,10 +215,9 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
       for (readCtx <- pgu.datasetReader.openDataset(latestCopy)) yield {
         val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
         val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
-        val userToSystemColumnMap = SchemaUtil.userToSystemColumnMap(readCtx.schema)
         val qrySchema = querySchema(pgu, analysis, latestCopy)
         val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor(_))
-        val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema)
+        val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
         val sqlReps = querier.getSqlReps(systemToUserColumnMap)
 
         val results = querier.query(
@@ -204,8 +227,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
           (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
             (a, tableName, sqlReps.values.toSeq).rowCountSql(sqlReps, Seq.empty, sqlCtx),
           rowCount,
-          systemToUserColumnMap,
-          userToSystemColumnMap,
           qryReps)
         (qrySchema, latestCopy.dataVersion, results)
       }
@@ -236,12 +257,23 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   private def readerWithQuery[SoQLType, SoQLValue](conn: Connection,
                                                    pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                                                    copyCtx: DatasetCopyContext[SoQLType],
-                                                   schema: com.socrata.datacoordinator.util.collection.ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]]):
+                                                   schema: com.socrata.datacoordinator.util.collection.ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]],
+                                                   rollupName: Option[RollupName]):
     PGSecondaryRowReader[SoQLType, SoQLValue] with RowReaderQuerier[SoQLType, SoQLValue] = {
+
+    val tableName = rollupName match {
+      case Some(r) =>
+        // TODOMS clean up
+        val rollupInfo = pgu.datasetMapReader.rollup(copyCtx.copyInfo, r)
+        // TODOMS ensure we have rollupinfo
+        RollupManager.rollupTableName(rollupInfo.get, copyCtx.copyInfo.dataVersion)
+      case None =>
+        copyCtx.copyInfo.dataTableName
+    }
 
     new PGSecondaryRowReader[SoQLType, SoQLValue] (
       conn,
-      new PostgresRepBasedDataSqlizer(copyCtx.copyInfo.dataTableName, pgu.datasetContextFactory(schema), pgu.commonSupport.copyInProvider) with DataSqlizerQuerier[SoQLType, SoQLValue],
+      new PostgresRepBasedDataSqlizer(tableName, pgu.datasetContextFactory(schema), pgu.commonSupport.copyInProvider) with DataSqlizerQuerier[SoQLType, SoQLValue],
       pgu.commonSupport.timingReport) with RowReaderQuerier[SoQLType, SoQLValue]
   }
 
@@ -289,6 +321,18 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
       } yield {
         val copy = getCopy(pgu, datasetInfo, reqCopy)
         pgu.datasetReader.openDataset(copy).map(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
+      }
+    }
+  }
+
+  def getRollups(ds: String, reqCopy: Option[String]): Option[Iterable[RollupInfo]] = {
+    withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
+      for {
+        datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds)
+        datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
+      } yield {
+        val copy = getCopy(pgu, datasetInfo, reqCopy)
+        pgu.datasetMapReader.rollups(copy)
       }
     }
   }
