@@ -137,7 +137,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserializer(analysisStream)
     val reqRowCount = Option(req.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     val copy = Option(req.getParameter("copy"))
-    val rollupName = Option(req.getParameter("rollupName"))
+    val rollupName = req.getParameter("rollupName") match {
+      case null => None
+      case s: String => Some(new RollupName(s))
+    }
 
     logger.info("Performing query on dataset " + datasetId)
     streamQueryResults(analysis, datasetId, reqRowCount, copy, rollupName, req.precondition, req.dateTimeHeader("If-Modified-Since"))
