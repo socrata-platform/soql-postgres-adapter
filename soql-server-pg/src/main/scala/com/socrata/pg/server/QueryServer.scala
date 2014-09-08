@@ -137,10 +137,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserializer(analysisStream)
     val reqRowCount = Option(req.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     val copy = Option(req.getParameter("copy"))
-    val rollupName = req.getParameter("rollupName") match {
-      case null => None
-      case s: String => Some(new RollupName(s))
-    }
+    val rollupName = Option(req.getParameter("rollupName"))
 
     logger.info("Performing query on dataset " + datasetId)
     streamQueryResults(analysis, datasetId, reqRowCount, copy, rollupName, req.precondition, req.dateTimeHeader("If-Modified-Since"))
@@ -263,10 +260,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
 
     val tableName = rollupName match {
       case Some(r) =>
-        // TODOMS clean up
-        val rollupInfo = pgu.datasetMapReader.rollup(copyCtx.copyInfo, r)
-        // TODOMS ensure we have rollupinfo
-        RollupManager.rollupTableName(rollupInfo.get, copyCtx.copyInfo.dataVersion)
+        val rollupInfo = pgu.datasetMapReader.rollup(copyCtx.copyInfo, r).getOrElse {
+          throw new RuntimeException(s"Rollup ${rollupName} not found for copy ${copyCtx.copyInfo} ")
+        }
+        RollupManager.rollupTableName(rollupInfo, copyCtx.copyInfo.dataVersion)
       case None =>
         copyCtx.copyInfo.dataTableName
     }
