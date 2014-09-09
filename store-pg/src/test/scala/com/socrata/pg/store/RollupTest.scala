@@ -29,7 +29,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase {
       val rm = new RollupManager(pgu, copyInfo)
       rm.updateRollup(rollupInfo, copyInfo.dataVersion)
 
-      val tableName = rm.rollupTableName(rollupInfo, copyInfo.dataVersion)
+      val tableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
 
       jdbcColumnCount(pgu.conn, tableName) should be (20)
       jdbcRowCount(pgu.conn,tableName) should be (11)
@@ -50,7 +50,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase {
       val rm = new RollupManager(pgu, copyInfo)
       rm.updateRollup(rollupInfo, copyInfo.dataVersion)
 
-      val tableName = rm.rollupTableName(rollupInfo, copyInfo.dataVersion)
+      val tableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
       jdbcColumnCount(pgu.conn, tableName) should be (2)
       jdbcRowCount(pgu.conn,tableName) should be (2)
       secondary.shutdown()
@@ -70,7 +70,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase {
       val rm = new RollupManager(pgu, copyInfo)
       rm.updateRollup(rollupInfo, copyInfo.dataVersion)
 
-      val tableName = rm.rollupTableName(rollupInfo, copyInfo.dataVersion)
+      val tableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
       jdbcColumnCount(pgu.conn, tableName) should be (0)
       secondary.shutdown()
     }

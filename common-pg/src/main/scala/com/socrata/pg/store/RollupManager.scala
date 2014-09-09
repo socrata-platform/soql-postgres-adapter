@@ -26,6 +26,8 @@ import com.typesafe.scalalogging.slf4j.Logging
 import scala.util.{Failure, Success, Try}
 
 class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) extends Logging {
+  import RollupManager._
+
   // put rollups in the same tablespace as the copy
   private val tablespaceSql = pgu.commonSupport.tablespace(copyInfo.dataTableName).map(" TABLESPACE " + _).getOrElse("")
 
@@ -243,7 +245,9 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     SoQLAnalyzerHelper.serializer(baos, analysis.mapColumnIds(name => new UserColumnId(name.name)))
     SoQLAnalyzerHelper.deserializer(new ByteArrayInputStream(baos.toByteArray))
   }
+}
 
+object RollupManager {
   def rollupTableName(rollupInfo: RollupInfo, dataVersion: Long): String = {
     val sha1 = MessageDigest.getInstance("SHA-1")
     // we have a 63 char limit on table names, so just taking a prefix.  It only has to be
