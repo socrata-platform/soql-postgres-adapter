@@ -210,7 +210,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
       )
 
       for (readCtx <- pgu.datasetReader.openDataset(latestCopy)) yield {
-        val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
+        val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema
         val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
         val qrySchema = querySchema(pgu, analysis, latestCopy)
         val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor(_))
@@ -254,7 +254,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   private def readerWithQuery[SoQLType, SoQLValue](conn: Connection,
                                                    pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                                                    copyCtx: DatasetCopyContext[SoQLType],
-                                                   schema: com.socrata.datacoordinator.util.collection.ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]],
+                                                   schema: ColumnIdMap[ColumnInfo[SoQLType]],
                                                    rollupName: Option[RollupName]):
     PGSecondaryRowReader[SoQLType, SoQLValue] with RowReaderQuerier[SoQLType, SoQLValue] = {
 
@@ -284,13 +284,13 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   private def querySchema(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                   analysis: SoQLAnalysis[UserColumnId, SoQLType],
                   latest: CopyInfo):
-                  OrderedMap[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.truth.metadata.ColumnInfo[pgu.CT]] = {
+                  OrderedMap[ColumnId, ColumnInfo[pgu.CT]] = {
 
-    analysis.selection.foldLeft(OrderedMap.empty[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.truth.metadata.ColumnInfo[pgu.CT]]) { (map, entry) =>
+    analysis.selection.foldLeft(OrderedMap.empty[ColumnId, ColumnInfo[pgu.CT]]) { (map, entry) =>
       entry match {
         case (columnName: ColumnName, coreExpr: CoreExpr[UserColumnId, SoQLType]) =>
-          val cid = new com.socrata.datacoordinator.id.ColumnId(map.size + 1)
-          val cinfo = new com.socrata.datacoordinator.truth.metadata.ColumnInfo[pgu.CT](
+          val cid = new ColumnId(map.size + 1)
+          val cinfo = new ColumnInfo[pgu.CT](
             latest,
             cid,
             new UserColumnId(columnName.name),
