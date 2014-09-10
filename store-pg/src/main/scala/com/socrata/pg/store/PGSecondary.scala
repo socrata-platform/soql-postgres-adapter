@@ -56,6 +56,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
   private val tableDropper = startTableDropper()
 
+  private val ResyncBatchSize = 500
+
   // Called when this process is shutting down (or being killed)
   def shutdown() {
     logger.debug("shutdown")
@@ -399,7 +401,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     val sidColumnInfo = newSchema.values.find(_.isSystemPrimaryKey == true).get
 
     for (iter <- rows) {
-      iter.grouped(500).foreach { bi =>
+      // TODO: divide rows based on data size instead of number of rows.
+      iter.grouped(ResyncBatchSize).foreach { bi =>
         for (row: ColumnIdMap[SoQLValue] <- bi) {
            logger.trace("adding row: {}", row)
            val rowId = pgu.commonSupport.typeContext.makeSystemIdFromValue(row.get(sidColumnInfo.systemId).get)
