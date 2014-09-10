@@ -398,15 +398,17 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
     val sidColumnInfo = newSchema.values.find(_.isSystemPrimaryKey == true).get
 
-    for (iter <- rows; row: ColumnIdMap[SoQLValue] <- iter) {
-      logger.trace("adding row: {}", row)
-      val rowId = pgu.commonSupport.typeContext.makeSystemIdFromValue(row.get(sidColumnInfo.systemId).get)
-      loader.insert(rowId, row)
+    for (iter <- rows) {
+      iter.grouped(500).foreach { bi =>
+        for (row: ColumnIdMap[SoQLValue] <- bi) {
+           logger.trace("adding row: {}", row)
+           val rowId = pgu.commonSupport.typeContext.makeSystemIdFromValue(row.get(sidColumnInfo.systemId).get)
+           loader.insert(rowId, row)
+        }
+        loader.flush()
+      }
     }
-    loader.flush()
-
     sLoader.optimize(truthSchema.values)
-
     cookie
   }
 
