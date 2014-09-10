@@ -56,6 +56,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
   private val tableDropper = startTableDropper()
 
+  private val resyncBatchSize = storeConfig.resyncBatchSize
+
   // Called when this process is shutting down (or being killed)
   def shutdown() {
     logger.debug("shutdown")
@@ -398,15 +400,18 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
     val sidColumnInfo = newSchema.values.find(_.isSystemPrimaryKey == true).get
 
-    for (iter <- rows; row: ColumnIdMap[SoQLValue] <- iter) {
-      logger.trace("adding row: {}", row)
-      val rowId = pgu.commonSupport.typeContext.makeSystemIdFromValue(row.get(sidColumnInfo.systemId).get)
-      loader.insert(rowId, row)
+    for (iter <- rows) {
+      // TODO: divide rows based on data size instead of number of rows.
+      iter.grouped(resyncBatchSize).foreach { bi =>
+        for (row: ColumnIdMap[SoQLValue] <- bi) {
+           logger.trace("adding row: {}", row)
+           val rowId = pgu.commonSupport.typeContext.makeSystemIdFromValue(row.get(sidColumnInfo.systemId).get)
+           loader.insert(rowId, row)
+        }
+        loader.flush()
+      }
     }
-    loader.flush()
-
     sLoader.optimize(truthSchema.values)
-
     cookie
   }
 
