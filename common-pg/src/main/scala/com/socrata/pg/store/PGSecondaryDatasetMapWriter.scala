@@ -70,6 +70,9 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection, tns: TypeNa
    * Deletes/drops a copy entirely, including column_map, copy_info and the actual table.
    */
   def deleteCopy(copyInfo: CopyInfo) {
+
+    dropRollup(copyInfo, None) // drop all related rollups metadata
+
     using(conn.prepareStatement(deleteCopyQuery_columnMap)) { stmt =>
       stmt.setLong(1, copyInfo.systemId.underlying)
       stmt.executeUpdate()
