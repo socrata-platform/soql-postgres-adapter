@@ -326,19 +326,20 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     cookie
   }
 
-
   // This is an expensive operation in that it is both time consuming as well as locking the data source for the duration
   // of the resync event. The resync event can come from either the DC, or originate from a ResyncSecondaryException being thrown
   // Incoming rows have their own ids already provided at this point
   // Need to record some state somewhere so that readers can know that a resync is underway
   // Backup code (Receiver class) touches this method as well via the receiveResync method
   // SoQL ID is only ever used for row ID
-  def resync(datasetInfo: DatasetInfo, secondaryCopyInfo: SecondaryCopyInfo, schema: ColumnIdMap[SecondaryColumnInfo[SoQLType]], cookie: Secondary.Cookie, rows: Managed[Iterator[ColumnIdMap[SoQLValue]]]): Secondary.Cookie = {
+  def resync(datasetInfo: DatasetInfo, secondaryCopyInfo: SecondaryCopyInfo, schema: ColumnIdMap[SecondaryColumnInfo[SoQLType]], cookie: Secondary.Cookie,
+             rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
+             rollups: Seq[RollupInfo]): Secondary.Cookie = {
     // should tell us the new copy number
     // We need to perform some accounting here to make sure readers know a resync is in process
     logger.info("resync (datasetInfo: {}, secondaryCopyInfo: {}, schema: {}, cookie: {})", datasetInfo, secondaryCopyInfo, schema, cookie)
     withPgu(dsInfo, Some(datasetInfo)) { pgu =>
-      val cookieOut = _resync(pgu, datasetInfo, secondaryCopyInfo, schema, cookie, rows)
+      val cookieOut = _resync(pgu, datasetInfo, secondaryCopyInfo, schema, cookie, rows, rollups)
       pgu.commit()
       cookieOut
     }
@@ -349,7 +350,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
               secondaryCopyInfo: SecondaryCopyInfo,
               newSchema: ColumnIdMap[SecondaryColumnInfo[SoQLType]],
               cookie: Secondary.Cookie,
-              rows: Managed[Iterator[ColumnIdMap[SoQLValue]]]): Secondary.Cookie =
+              rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
+              rollups: Seq[RollupInfo]): Secondary.Cookie =
   {
     val truthCopyInfo = pgu.secondaryDatasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName) match {
       case None =>
@@ -372,6 +374,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           pgu.datasetMapWriter.copyNumber(truthDatasetInfo, secondaryCopyInfo.copyNumber) match {
             case Some(copyInfo) =>
               logger.info("delete existing copy so that a new one can be created with the same ids {} {}", truthDatasetInfo.systemId.toString, secondaryCopyInfo.copyNumber.toString)
+              val rm = new RollupManager(pgu, copyInfo)
+              rm.dropRollups() // drop all rollup tables
               pgu.secondaryDatasetMapWriter.deleteCopy(copyInfo)
               pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, copyInfo.systemId, copyInfo.copyNumber,
                 TruthLifecycleStage.valueOf(copyInfo.lifecycleStage.toString),
@@ -412,6 +416,17 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       }
     }
     sLoader.optimize(truthSchema.values)
+
+    // re-create rollup metadata
+    for (rollup <- rollups) {
+      RollupCreatedOrUpdatedHandler(pgu, truthCopyInfo, rollup)
+    }
+    // re-create rollup tables
+    val rm = new RollupManager(pgu, truthCopyInfo)
+    pgu.datasetMapReader.rollups(truthCopyInfo).foreach { rollup =>
+      rm.updateRollup(rollup, truthCopyInfo.dataVersion)
+    }
+
     cookie
   }
 

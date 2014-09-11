@@ -3,8 +3,10 @@ package com.socrata.pg.store.events
 import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, DatasetInfo => SecondaryDatasetInfo}
 import com.socrata.datacoordinator.truth.loader.SchemaLoader
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo}
-import com.socrata.pg.store.{PGSecondaryLogger, PGSecondaryUniverse}
+import com.socrata.pg.store.{RollupManager, PGSecondaryLogger, PGSecondaryUniverse}
 import com.socrata.soql.types.{SoQLType, SoQLValue}
+import com.typesafe.scalalogging.slf4j.Logging
+
 
 /**
  * Handles WorkingCopyCreated Event
@@ -12,13 +14,17 @@ import com.socrata.soql.types.{SoQLType, SoQLValue}
 case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                                      datasetId: Option[com.socrata.datacoordinator.id.DatasetId],
                                      datasetInfo: SecondaryDatasetInfo,
-                                     copyInfo: SecondaryCopyInfo) {
+                                     copyInfo: SecondaryCopyInfo) extends Logging {
   copyInfo.copyNumber match {
     case 1 =>
+      logger.info("create first copy {}", datasetInfo.internalName)
       val (copyInfoSecondary: TruthCopyInfo, sLoader) = createDataset(pgu, datasetInfo.localeName)
       pgu.secondaryDatasetMapWriter.createInternalNameMapping(datasetInfo.internalName, copyInfoSecondary.datasetInfo.systemId)
     case copyNumBeyondOne =>
+
       pgu.datasetMapReader.datasetInfo(datasetId.get).map { truthDatasetInfo =>
+        logger.info("create working copy {} {} {}", datasetInfo.internalName, truthDatasetInfo.toString, copyNumBeyondOne.toString)
+        val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
         val copyIdFromSequence = pgu.secondaryDatasetMapWriter.allocateCopyId()
         val newCopyInfo = pgu.datasetMapWriter.unsafeCreateCopy(
           truthDatasetInfo,
@@ -28,6 +34,16 @@ case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
           copyInfo.dataVersion)
         val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
         sLoader.create(newCopyInfo)
+
+        // Copy rollups
+        val rm = new RollupManager(pgu, newCopyInfo)
+        pgu.datasetMapReader.rollups(truthCopyInfo).foreach { ru =>
+          val sru = RollupManager.makeSecondaryRollupInfo(ru)
+          RollupCreatedOrUpdatedHandler(pgu, newCopyInfo, sru)
+        }
+        pgu.datasetMapReader.rollups(newCopyInfo).foreach { ru =>
+          rm.updateRollup(ru, newCopyInfo.dataVersion)
+        }
       }
   }
 
