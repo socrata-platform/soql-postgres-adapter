@@ -3,7 +3,7 @@ package com.socrata.pg.store
 import java.sql.Connection
 import com.socrata.datacoordinator.truth.universe._
 import com.socrata.datacoordinator.truth.universe.sql.{SqlTableCleanup, PostgresCommonSupport}
-import com.socrata.datacoordinator.truth.loader.{ReportWriter, Logger}
+import com.socrata.datacoordinator.truth.loader.{DatasetContentsCopier, Logger}
 import com.socrata.datacoordinator.truth.metadata._
 import com.socrata.datacoordinator.util.NullCache
 import com.rojoma.simplearm.util._
@@ -23,7 +23,6 @@ import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
 
-
 /**
  *
  */
@@ -39,6 +38,7 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
   with DatasetMapReaderProvider
   with DatasetReaderProvider
   with LoggerProvider
+  with DatasetContentsCopierProvider
   with RowReaderProvider[SoQLType, SoQLValue]
   with TruncatorProvider
   with DatasetDropperProvider
@@ -77,6 +77,9 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
 
   def schemaLoader(logger: Logger[SoQLType, SoQLValue]) =
     new SecondarySchemaLoader(conn, logger, repForIndex, tablespace, commonSupport, RowSizeBufferSqlErrorContinue)
+
+  def datasetContentsCopier(logger: Logger[SoQLType, SoQLValue]): DatasetContentsCopier[SoQLType] =
+    new RepBasedSqlDatasetContentsCopier(conn, logger, repFor, timingReport)
 
   def obfuscationKeyGenerator() = truthStoreDatasetInfo match {
     case Some(dsi) => dsi.obfuscationKey
