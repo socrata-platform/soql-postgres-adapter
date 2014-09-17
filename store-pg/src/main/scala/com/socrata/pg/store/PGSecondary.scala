@@ -198,7 +198,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
 
     if (wccEvents.hasNext) {
-      val e = wccEvents.next
+      val e = wccEvents.next()
       logger.debug("got working copy event: {}", e)
 
       val existingDataset =
@@ -273,9 +273,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           WorkingCopyDroppedHandler(pgu, truthDatasetInfo)
           rebuildIndex
         case DataCopied =>
-          val msg = s"DataCopy triggers resync dataset ${secondaryDatasetInfo.internalName} $datasetId copy-${truthCopyInfo.copyNumber} data-ver-${truthCopyInfo.dataVersion}"
-          logger.info(msg)
-          throw new ResyncSecondaryException(msg)
+          DataCopiedHandler(pgu, truthDatasetInfo, truthCopyInfo)
+          rebuildIndex
         case SnapshotDropped(info) =>
           logger.info("drop snapshot system id - {}, copy number - {}", info.systemId.toString, info.copyNumber.toString)
           pgu.datasetMapReader.copyNumber(truthDatasetInfo, info.copyNumber) match {
