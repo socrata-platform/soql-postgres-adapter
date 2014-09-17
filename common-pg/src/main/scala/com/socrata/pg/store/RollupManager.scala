@@ -6,6 +6,7 @@ import java.sql.{Connection, SQLException}
 
 import com.rojoma.simplearm.util.using
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
+import com.socrata.datacoordinator.secondary.{RollupInfo => SecondaryRollupInfo}
 import com.socrata.datacoordinator.truth.loader.sql.SqlTableDropper
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, RollupInfo}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
@@ -123,24 +124,27 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
   }
 
   /**
-   * Schedules all rollup tables for the given dataset to be dropped.
+   * Immediately drop all rollup tables for the given dataset.
    * Does not update the rollup_map metadata.  The copyInfo passed in
    * must match with the currently created version number of the rollup tables.
    */
   def dropRollups() {
     val rollups = pgu.datasetMapReader.rollups(copyInfo)
-    rollups.foreach(dropRollup(_))
-    val rollupTableNames = rollups.map(rollupTableName(_, copyInfo.dataVersion))
-    scheduleRollupTablesForDropping(rollupTableNames.toSeq : _*)
+    rollups.foreach(dropRollup)
   }
 
   /**
-   * Schedules the specified rollup table to be dropped.
+   * Immediately drop the specified rollup table.
    * Does not update the rollup_map metadata.  The copyInfo passed in
    * must match with the currently created version number of the rollup table.
    */
   def dropRollup(ri: RollupInfo) {
-    scheduleRollupTablesForDropping(rollupTableName(ri, copyInfo.dataVersion))
+    val tableName = rollupTableName(ri, copyInfo.dataVersion)
+    using(pgu.conn.createStatement()) { stmt =>
+      val sql = s"DROP TABLE IF EXISTS ${tableName}"
+      logger.info(sql)
+      stmt.execute(sql)
+    }
   }
 
   /**
@@ -256,5 +260,8 @@ object RollupManager {
 
     rollupInfo.copyInfo.dataTableName + "_r_" + dataVersion + "_" + nameHash
   }
+
+  def makeSecondaryRollupInfo(rollupInfo: RollupInfo): SecondaryRollupInfo =
+     SecondaryRollupInfo(rollupInfo.name.underlying, rollupInfo.soql)
 }
 
