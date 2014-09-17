@@ -217,7 +217,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           }
           if (theCopy.isDefined) {
             logger.info("dataset {} working copy {} already existed, resync", secondaryDatasetInfo.internalName, theCopy.get.copyNumber.toString)
-            throw new ResyncSecondaryException("Dataset already exists")
+            val resyncNumOfCopies = if (pgu.datasetMapReader.latest(existingDataset.get) == copyInfo.copyNumber) Some(1) else None
+            throw new ResyncSecondaryException(resyncNumOfCopies, "Dataset already exists")
           } else {
             val truthDatasetInfo = pgu.secondaryDatasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName)
             WorkingCopyCreatedHandler(pgu, truthDatasetInfo, secondaryDatasetInfo, copyInfo)
@@ -234,14 +235,14 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     // now that we have working copy creation out of the way, we can load our
     // secondaryCopyInfo with assurance that it is there unless we are out of sync
     val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName).getOrElse(
-      throw new ResyncSecondaryException(s"Couldn't find mapping for datasetInternalName ${secondaryDatasetInfo.internalName}")
+      throw new ResyncSecondaryException(None, s"Couldn't find mapping for datasetInternalName ${secondaryDatasetInfo.internalName}")
     )
 
     val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
     val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
 
     if (truthCopyInfo.dataVersion + 1 != newDataVersion) {
-      throw new ResyncSecondaryException(s"Current version ${truthCopyInfo.dataVersion}, next version ${newDataVersion} but should be ${truthCopyInfo.dataVersion+1}")
+      throw new ResyncSecondaryException(None, s"Current version ${truthCopyInfo.dataVersion}, next version ${newDataVersion} but should be ${truthCopyInfo.dataVersion+1}")
     }
 
     val rebuildIndex = remainingEvents.foldLeft(false) { (rebuildIndex, e) =>
@@ -275,7 +276,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         case DataCopied =>
           val msg = s"DataCopy triggers resync dataset ${secondaryDatasetInfo.internalName} $datasetId copy-${truthCopyInfo.copyNumber} data-ver-${truthCopyInfo.dataVersion}"
           logger.info(msg)
-          throw new ResyncSecondaryException(msg)
+          throw new ResyncSecondaryException(Some(1), msg)
         case SnapshotDropped(info) =>
           logger.info("drop snapshot system id - {}, copy number - {}", info.systemId.toString, info.copyNumber.toString)
           pgu.datasetMapReader.copyNumber(truthDatasetInfo, info.copyNumber) match {
