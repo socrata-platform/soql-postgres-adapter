@@ -2,12 +2,16 @@ package com.socrata.pg.store.events
 
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, DatasetInfo => TruthDatasetInfo, DatasetCopyContext}
 import com.socrata.datacoordinator.secondary.ResyncSecondaryException
-import com.socrata.pg.store.PGSecondaryUniverse
+import com.socrata.pg.store.{RollupManager, PGSecondaryLogger, PGSecondaryUniverse}
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 
 
 case class CopyDroppedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: TruthCopyInfo) {
+  val rm = new RollupManager(pgu, copyInfo)
+  rm.dropRollups()
   pgu.datasetMapWriter.dropCopy(copyInfo)
+  val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
+  sLoader.drop(copyInfo)
 }
 
 case class TruncateHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: TruthCopyInfo) {
