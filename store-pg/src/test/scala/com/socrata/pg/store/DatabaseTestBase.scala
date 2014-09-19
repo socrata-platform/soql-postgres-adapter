@@ -1,30 +1,29 @@
 package com.socrata.pg.store
 
-import com.rojoma.simplearm.util._
-import com.rojoma.json.util.{JsonArrayIterator, JsonUtil}
-import com.rojoma.json.ast.{JValue, JArray}
-import com.rojoma.json.io.JsonEventIterator
-import com.socrata.datacoordinator.id.{UserColumnId, DatasetId}
-import com.socrata.datacoordinator.common.SoQLCommon
-import com.socrata.datacoordinator.util.{IndexedTempFile, NullCache, NoopTimingReport}
-import com.socrata.datacoordinator.service.Mutator
-import com.socrata.datacoordinator.service.ProcessCreationReturns
-import com.socrata.datacoordinator.secondary.NamedSecondary
-import com.socrata.datacoordinator.truth.migration.Migration.MigrationOperation
-import com.socrata.datacoordinator.truth.sql.{DatabasePopulator => TruthDatabasePopulator, DatasetMapLimits}
-import com.socrata.datacoordinator.truth.universe.sql.PostgresCopyIn
-import com.socrata.soql.types.{SoQLValue, SoQLType}
-import com.socrata.soql.environment.ColumnName
-import com.typesafe.config.{ConfigFactory, Config}
-import com.typesafe.scalalogging.slf4j.Logging
-import java.io.{InputStreamReader, FileInputStream, File}
-import java.sql.{DriverManager, Connection}
-import java.util.concurrent.TimeUnit
+import java.io.{File, FileInputStream, InputStreamReader}
+import java.sql.{Connection, DriverManager, PreparedStatement, ResultSet}
 import java.util.UUID
-import org.postgresql.ds.PGSimpleDataSource
-import scala.concurrent.duration.{FiniteDuration, Duration}
+import java.util.concurrent.TimeUnit
+
+import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.io.Codec
 
+import com.rojoma.json.ast.{JArray, JValue}
+import com.rojoma.json.io.JsonEventIterator
+import com.rojoma.json.util.{JsonArrayIterator, JsonUtil}
+import com.rojoma.simplearm.util._
+import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig, SoQLCommon}
+import com.socrata.datacoordinator.id.{DatasetId, RollupName, UserColumnId}
+import com.socrata.datacoordinator.secondary.NamedSecondary
+import com.socrata.datacoordinator.service.{Mutator, ProcessCreationReturns}
+import com.socrata.datacoordinator.truth.metadata.{CopyInfo, DatasetInfo}
+import com.socrata.datacoordinator.truth.migration.Migration.MigrationOperation
+import com.socrata.datacoordinator.truth.universe.sql.PostgresCopyIn
+import com.socrata.datacoordinator.util.{IndexedTempFile, NoopTimingReport, NullCache}
+import com.socrata.soql.environment.ColumnName
+import com.socrata.soql.types.{SoQLType, SoQLValue}
+import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.scalalogging.slf4j.Logging
 
 /**
  * Recreate test databases of truth and secondary.
@@ -52,6 +51,8 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
 
   val datasetIdToInternal = (datasetId: DatasetId) => s"${dcInstance}.${datasetId.underlying}"
 
+  val truthDataSourceConfig = new DataSourceConfig(ConfigFactory.load().getConfig("com.socrata.pg"), "truth.database" )
+
   /**
    * Create both truth and secondary databases
    * To be called during beforeAll
@@ -71,40 +72,58 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
     }
   }
 
-  def importDataset(conn: Connection, dbName: String = truthDb) {
-    val ds = new PGSimpleDataSource
-    ds.setServerName("localhost")
-    ds.setPortNumber(5432)
-    ds.setUser("blist")
-    ds.setPassword("blist")
-    ds.setDatabaseName(dbName)
+  def withSoQLCommon[T](datasourceConfig: DataSourceConfig)(f: (SoQLCommon) => T): T = {
+    val result = for (dsc <- DataSourceFromConfig(truthDataSourceConfig)) yield {
+      val executor = java.util.concurrent.Executors.newCachedThreadPool()
+      try {
+        val common = new SoQLCommon(
+          dsc.dataSource,
+          PostgresCopyIn,
+          executor,
+          Function.const(None),
+          NoopTimingReport,
+          true,
+          Duration(10, TimeUnit.SECONDS),
+          dcInstance,
+          new File(System.getProperty("java.io.tmpdir")),
+          Duration(10, TimeUnit.SECONDS),
+          Duration(10, TimeUnit.SECONDS),
+          NullCache
+        )
+        f(common)
+      } finally {
+        executor.shutdown()
+      }
+    }
+    result
+  }
 
-    val executor = java.util.concurrent.Executors.newCachedThreadPool()
+  /**
+   * @param conn
+   * @return truth dataset id and secondary dataset id pair.
+   */
+  def importDataset(conn: Connection): Tuple2[DatasetId, DatasetId] = {
+    withSoQLCommon(truthDataSourceConfig) { common =>
+      val ProcessCreationReturns(datasetId, _, _, _) = processMutationCreate(common, fixtureFile("mutate-create.json"))
+      processMutation(common, fixtureFile("mutate-publish.json"), datasetId)
+      pushToSecondary(common, datasetId)
+      truthDatasetId = datasetId
+      val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon)
+      val dsName = s"$dcInstance.${datasetId.underlying}"
+      secDatasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(s"$dsName").getOrElse(
+        throw new Exception("Fail to get secondary database id"))
+      pgu.datasetMapReader.datasetInfo(secDatasetId).getOrElse(throw new Exception("fail to get dataset from secondary"))
+      (truthDatasetId, secDatasetId)
+    }
+  }
 
-    val common = new SoQLCommon(
-      ds,
-      PostgresCopyIn,
-      executor,
-      Function.const(None),
-      NoopTimingReport,
-      true,
-      Duration(10, TimeUnit.SECONDS),
-      dcInstance,
-      new File(System.getProperty("java.io.tmpdir")),
-      Duration(10, TimeUnit.SECONDS),
-      Duration(10, TimeUnit.SECONDS),
-      NullCache
-    )
-
-    val ProcessCreationReturns(datasetId, _, _, _) = processMutationCreate(common, fixtureFile("mutate-create.json"))
-    processMutation(common, fixtureFile("mutate-publish.json"), datasetId)
-    pushToSecondary(common, datasetId)
-
-    truthDatasetId = datasetId
-    val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon )
-    val dsName = s"$dcInstance.${truthDatasetId.underlying}"
-    secDatasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(s"$dsName").getOrElse(
-      throw new Exception("Fail to get secondary database id"))
+  def createRollup(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo): String = {
+    val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"), "select 'x'")
+    val rm = new RollupManager(pgu, copyInfo)
+    rm.updateRollup(rollupInfo, copyInfo.dataVersion)
+    val rollupTableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
+    pgu.commit()
+    rollupTableName
   }
 
   def fixtureRows(name: String): Iterator[JValue] = {
@@ -114,7 +133,7 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
     JsonArrayIterator[JValue](jsonEventIter)
   }
 
-  private def processMutationCreate(common: SoQLCommon, script: File) = {
+  def processMutationCreate(common: SoQLCommon, script: File) = {
     for {
       u <- common.universe
       indexedTempFile <- managed(new IndexedTempFile(10 * 1024, 10 * 1024))
@@ -125,7 +144,7 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
     }
   }
 
-  private def processMutation(common: SoQLCommon, script: File, datasetId: DatasetId) = {
+  def processMutation(common: SoQLCommon, script: File, datasetId: DatasetId) = {
     for {
       u <- common.universe
       indexedTempFile <- managed(new IndexedTempFile(10 * 1024, 10 * 1024))
@@ -136,14 +155,14 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
     }
   }
 
-  private def pushToSecondary(common: SoQLCommon, datasetId: DatasetId) {
+  def pushToSecondary(common: SoQLCommon, datasetId: DatasetId, isNew: Boolean = true) {
     for(u <- common.universe) {
       val secondary = new PGSecondary(config)
       val pb = u.playbackToSecondary
       val secondaryMfst = u.secondaryManifest
       val claimantId = UUID.randomUUID()
       val claimTimeout = FiniteDuration(1, TimeUnit.MINUTES)
-      secondaryMfst.addDataset(storeId, datasetId)
+      if (isNew) secondaryMfst.addDataset(storeId, datasetId)
       for(job <- secondaryMfst.claimDatasetNeedingReplication(storeId, claimantId, claimTimeout)) {
         try {
           pb(NamedSecondary(storeId, secondary), job)
@@ -176,16 +195,45 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
     }
   }
 
+  /**
+   * Check if there are base table, audit table or log table.
+   */
+  def hasDataTables(conn: Connection, tableName: String, datasetInfo: DatasetInfo): Boolean = {
+    val sql = s"""
+      SELECT * FROM pg_class
+       WHERE relname in ('$tableName', '${datasetInfo.auditTableName}', '${datasetInfo.logTableName}')
+         And relkind='r'
+      """
+    resultSetHasRows(conn, sql)
+  }
+
+  /**
+   * Check if there are rollup tables.
+   * @param conn
+   */
+  def hasRollupTables(conn: Connection, tableName: String): Boolean = {
+    val sql = s"SELECT * FROM pg_class WHERE relname like '${tableName}_%' and relkind='r'"
+    resultSetHasRows(conn, sql)
+  }
+
+  def fixtureFile(name: String): File = {
+    val rootDir = System.getProperty("user.dir")
+    new File(rootDir + s"/$project/src/test/resources/fixtures/" + name)
+  }
+
+  private def resultSetHasRows(conn: Connection, sql: String): Boolean = {
+    using (conn.prepareStatement(sql)) { stmt: PreparedStatement =>
+      using (stmt.executeQuery()) { (rs: ResultSet) =>
+        rs.next()
+      }
+    }
+  }
+
   private def populateTruth(dbName: String) {
     using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/$dbName", "blist", "blist")) { conn =>
       conn.setAutoCommit(true)
       com.socrata.datacoordinator.truth.migration.Migration.migrateDb(conn)
     }
-  }
-
-  private def fixtureFile(name: String): File = {
-    val rootDir = System.getProperty("user.dir")
-    new File(rootDir + s"/$project/src/test/resources/fixtures/" + name)
   }
 }
 
