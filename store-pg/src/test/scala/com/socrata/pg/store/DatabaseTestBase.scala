@@ -212,7 +212,7 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
    * @param conn
    */
   def hasRollupTables(conn: Connection, tableName: String): Boolean = {
-    val sql = s"SELECT * FROM pg_class WHERE relname like '${tableName}_%' and relkind='r'"
+    val sql = s"SELECT * FROM pg_class WHERE relname like '${tableName}_r%' and relkind='r'"
     resultSetHasRows(conn, sql)
   }
 
