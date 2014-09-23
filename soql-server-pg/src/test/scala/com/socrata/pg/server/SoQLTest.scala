@@ -18,7 +18,7 @@ abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTe
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val tableName = pgu.datasetMapReader.latest(datasetInfo).dataTableName
       dropDataset(pgu, truthDatasetId)
-      cleanupDroppedtable(pgu)
+      cleanupDroppedTables(pgu)
       hasDataTables(pgu.conn, tableName, datasetInfo) should be (false)
     }
     super.afterAll
