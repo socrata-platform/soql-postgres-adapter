@@ -87,21 +87,24 @@ trait PGSecondaryUniverseTestBase {
     expect foreach {
       colInfo =>  {
         existing should contain (colInfo.systemId, colInfo.typ)
-        //println("Checked that " + colInfo.userColumnId+ ":" + colInfo.typeName + " was truly and surely created")
       }
     }
   }
 
-  def jdbcColumnCount(conn:Connection, tableName:String):Integer = {
-    val rs = conn.getMetaData.getColumns(null, null, tableName, null)
-    rs.last
-    rs.getRow
+  def jdbcColumnCount(conn:Connection, tableName:String): Integer = {
+    using(conn.getMetaData.getColumns(null, null, tableName, null)) { rs =>
+      rs.last()
+      rs.getRow
+    }
   }
 
   def jdbcRowCount(conn: Connection, tableName: String): Integer = {
-    val rs = conn.prepareStatement(s"SELECT COUNT(*) FROM ${tableName}").executeQuery()
-    rs.next()
-    rs.getInt(1)
+    using(conn.prepareStatement(s"SELECT COUNT(*) FROM ${tableName}")) { stmt =>
+      using(stmt.executeQuery()) { rs =>
+        rs.next()
+        rs.getInt(1)
+      }
+    }
   }
 
   def insertDummyRow(id:RowId, values:Map[TypeName, SoQLValue], pgu:PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo:CopyInfo, schema:ColumnIdMap[ColumnInfo[SoQLType]]) {

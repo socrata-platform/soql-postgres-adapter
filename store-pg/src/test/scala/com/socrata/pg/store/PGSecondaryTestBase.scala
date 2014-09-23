@@ -1,6 +1,6 @@
 package com.socrata.pg.store
 
-import com.socrata.datacoordinator.id.{UserColumnId, ColumnId, CopyId}
+import com.socrata.datacoordinator.id.{DatasetId, UserColumnId, ColumnId, CopyId}
 import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, _}
 import com.socrata.datacoordinator.secondary.{DatasetInfo => SecondaryDatasetInfo}
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo}
@@ -81,5 +81,17 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
 
   def getTruthCopies(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], secondaryDatasetInfo: SecondaryDatasetInfo): Iterable[TruthCopyInfo] = {
     pgu.datasetMapReader.allCopies(getTruthDatasetInfo(pgu, secondaryDatasetInfo))
+  }
+
+  def dropDataset(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], truthDatasetId: DatasetId) = {
+    val secondary = new PGSecondary(config)
+    val dsName = s"$dcInstance.${truthDatasetId.underlying}"
+    secondary.dropDataset(dsName, None)
+    pgu.commit()
+  }
+
+  def cleanupDroppedTables(pgu: PGSecondaryUniverse[SoQLType, SoQLValue]) = {
+    while (pgu.tableCleanup.cleanupPendingDrops()) { }
+    pgu.commit()
   }
 }

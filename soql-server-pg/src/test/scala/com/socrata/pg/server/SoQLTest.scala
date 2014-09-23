@@ -1,9 +1,8 @@
 package com.socrata.pg.server
 
-import com.rojoma.simplearm.util._
-import com.socrata.pg.store.{PGSecondary, PostgresUniverseCommon, PGSecondaryUniverse, PGSecondaryTestBase}
-import com.socrata.soql.types.{SoQLValue, SoQLType}
-import java.sql.PreparedStatement
+import com.socrata.pg.store.PGSecondaryTestBase
+import com.socrata.pg.store.PGSecondaryUtil._
+
 
 abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
 
@@ -15,26 +14,13 @@ abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTe
   }
 
   override def afterAll = {
-    dropDataset()
-    super.afterAll
-  }
-
-  protected def dropDataset() = {
-    withDb() { conn =>
-      val secondary = new PGSecondary(config)
-      val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon )
+    withPgu() { pgu =>
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val tableName = pgu.datasetMapReader.latest(datasetInfo).dataTableName
-      val dsName = s"$dcInstance.${truthDatasetId.underlying}"
-      secondary.dropDataset(dsName, None)
-      conn.commit()
-      while (pgu.tableCleanup.cleanupPendingDrops()) { }
-      pgu.commit()
-      // Check that base table, audit table and log table are deleted.
-      val tableExistSql = s"select * from pg_class where relname in ('$tableName', '${datasetInfo.auditTableName}', '${datasetInfo.logTableName}') and relkind='r'"
-      using (conn.prepareStatement(tableExistSql)) { stmt: PreparedStatement =>
-        stmt.executeQuery().next() should be (false)
-      }
+      dropDataset(pgu, truthDatasetId)
+      cleanupDroppedTables(pgu)
+      hasDataTables(pgu.conn, tableName, datasetInfo) should be (false)
     }
+    super.afterAll
   }
 }
