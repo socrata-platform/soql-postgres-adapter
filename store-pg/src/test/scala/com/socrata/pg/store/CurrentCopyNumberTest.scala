@@ -2,9 +2,9 @@ package com.socrata.pg.store
 
 import scala.language.reflectiveCalls
 
-class CurrentCopyNumberTest extends PGSecondaryTestBase with PGStoreTestBase {
+class CurrentCopyNumberTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
-  import com.socrata.pg.store.PGSecondaryUtil._
+  import PGSecondaryUtil._
 
   test("handle CurrentCopyNumber") {
     withPgu() { pgu =>

@@ -1,14 +1,12 @@
 package com.socrata.pg.store
 
-import org.scalatest.{Matchers, BeforeAndAfterAll, FunSuite}
 import java.sql.Connection
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.datacoordinator.common.StandardObfuscationKeyGenerator
 import scala.language.reflectiveCalls
 
-class PGSecondaryDatasetMapWriterTest extends PGSecondaryTestBase with PGStoreTestBase {
-  import com.socrata.pg.store.PGSecondaryUtil._
+class PGSecondaryDatasetMapWriterTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
   def noopKeyGen() = new Array[Byte](0)
   val ZeroID = 0L

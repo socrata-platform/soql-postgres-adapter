@@ -1,6 +1,5 @@
 package com.socrata.pg.server
 
-
 /**
  * http://beta.dev.socrata.com/docs/datatypes/boolean.html
  */

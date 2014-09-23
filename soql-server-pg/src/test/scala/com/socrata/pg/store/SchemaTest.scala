@@ -1,13 +1,15 @@
 package com.socrata.pg.store
 
-import com.rojoma.json.util.JsonUtil
-import com.socrata.pg.server.{PGQueryServerDatabaseTestBase, QueryServerTest}
-import com.socrata.pg.Schema
-import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
-import scala.language.reflectiveCalls
 import scala.io.Source
+import scala.language.reflectiveCalls
 
-class SchemaTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
+import com.rojoma.json.util.JsonUtil
+import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
+import com.socrata.pg.Schema
+import com.socrata.pg.server.{PGQueryServerDatabaseTestBase, QueryServerTest}
+import com.socrata.pg.query.PGQueryTestBase
+
+class SchemaTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase with PGQueryTestBase {
   import com.socrata.pg.store.PGSecondaryUtil._
   import Schema._
 

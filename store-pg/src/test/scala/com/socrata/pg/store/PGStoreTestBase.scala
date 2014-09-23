@@ -4,7 +4,9 @@ trait PGStoreTestBase {
 
   val dcInstance = "alpha"
 
-  val project: String = "store-pg"
+  val project = "store-pg"
 
-  val storeId: String = "pg"
+  val storeId = "pg"
+
+  val projectDb = "store"
 }

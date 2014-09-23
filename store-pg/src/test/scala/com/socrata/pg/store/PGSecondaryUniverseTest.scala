@@ -1,22 +1,22 @@
 package com.socrata.pg.store
 
-import org.scalatest.{Matchers, BeforeAndAfterAll, FunSuite}
-
 import java.sql.Connection
-import com.socrata.soql.types._
+
+import com.socrata.datacoordinator.secondary
 import com.socrata.datacoordinator.id._
 import com.socrata.datacoordinator.truth.metadata._
-import com.socrata.soql.environment.TypeName
-import org.postgresql.util.PSQLException
-import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.truth.universe.sql.SqlTableCleanup
-import com.socrata.datacoordinator.secondary
+import com.socrata.datacoordinator.util.collection.ColumnIdMap
+import com.socrata.soql.environment.TypeName
+import com.socrata.soql.types._
+import org.postgresql.util.PSQLException
+import org.scalatest.{BeforeAndAfterAll, FunSuite, Matchers}
 
 /**
  *
  */
 class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfterAll
-      with PGSecondaryUniverseTestBase with DatabaseTestBase with PGStoreTestBase {
+      with PGSecondaryUniverseTestBase with PGStoreTestBase with DatabaseTestBase  {
 
   override def beforeAll() {
     createDatabases()

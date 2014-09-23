@@ -15,8 +15,6 @@ import org.joda.time.DateTime
 
 class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSecondaryUniverseTestBase {
 
-  import com.socrata.pg.store.PGSecondaryUtil._
-
   test("handle resync") {
     withPgu() { pgu =>
       val pgs = new PGSecondary(config)

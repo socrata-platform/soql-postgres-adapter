@@ -2,12 +2,13 @@ package com.socrata.pg.store.events
 
 import com.socrata.datacoordinator.secondary.{LifecycleStage, CopyInfo, DatasetInfo => SecondaryDatasetInfo}
 import com.socrata.datacoordinator.id.{DatasetId, CopyId}
-import com.socrata.pg.store.{PGStoreTestBase, PGSecondaryTestBase}
+import com.socrata.pg.store.{PGSecondaryUniverseTestBase, PGStoreTestBase, PGSecondaryTestBase}
 import scala.language.reflectiveCalls
 import com.socrata.datacoordinator.truth.metadata
 import org.joda.time.DateTime
 
-class WorkingCopyCreatedHandlerTest extends PGSecondaryTestBase with PGStoreTestBase {
+class WorkingCopyCreatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
+
   import com.socrata.pg.store.PGSecondaryUtil._
 
   val datasetInfo = SecondaryDatasetInfo(testInternalName, localeName, obfuscationKey)

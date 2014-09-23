@@ -16,17 +16,14 @@ import org.scalatest.{BeforeAndAfterAll, Matchers}
 import scala.language.existentials
 import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity}
 import com.socrata.http.server.util.NoPrecondition
+import com.typesafe.config.{ConfigFactory, Config}
 
 trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUniverseTestBase {
   this : Matchers with BeforeAndAfterAll =>
 
-  import PGQueryServerDatabaseTestBase._
+  private lazy val datasourceConfig = new DataSourceConfig(config, "database")
 
-  val dcInstance = "alpha"
-
-  val project: String = "soql-server-pg"
-
-  val storeId: String = "pg"
+  protected lazy val ds = DataSourceFromConfig(datasourceConfig)
 
   def compareSoqlResult(soql: String, expectedFixture: String, expectedRowCount: Option[Long] = None, caseSensitivity: CaseSensitivity = CaseSensitive) {
     withDb() { conn =>
@@ -75,12 +72,4 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
       }
     }
   }
-}
-
-object PGQueryServerDatabaseTestBase {
-
-  private val config = PGSecondaryUtil.config
-
-  private val datasourceConfig = new DataSourceConfig(config, "database")
-  private val ds = DataSourceFromConfig(datasourceConfig)
 }

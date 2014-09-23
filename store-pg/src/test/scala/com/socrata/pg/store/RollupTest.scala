@@ -10,11 +10,10 @@ import com.socrata.pg.store.events.{RollupCreatedOrUpdatedHandler, WorkingCopyCr
 import com.socrata.soql.types._
 import org.joda.time.DateTime
 
-class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase {
+class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
-  val dcInstance = "alpha"
-  val project: String = "soql-server-pg"
-  val storeId: String = "pg"
+  // Despite being in the store project, it is getting its mutation script in the query project.
+  override val project = "soql-server-pg"
 
   override def beforeAll = {
     createDatabases()
