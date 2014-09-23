@@ -1,8 +1,10 @@
 package com.socrata.pg.error
 
+import java.lang.reflect.InvocationTargetException
+import java.sql.Connection
+
 import com.socrata.datacoordinator.secondary.ResyncSecondaryException
 import com.typesafe.scalalogging.slf4j.Logging
-import java.sql.Connection
 import org.postgresql.util.PSQLException
 
 object RowSizeBufferSqlErrorContinue extends SqlErrorHandler {
@@ -24,20 +26,30 @@ object RowSizeBufferSqlErrorHandler extends Logging {
   def guard[E <: Exception](conn: Connection, exceptionClass: Option[Class[E]])(f : => Unit) {
 
     val savepoint = Option(conn.setSavepoint())
+
+    def resyncIfIndexRowSizeError(ex: PSQLException) {
+      isIndexRowSizeError(ex) match {
+        case Some(index) =>
+          val msg = s"index row size buffer exceeded $index " + exceptionClass.map("rethrow " + _.getName).getOrElse("ignore")
+          logger.warn(msg)
+          savepoint.foreach(conn.rollback(_))
+          exceptionClass.foreach(exClass => throw exClass.getDeclaredConstructor(classOf[String]).newInstance(msg))
+        case None =>
+          logger.info("got some PSQL exception, trying to roll back...", ex)
+          savepoint.foreach(conn.rollback(_))
+          throw ex
+      }
+    }
+
     try {
       f
     } catch {
       case ex: PSQLException =>
-        isIndexRowSizeError(ex) match {
-          case Some(index) =>
-            val msg = s"index row size buffer exceeded $index " + exceptionClass.map("rethrow " + _.getName).getOrElse("ignore")
-            logger.warn(msg)
-            savepoint.foreach(conn.rollback(_))
-            exceptionClass.foreach(exClass => throw exClass.getDeclaredConstructor(classOf[String]).newInstance(msg))
-          case None =>
-            logger.info("got some PSQL exception, trying to roll back...", ex)
-            savepoint.foreach(conn.rollback(_))
-            throw ex
+        resyncIfIndexRowSizeError(ex)
+      case itex: InvocationTargetException => // copy in calls have sql exceptions wrapped in invocation target exception.
+        itex.getCause match {
+          case ex: PSQLException => resyncIfIndexRowSizeError(ex)
+          case ex => throw ex
         }
     } finally {
       try {
