@@ -35,13 +35,17 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
 
   val project: String // soql-server-pg
 
+  val projectDb: String // Each project has its own databases
+
   val storeId: String // pg
 
-  val truthDb = "truth_test"
+  lazy val config: Config = ConfigFactory.load().getConfig(s"com.socrata.pg.${projectDb}.secondary")
 
-  val secondaryDb = "secondary_test"
+  lazy val truthDataSourceConfig: DataSourceConfig = new DataSourceConfig(ConfigFactory.load().getConfig(s"com.socrata.pg.${projectDb}"), "truth.database" )
 
-  val config: Config = ConfigFactory.load().getConfig("com.socrata.pg.common")
+  lazy val truthDb: String = truthDataSourceConfig.database
+
+  lazy val secondaryDb: String = config.getString("database.database")
 
   var truthDatasetId: DatasetId = _
 
@@ -51,25 +55,12 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
 
   val datasetIdToInternal = (datasetId: DatasetId) => s"${dcInstance}.${datasetId.underlying}"
 
-  val truthDataSourceConfig = new DataSourceConfig(ConfigFactory.load().getConfig("com.socrata.pg"), "truth.database" )
-
   /**
    * Create both truth and secondary databases
    * To be called during beforeAll
    */
   def createDatabases() {
-    synchronized {
-      if (!DatabaseTestBase.dbInitialized) {
-        DatabaseTestBase.dbInitialized = true
-        logger.info("*** Creating test databases ***")
-        createDatabase(truthDb)
-        createDatabase(secondaryDb)
-        // migrate truth db
-        populateTruth(truthDb)
-        // migrate secondary db
-        SchemaMigrator("database", MigrationOperation.Migrate, PGSecondaryUtil.config)
-      }
-    }
+    DatabaseTestBase.createDatabases(truthDb, secondaryDb, config)
   }
 
   def withSoQLCommon[T](datasourceConfig: DataSourceConfig)(f: (SoQLCommon) => T): T = {
@@ -173,28 +164,6 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
     }
   }
 
-  private def createDatabase(dbName: String) {
-    try {
-      Class.forName("org.postgresql.Driver").newInstance()
-    } catch {
-      case ex: ClassNotFoundException => throw ex
-    }
-    using(DriverManager.getConnection("jdbc:postgresql://localhost:5432/postgres", "blist", "blist")) { conn =>
-      conn.setAutoCommit(true)
-      val sql = s"drop database if exists $dbName; create database $dbName;"
-      using(conn.createStatement()) { stmt =>
-        stmt.execute(sql)
-      }
-    }
-    using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/$dbName", "blist", "blist")) { conn =>
-      conn.setAutoCommit(true)
-      val sql = "create extension postgis;"
-      using(conn.createStatement()) { stmt =>
-        stmt.execute(sql)
-      }
-    }
-  }
-
   /**
    * Check if there are base table, audit table or log table.
    */
@@ -228,6 +197,49 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
       }
     }
   }
+}
+
+object DatabaseTestBase extends Logging {
+
+  private var dbInitialized = false
+
+  def createDatabases(truthDb: String, secondaryDb: String, secondaryConfig: Config) {
+    synchronized {
+      if (!DatabaseTestBase.dbInitialized) {
+        logger.info("*** Creating test databases *** ")
+        createDatabase(truthDb)
+        createDatabase(secondaryDb)
+        // migrate truth db
+        populateTruth(truthDb)
+        // migrate secondary db
+        //SchemaMigrator("database", MigrationOperation.Migrate, PGSecondaryUtil.config)
+        SchemaMigrator("database", MigrationOperation.Migrate, secondaryConfig)
+        DatabaseTestBase.dbInitialized = true
+      }
+    }
+  }
+
+  private def createDatabase(dbName: String) {
+    try {
+      Class.forName("org.postgresql.Driver").newInstance()
+    } catch {
+      case ex: ClassNotFoundException => throw ex
+    }
+    using(DriverManager.getConnection("jdbc:postgresql://localhost:5432/postgres", "blist", "blist")) { conn =>
+      conn.setAutoCommit(true)
+      val sql = s"drop database if exists $dbName; create database $dbName;"
+      using(conn.createStatement()) { stmt =>
+        stmt.execute(sql)
+      }
+    }
+    using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/$dbName", "blist", "blist")) { conn =>
+      conn.setAutoCommit(true)
+      val sql = "create extension postgis;"
+      using(conn.createStatement()) { stmt =>
+        stmt.execute(sql)
+      }
+    }
+  }
 
   private def populateTruth(dbName: String) {
     using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/$dbName", "blist", "blist")) { conn =>
@@ -235,10 +247,4 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
       com.socrata.datacoordinator.truth.migration.Migration.migrateDb(conn)
     }
   }
-}
-
-object DatabaseTestBase {
-
-  private var dbInitialized = false
-
 }

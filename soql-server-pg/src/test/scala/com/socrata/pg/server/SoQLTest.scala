@@ -6,6 +6,8 @@ import com.socrata.pg.store.PGSecondaryUtil._
 
 abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
 
+  override val projectDb = "query"
+
   override def beforeAll = {
     createDatabases()
     withDb() { conn =>

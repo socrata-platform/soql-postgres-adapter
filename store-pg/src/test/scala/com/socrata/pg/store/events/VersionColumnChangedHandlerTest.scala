@@ -1,14 +1,13 @@
 package com.socrata.pg.store.events
 
-import com.socrata.datacoordinator.id.{UserColumnId, ColumnId}
-import com.socrata.datacoordinator.secondary.{VersionColumnChanged, SystemRowIdentifierChanged, ColumnCreated, ColumnInfo}
-import com.socrata.pg.store.{PGStoreTestBase, PGSecondaryTestBase}
-import com.socrata.soql.types.SoQLID
 import scala.language.reflectiveCalls
 
-class VersionColumnChangedHandlerTest extends PGSecondaryTestBase with PGStoreTestBase {
+import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
+import com.socrata.datacoordinator.secondary.{ColumnCreated, ColumnInfo, VersionColumnChanged}
+import com.socrata.pg.store.{PGSecondaryTestBase, PGSecondaryUniverseTestBase, PGStoreTestBase}
+import com.socrata.soql.types.SoQLID
 
-  import com.socrata.pg.store.PGSecondaryUtil._
+class VersionColumnChangedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
   test("handle VersionColumnChanged") {
     withPgu() { pgu =>

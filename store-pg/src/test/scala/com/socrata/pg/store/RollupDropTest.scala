@@ -1,17 +1,17 @@
 package com.socrata.pg.store
 
-import com.socrata.pg.store.PGSecondaryUtil._
 import com.socrata.pg.store.events.CopyDroppedHandler
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.socrata.datacoordinator.id.DatasetId
 
-
-class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase {
+class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase  {
 
   val dcInstance = "alpha"
 
   val project: String = "soql-server-pg"
+
+  override val projectDb = "store"
 
   val storeId: String = "pg"
 

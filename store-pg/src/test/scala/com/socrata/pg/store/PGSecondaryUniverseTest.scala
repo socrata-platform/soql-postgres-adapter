@@ -11,12 +11,14 @@ import org.postgresql.util.PSQLException
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.datacoordinator.truth.universe.sql.SqlTableCleanup
 import com.socrata.datacoordinator.secondary
+import com.socrata.datacoordinator.common.DataSourceConfig
+import com.typesafe.config.{Config, ConfigFactory}
 
 /**
  *
  */
 class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfterAll
-      with PGSecondaryUniverseTestBase with DatabaseTestBase with PGStoreTestBase {
+      with PGSecondaryUniverseTestBase with PGStoreTestBase with DatabaseTestBase  {
 
   override def beforeAll() {
     createDatabases()

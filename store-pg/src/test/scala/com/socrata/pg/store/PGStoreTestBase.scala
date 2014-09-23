@@ -7,4 +7,6 @@ trait PGStoreTestBase {
   val project: String = "store-pg"
 
   val storeId: String = "pg"
+
+  val projectDb = "store"
 }

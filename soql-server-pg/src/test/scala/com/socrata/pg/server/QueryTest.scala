@@ -17,10 +17,11 @@ import org.apache.log4j.PropertyConfigurator
 import scala.language.existentials
 import com.socrata.pg.soql.CaseSensitive
 import com.socrata.http.server.util.NoPrecondition
+import com.typesafe.config.{Config, ConfigFactory}
 
 class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
 
-  import QueryTest._
+  val projectDb = "query"
 
   override def beforeAll = {
     PropertyConfigurator.configure(Propertizer("log4j", config.getConfig("log4j")))
@@ -75,13 +76,4 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
       }
     }
   }
-}
-
-object QueryTest {
-
-  private val config = PGSecondaryUtil.config
-
-  private val datasourceConfig = new DataSourceConfig(config, "database")
-  private val ds = DataSourceFromConfig(datasourceConfig)
-
 }

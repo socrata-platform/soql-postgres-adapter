@@ -1,23 +1,19 @@
 package com.socrata.pg.store
 
-import org.apache.log4j.PropertyConfigurator
-import org.joda.time.{LocalTime, LocalDate, LocalDateTime, DateTime}
-import com.rojoma.json.ast.{JArray, JString, JObject}
+import java.sql.{Connection, DriverManager}
+
+import com.rojoma.json.ast.{JArray, JObject, JString}
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.id.{RowId, UserColumnId}
-import com.socrata.datacoordinator.truth.metadata.DatasetCopyContext
+import com.socrata.datacoordinator.secondary.DatasetInfo
 import com.socrata.datacoordinator.truth.loader.SchemaLoader
-import com.socrata.datacoordinator.truth.metadata.ColumnInfo
-import com.socrata.datacoordinator.truth.metadata.CopyInfo
-import com.socrata.datacoordinator.truth.sql.{DatabasePopulator => TruthDatabasePopulator, DatasetMapLimits}
+import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, DatasetCopyContext}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.soql.environment.TypeName
 import com.socrata.soql.types._
-import com.socrata.thirdparty.typesafeconfig.Propertizer
-import com.typesafe.config.ConfigFactory
-import java.sql.{DriverManager, Connection}
+import com.typesafe.config.Config
+import org.joda.time.{DateTime, LocalDate, LocalDateTime, LocalTime}
 import org.scalatest.{BeforeAndAfterAll, Matchers}
-import com.socrata.datacoordinator.secondary.DatasetInfo
 
 trait PGSecondaryUniverseTestBase {
   this : Matchers with BeforeAndAfterAll =>
@@ -26,23 +22,28 @@ trait PGSecondaryUniverseTestBase {
   type CV = SoQLValue
   val common = PostgresUniverseCommon
 
-  override def beforeAll() {
-    val config = ConfigFactory.load().getConfig("com.socrata.pg.common")
-    PropertyConfigurator.configure(Propertizer("log4j", config.getConfig("log4j")))
-  }
-
-  override def afterAll() {
-  }
+  val config: Config
 
   def withDb[T]()(f: (Connection) => T): T = {
     def loglevel = 0; // 2 = debug, 0 = default
-    using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/secondary_test?loglevel=$loglevel", "blist", "blist")) { conn =>
+
+    val database = config.getString("database.database")
+    val user = config.getString("database.username")
+    val pass = config.getString("database.password")
+    using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/$database?loglevel=$loglevel", user, pass)) { conn =>
       conn.setAutoCommit(false)
       f(conn)
     }
   }
 
-  def createTable(conn:Connection, datasetInfo:Option[DatasetInfo] = None):(PGSecondaryUniverse[SoQLType, SoQLValue], CopyInfo, SchemaLoader[SoQLType]) = {
+  def withPgu[T]()(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
+    withDb() { conn =>
+      val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
+      f(pgu)
+    }
+  }
+
+  def createTable(conn:Connection, datasetInfo:Option[DatasetInfo] = None): (PGSecondaryUniverse[SoQLType, SoQLValue], CopyInfo, SchemaLoader[SoQLType]) = {
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon, datasetInfo)
     val copyInfo = pgu.datasetMapWriter.create("us") // locale
     val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])

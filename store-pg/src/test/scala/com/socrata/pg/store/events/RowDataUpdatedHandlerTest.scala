@@ -1,21 +1,16 @@
 package com.socrata.pg.store.events
 
-import com.rojoma.simplearm.util._
-import com.socrata.datacoordinator.id.{RowId, ColumnId}
-import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.pg.store.{PGStoreTestBase, PostgresUniverseCommon, PGSecondaryUniverse, PGSecondaryTestBase}
-import com.socrata.soql.types._
 import scala.language.reflectiveCalls
+
+import com.rojoma.simplearm.util._
+import com.socrata.datacoordinator.id.{ColumnId, RowId}
+import com.socrata.datacoordinator.secondary.{Delete, Insert, RowDataUpdated, Update}
+import com.socrata.datacoordinator.util.collection.ColumnIdMap
+import com.socrata.pg.store._
+import com.socrata.soql.types._
 import com.typesafe.scalalogging.slf4j.Logging
-import com.socrata.datacoordinator.secondary.RowDataUpdated
-import com.socrata.datacoordinator.secondary.Update
-import com.socrata.datacoordinator.secondary.Insert
-import com.socrata.datacoordinator.secondary.Delete
 
-
-class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGStoreTestBase with Logging {
-
-  import com.socrata.pg.store.PGSecondaryUtil._
+class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase with Logging {
 
   private val insertOps = Seq(
           (1000, 110, "foo"),

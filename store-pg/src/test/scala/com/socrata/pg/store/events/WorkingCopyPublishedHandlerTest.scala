@@ -1,13 +1,12 @@
 package com.socrata.pg.store.events
 
-import com.socrata.datacoordinator.secondary.{WorkingCopyPublished}
-import com.socrata.pg.store.{PGStoreTestBase, PGSecondaryTestBase}
 import scala.language.reflectiveCalls
+
+import com.socrata.datacoordinator.secondary.WorkingCopyPublished
 import com.socrata.datacoordinator.truth.metadata.LifecycleStage
+import com.socrata.pg.store.{PGSecondaryUniverseTestBase, PGSecondaryTestBase, PGStoreTestBase}
 
-class WorkingCopyPublishedHandlerTest extends PGSecondaryTestBase with PGStoreTestBase {
-
-  import com.socrata.pg.store.PGSecondaryUtil._
+class WorkingCopyPublishedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
   test("handle WorkingCopyPublished") {
     withPgu() { pgu =>

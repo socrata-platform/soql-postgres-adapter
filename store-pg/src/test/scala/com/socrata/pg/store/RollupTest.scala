@@ -10,13 +10,18 @@ import com.socrata.pg.store.events.{RollupCreatedOrUpdatedHandler, WorkingCopyCr
 import com.socrata.soql.types._
 import org.joda.time.DateTime
 
+
 class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase {
 
   val dcInstance = "alpha"
   val project: String = "soql-server-pg"
+
+  override val projectDb = "store"
+
   val storeId: String = "pg"
 
   override def beforeAll = {
+    println("ROLLUP TEST BEFORE ALL")
     createDatabases()
     withDb() { conn =>
       importDataset(conn)
