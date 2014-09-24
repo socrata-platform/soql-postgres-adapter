@@ -64,6 +64,8 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
             qs.execQuery(pgu, "someDatasetInternalName", copyInfo.datasetInfo, analysis, false, None, None, NoPrecondition, None) match {
               case QueryServer.Success(schema, version, results, etag, lastModified) =>
                 (schema, version, results)
+              case queryFail =>
+                throw new Exception(s"Query Fail ${queryFail.getClass.getName}")
             }
           }
         for (result <- mresult) {

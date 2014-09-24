@@ -421,7 +421,7 @@ object QueryServer extends Logging {
       val auxData = new AuxiliaryData(livenessCheckInfo = Some(pong.livenessCheckInfo))
       val curatorBroker = new CuratorBroker(discovery, address, config.advertisement.name + "." + config.instance, Some(auxData))
       val handler = ThreadRenamingHandler(LoggingHandler(queryServer.route))
-      val server = new SocrataServerJetty(handler, port = config.port, broker = curatorBroker)
+      val server = new SocrataServerJetty(handler, SocrataServerJetty.defaultOptions.withPort(config.port).withBroker(curatorBroker))
       logger.info("starting pg query server")
       server.run()
     }
