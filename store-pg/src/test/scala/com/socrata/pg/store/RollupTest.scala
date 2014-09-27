@@ -21,7 +21,6 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase {
   val storeId: String = "pg"
 
   override def beforeAll = {
-    println("ROLLUP TEST BEFORE ALL")
     createDatabases()
     withDb() { conn =>
       importDataset(conn)
