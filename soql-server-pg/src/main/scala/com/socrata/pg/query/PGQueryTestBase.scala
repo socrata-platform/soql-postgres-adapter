@@ -4,9 +4,9 @@ trait PGQueryTestBase {
 
   val dcInstance = "alpha"
 
-  val project: String = "soql-server-pg"
+  val project = "soql-server-pg"
 
-  val storeId: String = "pg"
+  val storeId = "pg"
 
   val projectDb = "query"
 }
