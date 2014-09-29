@@ -39,9 +39,11 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
 
   val storeId: String // pg
 
-  lazy val config: Config = ConfigFactory.load().getConfig(s"com.socrata.pg.${projectDb}.secondary")
+  private lazy val projectConfig: Config = ConfigFactory.load().getConfig(s"com.socrata.pg.${projectDb}")
 
-  lazy val truthDataSourceConfig: DataSourceConfig = new DataSourceConfig(ConfigFactory.load().getConfig(s"com.socrata.pg.${projectDb}"), "truth.database" )
+  lazy val config: Config = projectConfig.getConfig("secondary")
+
+  lazy val truthDataSourceConfig: DataSourceConfig = new DataSourceConfig(projectConfig, "truth.database" )
 
   lazy val truthDb: String = truthDataSourceConfig.database
 
