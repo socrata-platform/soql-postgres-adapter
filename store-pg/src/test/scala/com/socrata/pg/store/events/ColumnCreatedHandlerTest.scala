@@ -1,12 +1,9 @@
 package com.socrata.pg.store.events
 
-import com.socrata.pg.store.{PGStoreTestBase, PGSecondaryTestBase}
-import scala.language.reflectiveCalls
+import com.socrata.pg.store.{PGSecondaryUniverseTestBase, PGStoreTestBase, PGSecondaryTestBase}
 import com.socrata.datacoordinator.secondary.ColumnCreated
 
-class ColumnCreatedHandlerTest extends PGSecondaryTestBase with PGStoreTestBase {
-
-  import com.socrata.pg.store.PGSecondaryUtil._
+class ColumnCreatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
   test("handle ColumnCreated") {
     withPgu() { pgu =>
@@ -21,6 +18,4 @@ class ColumnCreatedHandlerTest extends PGSecondaryTestBase with PGStoreTestBase 
         f.events.collect { case ColumnCreated(ci) => (ci.id, ci.systemId) }
     }
   }
-
-
 }

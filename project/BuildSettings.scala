@@ -32,7 +32,7 @@ object BuildSettings {
     }
   }
 
-  private val wrappedStrategies = new scala.collection.mutable.HashMap[MergeStrategy, MergeStrategy]
+  val wrappedStrategies = new scala.collection.mutable.HashMap[MergeStrategy, MergeStrategy]
 
   def wrappedMergeStrategy(originalStrat: MergeStrategy): MergeStrategy = synchronized {
     wrappedStrategies.get(originalStrat) match {

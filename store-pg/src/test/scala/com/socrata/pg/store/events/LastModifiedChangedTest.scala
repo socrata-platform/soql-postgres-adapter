@@ -1,15 +1,13 @@
 package com.socrata.pg.store.events
 
-import com.socrata.pg.store.{PGStoreTestBase, PGSecondaryTestBase}
-import scala.language.reflectiveCalls
-import com.socrata.datacoordinator.secondary.{LastModifiedChanged}
-import org.joda.time.DateTime
+import scala.language.{postfixOps, reflectiveCalls}
 import scala.util.Random
-import scala.language.postfixOps
 
-class LastModifiedChangedTest extends PGSecondaryTestBase with PGStoreTestBase {
+import com.socrata.datacoordinator.secondary.LastModifiedChanged
+import com.socrata.pg.store.{PGSecondaryTestBase, PGSecondaryUniverseTestBase, PGStoreTestBase}
+import org.joda.time.DateTime
 
-  import com.socrata.pg.store.PGSecondaryUtil._
+class LastModifiedChangedTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
   test("handle LastModifiedChanged") {
     withPgu() { pgu =>
