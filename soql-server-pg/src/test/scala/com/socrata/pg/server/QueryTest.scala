@@ -1,6 +1,5 @@
 package com.socrata.pg.server
 
-import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
 import com.socrata.datacoordinator.id.{RowId, UserColumnId}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.store._
@@ -17,11 +16,9 @@ import org.apache.log4j.PropertyConfigurator
 import scala.language.existentials
 import com.socrata.pg.soql.CaseSensitive
 import com.socrata.http.server.util.NoPrecondition
-import com.typesafe.config.{Config, ConfigFactory}
+import com.socrata.pg.query.PGQueryTestBase
 
-class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
-
-  val projectDb = "query"
+class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase with PGQueryTestBase {
 
   override def beforeAll = {
     PropertyConfigurator.configure(Propertizer("log4j", config.getConfig("log4j")))

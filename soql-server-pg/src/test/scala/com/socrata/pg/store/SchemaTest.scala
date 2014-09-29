@@ -7,12 +7,11 @@ import com.rojoma.json.util.JsonUtil
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.pg.Schema
 import com.socrata.pg.server.{PGQueryServerDatabaseTestBase, QueryServerTest}
+import com.socrata.pg.query.PGQueryTestBase
 
-class SchemaTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
+class SchemaTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase with PGQueryTestBase {
   import com.socrata.pg.store.PGSecondaryUtil._
   import Schema._
-
-  override val projectDb = "query"
 
   override def beforeAll() {
     createDatabases()

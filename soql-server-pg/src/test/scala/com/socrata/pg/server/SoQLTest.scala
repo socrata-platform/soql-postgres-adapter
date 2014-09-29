@@ -2,11 +2,10 @@ package com.socrata.pg.server
 
 import com.socrata.pg.store.PGSecondaryTestBase
 import com.socrata.pg.store.PGSecondaryUtil._
+import com.socrata.pg.query.PGQueryTestBase
 
 
-abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase {
-
-  override val projectDb = "query"
+abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase with PGQueryTestBase {
 
   override def beforeAll = {
     createDatabases()

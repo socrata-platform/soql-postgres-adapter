@@ -5,15 +5,10 @@ import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.socrata.datacoordinator.id.DatasetId
 
-class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase  {
+class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
-  val dcInstance = "alpha"
-
-  val project: String = "soql-server-pg"
-
-  override val projectDb = "store"
-
-  val storeId: String = "pg"
+  // Despite being in the store project, it is getting its mutation script in the query project.
+  override val project: String = "soql-server-pg"
 
   override def beforeAll = {
     createDatabases()

@@ -21,12 +21,6 @@ import com.typesafe.config.{ConfigFactory, Config}
 trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUniverseTestBase {
   this : Matchers with BeforeAndAfterAll =>
 
-  val dcInstance = "alpha"
-
-  val project: String = "soql-server-pg"
-
-  val storeId: String = "pg"
-
   private lazy val datasourceConfig = new DataSourceConfig(config, "database")
 
   protected lazy val ds = DataSourceFromConfig(datasourceConfig)
