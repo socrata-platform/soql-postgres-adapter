@@ -212,7 +212,6 @@ object DatabaseTestBase extends Logging {
         // migrate truth db
         populateTruth(truthDb)
         // migrate secondary db
-        //SchemaMigrator("database", MigrationOperation.Migrate, PGSecondaryUtil.config)
         SchemaMigrator("database", MigrationOperation.Migrate, secondaryConfig)
         DatabaseTestBase.dbInitialized = true
       }
