@@ -10,6 +10,8 @@ trait Indexable[T] { this: SqlColumnCommonRep[T] =>
 
   def createIndex(tableName: String, tablespace: String): Option[String]
 
+  def createRollupIndex(tableName: String, tablespace: String): Option[String] = createIndex(tableName, tablespace)
+
   def dropIndex(tableName: String): Option[String]
 
 }
@@ -36,7 +38,21 @@ trait TextIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
     Some(sql)
   }
 
-  def dropIndex(tableName: String): Option[String] = {
+  override def createRollupIndex(tableName: String, tablespace: String): Option[String] = {
+    // In the bigger picture, the choice of indexes to create should be more dynamic based on
+    // type of queries we expect to the table and/or dynamically determined from workload.
+    // For now we are putting minimal indexes on rollup tables since their main use case is
+    // making small tables we can efficiently do full table scans on.  We are not typically
+    // doing prefix matching or case insensitive matching against them.
+
+    val sql = this.physColumns.map { phyCol =>
+      s"""
+      CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last)$tablespace;"""
+    }.mkString(";")
+    Some(sql)
+  }
+
+  override def dropIndex(tableName: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
       // we used to create nulls first indexes, so drop those if exist
       s"""
@@ -61,7 +77,7 @@ trait BaseIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
     Some(sql)
   }
 
-  def dropIndex(tableName: String): Option[String] = {
+  override def dropIndex(tableName: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
       // we used to create a nulls first index, so also drop it if exists
       s"""

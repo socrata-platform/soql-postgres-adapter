@@ -217,7 +217,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       using(pgu.conn.createStatement()) { stmt =>
         for {
           rep <- rollupReps
-          createIndexSql <- rep.createIndex(tableName, tablespaceSql)
+          createIndexSql <- rep.createRollupIndex(tableName, tablespaceSql)
         } {
           // Currently we aren't using any SqlErrorHandlers here, because as of this
           // time none of the existing ones are appropriate.
