@@ -16,7 +16,7 @@ object Dependencies {
     val simpleArm = "[1.1.10,2.0.0)"
     val slf4j = "1.7.5"
     val socrataUtils = "[0.6.0,1.0.0)"
-    val socrataThirdPartyUtil = "[2.4.0,3.0.0)"
+    val socrataThirdPartyUtil = "[2.5.1,3.0.0)"
     val socrataHttpCuratorBroker = "[2.0.0,3.0.0)"
     val soqlStdlib = "[0.2.1,1.0.0)"
     val typesafeConfig = "1.0.0"
