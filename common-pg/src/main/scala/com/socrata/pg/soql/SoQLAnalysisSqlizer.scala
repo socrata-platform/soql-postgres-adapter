@@ -99,11 +99,23 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     else sql
   }
 
+  private val GeoTypes: Set[SoQLType] = Set(SoQLPoint, SoQLMultiLine, SoQLMultiPolygon)
+  /**
+   * When we pull data out of pg we (slightly unfortunately, for performance reasons) want
+   * it as WKT.  We only want to translate it when we pull it out for performance reasons,
+   * in particular if we are doing aggregations on geo types in the SQL query, so we do so
+   * against the top level types of the final select list.
+   */
+  private def toGeoText(sql: String, typ: SoQLType): String = {
+    if (GeoTypes.contains(typ)) s"ST_AsText($sql)"
+    else sql
+  }
+
   private def select(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
     analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams)) { (t2, columnNameAndcoreExpr) =>
       val (columnName, coreExpr) = columnNameAndcoreExpr
       val ParametricSql(sql, newSetParams) = coreExpr.sql(rep, t2._2, ctx + (RootExpr -> coreExpr))
-      (t2._1 :+ sql, newSetParams)
+      (t2._1 :+ toGeoText(sql, coreExpr.typ), newSetParams)
     }
   }
 

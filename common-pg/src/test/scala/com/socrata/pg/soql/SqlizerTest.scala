@@ -53,6 +53,13 @@ class SqlizerTest extends FunSuite with Matchers {
     setParams.length should be (0)
   }
 
+  test("extent") {
+    val soql = "select extent(point), extent(line), extent(polygon)"
+    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT ST_AsText((ST_Multi(ST_Extent(point)))),ST_AsText((ST_Multi(ST_Extent(line)))),ST_AsText((ST_Multi(ST_Extent(polygon)))) FROM t1")
+    setParams.length should be (0)
+  }
+
   test("expr and expr") {
     val soql = "select id where id = 1 and case_number = 'cn001'"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)

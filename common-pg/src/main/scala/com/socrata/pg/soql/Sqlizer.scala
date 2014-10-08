@@ -92,13 +92,7 @@ object Sqlizer {
     new SoQLAnalysisSqlizer(analysisTable._1, analysisTable._2, analysisTable._3)
   }
 
-  def toGeoText(sql: String, typ: SoQLType, ctx: Context): String = {
-    import SqlizerContext._
-    if (GeoTypes.contains(typ) && ctx.get(SoqlPart) == Some(SoqlSelect)) s"ST_AsText($sql)"
-    else sql
-  }
 
-  private val GeoTypes: Set[SoQLType] = Set(SoQLPoint, SoQLMultiLine, SoQLMultiPolygon)
 }
 
 object SqlizerContext extends Enumeration {
