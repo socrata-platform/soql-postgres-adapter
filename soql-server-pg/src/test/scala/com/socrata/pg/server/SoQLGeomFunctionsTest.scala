@@ -38,4 +38,13 @@ class SoQLGeomFunctionsTest extends SoQLTest {
   test("multiline conversion") {
     compareSoqlResult("select name, 'multilinestring((10.123456 -20.123456, -30.654321 40.654321))'::multiline as multiline where name = 'Chili'", "select-mline-lit.json")
   }
+
+  test("extent") {
+    compareSoqlResult("select extent(point) as extent where make = 'APCO' or make = 'Skywalk' ", "select-extent.json")
+  }
+
+  test("extent groupby") {
+    compareSoqlResult("select size, extent(point) as extent where size='Small' group by size", "select-extent-groupby.json")
+  }
+
 }
