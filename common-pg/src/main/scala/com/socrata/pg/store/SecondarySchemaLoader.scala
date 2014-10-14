@@ -20,7 +20,7 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
   override def addColumns(columnInfos: Iterable[ColumnInfo[CT]]) {
     if(columnInfos.isEmpty) return; // ok? copied from parent schema loader
     super.addColumns(columnInfos)
-    createIndexes(columnInfos)
+    // createIndexes(columnInfos) was moved to publish time.
   }
 
   override def create(copyInfo: CopyInfo) {
@@ -84,17 +84,19 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
     }
   }
 
-  protected def createIndexes(columnInfos: Iterable[ColumnInfo[CT]]) {
-    val table = tableName(columnInfos)
-    val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
-      throw new Exception(table + " does not exist when creating index.")))
-    using(conn.createStatement()) { stmt =>
-      for {
-        ci <- columnInfos
-        createIndexSql <- repFor(ci).createIndex(table, tablespace)
-      } {
-        sqlErrorHandler.guard(conn) {
-          stmt.execute(createIndexSql)
+  def createIndexes(columnInfos: Iterable[ColumnInfo[CT]]) {
+    if (columnInfos.nonEmpty) {
+      val table = tableName(columnInfos)
+      val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
+        throw new Exception(table + " does not exist when creating index.")))
+      using(conn.createStatement()) { stmt =>
+        for {
+          ci <- columnInfos
+          createIndexSql <- repFor(ci).createIndex(table, tablespace)
+        } {
+          sqlErrorHandler.guard(conn) {
+            stmt.execute(createIndexSql)
+          }
         }
       }
     }
