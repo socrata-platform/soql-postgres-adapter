@@ -252,10 +252,10 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           rebuildIndex
         case ColumnCreated(secondaryColInfo) =>
           ColumnCreatedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          true
+          rebuildIndex
         case ColumnRemoved(secondaryColInfo) =>
           ColumnRemovedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          true
+          rebuildIndex
         case RowIdentifierSet(info) =>  // no-op
           rebuildIndex
         case RowIdentifierCleared(info) =>  // no-op
@@ -286,7 +286,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           rebuildIndex
         case WorkingCopyPublished =>
           WorkingCopyPublishedHandler(pgu, truthCopyInfo)
-          rebuildIndex
+          true
         case RowDataUpdated(ops) =>
           RowDataUpdatedHandler(pgu, truthCopyInfo, ops)
           rebuildIndex
@@ -309,6 +309,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     if (rebuildIndex) {
       val schema = pgu.datasetMapReader.schema(truthCopyInfo)
       val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
+      sLoader.createIndexes(schema.values)
       sLoader.createFullTextSearchIndex(schema.values)
     }
 
