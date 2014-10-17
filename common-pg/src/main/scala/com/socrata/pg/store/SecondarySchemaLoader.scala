@@ -89,6 +89,7 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
       val table = tableName(columnInfos)
       val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
         throw new Exception(table + " does not exist when creating index.")))
+      dropIndexes(columnInfos)
       using(conn.createStatement()) { stmt =>
         for {
           ci <- columnInfos
