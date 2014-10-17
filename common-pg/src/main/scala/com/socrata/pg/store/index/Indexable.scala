@@ -31,9 +31,17 @@ trait TextIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
       // nl for order by col asc nulls lasts and col desc nulls first and range scans
       // text_pattern_ops for like 'prefix%' or equality
       s"""
-      CREATE INDEX idx_${tableName}_u_$phyCol on $tableName USING BTREE (upper($phyCol) text_pattern_ops)$tablespace;
-      CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last)$tablespace;
-      CREATE INDEX idx_${tableName}_unl_$phyCol on $tableName USING BTREE (upper($phyCol) nulls last)$tablespace"""
+      DO $$$$ BEGIN
+        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_u_$phyCol') THEN
+          CREATE INDEX idx_${tableName}_u_$phyCol on $tableName USING BTREE (upper($phyCol) text_pattern_ops)$tablespace;
+        END IF;
+        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_nl_$phyCol') THEN
+          CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last)$tablespace;
+        END IF;
+        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_unl_$phyCol') THEN
+          CREATE INDEX idx_${tableName}_unl_$phyCol on $tableName USING BTREE (upper($phyCol) nulls last)$tablespace;
+        END IF;
+      END; $$$$;"""
     }.mkString(";")
     Some(sql)
   }
@@ -47,7 +55,11 @@ trait TextIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
 
     val sql = this.physColumns.map { phyCol =>
       s"""
-      CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last)$tablespace;"""
+      DO $$$$ BEGIN
+        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_nl_$phyCol') THEN
+          CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last)$tablespace;
+        END IF;
+      END; $$$$;"""
     }.mkString(";")
     Some(sql)
   }
@@ -72,7 +84,11 @@ trait BaseIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
   override def createIndex(tableName: String, tablespace: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
       s"""
-      CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last)$tablespace"""
+      DO $$$$ BEGIN
+        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_nl_$phyCol') THEN
+          CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last)$tablespace;
+        END IF;
+      END; $$$$;"""
     }.mkString(";")
     Some(sql)
   }
@@ -98,7 +114,12 @@ trait GeoIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] =>
 
   override def createIndex(tableName: String, tablespace: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
-      s"""CREATE index idx_${tableName}_${phyCol}_gist ON ${tableName} USING GIST(${phyCol})"""
+      s"""
+      DO $$$$ BEGIN
+        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_${phyCol}_gist') THEN
+          CREATE index idx_${tableName}_${phyCol}_gist ON ${tableName} USING GIST(${phyCol})$tablespace;
+        END IF;
+      END; $$$$;"""
     }.mkString(";")
     Some(sql)
   }
