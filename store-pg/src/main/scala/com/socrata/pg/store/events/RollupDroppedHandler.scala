@@ -14,7 +14,7 @@ case class RollupDroppedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], c
   val rm = new RollupManager(pgu, copyInfo)
 
   for (ri <- pgu.datasetMapReader.rollup(copyInfo, rollupName)) {
-    rm.dropRollup(ri)
+    rm.dropRollup(ri, false)
     pgu.datasetMapWriter.dropRollup(copyInfo, Some(rollupName))
   }
 }

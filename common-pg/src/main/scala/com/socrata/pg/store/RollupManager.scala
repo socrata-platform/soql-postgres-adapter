@@ -128,9 +128,9 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    * Does not update the rollup_map metadata.  The copyInfo passed in
    * must match with the currently created version number of the rollup tables.
    */
-  def dropRollups() {
+  def dropRollups(immediate: Boolean) {
     val rollups = pgu.datasetMapReader.rollups(copyInfo)
-    rollups.foreach(dropRollup)
+    rollups.foreach(dropRollup(_, immediate))
   }
 
   /**
@@ -138,13 +138,16 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    * Does not update the rollup_map metadata.  The copyInfo passed in
    * must match with the currently created version number of the rollup table.
    */
-  def dropRollup(ri: RollupInfo) {
+  def dropRollup(ri: RollupInfo, immediate: Boolean) {
     val tableName = rollupTableName(ri, copyInfo.dataVersion)
-    using(pgu.conn.createStatement()) { stmt =>
-      val sql = s"DROP TABLE IF EXISTS ${tableName}"
-      logger.info(sql)
-      stmt.execute(sql)
-    }
+    if (immediate)
+      using(pgu.conn.createStatement()) { stmt =>
+        val sql = s"DROP TABLE IF EXISTS ${tableName}"
+        logger.info(sql)
+        stmt.execute(sql)
+      }
+    else
+      scheduleRollupTablesForDropping(tableName)
   }
 
   /**
