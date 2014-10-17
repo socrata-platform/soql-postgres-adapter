@@ -86,7 +86,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           val datasetId = copyInfo.datasetInfo.systemId
           for (copy <- pgu.datasetMapReader.allCopies(copyInfo.datasetInfo)) {
             val rm = new RollupManager(pgu, copy)
-            rm.dropRollups()
+            rm.dropRollups(immediate = false)
           }
           pgu.datasetDropper.dropDataset(datasetId)
           pgu.commit()
@@ -378,7 +378,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
             case Some(copyInfo) =>
               logger.info("delete existing copy so that a new one can be created with the same ids {} {}", truthDatasetInfo.systemId.toString, secondaryCopyInfo.copyNumber.toString)
               val rm = new RollupManager(pgu, copyInfo)
-              rm.dropRollups() // drop all rollup tables
+              rm.dropRollups(immediate = true) // drop all rollup tables
               pgu.secondaryDatasetMapWriter.deleteCopy(copyInfo)
               pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, copyInfo.systemId, copyInfo.copyNumber,
                 TruthLifecycleStage.valueOf(copyInfo.lifecycleStage.toString),
