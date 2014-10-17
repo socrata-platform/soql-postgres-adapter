@@ -31,9 +31,17 @@ trait TextIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
       // nl for order by col asc nulls lasts and col desc nulls first and range scans
       // text_pattern_ops for like 'prefix%' or equality
       s"""
-      CREATE INDEX idx_${tableName}_u_$phyCol on $tableName USING BTREE (upper($phyCol) text_pattern_ops)$tablespace;
-      CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last)$tablespace;
-      CREATE INDEX idx_${tableName}_unl_$phyCol on $tableName USING BTREE (upper($phyCol) nulls last)$tablespace"""
+      DO $$$$ BEGIN
+        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_u_$phyCol') THEN
+          CREATE INDEX idx_${tableName}_u_$phyCol on $tableName USING BTREE (upper($phyCol) text_pattern_ops)$tablespace;
+        END IF;
+        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_nl_$phyCol') THEN
+          CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last)$tablespace;
+        END IF;
+        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_unl_$phyCol') THEN
+          CREATE INDEX idx_${tableName}_unl_$phyCol on $tableName USING BTREE (upper($phyCol) nulls last)$tablespace;
+        END IF;
+      END; $$$$;"""
     }.mkString(";")
     Some(sql)
   }
