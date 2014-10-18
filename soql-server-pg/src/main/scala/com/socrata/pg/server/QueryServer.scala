@@ -30,7 +30,8 @@ import com.socrata.http.server.responses._
 import com.socrata.http.server.routing.{SimpleResource, SimpleRouteContext}
 import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, StrongEntityTag}
 import com.socrata.http.server.util.Precondition._
-import com.socrata.http.server.util.handlers.{LoggingHandler, ThreadRenamingHandler}
+import com.socrata.http.server.util.handlers.{NewLoggingHandler, ThreadRenamingHandler}
+import com.socrata.http.server.util.RequestId.ReqIdHeader
 import com.socrata.pg.{SecondaryBase, Version}
 import com.socrata.pg.Schema._
 import com.socrata.pg.query.{DataSqlizerQuerier, RowCount, RowReaderQuerier}
@@ -419,8 +420,13 @@ object QueryServer extends Logging {
       pong.start()
       val queryServer = new QueryServer(dsInfo, CaseSensitive)
       val auxData = new AuxiliaryData(livenessCheckInfo = Some(pong.livenessCheckInfo))
-      val curatorBroker = new CuratorBroker(discovery, address, config.advertisement.name + "." + config.instance, Some(auxData))
-      val handler = ThreadRenamingHandler(LoggingHandler(queryServer.route))
+      val curatorBroker = new CuratorBroker(discovery,
+                                            address,
+                                            config.advertisement.name + "." + config.instance,
+                                            Some(auxData))
+      val logOptions = NewLoggingHandler.defaultOptions.copy(
+                         logRequestHeaders = Set(ReqIdHeader, "X-Socrata-Resource"))
+      val handler = ThreadRenamingHandler(NewLoggingHandler(logOptions)(queryServer.route))
       val server = new SocrataServerJetty(handler, SocrataServerJetty.defaultOptions.withPort(config.port).withBroker(curatorBroker))
       logger.info("starting pg query server")
       server.run()
