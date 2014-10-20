@@ -47,4 +47,16 @@ class SoQLGeomFunctionsTest extends SoQLTest {
     compareSoqlResult("select size, extent(point) as extent where size='Small' group by size", "select-extent-groupby.json")
   }
 
+  test("intersects") {
+    // The multipolygon below covers the following cases:
+    // - Shapes fully contained within the multipolygon
+    // - Shapes overlapping but not fully contained within the multipolygon
+    // - Shapes on the boundary of the multipolygon
+    compareSoqlResult("select make, name, multipolygon where intersects(multipolygon, 'MULTIPOLYGON(((0 0, 1.5 0, 1.5 2, 0 2, 0 0)))')", "where-intersects.json")
+  }
+
+  test("intersects no matches") {
+    compareSoqlResult("select make, name, multipolygon where intersects(multipolygon, 'MULTIPOLYGON(((2 3,3 3,3 4,2 4,2 3)))')", "empty.json")
+  }
+
 }

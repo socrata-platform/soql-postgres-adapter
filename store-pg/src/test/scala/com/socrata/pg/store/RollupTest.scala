@@ -29,7 +29,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
       val dsName = s"$dcInstance.${truthDatasetId.underlying}"
       // TODO MS fix up geometry columns so we can make rollups on them, low priority
-      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"), "select * (EXCEPT _point)")
+      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"), "select * (EXCEPT _point, _multipolygon)")
 
       val rm = new RollupManager(pgu, copyInfo)
       rm.updateRollup(rollupInfo, copyInfo.dataVersion)
