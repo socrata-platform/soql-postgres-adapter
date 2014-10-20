@@ -117,7 +117,7 @@ trait GeoIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] =>
       s"""
       DO $$$$ BEGIN
         IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_${phyCol}_gist') THEN
-          CREATE index idx_${tableName}_${phyCol}_gist ON ${tableName} USING GIST(${phyCol});
+          CREATE index idx_${tableName}_${phyCol}_gist ON ${tableName} USING GIST(${phyCol})$tablespace;
         END IF;
       END; $$$$;"""
     }.mkString(";")
