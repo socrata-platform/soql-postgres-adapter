@@ -430,7 +430,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       rm.updateRollup(rollup, truthCopyInfo.dataVersion)
     }
 
-    pgu.datasetMapWriter.updateDataVersion(truthCopyInfo, secondaryCopyInfo.dataVersion)
+    if (truthCopyInfo.dataVersion != secondaryCopyInfo.dataVersion) {
+      pgu.datasetMapWriter.updateDataVersion(truthCopyInfo, secondaryCopyInfo.dataVersion)
+    }
     pgu.datasetMapWriter.updateLastModified(truthCopyInfo, secondaryCopyInfo.lastModified)
     cookie
   }
