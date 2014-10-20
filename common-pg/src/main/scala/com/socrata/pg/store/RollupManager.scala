@@ -124,7 +124,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
   }
 
   /**
-   * Immediately drop all rollup tables for the given dataset.
+   * Either immediately drop all rollup tables or put them in pending drop table for the given dataset.
    * Does not update the rollup_map metadata.  The copyInfo passed in
    * must match with the currently created version number of the rollup tables.
    */
