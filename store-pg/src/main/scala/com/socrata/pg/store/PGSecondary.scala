@@ -381,8 +381,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
               rm.dropRollups(immediate = true) // drop all rollup tables
               pgu.secondaryDatasetMapWriter.deleteCopy(copyInfo)
               pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, copyInfo.systemId, copyInfo.copyNumber,
-                TruthLifecycleStage.valueOf(copyInfo.lifecycleStage.toString),
-                copyInfo.dataVersion)
+                TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
+                secondaryCopyInfo.dataVersion)
             case None =>
               val secCopyId = pgu.secondaryDatasetMapWriter.allocateCopyId()
               pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, secCopyId,
@@ -430,6 +430,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       rm.updateRollup(rollup, truthCopyInfo.dataVersion)
     }
 
+    if (truthCopyInfo.dataVersion != secondaryCopyInfo.dataVersion) {
+      pgu.datasetMapWriter.updateDataVersion(truthCopyInfo, secondaryCopyInfo.dataVersion)
+    }
     pgu.datasetMapWriter.updateLastModified(truthCopyInfo, secondaryCopyInfo.lastModified)
     cookie
   }
