@@ -65,8 +65,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
       sLoader.addColumns(cols)
 
       validateSchema(cols, getSchema(pgu, copyInfo))
-      // +1 since location maps to lat and lon columns, so this test is pretty fragile in the face of new data types
-      assert(jdbcColumnCount(conn, copyInfo.dataTableName) == cols.size+1, s"Expected table to have ${cols.size+1} columns")
+      assert(jdbcColumnCount(conn, copyInfo.dataTableName) == cols.size, s"Expected table to have ${cols.size} columns")
 
       cols.foreach(pgu.datasetMapWriter.dropColumn(_))
 
