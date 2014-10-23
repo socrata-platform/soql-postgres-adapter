@@ -183,7 +183,6 @@ trait PGSecondaryUniverseTestBase {
           case SoQLObject => SoQLObject(new JObject(Map("hi" -> JString("there"))))
           case SoQLArray => SoQLArray(new JArray(Seq(JString("there"))))
           case SoQLJson => SoQLJson(new JArray(Seq(JString("there"))))
-          case SoQLLocation => SoQLLocation(0.1, 0.2)
           case SoQLPoint => SoQLPoint(SoQLPoint.WktRep.unapply("POINT (47.6303 -122.3148)").get)
           case SoQLMultiLine => SoQLMultiLine(SoQLMultiLine.WktRep.unapply("MULTILINESTRING ((100 0, 101 1), (102 2, 103 3))").get)
           case SoQLMultiPolygon => SoQLMultiPolygon(SoQLMultiPolygon.WktRep.unapply(

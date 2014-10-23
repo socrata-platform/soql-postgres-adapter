@@ -131,7 +131,7 @@ class SqlizerTest extends FunSuite with Matchers {
   test("search") {
     val soql = "select id search 'oNe Two'"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT id FROM t1 WHERE to_tsvector('english', coalesce(array_13,'') || ' ' || coalesce(case_number_6,'') || ' ' || coalesce(object_12,'') || ' ' || coalesce(primary_type_7,'')) @@ plainto_tsquery(?)")
+    sql should be ("SELECT id FROM t1 WHERE to_tsvector('english', coalesce(array_12,'') || ' ' || coalesce(case_number_6,'') || ' ' || coalesce(object_11,'') || ' ' || coalesce(primary_type_7,'')) @@ plainto_tsquery(?)")
     setParams.length should be (1)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq("oNe Two"))
@@ -167,12 +167,11 @@ object SqlizerTest {
     ColumnName("year") -> (8, SoQLNumber),
     ColumnName("arrest") -> (9, SoQLBoolean),
     ColumnName("updated_on") -> (10, SoQLFloatingTimestamp),
-    ColumnName("location") -> (11, SoQLLocation),
-    ColumnName("object") -> (12, SoQLObject),
-    ColumnName("array") -> (13, SoQLArray),
-    ColumnName("point") -> (14, SoQLPoint),
-    ColumnName("line") -> (15, SoQLMultiLine),
-    ColumnName("polygon") -> (16, SoQLMultiPolygon)
+    ColumnName("object") -> (11, SoQLObject),
+    ColumnName("array") -> (12, SoQLArray),
+    ColumnName("point") -> (13, SoQLPoint),
+    ColumnName("line") -> (14, SoQLMultiLine),
+    ColumnName("polygon") -> (15, SoQLMultiPolygon)
   )
 
   private val columnInfos = columnMap.foldLeft(Seq.empty[ColumnInfo[SoQLType]]) { (acc, colNameAndType) => colNameAndType match {
