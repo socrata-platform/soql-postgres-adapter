@@ -25,7 +25,8 @@ object CommonPG {
       typesafeConfig,
       slf4j,
       typesafeScalaLogging,
-      rojomaJson
+      rojomaJson,
+      metricsScala
     )
   )
 

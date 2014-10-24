@@ -47,6 +47,7 @@ import com.socrata.soql.typed.CoreExpr
 import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.thirdparty.typesafeconfig.Propertizer
+import com.socrata.thirdparty.metrics.{SocrataHttpSupport, Metrics, MetricsReporter}
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.slf4j.Logging
 import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
@@ -414,6 +415,7 @@ object QueryServer extends Logging {
       executor <- managed(Executors.newCachedThreadPool())
       dsInfo <- DataSourceFromConfig(datasourceConfig)
       conn <- managed(dsInfo.dataSource.getConnection)
+      reporter <- MetricsReporter.managed(config.metrics)
     } {
       curator.start()
       discovery.start()
@@ -427,7 +429,11 @@ object QueryServer extends Logging {
       val logOptions = NewLoggingHandler.defaultOptions.copy(
                          logRequestHeaders = Set(ReqIdHeader, "X-Socrata-Resource"))
       val handler = ThreadRenamingHandler(NewLoggingHandler(logOptions)(queryServer.route))
-      val server = new SocrataServerJetty(handler, SocrataServerJetty.defaultOptions.withPort(config.port).withBroker(curatorBroker))
+      val server = new SocrataServerJetty(handler,
+                     SocrataServerJetty.defaultOptions.
+                       withPort(config.port).
+                       withExtraHandlers(List(SocrataHttpSupport.getHandler(config.metrics))).
+                       withBroker(curatorBroker))
       logger.info("starting pg query server")
       server.run()
     }
