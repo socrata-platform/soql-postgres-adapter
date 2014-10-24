@@ -46,13 +46,12 @@ import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.typed.CoreExpr
 import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion}
 import com.socrata.soql.types.obfuscation.CryptProvider
+import com.socrata.thirdparty.curator.CuratorFromConfig
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.socrata.thirdparty.metrics.{SocrataHttpSupport, Metrics, MetricsReporter}
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.slf4j.Logging
 import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
-import org.apache.curator.retry
-import org.apache.curator.framework.CuratorFrameworkFactory
 import org.apache.curator.x.discovery.{ServiceDiscoveryBuilder, ServiceInstanceBuilder}
 import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
@@ -398,15 +397,7 @@ object QueryServer extends Logging {
     }
 
     for {
-      curator <- managed(CuratorFrameworkFactory.builder.
-        connectString(config.curator.ensemble).
-        sessionTimeoutMs(config.curator.sessionTimeout.toMillis.toInt).
-        connectionTimeoutMs(config.curator.connectTimeout.toMillis.toInt).
-        retryPolicy(new retry.BoundedExponentialBackoffRetry(config.curator.baseRetryWait.toMillis.toInt,
-        config.curator.maxRetryWait.toMillis.toInt,
-        config.curator.maxRetries)).
-        namespace(config.curator.namespace).
-        build())
+      curator <- CuratorFromConfig(config.curator)
       discovery <- managed(ServiceDiscoveryBuilder.builder(classOf[AuxiliaryData]).
         client(curator).
         basePath(config.advertisement.basePath).
