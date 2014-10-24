@@ -13,16 +13,16 @@ object Dependencies {
     val liquibasePlugin = "1.9.5.0"
     val postgresql = "9.3-1102-jdbc41"
     val scalaTest = "2.1.0-RC2"
-    val simpleArm = "[1.1.10,2.0.0)"
+    val simpleArm = "1.1.10"
     val slf4j = "1.7.5"
-    val socrataUtils = "[0.6.0,1.0.0)"
+    val socrataUtils = "0.6.0"
     val socrataThirdPartyUtil = "2.5.1"
     val socrataHttpCuratorBroker = "2.3.2"
-    val soqlStdlib = "[0.3.0,1.0.0)"
+    val soqlStdlib = "0.3.2"
     val typesafeConfig = "1.0.0"
     val dataCoordinator = "0.2.2"
     val typesafeScalaLogging = "1.1.0"
-    val rojomaJson = "[2.4.3,3.0.0)"
+    val rojomaJson = "2.4.3"
   }
 
   val c3p0 = "com.mchange" % "c3p0" % versions.c3p0
