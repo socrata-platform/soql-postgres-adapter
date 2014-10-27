@@ -46,13 +46,13 @@ import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.typed.CoreExpr
 import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion}
 import com.socrata.soql.types.obfuscation.CryptProvider
-import com.socrata.thirdparty.curator.CuratorFromConfig
+import com.socrata.thirdparty.curator.{CuratorFromConfig, DiscoveryFromConfig}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.socrata.thirdparty.metrics.{SocrataHttpSupport, Metrics, MetricsReporter}
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.slf4j.Logging
 import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
-import org.apache.curator.x.discovery.{ServiceDiscoveryBuilder, ServiceInstanceBuilder}
+import org.apache.curator.x.discovery.ServiceInstanceBuilder
 import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
 
@@ -389,7 +389,7 @@ object QueryServer extends Logging {
 
   def main(args:Array[String]) {
 
-    val address = config.advertisement.address
+    val address = config.discovery.address
     val datasourceConfig = new DataSourceConfig(config.getRawConfig("store"), "database")
 
     implicit object executorResource extends com.rojoma.simplearm.Resource[ExecutorService] {
@@ -398,24 +398,19 @@ object QueryServer extends Logging {
 
     for {
       curator <- CuratorFromConfig(config.curator)
-      discovery <- managed(ServiceDiscoveryBuilder.builder(classOf[AuxiliaryData]).
-        client(curator).
-        basePath(config.advertisement.basePath).
-        build())
+      discovery <- DiscoveryFromConfig(classOf[AuxiliaryData], curator, config.discovery)
       pong <- managed(new LivenessCheckResponder(new InetSocketAddress(InetAddress.getByName(address), 0)))
       executor <- managed(Executors.newCachedThreadPool())
       dsInfo <- DataSourceFromConfig(datasourceConfig)
       conn <- managed(dsInfo.dataSource.getConnection)
       reporter <- MetricsReporter.managed(config.metrics)
     } {
-      curator.start()
-      discovery.start()
       pong.start()
       val queryServer = new QueryServer(dsInfo, CaseSensitive)
       val auxData = new AuxiliaryData(livenessCheckInfo = Some(pong.livenessCheckInfo))
       val curatorBroker = new CuratorBroker(discovery,
                                             address,
-                                            config.advertisement.name + "." + config.instance,
+                                            config.discovery.name + "." + config.instance,
                                             Some(auxData))
       val logOptions = NewLoggingHandler.defaultOptions.copy(
                          logRequestHeaders = Set(ReqIdHeader, "X-Socrata-Resource"))

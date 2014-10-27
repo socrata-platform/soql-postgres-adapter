@@ -2,7 +2,7 @@ package com.socrata.pg.server.config
 
 import com.typesafe.config.Config
 import com.socrata.pg.config.{StoreConfig}
-import com.socrata.thirdparty.curator.CuratorConfig
+import com.socrata.thirdparty.curator.{CuratorConfig, DiscoveryConfig}
 import com.socrata.thirdparty.metrics.MetricsOptions
 import com.socrata.thirdparty.typesafeconfig.ConfigClass
 
@@ -11,7 +11,7 @@ class QueryServerConfig(val config: Config, val root: String) extends ConfigClas
   val store = new StoreConfig(config, path("store"))
   val port = getInt("port")
   val curator = new CuratorConfig(config, path("curator"))
-  val advertisement = new AdvertisementConfig(config, path("service-advertisement"))
+  val discovery = new DiscoveryConfig(config, path("service-advertisement"))
   val metrics = MetricsOptions(config.getConfig(path("metrics")))
   val instance = getString("instance")
 }
