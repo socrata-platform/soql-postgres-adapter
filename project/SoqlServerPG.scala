@@ -10,7 +10,9 @@ object SoqlServerPG {
   )
 
   def libraries() = Seq(
-    secondarylib
+    secondarylib,
+    metricsJetty,
+    metricsGraphite
   )
 }
 

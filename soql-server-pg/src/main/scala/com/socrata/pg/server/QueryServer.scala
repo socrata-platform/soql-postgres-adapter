@@ -30,7 +30,8 @@ import com.socrata.http.server.responses._
 import com.socrata.http.server.routing.{SimpleResource, SimpleRouteContext}
 import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, StrongEntityTag}
 import com.socrata.http.server.util.Precondition._
-import com.socrata.http.server.util.handlers.{LoggingHandler, ThreadRenamingHandler}
+import com.socrata.http.server.util.handlers.{NewLoggingHandler, ThreadRenamingHandler}
+import com.socrata.http.server.util.RequestId.ReqIdHeader
 import com.socrata.pg.{SecondaryBase, Version}
 import com.socrata.pg.Schema._
 import com.socrata.pg.query.{DataSqlizerQuerier, RowCount, RowReaderQuerier}
@@ -45,13 +46,13 @@ import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.typed.CoreExpr
 import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion}
 import com.socrata.soql.types.obfuscation.CryptProvider
+import com.socrata.thirdparty.curator.{CuratorFromConfig, DiscoveryFromConfig}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
+import com.socrata.thirdparty.metrics.{SocrataHttpSupport, Metrics, MetricsReporter}
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.slf4j.Logging
 import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
-import org.apache.curator.retry
-import org.apache.curator.framework.CuratorFrameworkFactory
-import org.apache.curator.x.discovery.{ServiceDiscoveryBuilder, ServiceInstanceBuilder}
+import org.apache.curator.x.discovery.ServiceInstanceBuilder
 import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
 
@@ -388,7 +389,7 @@ object QueryServer extends Logging {
 
   def main(args:Array[String]) {
 
-    val address = config.advertisement.address
+    val address = config.discovery.address
     val datasourceConfig = new DataSourceConfig(config.getRawConfig("store"), "database")
 
     implicit object executorResource extends com.rojoma.simplearm.Resource[ExecutorService] {
@@ -396,32 +397,29 @@ object QueryServer extends Logging {
     }
 
     for {
-      curator <- managed(CuratorFrameworkFactory.builder.
-        connectString(config.curator.ensemble).
-        sessionTimeoutMs(config.curator.sessionTimeout.toMillis.toInt).
-        connectionTimeoutMs(config.curator.connectTimeout.toMillis.toInt).
-        retryPolicy(new retry.BoundedExponentialBackoffRetry(config.curator.baseRetryWait.toMillis.toInt,
-        config.curator.maxRetryWait.toMillis.toInt,
-        config.curator.maxRetries)).
-        namespace(config.curator.namespace).
-        build())
-      discovery <- managed(ServiceDiscoveryBuilder.builder(classOf[AuxiliaryData]).
-        client(curator).
-        basePath(config.advertisement.basePath).
-        build())
+      curator <- CuratorFromConfig(config.curator)
+      discovery <- DiscoveryFromConfig(classOf[AuxiliaryData], curator, config.discovery)
       pong <- managed(new LivenessCheckResponder(new InetSocketAddress(InetAddress.getByName(address), 0)))
       executor <- managed(Executors.newCachedThreadPool())
       dsInfo <- DataSourceFromConfig(datasourceConfig)
       conn <- managed(dsInfo.dataSource.getConnection)
+      reporter <- MetricsReporter.managed(config.metrics)
     } {
-      curator.start()
-      discovery.start()
       pong.start()
       val queryServer = new QueryServer(dsInfo, CaseSensitive)
       val auxData = new AuxiliaryData(livenessCheckInfo = Some(pong.livenessCheckInfo))
-      val curatorBroker = new CuratorBroker(discovery, address, config.advertisement.name + "." + config.instance, Some(auxData))
-      val handler = ThreadRenamingHandler(LoggingHandler(queryServer.route))
-      val server = new SocrataServerJetty(handler, SocrataServerJetty.defaultOptions.withPort(config.port).withBroker(curatorBroker))
+      val curatorBroker = new CuratorBroker(discovery,
+                                            address,
+                                            config.discovery.name + "." + config.instance,
+                                            Some(auxData))
+      val logOptions = NewLoggingHandler.defaultOptions.copy(
+                         logRequestHeaders = Set(ReqIdHeader, "X-Socrata-Resource"))
+      val handler = ThreadRenamingHandler(NewLoggingHandler(logOptions)(queryServer.route))
+      val server = new SocrataServerJetty(handler,
+                     SocrataServerJetty.defaultOptions.
+                       withPort(config.port).
+                       withExtraHandlers(List(SocrataHttpSupport.getHandler(config.metrics))).
+                       withBroker(curatorBroker))
       logger.info("starting pg query server")
       server.run()
     }
