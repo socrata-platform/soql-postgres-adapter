@@ -41,6 +41,8 @@ object SqlFunctions {
     // within_box(location_col_identifier, top_left_latitude, top_left_longitude, bottom_right_latitude, bottom_right_longitude)
     WithinBox -> formatCall("ST_MakeEnvelope(%s, %s, %s, %s, 4326) ~ %s", Some(Seq(2, 3, 4, 1, 0))) _,
     Extent -> formatCall("ST_Multi(ST_Extent(%s))") _,
+    ConcaveHull -> formatCall("ST_Multi(ST_ConcaveHull(ST_Union(%s), %s))") _,
+    ConvexHull -> formatCall("ST_Multi(ST_ConvexHull(ST_Union(%s)))"),
     Intersects -> formatCall("ST_Intersects(%s, %s)") _,
     Between -> formatCall("%s between %s and %s") _,
     Lt -> infix("<") _,

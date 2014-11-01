@@ -47,6 +47,14 @@ class SoQLGeomFunctionsTest extends SoQLTest {
     compareSoqlResult("select size, extent(point) as extent where size='Small' group by size", "select-extent-groupby.json")
   }
 
+  test("concave hull") {
+    compareSoqlResult("select concave_hull(multipolygon, 0.99) as concave_hull where country = 'Germany'", "select-concave-hull.json")
+  }
+
+  test("convex hull") {
+    compareSoqlResult("select convex_hull(multipolygon) as convex_hull where country = 'Germany'", "select-convex-hull.json")
+  }
+
   test("intersects") {
     // The multipolygon below covers the following cases:
     // - Shapes fully contained within the multipolygon
