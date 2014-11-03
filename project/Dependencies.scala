@@ -2,7 +2,7 @@ import sbt._
 
 object Dependencies {
   object versions {
-    val c3p0 = "0.9.5-pre8"
+    val c3p0 = "0.9.5-pre9"
     val commonsCli = "1.2"
     val commonsCodec = "1.5"
     val commonsIo = "1.4"
@@ -16,7 +16,7 @@ object Dependencies {
     val simpleArm = "1.1.10"
     val slf4j = "1.7.5"
     val socrataUtils = "0.8.0"
-    val socrataThirdPartyUtil = "2.5.3"
+    val socrataThirdPartyUtil = "2.6.0"
     val socrataHttpCuratorBroker = "2.3.3"
     val soqlStdlib = "0.4.0"
     val typesafeConfig = "1.0.0"

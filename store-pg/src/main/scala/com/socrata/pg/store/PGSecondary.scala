@@ -30,7 +30,7 @@ import com.socrata.datacoordinator.truth.loader.sql.SqlPrevettedLoader
 import com.socrata.datacoordinator.truth.universe.sql.{PostgresCopyIn, C3P0WrappedPostgresCopyIn}
 import com.socrata.pg.store.events.WorkingCopyPublishedHandler
 import com.socrata.pg.{Version, SecondaryBase}
-import com.socrata.thirdparty.typesafeconfig.Propertizer
+import com.socrata.thirdparty.typesafeconfig.C3P0Propertizer
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.slf4j.Logging
 import java.io.Closeable
@@ -484,7 +484,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     dataSource.setApplicationName(config.applicationName)
     config.poolOptions match {
       case Some(poolOptions) =>
-        val overrideProps = Propertizer("", poolOptions)
+        val overrideProps = C3P0Propertizer("", poolOptions)
         val pooled = DataSources.pooledDataSource(dataSource, null, overrideProps)
         new DSInfo(pooled, C3P0WrappedPostgresCopyIn) with Closeable {
           def close() {
