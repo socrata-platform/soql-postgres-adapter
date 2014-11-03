@@ -60,6 +60,35 @@ class SqlizerTest extends FunSuite with Matchers {
     setParams.length should be (0)
   }
 
+  test("concave hull") {
+    val soql = "select concave_hull(point, 0.99), concave_hull(line, 0.89), concave_hull(polygon, 0.79)"
+    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT ST_AsText((ST_Multi(ST_ConcaveHull(ST_Union(point), ?))))," +
+                          "ST_AsText((ST_Multi(ST_ConcaveHull(ST_Union(line), ?))))," +
+                          "ST_AsText((ST_Multi(ST_ConcaveHull(ST_Union(polygon), ?)))) FROM t1")
+    setParams.length should be (3)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq(0.99, 0.89, 0.79).map(BigDecimal(_)))
+  }
+
+  test("convex hull") {
+    val soql = "select convex_hull(point), convex_hull(line), convex_hull(polygon)"
+    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT ST_AsText((ST_Multi(ST_ConvexHull(ST_Union(point)))))," +
+                          "ST_AsText((ST_Multi(ST_ConvexHull(ST_Union(line)))))," +
+                          "ST_AsText((ST_Multi(ST_ConvexHull(ST_Union(polygon))))) FROM t1")
+    setParams.length should be (0)
+  }
+
+  test("intersects") {
+    val soql = "select intersects(point, 'MULTIPOLYGON (((1 1, 2 1, 2 2, 1 2, 1 1)))')"
+    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT (ST_Intersects(point, (ST_GeomFromText(?, 4326)))) FROM t1")
+    setParams.length should be (1)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq("MULTIPOLYGON (((1 1, 2 1, 2 2, 1 2, 1 1)))"))
+  }
+
   test("expr and expr") {
     val soql = "select id where id = 1 and case_number = 'cn001'"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
