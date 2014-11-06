@@ -4,6 +4,7 @@ import com.rojoma.simplearm.util.unmanaged
 import com.socrata.datacoordinator.id.{ColumnId, CopyId, RollupName, UserColumnId}
 import com.socrata.datacoordinator.secondary._
 import com.socrata.datacoordinator.truth.metadata
+import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, LifecycleStage => TruthLifecycleStage}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.store.PGSecondaryUtil._
 import com.socrata.pg.store.events.{RollupCreatedOrUpdatedHandler, WorkingCopyCreatedHandler, WorkingCopyPublishedHandler}
@@ -99,7 +100,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(testInternalName)
       datasetId.isDefined should be (true)
       WorkingCopyPublishedHandler(pgu, firstCopy)
-      val firstCopyPublished = getTruthCopyInfo(pgu, datasetInfo)
+      val firstCopyPublished: TruthCopyInfo = getTruthCopyInfo(pgu, datasetInfo)
       firstCopyPublished.lifecycleStage should be (metadata.LifecycleStage.Published)
 
       val rollup = RollupInfo("ru", "select count(1)")
@@ -111,7 +112,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       RollupManager.makeSecondaryRollupInfo(rollupInFirstCopy) should be (rollup)
 
       // create the rollup table
-      (new RollupManager(pgu, firstCopy)).updateRollup(rollupInFirstCopy, firstCopy.dataVersion)
+      (new RollupManager(pgu, firstCopyPublished)).updateRollup(rollupInFirstCopy, firstCopy.dataVersion)
 
       val tableNameFirstCopy = RollupManager.rollupTableName(rollupInFirstCopy, firstCopy.dataVersion)
       jdbcColumnCount(pgu.conn, tableNameFirstCopy) should be (1)
@@ -123,17 +124,26 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       secondCopy.lifecycleStage should be (metadata.LifecycleStage.Unpublished)
       secondCopy.copyNumber should be (2L)
 
-      val rollupsInSecondCopy = pgu.datasetMapReader.rollups(secondCopy)
+      // Publish the 2nd copy
+      WorkingCopyPublishedHandler(pgu, secondCopy)
+
+      // Update rollups in the 2nd copy
+      val secondCopyPublished = getTruthCopyInfo(pgu, datasetInfo)
+      val rollupsInSecondCopy = pgu.datasetMapReader.rollups(secondCopyPublished)
       rollupsInSecondCopy.size should be (1)
       val rollupInSecondCopy = rollupsInSecondCopy.head
+      (new RollupManager(pgu, secondCopyPublished)).updateRollup(rollupInSecondCopy, secondCopyPublished.dataVersion)
       RollupManager.makeSecondaryRollupInfo(rollupInSecondCopy) should be (rollup)
 
       val tableNameSecondCopy = RollupManager.rollupTableName(rollupInSecondCopy, secondCopy.dataVersion)
       jdbcColumnCount(pgu.conn, tableNameSecondCopy) should be (1)
       jdbcRowCount(pgu.conn, tableNameSecondCopy) should be (1)
 
-      val allCopies = getTruthCopies(pgu, datasetInfo).toSeq
-      allCopies should be (Seq(firstCopyPublished, secondCopy))
+      val allCopies = getTruthCopies(pgu, datasetInfo).toVector
+      allCopies.size should be (2)
+      val firstSnapshot = firstCopyPublished.unanchored.copy(lifecycleStage = TruthLifecycleStage.Snapshotted)
+      allCopies(0).unanchored should be (firstSnapshot)
+      allCopies(1) should be (secondCopyPublished)
     }
   }
 

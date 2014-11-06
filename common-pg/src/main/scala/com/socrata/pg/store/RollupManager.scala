@@ -4,16 +4,19 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.security.MessageDigest
 import java.sql.{Connection, SQLException}
 
+import scala.util.{Failure, Success, Try}
+
 import com.rojoma.simplearm.util.using
-import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
+import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.secondary.{RollupInfo => SecondaryRollupInfo}
 import com.socrata.datacoordinator.truth.loader.sql.SqlTableDropper
-import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, RollupInfo}
+import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, LifecycleStage, RollupInfo}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.soql.{ParametricSql, SoQLAnalysisSqlizer, SqlizerContext}
+import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.store.index.{Indexable, SoQLIndexableRep}
+import com.socrata.soql.{SoQLAnalysis, SoQLAnalyzer}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, DatasetContext}
@@ -21,10 +24,7 @@ import com.socrata.soql.exceptions.SoQLException
 import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLTypeInfo}
 import com.socrata.soql.parsing.standalone_exceptions.StandaloneLexerException
 import com.socrata.soql.types.{SoQLAnalysisType, SoQLType, SoQLValue}
-import com.socrata.soql.{SoQLAnalysis, SoQLAnalyzer}
 import com.typesafe.scalalogging.slf4j.Logging
-
-import scala.util.{Failure, Success, Try}
 
 class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) extends Logging {
   import RollupManager._
@@ -75,6 +75,11 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    *                       transaction completes.
    */
   def updateRollup(rollupInfo: RollupInfo, newDataVersion: Long) {
+
+    if (!shouldMaterializeRollups(copyInfo.lifecycleStage)) {
+      return // Working copies do not materialize rollups.
+    }
+
     logger.info(s"Updating copy ${copyInfo}, rollup ${rollupInfo}")
     time("update-rollup", "dataset_id" -> copyInfo.datasetInfo.systemId, "rollupName" -> rollupInfo.name) {
 
@@ -266,5 +271,9 @@ object RollupManager {
 
   def makeSecondaryRollupInfo(rollupInfo: RollupInfo): SecondaryRollupInfo =
      SecondaryRollupInfo(rollupInfo.name.underlying, rollupInfo.soql)
+
+  def shouldMaterializeRollups(stage: LifecycleStage): Boolean = {
+    stage != LifecycleStage.Unpublished
+  }
 }
 

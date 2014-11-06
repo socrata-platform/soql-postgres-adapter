@@ -110,7 +110,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   def rollups(req: HttpServletRequest): HttpResponse = {
     val ds = req.getParameter("ds")
     val copy = Option(req.getParameter("copy"))
-    getRollups(ds, copy) match {
+    val includeUnmaterialized = java.lang.Boolean.parseBoolean(req.getParameter("include_unmaterialized"))
+    getRollups(ds, copy, includeUnmaterialized) match {
       case Some(rollups) =>
         OK ~> ContentType("application/json; charset=utf-8") ~> Write(JsonUtil.writeJson(_, rollups.map(r => r.unanchored).toSeq, buffer = true))
       case None =>
@@ -323,14 +324,18 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     }
   }
 
-  def getRollups(ds: String, reqCopy: Option[String]): Option[Iterable[RollupInfo]] = {
+  def getRollups(ds: String, reqCopy: Option[String], includeUnmaterialized: Boolean): Option[Iterable[RollupInfo]] = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       for {
         datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds)
         datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
       } yield {
         val copy = getCopy(pgu, datasetInfo, reqCopy)
-        pgu.datasetMapReader.rollups(copy)
+        if (includeUnmaterialized || RollupManager.shouldMaterializeRollups(copy.lifecycleStage)) {
+          pgu.datasetMapReader.rollups(copy)
+        } else {
+          None
+        }
       }
     }
   }
