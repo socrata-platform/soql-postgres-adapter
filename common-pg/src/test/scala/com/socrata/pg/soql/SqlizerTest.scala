@@ -180,10 +180,17 @@ object SqlizerTest {
   private def sqlize(soql: String, caseSensitivity: CaseSensitivity): ParametricSql = {
     val allColumnReps = columnInfos.map(PostgresUniverseCommon.repForIndex(_))
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
-    (analysis, "t1", allColumnReps).sql(Map.empty[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], Seq.empty, sqlCtx + (SqlizerContext.CaseSensitivity -> caseSensitivity))
+    (analysis, "t1", allColumnReps).sql(
+      Map.empty[UserColumnId,
+      SqlColumnRep[SoQLType, SoQLValue]],
+      Seq.empty,
+      sqlCtx + (SqlizerContext.CaseSensitivity -> caseSensitivity),
+      passThrough)
   }
 
   private val idMap =  (cn: ColumnName) => new UserColumnId(cn.caseFolded)
+
+  private val passThrough = (s: String) => s
 
   private val columnMap = Map(
     ColumnName(":id") -> (1, SoQLID),

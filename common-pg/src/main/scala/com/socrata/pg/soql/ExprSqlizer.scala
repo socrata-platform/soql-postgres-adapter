@@ -12,14 +12,14 @@ class StringLiteralSqlizer(lit: StringLiteral[SoQLType]) extends Sqlizer[StringL
 
   val underlying = lit
 
-  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
+  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context, escape: Escape) = {
 
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
-        val v = toUpper(quote(lit.value), ctx)
+        val v = toUpper(quote(lit.value, escape), ctx)
         ParametricSql(v, setParams)
       case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(ctx) =>
-        val v = toUpper(quote(lit.value), ctx)
+        val v = toUpper(quote(lit.value, escape), ctx)
         ParametricSql(v, setParams)
       case _ =>
         val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
@@ -31,7 +31,9 @@ class StringLiteralSqlizer(lit: StringLiteral[SoQLType]) extends Sqlizer[StringL
     }
   }
 
-  private def quote(s: String) = "'" + s.replaceAllLiterally("'", "''") + "'"
+  private def quote(s: String, escape: Escape) = {
+    s"e'${escape(s)}'"
+  }
 
   private def toUpper(lit: String, ctx: Context): String = if (useUpper(ctx)) lit.toUpperCase else lit
 }
@@ -40,7 +42,7 @@ class NumberLiteralSqlizer(lit: NumberLiteral[SoQLType]) extends Sqlizer[NumberL
 
   val underlying = lit
 
-  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
+  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context, escape: Escape) = {
 
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
@@ -61,7 +63,7 @@ class BooleanLiteralSqlizer(lit: BooleanLiteral[SoQLType]) extends Sqlizer[Boole
 
   val underlying = lit
 
-  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
+  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context, escape: Escape) = {
 
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
@@ -82,7 +84,7 @@ class NullLiteralSqlizer(lit: NullLiteral[SoQLType]) extends Sqlizer[NullLiteral
 
   val underlying = lit
 
-  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) =
+  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context, escape: Escape) =
     ParametricSql("null", setParams)
 }
 
@@ -90,9 +92,9 @@ class FunctionCallSqlizer(expr: FunctionCall[UserColumnId, SoQLType]) extends Sq
 
   val underlying = expr
 
-  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
+  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context, escape: Escape) = {
     val fn = SqlFunctions(expr.function.function)
-    val ParametricSql(sql, fnSetParams) = fn(expr, rep, setParams, ctx)
+    val ParametricSql(sql, fnSetParams) = fn(expr, rep, setParams, ctx, escape)
     // SoQL parsing bakes parenthesis into the ast tree without explicitly spitting out parenthesis.
     // We add parenthesis to every function call to preserve semantics.
     ParametricSql(s"($sql)", fnSetParams)
@@ -103,7 +105,7 @@ class ColumnRefSqlizer(expr: ColumnRef[UserColumnId, SoQLType]) extends Sqlizer[
 
   val underlying = expr
 
-  def sql(reps: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context) = {
+  def sql(reps: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context, escape: Escape) = {
     reps.get(expr.column) match {
       case Some(rep) =>
         val maybeUpperPhysColumns = rep.physColumns.map(toUpper(_, ctx))

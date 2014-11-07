@@ -19,7 +19,7 @@ trait Sqlizer[T] {
   import Sqlizer._
   import SqlizerContext._
 
-  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context): ParametricSql
+  def sql(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context, escape: Escape): ParametricSql
 
   val underlying: T
 
