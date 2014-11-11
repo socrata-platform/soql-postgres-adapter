@@ -209,6 +209,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
         SqlizerContext.CaseSensitivity -> caseSensitivity
       )
+      val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit)
 
       for (readCtx <- pgu.datasetReader.openDataset(latestCopy)) yield {
         val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema
@@ -221,9 +222,9 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         val results = querier.query(
           analysis,
           (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-            (a, tableName, sqlReps.values.toSeq).sql(sqlReps, Seq.empty, sqlCtx),
+            (a, tableName, sqlReps.values.toSeq).sql(sqlReps, Seq.empty, sqlCtx, escape),
           (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-            (a, tableName, sqlReps.values.toSeq).rowCountSql(sqlReps, Seq.empty, sqlCtx),
+            (a, tableName, sqlReps.values.toSeq).rowCountSql(sqlReps, Seq.empty, sqlCtx, escape),
           rowCount,
           qryReps)
         (qrySchema, latestCopy.dataVersion, results)
