@@ -42,7 +42,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
           for (dsInfo <- ds) yield {
             val qs = new QueryServer(dsInfo, caseSensitivity)
             qs.execQuery(pgu, "someDatasetInternalName", copyInfo.datasetInfo, analysis, expectedRowCount.isDefined, None, None, NoPrecondition, None) match {
-              case QueryServer.Success(schema, version, results, etag, lastModified) =>
+              case QueryServer.Success(schema, _, version, results, etag, lastModified) =>
                 (schema, version, results)
               case queryFail =>
                 throw new Exception(s"Query Fail ${queryFail.getClass.getName}")
