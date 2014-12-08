@@ -95,11 +95,17 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   def schema(req: HttpServletRequest): HttpResponse = {
     val ds = req.getParameter("ds")
     val copy = Option(req.getParameter("copy"))
-    getSchema(ds, copy) match {
-      case Some(schema) =>
-        OK ~> ContentType("application/json; charset=utf-8") ~> Write(JsonUtil.writeJson(_, schema, buffer = true))
-      case None =>
-        NotFound
+    withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
+      getCopy(pgu, ds, copy) match {
+        case Some(copyInfo) =>
+          val schema = getSchema(pgu, copyInfo)
+          OK ~>
+            ContentType("application/json; charset=utf-8") ~>
+            copyInfoHeader(copyInfo.copyNumber, copyInfo.dataVersion, copyInfo.lastModified) ~>
+            Write(JsonUtil.writeJson(_, schema, buffer = true))
+        case None =>
+          NotFound
+      }
     }
   }
 
@@ -167,11 +173,12 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
               def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
 
               execQuery(pgu, datasetId, datasetInfo, analysis, reqRowCount, copy, rollupName, precondition, ifModifiedSince) match {
-                case Success(qrySchema, dataVersion, results, etag, lastModified) =>
+                case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
                   // Very weird separation of concerns between execQuery and streaming. Most likely we will
                   // want yet-another-refactoring where much of execQuery is lifted out into this function.
                   // This will significantly change the tests; however.
                   ETag(etag)(resp)
+                  copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
                   rollupName.foreach(r => Header("X-SODA2-Rollup", r.underlying)(resp))
                   for (r <- results) yield {
                     CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, r.rowCount, dataVersion, lastModified)(resp)
@@ -210,6 +217,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
         SqlizerContext.CaseSensitivity -> caseSensitivity
       )
+      val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit)
 
       for (readCtx <- pgu.datasetReader.openDataset(latestCopy)) yield {
         val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema
@@ -222,9 +230,9 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         val results = querier.query(
           analysis,
           (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-            (a, tableName, sqlReps.values.toSeq).sql(sqlReps, Seq.empty, sqlCtx),
+            (a, tableName, sqlReps.values.toSeq).sql(sqlReps, Seq.empty, sqlCtx, escape),
           (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-            (a, tableName, sqlReps.values.toSeq).rowCountSql(sqlReps, Seq.empty, sqlCtx),
+            (a, tableName, sqlReps.values.toSeq).rowCountSql(sqlReps, Seq.empty, sqlCtx, escape),
           rowCount,
           qryReps)
         (qrySchema, latestCopy.dataVersion, results)
@@ -244,7 +252,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
             NotModified(Seq(etag))
           case Some(_) | None =>
             val (qrySchema, version, results) = runQuery(pgu, copy, analysis, rowCount)
-            Success(qrySchema, version, results, etag, lastModified)
+            Success(qrySchema, copy.copyNumber, version, results, etag, lastModified)
         }
       case FailedBecauseMatch(etags) =>
         NotModified(etags)
@@ -340,6 +348,20 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     }
   }
 
+  private def getSchema(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copy: CopyInfo): Schema = {
+    pgu.datasetReader.openDataset(copy).map(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
+  }
+
+  private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], ds: String, reqCopy: Option[String])
+                      : Option[CopyInfo] = {
+    for {
+      datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds)
+      datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
+    } yield {
+      getCopy(pgu, datasetInfo, reqCopy)
+    }
+  }
+
   private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInfo: DatasetInfo, reqCopy: Option[String]): CopyInfo = {
     val intRx = "^[0-9]+$".r
     val rd = pgu.datasetMapReader
@@ -356,6 +378,12 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         throw new IllegalArgumentException(s"invalid copy value $unknown")
     }
   }
+
+  private def copyInfoHeader(copyNumber: Long, dataVersion: Long, lastModified: DateTime) = {
+    Header("Last-Modified", lastModified.toHttpDate) ~>
+      Header("X-SODA2-CopyNumber", copyNumber.toString) ~>
+      Header("X-SODA2-DataVersion", dataVersion.toString)
+  }
 }
 
 object QueryServer extends Logging {
@@ -365,6 +393,7 @@ object QueryServer extends Logging {
   case object PreconditionFailed extends QueryResult
   case class Success(
     qrySchema: OrderedMap[ColumnId, ColumnInfo[SoQLType]],
+    copyNumber: Long,
     dataVersion: Long,
     results: Managed[CloseableIterator[Row[SoQLValue]] with RowCount],
     etag: EntityTag,

@@ -61,10 +61,11 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
   // Called when this process is shutting down (or being killed)
   def shutdown() {
-    logger.debug("shutdown")
+    logger.info("shutting down {} {} ...", dsConfig.host, dsConfig.database)
     finished.countDown()
     tableDropper.join()
     dsInfo.close()
+    logger.info("shut down {} {}", dsConfig.host, dsConfig.database)
   }
 
   // Return true to get all the events from the stream of updates from the data-coordinator
