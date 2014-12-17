@@ -319,13 +319,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
 
     // Right now we take the naive approach and rebuild every rollup after every
-    // version event.  This simplifies tracking what has changed and also
+    // version event.  However, it does not materialize if stage is unpublished.
+    // This simplifies tracking what has changed and also
     // simplifies cleaning up old versions of rollups.  Obviously this can be
     // improved on when and if warranted.
-    val rm = new RollupManager(pgu, truthCopyInfo)
-    pgu.datasetMapReader.rollups(truthCopyInfo).foreach { ri =>
-      rm.updateRollup(ri, newDataVersion)
-    }
+    val postUpdateTruthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
+    updateRollups(pgu, postUpdateTruthCopyInfo)
 
     cookie
   }
@@ -421,20 +420,19 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
     sLoader.optimize(truthSchema.values)
 
-    // re-create rollup metadata
-    for (rollup <- rollups) {
-      RollupCreatedOrUpdatedHandler(pgu, truthCopyInfo, rollup)
-    }
-    // re-create rollup tables
-    val rm = new RollupManager(pgu, truthCopyInfo)
-    pgu.datasetMapReader.rollups(truthCopyInfo).foreach { rollup =>
-      rm.updateRollup(rollup, truthCopyInfo.dataVersion)
-    }
-
     if (truthCopyInfo.dataVersion != secondaryCopyInfo.dataVersion) {
       pgu.datasetMapWriter.updateDataVersion(truthCopyInfo, secondaryCopyInfo.dataVersion)
     }
     pgu.datasetMapWriter.updateLastModified(truthCopyInfo, secondaryCopyInfo.lastModified)
+
+    val postUpdateTruthCopyInfo = pgu.datasetMapReader.latest(truthCopyInfo.datasetInfo)
+    // re-create rollup metadata
+    for (rollup <- rollups) {
+      RollupCreatedOrUpdatedHandler(pgu, postUpdateTruthCopyInfo, rollup)
+    }
+    // re-create rollup tables
+    updateRollups(pgu, postUpdateTruthCopyInfo)
+
     cookie
   }
 
@@ -444,6 +442,13 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       truthDatasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
     } yield {
       pgu.datasetMapReader.latest(truthDatasetInfo)
+    }
+  }
+
+  private def updateRollups(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: TruthCopyInfo) {
+    val rm = new RollupManager(pgu, copyInfo)
+    pgu.datasetMapReader.rollups(copyInfo).foreach { ri =>
+      rm.updateRollup(ri, copyInfo.dataVersion)
     }
   }
 

@@ -4,6 +4,7 @@ import com.socrata.pg.store.events.CopyDroppedHandler
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.socrata.datacoordinator.id.DatasetId
+import com.socrata.datacoordinator.truth.loader.sql.messages.LifecycleStage
 
 class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
@@ -18,7 +19,7 @@ class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBas
     withPgu() { pgu =>
       val (truthDatasetId, secDatasetId) = importDataset(pgu.conn)
       pgu.commit()
-      val allCopies = createTwoCopiesAndRollup(pgu, truthDatasetId, secDatasetId)
+      val allCopies = createTwoCopiesAndRollup(pgu, truthDatasetId, secDatasetId, publishSecondCopy = true)
       dropDataset(pgu, truthDatasetId)
       cleanupDroppedTables(pgu)
       allCopies.foreach { copy =>
@@ -33,7 +34,7 @@ class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBas
     withPgu() { pgu =>
       val (truthDatasetId, secDatasetId) = importDataset(pgu.conn)
       pgu.commit()
-      val allCopies = createTwoCopiesAndRollup(pgu, truthDatasetId, secDatasetId)
+      val allCopies = createTwoCopiesAndRollup(pgu, truthDatasetId, secDatasetId, publishSecondCopy = false)
       val copy1 = allCopies(0)
       val copy2 = allCopies(1)
       CopyDroppedHandler(pgu, copy2)
@@ -47,26 +48,44 @@ class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBas
   }
 
   private def createTwoCopiesAndRollup(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                                       truthDatasetId: DatasetId, secDatasetId: DatasetId): Seq[CopyInfo] = {
+                                       truthDatasetId: DatasetId, secDatasetId: DatasetId,
+                                       publishSecondCopy: Boolean): Seq[CopyInfo] = {
     val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
-    createRollup(pgu, pgu.datasetMapReader.latest(datasetInfo))
+    val latestCopy: CopyInfo = pgu.datasetMapReader.latest(datasetInfo)
+    createRollup(pgu, latestCopy)
     // create a second copy.  rollup should be copied to the second copy.
     withSoQLCommon(truthDataSourceConfig) { common =>
       processMutation(common, fixtureFile("mutate-copy.json"), truthDatasetId)
       pushToSecondary(common, truthDatasetId, false)
+      if (publishSecondCopy) {
+        processMutation(common, fixtureFile("mutate-publish.json"), truthDatasetId)
+        pushToSecondary(common, truthDatasetId, false)
+      }
     }
+
+
+
     pgu.commit()
     val allCopies = pgu.datasetMapReader.allCopies(datasetInfo).toSeq
+
     allCopies.size should be (2)
-    allCopies.foreach(rollupTableExists(pgu, _))
+    allCopies.foreach { copy =>
+      if (RollupManager.shouldMaterializeRollups(copy.lifecycleStage)) {
+        rollupTableExists(pgu, copy)
+      }
+    }
     allCopies
   }
 
   private def rollupTableExists(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) {
     val rollupTableName = pgu.datasetMapReader.rollups(copyInfo).map { rollupInfo =>
-    val rollupTableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
-      jdbcColumnCount(pgu.conn, rollupTableName) should be (1)
-      jdbcRowCount(pgu.conn, rollupTableName) should be (11)
+      val rollupTableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
+      val materialized = RollupManager.shouldMaterializeRollups(copyInfo.lifecycleStage)
+      val expectedTable = if (materialized) 1 else 0
+      jdbcColumnCount(pgu.conn, rollupTableName) should be (expectedTable)
+      if (materialized) {
+        jdbcRowCount(pgu.conn, rollupTableName) should be (11)
+      }
       pgu.conn.commit()
       rollupTableName
     }
