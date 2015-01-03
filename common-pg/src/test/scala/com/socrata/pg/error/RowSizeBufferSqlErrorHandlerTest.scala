@@ -23,7 +23,7 @@ class RowSizeBufferSqlErrorHandlerTest extends FunSuite with Matchers with Befor
     handleRowSizeBufferishError((60000 to 63000).mkString("'", ",", "'"), "")
   }
 
-  private def handleRowSizeBufferishError(largeContent: String, errorOnIndex: String) {
+  private def handleRowSizeBufferishError(largeContent: String, errorOnIndex: String): Unit = {
     withConnection(dbName) { conn =>
       using(conn.createStatement()) { stmt: Statement =>
         conn.setAutoCommit(false)
