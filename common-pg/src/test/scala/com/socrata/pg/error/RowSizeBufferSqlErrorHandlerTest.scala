@@ -16,19 +16,27 @@ class RowSizeBufferSqlErrorHandlerTest extends FunSuite with Matchers with Befor
   }
 
   test("row size buffer sql error continue") {
+    handleRowSizeBufferishError("repeat('hello ', 100000)", "\"i2\"")
+  }
+
+  test("row size buffer sql error variation continue") {
+    handleRowSizeBufferishError((60000 to 63000).mkString("'", ",", "'"), "")
+  }
+
+  private def handleRowSizeBufferishError(largeContent: String, errorOnIndex: String): Unit = {
     withConnection(dbName) { conn =>
       using(conn.createStatement()) { stmt: Statement =>
         conn.setAutoCommit(false)
+        stmt.execute("drop table if exists t1")
         stmt.execute("create table t1 (c1 text, c2 text)")
         stmt.execute("insert into t1 values('1', 'one')")
-        // this lengthy content causes subsequent create index to fail on column c2
-        stmt.execute("insert into t1 values('too long', repeat('hello ', 100000))")
+        stmt.execute(s"insert into t1 values('too long', $largeContent)")
         conn.commit()
         stmt.execute("create index i1 on t1 (c1)")
         val thrown = intercept[PSQLException] {
           stmt.execute("create index i2 on t1 (c2)")
         }
-        RowSizeBufferSqlErrorHandler.isIndexRowSizeError(thrown) should be (Some("\"i2\""))
+        RowSizeBufferSqlErrorHandler.isIndexRowSizeError(thrown) should be (Some(errorOnIndex))
         intercept[PSQLException] {
           // cannot run another statement without explicit rollback or guard
           stmt.execute("insert into t1 values('2', 'two')")

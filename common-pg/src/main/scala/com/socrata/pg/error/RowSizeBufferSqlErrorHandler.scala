@@ -67,13 +67,19 @@ object RowSizeBufferSqlErrorHandler extends Logging {
         ex.getServerErrorMessage.getMessage match {
           case IndexRowSizeError(_, _, index) =>
             Some(index)
-          case _ =>
+          case IndexRowSizeErrorWoIndexName(_, _) =>
+            Some("")
+          case msg =>
+            logger.warn("unrecognized message in sql error 54000 {}", msg)
             None
         }
-      case _ =>
+      case unknownState =>
+        logger.warn("unrecognized error stage {}", unknownState)
         None
     }
   }
 
   private val IndexRowSizeError = """index row size (\d+) exceeds maximum (\d+) for index (.*)""".r
+
+  private val IndexRowSizeErrorWoIndexName = """index row requires (\d+) bytes, maximum size is (\d+)""".r
 }
