@@ -202,7 +202,8 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       val soqlAnalysis = analysisToSoQLType(rollupAnalysis)
       val sqlizer = new SoQLAnalysisSqlizer(soqlAnalysis, copyInfo.dataTableName, rollupReps)
       val sqlCtx = Map[SqlizerContext, Any](
-        SqlizerContext.CaseSensitivity -> true
+        SqlizerContext.CaseSensitivity -> true,
+        SqlizerContext.LeaveGeomAsIs -> true
       )
 
       val dsRepMap: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]] =
