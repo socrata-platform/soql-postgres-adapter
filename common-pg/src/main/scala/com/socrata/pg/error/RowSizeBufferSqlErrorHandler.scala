@@ -74,17 +74,11 @@ object RowSizeBufferSqlErrorHandler extends Logging {
     ex.getSQLState match {
       case "54000" =>
         ex.getServerErrorMessage.getMessage match {
-          case IndexRowSizeError(_, _, index) =>
-            Success(Some(index))
-          case IndexRowSizeErrorWoIndexName(_, _) =>
-            Success(None)
-          case msg =>
-            logger.warn("unrecognized message in sql error 54000 {}", msg)
-            Failure(ex)
+          case IndexRowSizeError(_, _, index) => Success(Some(index))
+          case IndexRowSizeErrorWoIndexName(_, _) => Success(None)
+          case msg => Failure(ex)
         }
-      case unknownState =>
-        logger.warn("unrecognized error stage {}", unknownState)
-        Failure(ex)
+      case unknownState => Failure(ex)
     }
   }
 
