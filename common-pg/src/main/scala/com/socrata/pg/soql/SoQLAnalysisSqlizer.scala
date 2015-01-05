@@ -123,7 +123,8 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams)) { (t2, columnNameAndcoreExpr) =>
       val (columnName, coreExpr) = columnNameAndcoreExpr
       val ParametricSql(sql, newSetParams) = coreExpr.sql(rep, t2._2, ctx + (RootExpr -> coreExpr), escape)
-      (t2._1 :+ toGeoText(sql, coreExpr.typ), newSetParams)
+      val sqlGeomConverted = if (ctx.contains(LeaveGeomAsIs)) sql else toGeoText(sql, coreExpr.typ)
+      (t2._1 :+ sqlGeomConverted, newSetParams)
     }
   }
 
