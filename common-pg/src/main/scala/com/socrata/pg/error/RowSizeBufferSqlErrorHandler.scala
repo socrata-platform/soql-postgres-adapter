@@ -3,6 +3,8 @@ package com.socrata.pg.error
 import java.lang.reflect.InvocationTargetException
 import java.sql.Connection
 
+import scala.util.{Failure, Success, Try}
+
 import com.socrata.datacoordinator.secondary.ResyncSecondaryException
 import com.typesafe.scalalogging.slf4j.Logging
 import org.postgresql.util.PSQLException
@@ -29,12 +31,13 @@ object RowSizeBufferSqlErrorHandler extends Logging {
 
     def resyncIfIndexRowSizeError(ex: PSQLException) {
       isIndexRowSizeError(ex) match {
-        case Some(index) =>
+        case Success(indexOpt) =>
+          val index = indexOpt.getOrElse("*unknown*")
           val msg = s"index row size buffer exceeded $index " + exceptionClass.map("rethrow " + _.getName).getOrElse("ignore")
           logger.warn(msg)
           savepoint.foreach(conn.rollback(_))
           exceptionClass.foreach(exClass => throw exClass.getDeclaredConstructor(classOf[String]).newInstance(msg))
-        case None =>
+        case Failure(ex) =>
           logger.info("got some PSQL exception, trying to roll back...", ex)
           savepoint.foreach(conn.rollback(_))
           throw ex
@@ -61,21 +64,27 @@ object RowSizeBufferSqlErrorHandler extends Logging {
     }
   }
 
-  def isIndexRowSizeError(ex: PSQLException): Option[String] = {
+
+  /**
+   * @param ex Possible PSQLException that is row size related.
+   * @return If the exception is row size related, return Success and the index name if known.
+   *         Otherwise, return the Failure with the original exception.
+   */
+  def isIndexRowSizeError(ex: PSQLException): Try[Option[String]] = {
     ex.getSQLState match {
       case "54000" =>
         ex.getServerErrorMessage.getMessage match {
           case IndexRowSizeError(_, _, index) =>
-            Some(index)
+            Success(Some(index))
           case IndexRowSizeErrorWoIndexName(_, _) =>
-            Some("")
+            Success(None)
           case msg =>
             logger.warn("unrecognized message in sql error 54000 {}", msg)
-            None
+            Failure(ex)
         }
       case unknownState =>
         logger.warn("unrecognized error stage {}", unknownState)
-        None
+        Failure(ex)
     }
   }
 

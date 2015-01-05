@@ -1,11 +1,13 @@
 package com.socrata.pg.error
 
-import com.rojoma.simplearm.util._
-import java.sql.{Statement, DriverManager, Connection}
-import org.postgresql.util.PSQLException
-import org.scalatest.{BeforeAndAfterAll, Matchers, FunSuite}
-import com.socrata.pg.store.SecondarySchemaLoader
+import java.sql.{Connection, DriverManager, Statement}
 
+import scala.util.{Success, Try}
+
+import com.rojoma.simplearm.util._
+import com.socrata.pg.store.SecondarySchemaLoader
+import org.postgresql.util.PSQLException
+import org.scalatest.{BeforeAndAfterAll, FunSuite, Matchers}
 
 class RowSizeBufferSqlErrorHandlerTest extends FunSuite with Matchers with BeforeAndAfterAll {
 
@@ -16,14 +18,14 @@ class RowSizeBufferSqlErrorHandlerTest extends FunSuite with Matchers with Befor
   }
 
   test("row size buffer sql error continue") {
-    handleRowSizeBufferishError("repeat('hello ', 100000)", "\"i2\"")
+    handleRowSizeBufferishError("repeat('hello ', 100000)", Success(Some("\"i2\"")))
   }
 
   test("row size buffer sql error variation continue") {
-    handleRowSizeBufferishError((60000 to 63000).mkString("'", ",", "'"), "")
+    handleRowSizeBufferishError((60000 to 63000).mkString("'", ",", "'"), Success(None))
   }
 
-  private def handleRowSizeBufferishError(largeContent: String, errorOnIndex: String): Unit = {
+  private def handleRowSizeBufferishError(largeContent: String, errorOnIndex: Try[Option[String]]): Unit = {
     withConnection(dbName) { conn =>
       using(conn.createStatement()) { stmt: Statement =>
         conn.setAutoCommit(false)
@@ -36,7 +38,7 @@ class RowSizeBufferSqlErrorHandlerTest extends FunSuite with Matchers with Befor
         val thrown = intercept[PSQLException] {
           stmt.execute("create index i2 on t1 (c2)")
         }
-        RowSizeBufferSqlErrorHandler.isIndexRowSizeError(thrown) should be (Some(errorOnIndex))
+        RowSizeBufferSqlErrorHandler.isIndexRowSizeError(thrown) should be (errorOnIndex)
         intercept[PSQLException] {
           // cannot run another statement without explicit rollback or guard
           stmt.execute("insert into t1 values('2', 'two')")
