@@ -8,5 +8,5 @@ object Version {
   def apply(name: String) = for {
     stream <- managed(getClass.getClassLoader.getResourceAsStream(s"$name.json"))
     reader <- managed(new java.io.InputStreamReader(stream, StandardCharsets.UTF_8))
-  } yield com.rojoma.json.io.JsonReader.fromReader(reader)
+  } yield com.rojoma.json.v3.io.JsonReader.fromReader(reader)
 }

@@ -63,6 +63,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
 
   val postgresUniverseCommon = PostgresUniverseCommon
 
+  private val JsonContentType = "application/json; charset=utf-8"
+
   private val routerSet = locally {
     import SimpleRouteContext._
     Routes(
@@ -73,7 +75,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     )
   }
 
-  private def route(req: HttpServletRequest): HttpResponse = {
+  private def route(req: HttpRequest): HttpResponse = {
     routerSet(req.requestPath) match {
       case Some(s) =>
         s(req)
@@ -83,26 +85,26 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   }
 
   object VersionResource extends SimpleResource {
-    val response = OK ~> ContentType("application/json; charset=utf-8") ~> Content(JsonUtil.renderJson(Version("soql-server-pg")))
+    val response = OK ~> Json(Version("soql-server-pg"))
 
-    override val get = { req: HttpServletRequest => response }
+    override val get = { _: HttpRequest => response }
   }
 
   object SchemaResource extends SimpleResource {
     override val get = schema _
   }
 
-  def schema(req: HttpServletRequest): HttpResponse = {
-    val ds = req.getParameter("ds")
-    val copy = Option(req.getParameter("copy"))
+  def schema(req: HttpRequest): HttpResponse = {
+    val servReq = req.servletRequest
+    val ds = servReq.getParameter("ds")
+    val copy = Option(servReq.getParameter("copy"))
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       getCopy(pgu, ds, copy) match {
         case Some(copyInfo) =>
           val schema = getSchema(pgu, copyInfo)
           OK ~>
-            ContentType("application/json; charset=utf-8") ~>
             copyInfoHeader(copyInfo.copyNumber, copyInfo.dataVersion, copyInfo.lastModified) ~>
-            Write(JsonUtil.writeJson(_, schema, buffer = true))
+            Write(JsonContentType)(JsonUtil.writeJson(_, schema, buffer = true))
         case None =>
           NotFound
       }
@@ -113,13 +115,14 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     override val get = rollups _
   }
 
-  def rollups(req: HttpServletRequest): HttpResponse = {
-    val ds = req.getParameter("ds")
-    val copy = Option(req.getParameter("copy"))
-    val includeUnmaterialized = java.lang.Boolean.parseBoolean(req.getParameter("include_unmaterialized"))
+  def rollups(req: HttpRequest): HttpResponse = {
+    val servReq = req.servletRequest
+    val ds = servReq.getParameter("ds")
+    val copy = Option(servReq.getParameter("copy"))
+    val includeUnmaterialized = java.lang.Boolean.parseBoolean(servReq.getParameter("include_unmaterialized"))
     getRollups(ds, copy, includeUnmaterialized) match {
       case Some(rollups) =>
-        OK ~> ContentType("application/json; charset=utf-8") ~> Write(JsonUtil.writeJson(_, rollups.map(r => r.unanchored).toSeq, buffer = true))
+        OK ~> Write(JsonContentType)(JsonUtil.writeJson(_, rollups.map(r => r.unanchored).toSeq, buffer = true))
       case None =>
         NotFound
     }
@@ -136,16 +139,16 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
   }
 
-  def query(req: HttpServletRequest): HttpServletResponse => Unit =  {
-
-    val datasetId = req.getParameter("dataset")
-    val analysisParam = req.getParameter("query")
+  def query(req: HttpRequest): HttpServletResponse => Unit =  {
+    val servReq = req.servletRequest
+    val datasetId = servReq.getParameter("dataset")
+    val analysisParam = servReq.getParameter("query")
     val analysisStream = new ByteArrayInputStream(analysisParam.getBytes(StandardCharsets.ISO_8859_1))
-    val schemaHash = req.getParameter("schemaHash")
+    val schemaHash = servReq.getParameter("schemaHash")
     val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserializer(analysisStream)
-    val reqRowCount = Option(req.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
-    val copy = Option(req.getParameter("copy"))
-    val rollupName = Option(req.getParameter("rollupName")).map(new RollupName(_))
+    val reqRowCount = Option(servReq.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
+    val copy = Option(servReq.getParameter("copy"))
+    val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
 
     logger.info("Performing query on dataset " + datasetId)
     streamQueryResults(analysis, datasetId, reqRowCount, copy, rollupName, req.precondition, req.dateTimeHeader("If-Modified-Since"))
