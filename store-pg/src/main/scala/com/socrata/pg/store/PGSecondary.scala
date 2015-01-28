@@ -1,7 +1,7 @@
 package com.socrata.pg.store
 
 import com.mchange.v2.c3p0.DataSources
-import com.rojoma.json.util.JsonUtil
+import com.rojoma.json.v3.util.JsonUtil
 import com.rojoma.simplearm.Managed
 import com.rojoma.simplearm.util._
 import com.socrata.soql.types.{SoQLValue, SoQLType}

@@ -20,9 +20,9 @@ object Dependencies {
     val socrataHttpCuratorBroker = "2.3.3"
     val soqlStdlib = "0.4.0"
     val typesafeConfig = "1.0.0"
-    val dataCoordinator = "0.2.5"
+    val dataCoordinator = "0.3.0"
     val typesafeScalaLogging = "1.1.0"
-    val rojomaJson = "2.4.3"
+    val rojomaJson = "3.2.0"
     val metricsJetty = "3.1.0"
     val metricsGraphite = "3.0.2"
     val metricsScala = "3.3.0"
@@ -67,7 +67,7 @@ object Dependencies {
 
   val typesafeScalaLogging = "com.typesafe" %% "scalalogging-slf4j" % versions.typesafeScalaLogging
 
-  val rojomaJson = "com.rojoma" %% "rojoma-json" % versions.rojomaJson
+  val rojomaJson = "com.rojoma" %% "rojoma-json-v3" % versions.rojomaJson
 
   val metricsJetty = "io.dropwizard.metrics" % "metrics-jetty9" % versions.metricsJetty
   // See CORE-3635: use lower version of graphite to work around Graphite reconnect issues
