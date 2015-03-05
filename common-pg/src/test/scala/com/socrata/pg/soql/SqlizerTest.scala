@@ -165,6 +165,15 @@ class SqlizerTest extends FunSuite with Matchers {
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq("oNe Two"))
   }
+
+  test("magnitude") {
+    val soql = "select magnitude(year, 10)"
+    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT (floor(log(?, abs(year) * ? + 1))) FROM t1")
+    setParams.length should be (2)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq(10,10))
+  }
 }
 
 object SqlizerTest {
