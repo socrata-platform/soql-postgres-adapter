@@ -64,6 +64,7 @@ object SqlFunctions {
     // http://beta.dev.socrata.com/docs/datatypes/numeric.html
     UnaryPlus -> formatCall("%s"),
     UnaryMinus -> formatCall("-%s") _,
+    Magnitude -> formatCall("floor(log(%s, abs(%s) * %s + 1))", Some(Seq(1,0,1,0))),
     BinaryPlus -> infix("+") _,
     BinaryMinus -> infix("-") _,
     TimesNumNum -> infix("*") _,
