@@ -1,0 +1,58 @@
+[
+  {
+    "name" : "Atlas",
+    "line_length" : null,
+    "signed_magnitude_10_line_length" : null
+  },
+  {
+    "name" : "Buzz",
+    "line_length" : -1,
+    "signed_magnitude_10_line_length" : -1
+  },
+  {
+    "name" : "Chili",
+    "line_length" : -1,
+    "signed_magnitude_10_line_length" : -1
+  },
+  {
+    "name" : "Karma",
+    "line_length" : 412,
+    "signed_magnitude_10_line_length" : 3
+  },
+  {
+    "name" : "Karma SP",
+    "line_length" : 412,
+    "signed_magnitude_10_line_length" : 3
+  },
+  {
+    "name" : "Mescal",
+    "line_length" : 295,
+    "signed_magnitude_10_line_length" : 3
+  },
+  {
+    "name" : "Rush",
+    "line_length" : -1,
+    "signed_magnitude_10_line_length" : -1
+  },
+  {
+    "name" : "Sprint Evo",
+    "line_length" : null,
+    "signed_magnitude_10_line_length" : null
+  },
+  {
+  "name" : "Tequila",
+  "line_length" : -1,
+  "signed_magnitude_10_line_length" : -1
+  },
+  {
+    "name" : "Vista II SP",
+    "line_length" : 250,
+    "signed_magnitude_10_line_length" : 3
+  },
+  {
+  "name" : "Zefira",
+  "line_length" : 285,
+  "signed_magnitude_10_line_length" : 3
+}
+
+]
