@@ -166,13 +166,11 @@ class SqlizerTest extends FunSuite with Matchers {
     params should be (Seq("oNe Two"))
   }
 
-  test("magnitude") {
-    val soql = "select magnitude(year, 10)"
+  test("signed magnitude 10") {
+    val soql = "select signed_magnitude_10(year)"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (floor(log(?, abs(year) * ? + 1))) FROM t1")
-    setParams.length should be (2)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq(10,10))
+    sql should be ("SELECT (sign(year) * length(floor(abs(year))::text)) FROM t1")
+    setParams.length should be (0)
   }
 }
 
