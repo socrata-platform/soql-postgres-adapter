@@ -8,9 +8,9 @@ import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.io.Codec
 
-import com.rojoma.json.ast.{JArray, JValue}
-import com.rojoma.json.io.JsonEventIterator
-import com.rojoma.json.util.{JsonArrayIterator, JsonUtil}
+import com.rojoma.json.v3.ast.{JArray, JValue}
+import com.rojoma.json.v3.io.JsonEventIterator
+import com.rojoma.json.v3.util.{JsonArrayIterator, JsonUtil}
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig, SoQLCommon}
 import com.socrata.datacoordinator.id.{DatasetId, RollupName, UserColumnId}
@@ -131,7 +131,7 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
       u <- common.universe
       indexedTempFile <- managed(new IndexedTempFile(10 * 1024, 10 * 1024))
     } yield {
-      val array = JsonUtil.readJsonFile[JArray](script, Codec.UTF8).get
+      val array = JsonUtil.readJsonFile[JArray](script, Codec.UTF8).right.toOption.get
       val mutator = new Mutator(indexedTempFile, common.Mutator)
       mutator.createScript(u, array.iterator)
     }
@@ -142,7 +142,7 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
       u <- common.universe
       indexedTempFile <- managed(new IndexedTempFile(10 * 1024, 10 * 1024))
     } yield {
-      val array = JsonUtil.readJsonFile[JArray](script, Codec.UTF8).get
+      val array = JsonUtil.readJsonFile[JArray](script, Codec.UTF8).right.toOption.get
       val mutator = new Mutator(indexedTempFile, common.Mutator)
       mutator.updateScript(u, datasetId, array.iterator)
     }
