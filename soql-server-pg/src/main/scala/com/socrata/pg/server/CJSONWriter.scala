@@ -1,8 +1,8 @@
 package com.socrata.pg.server
 
-import com.rojoma.json.ast._
-import com.rojoma.json.io.CompactJsonWriter
-import com.rojoma.json.util.{AutomaticJsonCodecBuilder, JsonUtil}
+import com.rojoma.json.v3.ast._
+import com.rojoma.json.v3.io.CompactJsonWriter
+import com.rojoma.json.v3.util.{AutomaticJsonCodecBuilder, JsonUtil}
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.metadata.{DatasetInfo, ColumnInfo}

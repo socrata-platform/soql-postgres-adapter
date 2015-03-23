@@ -3,7 +3,7 @@ package com.socrata.pg.store
 import scala.io.Source
 import scala.language.reflectiveCalls
 
-import com.rojoma.json.util.JsonUtil
+import com.rojoma.json.v3.util.JsonUtil
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.pg.Schema
 import com.socrata.pg.server.{PGQueryServerDatabaseTestBase, QueryServerTest}
@@ -27,10 +27,12 @@ class SchemaTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase 
       val qs = new QueryServerTest(dsInfo, pgu)
       val schema = qs.getSchema(testInternalName, None).get
       val schemaj = JsonUtil.renderJson(schema)
-      val schemaRoundTrip = JsonUtil.parseJson[com.socrata.datacoordinator.truth.metadata.Schema](schemaj).get
+      val schemaRoundTrip = JsonUtil.parseJson[com.socrata.datacoordinator.truth.metadata.Schema](schemaj)
+        .right.toOption.get
       schema should be (schemaRoundTrip)
       val expected = Source.fromURL(getClass.getResource("/fixtures/schema.json"))
-      val expectedSchema = JsonUtil.readJson[com.socrata.datacoordinator.truth.metadata.Schema](expected.reader()).get
+      val expectedSchema = JsonUtil.readJson[com.socrata.datacoordinator.truth.metadata.Schema](expected.reader())
+        .right.toOption.get
       schema should be (expectedSchema)
       }
     }

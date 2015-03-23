@@ -2,7 +2,7 @@ package com.socrata.pg.store
 
 import java.sql.{Connection, DriverManager}
 
-import com.rojoma.json.ast.{JArray, JObject, JString}
+import com.rojoma.json.v3.ast.{JArray, JObject, JString}
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.id.{RowId, UserColumnId}
 import com.socrata.datacoordinator.secondary.DatasetInfo

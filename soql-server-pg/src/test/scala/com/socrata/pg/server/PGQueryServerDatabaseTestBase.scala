@@ -1,7 +1,7 @@
 package com.socrata.pg.server
 
-import com.rojoma.json.ast.JObject
-import com.rojoma.json.util.JsonUtil
+import com.rojoma.json.v3.ast.JObject
+import com.rojoma.json.v3.util.JsonUtil
 import com.socrata.pg.store._
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.truth.metadata.CopyInfo

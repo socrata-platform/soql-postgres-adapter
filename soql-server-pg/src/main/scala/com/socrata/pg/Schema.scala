@@ -1,8 +1,9 @@
 package com.socrata.pg
 
-import com.rojoma.json.codec.JsonCodec
-import com.rojoma.json.matcher.{PObject, Variable}
-import com.rojoma.json.ast.{JValue, JString, JObject}
+import com.rojoma.json.v3.codec.JsonDecode.DecodeResult
+import com.rojoma.json.v3.codec.{DecodeError, JsonDecode, JsonEncode}
+import com.rojoma.json.v3.matcher.{PObject, Variable}
+import com.rojoma.json.v3.ast.{JValue, JString, JObject}
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.metadata.{Schema => TruthSchema}
 import com.socrata.datacoordinator.util.collection.UserColumnIdMap
@@ -10,9 +11,11 @@ import com.socrata.soql.environment.TypeName
 
 object Schema {
 
-  implicit object SchemaCodec extends JsonCodec[TruthSchema] {
-    private implicit val schemaProperCodec = new JsonCodec[UserColumnIdMap[TypeName]] {
-      def encode(schema: UserColumnIdMap[TypeName]) =  {
+  implicit object SchemaCodec extends JsonDecode[TruthSchema] with JsonEncode[TruthSchema] {
+
+    private implicit val schemaProperCodec = new JsonDecode[UserColumnIdMap[TypeName]]
+      with JsonEncode[UserColumnIdMap[TypeName]] {
+      def encode(schema: UserColumnIdMap[TypeName]): JValue = {
         val map = schema.foldLeft(Map.empty[String, JValue]) { (acc, item) =>
           item match {
             case (k, v) =>
@@ -21,11 +24,14 @@ object Schema {
         }
         JObject(map)
       }
-      def decode(x: JValue) =  {
-        val mapOpt = JsonCodec[Map[String, String]].decode(x).map {
-          m => m.map { case (k, v) => new UserColumnId(k) -> TypeName(v)
-        }}
-        mapOpt.map(UserColumnIdMap(_))
+
+      def decode(x: JValue): DecodeResult[UserColumnIdMap[TypeName]] =  {
+        JsonDecode[Map[String, String]].decode(x) match {
+          case Right(m) =>
+            val idTypeName = m.map { case (k, v) => new UserColumnId(k) -> TypeName(v)}
+            Right(UserColumnIdMap(idTypeName))
+          case Left(err) => Left(err)
+        }
       }
     }
 
@@ -48,8 +54,14 @@ object Schema {
         localeVar := schemaObj.locale)
     }
 
-    def decode(x: JValue) = PSchema.matches(x) map { results =>
-      new TruthSchema(hashVar(results), schemaVar(results), new UserColumnId(pkVar(results)), localeVar(results))
+    def decode(x: JValue) = PSchema.matches(x) match {
+      case Right(results) =>
+        Right(new TruthSchema(
+          hashVar(results),
+          schemaVar(results),
+          new UserColumnId(pkVar(results)),
+          localeVar(results)))
+      case Left(err) => Left(err)
     }
   }
 }
