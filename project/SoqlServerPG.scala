@@ -11,6 +11,7 @@ object SoqlServerPG {
 
   def libraries() = Seq(
     secondarylib,
+    socrataHttpCuratorBroker,
     metricsJetty,
     metricsGraphite
   )

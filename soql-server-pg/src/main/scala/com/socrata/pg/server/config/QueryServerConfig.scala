@@ -14,4 +14,5 @@ class QueryServerConfig(val config: Config, val root: String) extends ConfigClas
   val discovery = new DiscoveryConfig(config, path("service-advertisement"))
   val metrics = MetricsOptions(config.getConfig(path("metrics")))
   val instance = getString("instance")
+  val threadpool = getRawConfig("threadpool")
 }

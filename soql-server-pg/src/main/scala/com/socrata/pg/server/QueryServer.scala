@@ -456,6 +456,7 @@ object QueryServer extends Logging {
                      SocrataServerJetty.defaultOptions.
                        withPort(config.port).
                        withExtraHandlers(List(SocrataHttpSupport.getHandler(config.metrics))).
+                       withPoolOptions(SocrataServerJetty.Pool(config.threadpool)).
                        withBroker(curatorBroker))
       logger.info("starting pg query server")
       server.run()
