@@ -17,7 +17,7 @@ object Dependencies {
     val slf4j = "1.7.5"
     val socrataUtils = "0.8.0"
     val socrataThirdPartyUtil = "2.6.1"
-    val socrataHttpCuratorBroker = "2.3.3"
+    val socrataHttpCuratorBroker = "3.3.0"
     val soqlStdlib = "0.4.6"
     val typesafeConfig = "1.0.0"
     val dataCoordinator = "0.4.0"
@@ -55,6 +55,8 @@ object Dependencies {
   val socrataUtil = "com.socrata" %% "socrata-utils" % versions.socrataUtils
 
   val socrataThirdPartyUtil = "com.socrata" %% "socrata-thirdparty-utils" % versions.socrataThirdPartyUtil
+
+  val socrataHttpCuratorBroker = "com.socrata" %% "socrata-http-curator-broker" % versions.socrataHttpCuratorBroker
 
   val soqlStdlib = "com.socrata" %% "soql-stdlib" % versions.soqlStdlib
 
