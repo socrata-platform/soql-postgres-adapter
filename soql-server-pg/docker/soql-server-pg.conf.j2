@@ -1,0 +1,30 @@
+com.socrata.soql-server-pg {
+  curator.ensemble = {{ ZOOKEEPER_ENSEMBLE }}
+  service-advertisement.address = "{{ ARK_HOST }}"
+
+  # TODO Support runtime port assignment so we can run more than one instance on a single node.
+  # Need to take PORT_x env variables we get passed and advertise our port based on them.
+  port = 6090
+  liveness-check.port = 6091
+
+  metrics {
+    enable-graphite = {{ ENABLE_GRAPHITE }}
+    graphite-host = "{{ GRAPHITE_HOST }}"
+    graphite-port = "{{ GRAPHITE_PORT }}"
+    log-metrics = {{ LOG_METRICS }}
+  }
+
+  store {
+    database = ${com.socrata.pg.common.store.database}
+
+    database {
+      host = "{{ PG_SECONDARY_DB_HOST }}"
+      port = "{{ PG_SECONDARY_DB_PORT }}"
+      database = "{{ PG_SECONDARY_DB_NAME }}"
+      username = "{{ PG_SECONDARY_DB_USER }}"
+      {{ PG_SECONDARY_DB_PASSWORD_LINE }}
+    }
+  }
+
+  instance = {{ PG_SECONDARY_INSTANCE }}
+}
