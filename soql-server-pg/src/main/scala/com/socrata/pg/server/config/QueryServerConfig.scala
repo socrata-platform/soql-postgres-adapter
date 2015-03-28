@@ -1,6 +1,7 @@
 package com.socrata.pg.server.config
 
 import com.typesafe.config.Config
+import com.socrata.http.server.livenesscheck.LivenessCheckConfig
 import com.socrata.pg.config.{StoreConfig}
 import com.socrata.thirdparty.curator.{CuratorConfig, DiscoveryConfig}
 import com.socrata.thirdparty.metrics.MetricsOptions
@@ -12,6 +13,7 @@ class QueryServerConfig(val config: Config, val root: String) extends ConfigClas
   val port = getInt("port")
   val curator = new CuratorConfig(config, path("curator"))
   val discovery = new DiscoveryConfig(config, path("service-advertisement"))
+  val livenessCheck = new LivenessCheckConfig(config, path("liveness-check"))
   val metrics = MetricsOptions(config.getConfig(path("metrics")))
   val instance = getString("instance")
   val threadpool = getRawConfig("threadpool")

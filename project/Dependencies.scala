@@ -15,6 +15,7 @@ object Dependencies {
     val scalaTest = "2.1.0-RC2"
     val simpleArm = "1.1.10"
     val slf4j = "1.7.5"
+    val socrataHttpServer = "3.1.0"
     val socrataUtils = "0.8.0"
     val socrataThirdPartyUtil = "2.6.1"
     val socrataHttpCuratorBroker = "3.3.0"
@@ -51,6 +52,8 @@ object Dependencies {
   val scalaTest = "org.scalatest" %% "scalatest" % versions.scalaTest
 
   val simpleArm = "com.rojoma" %% "simple-arm" % versions.simpleArm
+
+  val socrataHttpServer = "com.socrata" %% "socrata-http-server" % versions.socrataHttpServer
 
   val socrataUtil = "com.socrata" %% "socrata-utils" % versions.socrataUtils
 
