@@ -1,5 +1,5 @@
-# TODO include specific version number to depend on
-FROM secondary-watcher
+# TODO update to release dependency
+FROM registry.docker.aws-us-west-2-infrastructure.socrata.net:5000/internal/secondary-watcher:v0.3.1-SNAPSHOT-tmp5
 
 # TODO expose JMX
 # EXPOSE 
@@ -9,8 +9,7 @@ ENV SECONDARY_CONFIG secondary.conf
 
 ENV PG_SECONDARY_DB_NAME falth
 ENV PG_SECONDARY_DB_PORT 5432
-ENV PG_SECONDARY_DB_USER soda_query
-ENV PG_SECONDARY_INSTANCE pg
+ENV PG_SECONDARY_DB_USER soda_store
 ENV PG_SECONDARY_NUM_WORKERS 5
 ENV PG_SECONDARY_TABLESPACE_FN nil
 

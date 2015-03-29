@@ -1,11 +1,13 @@
-# TODOMS support for multiple instances
 instances {
-  {{ PG_SECONDARY_INSTANCE }} {
+{% for i in PG_SECONDARY_INSTANCES.split() %}
+  {% set name, hostname = i.split(':') %}
+  {{ name }} {
     secondaryType = pg
     numWorkers = {{ PG_SECONDARY_NUM_WORKERS }}
     config = ${pg-secondary-config}
-    config.database.host = "{{ PG_SECONDARY_DB_HOST }}"
+    config.database.host = "{{ hostname }}"
   }
+{% endfor %}
 }
 
 pg-secondary-config {
@@ -17,7 +19,7 @@ pg-secondary-config {
     {{ PG_SECONDARY_DB_PASSWORD_LINE }}
 
     c3p0 {
-      maxPoolSize = 20
+      maxPoolSize = {{ PG_SECONDARY_NUM_WORKERS }}
       idleConnectionTestPeriod = 60
       testConnectionOnCheckin = true
       preferredTestQuery = "SELECT 1"
@@ -44,7 +46,5 @@ pg-secondary-config {
   }
   #log4j = ${common-log4j}
 
-
-  # TODOMS  """(format "ts%05d" (rand-int 1000))"""
-  tablespace = {{ PG_SECONDARY_TABLESPACE_FN }}
+  tablespace = "{{ PG_SECONDARY_TABLESPACE_FN }}"
 }
