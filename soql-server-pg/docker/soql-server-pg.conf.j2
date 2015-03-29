@@ -14,16 +14,12 @@ com.socrata.soql-server-pg {
     log-metrics = {{ LOG_METRICS }}
   }
 
-  store {
-    database = ${com.socrata.pg.common.store.database}
-
-    database {
-      host = "{{ PG_SECONDARY_DB_HOST }}"
-      port = "{{ PG_SECONDARY_DB_PORT }}"
-      database = "{{ PG_SECONDARY_DB_NAME }}"
-      username = "{{ PG_SECONDARY_DB_USER }}"
-      {{ PG_SECONDARY_DB_PASSWORD_LINE }}
-    }
+  store.database {
+    host = "{{ PG_SECONDARY_DB_HOST }}"
+    port = "{{ PG_SECONDARY_DB_PORT }}"
+    database = "{{ PG_SECONDARY_DB_NAME }}"
+    username = "{{ PG_SECONDARY_DB_USER }}"
+    {{ PG_SECONDARY_DB_PASSWORD_LINE }}
   }
 
   instance = {{ PG_SECONDARY_INSTANCE }}
