@@ -13,8 +13,7 @@ object SoqlServerPG {
     secondarylib,
     socrataHttpCuratorBroker,
     metricsJetty,
-    metricsGraphite,
-    socrataHttpServer
+    metricsGraphite
   )
 }
 
