@@ -436,7 +436,7 @@ object QueryServer extends Logging {
     for {
       curator <- CuratorFromConfig(config.curator)
       discovery <- DiscoveryFromConfig(classOf[AuxiliaryData], curator, config.discovery)
-      pong <- managed(new LivenessCheckResponder(new InetSocketAddress(InetAddress.getByName(address), 0)))
+      pong <- managed(new LivenessCheckResponder(config.livenessCheck))
       executor <- managed(Executors.newCachedThreadPool())
       dsInfo <- DataSourceFromConfig(datasourceConfig)
       conn <- managed(dsInfo.dataSource.getConnection)

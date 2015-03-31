@@ -1,0 +1,49 @@
+instances {
+{% for i in PG_SECONDARY_INSTANCES.split() %}
+  {% set name, hostname = i.split(':') %}
+  {{ name }} {
+    secondaryType = pg
+    numWorkers = {{ PG_SECONDARY_NUM_WORKERS }}
+    config = ${pg-secondary-config}
+    config.database.host = "{{ hostname }}"
+  }
+{% endfor %}
+}
+
+pg-secondary-config {
+  database {
+    app-name = "pg-secondary-store"
+    port = "{{ PG_SECONDARY_DB_PORT }}"
+    database = "{{ PG_SECONDARY_DB_NAME }}"
+    username = "{{ PG_SECONDARY_DB_USER }}"
+    {{ PG_SECONDARY_DB_PASSWORD_LINE }}
+
+    c3p0 {
+      maxPoolSize = {{ PG_SECONDARY_NUM_WORKERS }}
+      idleConnectionTestPeriod = 60
+      testConnectionOnCheckin = true
+      preferredTestQuery = "SELECT 1"
+      maxIdleTimeExcessConnections = 300
+      connectionCustomizerClassName = com.socrata.thirdparty.c3p0.ConnectionCustomizer
+      extensions {
+        onAcquire = "SET work_mem = '768MB'; COMMIT"
+      }
+    }
+  }
+
+  # TODOMS figure out right strategy for where this should go 
+  log4j {
+    rootLogger = [ INFO, console ]
+    appender {
+      console.class = org.apache.log4j.ConsoleAppender
+      console.props {
+	layout.class = org.apache.log4j.PatternLayout
+	layout.props {
+	  ConversionPattern = "%d %p [%t] (%X{X-Socrata-RequestId}) [%X{X-Socrata-Resource}] %c{1} %m%n"
+	}
+      }
+    }
+  }
+
+  tablespace = "{{ PG_SECONDARY_TABLESPACE_FN }}"
+}
