@@ -49,23 +49,23 @@ class SqlizerTest extends FunSuite with Matchers {
   test("point/line/polygon") {
     val soql = "select case_number, point, line, polygon"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT case_number,ST_AsText(point),ST_AsText(line),ST_AsText(polygon) FROM t1")
+    sql should be ("SELECT case_number,ST_AsBinary(point),ST_AsBinary(line),ST_AsBinary(polygon) FROM t1")
     setParams.length should be (0)
   }
 
   test("extent") {
     val soql = "select extent(point), extent(line), extent(polygon)"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT ST_AsText((ST_Multi(ST_Extent(point)))),ST_AsText((ST_Multi(ST_Extent(line)))),ST_AsText((ST_Multi(ST_Extent(polygon)))) FROM t1")
+    sql should be ("SELECT ST_AsBinary((ST_Multi(ST_Extent(point)))),ST_AsBinary((ST_Multi(ST_Extent(line)))),ST_AsBinary((ST_Multi(ST_Extent(polygon)))) FROM t1")
     setParams.length should be (0)
   }
 
   test("concave hull") {
     val soql = "select concave_hull(point, 0.99), concave_hull(line, 0.89), concave_hull(polygon, 0.79)"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT ST_AsText((ST_Multi(ST_ConcaveHull(ST_Union(point), ?))))," +
-                          "ST_AsText((ST_Multi(ST_ConcaveHull(ST_Union(line), ?))))," +
-                          "ST_AsText((ST_Multi(ST_ConcaveHull(ST_Union(polygon), ?)))) FROM t1")
+    sql should be ("SELECT ST_AsBinary((ST_Multi(ST_ConcaveHull(ST_Union(point), ?))))," +
+                          "ST_AsBinary((ST_Multi(ST_ConcaveHull(ST_Union(line), ?))))," +
+                          "ST_AsBinary((ST_Multi(ST_ConcaveHull(ST_Union(polygon), ?)))) FROM t1")
     setParams.length should be (3)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq(0.99, 0.89, 0.79).map(BigDecimal(_)))
@@ -74,9 +74,9 @@ class SqlizerTest extends FunSuite with Matchers {
   test("convex hull") {
     val soql = "select convex_hull(point), convex_hull(line), convex_hull(polygon)"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT ST_AsText((ST_Multi(ST_ConvexHull(ST_Union(point)))))," +
-                          "ST_AsText((ST_Multi(ST_ConvexHull(ST_Union(line)))))," +
-                          "ST_AsText((ST_Multi(ST_ConvexHull(ST_Union(polygon))))) FROM t1")
+    sql should be ("SELECT ST_AsBinary((ST_Multi(ST_ConvexHull(ST_Union(point)))))," +
+                          "ST_AsBinary((ST_Multi(ST_ConvexHull(ST_Union(line)))))," +
+                          "ST_AsBinary((ST_Multi(ST_ConvexHull(ST_Union(polygon))))) FROM t1")
     setParams.length should be (0)
   }
 
