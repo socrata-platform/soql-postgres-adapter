@@ -106,13 +106,12 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
 
   private val GeoTypes: Set[SoQLType] = Set(SoQLPoint, SoQLMultiLine, SoQLMultiPolygon)
   /**
-   * When we pull data out of pg we (slightly unfortunately, for performance reasons) want
-   * it as WKT.  We only want to translate it when we pull it out for performance reasons,
-   * in particular if we are doing aggregations on geo types in the SQL query, so we do so
-   * against the top level types of the final select list.
+   * When we pull data out of pg we only want to translate it when we pull it out for performance reasons,
+   * in particular if we are doing aggregations on geo types in the SQL query, so we do so against the top
+   * level types of the final select list.
    */
   private def toGeoText(sql: String, typ: SoQLType): String = {
-    if (GeoTypes.contains(typ)) s"ST_AsText($sql)"
+    if (GeoTypes.contains(typ)) s"ST_AsBinary($sql)"
     else sql
   }
 

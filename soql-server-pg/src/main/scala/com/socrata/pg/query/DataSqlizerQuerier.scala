@@ -37,25 +37,34 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
         None
       }
 
+    // For some weird reason, when you iterate over the querySchema, a new Rep is created from scratch
+    // every time, which is very expensive.  Move that out of the inner loop of decodeRow.
+    // Also, the orderedMap is extremely inefficient and very complex to debug.
+    // TODO: refactor PG server not to use Ordered Map.
+    val decoders = querySchema.map { case (cid, rep) =>
+      (cid, rep.fromResultSet(_, _), rep.physColumns.length)
+    }.toArray
+
     // get rows
     if (analysis.selection.size > 0) {
       val rs = executeSql(conn, toSql(analysis, dataTableName))
       // Statement and resultset are closed by the iterator.
-      new ResultSetIt(rowCount, rs, decodeRow(querySchema))
+      new ResultSetIt(rowCount, rs, decodeRow(decoders))
     } else {
       logger.debug("Queried a dataset with no user columns")
       EmptyIt
     }
   }
 
-  def decodeRow(schema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]])(rs: ResultSet): com.socrata.datacoordinator.Row[CV] = {
+  def decodeRow(decoders: Array[(ColumnId, (ResultSet, Int) => CV, Int)])(rs: ResultSet):
+    com.socrata.datacoordinator.Row[CV] = {
 
     val row = new MutableRow[CV]
     var i = 1
 
-    schema.foreach { case (cid, rep) =>
-      row(cid) = rep.fromResultSet(rs, i)
-      i += rep.physColumns.length
+    decoders.foreach { case (cid, rsExtractor, physColumnsLen) =>
+      row(cid) = rsExtractor(rs, i)
+      i += physColumnsLen
     }
     row.freeze()
   }
