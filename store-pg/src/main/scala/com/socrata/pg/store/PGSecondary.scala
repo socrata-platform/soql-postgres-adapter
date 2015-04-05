@@ -420,7 +420,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
     sLoader.optimize(truthSchema.values)
 
-    if (secondaryCopyInfo.lifecycleStage == LifecycleStage.Published) {
+    if (truthCopyInfo.lifecycleStage == LifecycleStage.Unpublished &&
+        secondaryCopyInfo.lifecycleStage == LifecycleStage.Published) {
       pgu.datasetMapWriter.publish(truthCopyInfo)
     }
 
