@@ -1,5 +1,4 @@
-# TODO update to release dependency
-FROM registry.docker.aws-us-west-2-infrastructure.socrata.net:5000/internal/secondary-watcher:v0.3.1-SNAPSHOT-tmp5
+FROM registry.docker.aws-us-west-2-infrastructure.socrata.net:5000/internal/secondary-watcher:0.6.4-SNAPSHOT_b5710555_2
 
 # TODO expose JMX
 # EXPOSE 
