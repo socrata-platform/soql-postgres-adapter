@@ -13,6 +13,7 @@ import com.socrata.datacoordinator.truth.loader.sql.SqlTableDropper
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, LifecycleStage, RollupInfo}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
+import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
 import com.socrata.pg.soql.{ParametricSql, SoQLAnalysisSqlizer, SqlizerContext}
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.store.index.{Indexable, SoQLIndexableRep}
@@ -232,7 +233,9 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
           // Currently we aren't using any SqlErrorHandlers here, because as of this
           // time none of the existing ones are appropriate.
           logger.trace(s"Creating index on ${tableName} for ${copyInfo} / ${rollupInfo} using sql: ${createIndexSql}")
-          stmt.execute(createIndexSql)
+          RowSizeBufferSqlErrorContinue.guard(pgu.conn) {
+            stmt.execute(createIndexSql)
+          }
         }
       }
     }
