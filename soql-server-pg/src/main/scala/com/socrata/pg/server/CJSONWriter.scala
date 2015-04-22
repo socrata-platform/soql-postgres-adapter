@@ -41,6 +41,7 @@ object CJSONWriter {
     Logger(LoggerFactory getLogger getClass.getName)
 
   val dateTimeFormat = ISODateTimeFormat.dateTime
+  val encodingName = scala.io.Codec.UTF8.name
 
   def writeCJson(datasetInfo: DatasetInfo,
                  qrySchema: OrderedMap[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]],
@@ -52,7 +53,7 @@ object CJSONWriter {
                  locale: String = "en_US") = (r:HttpServletResponse) => {
 
     r.setContentType("application/json")
-    r.setCharacterEncoding(scala.io.Codec.UTF8.name)
+    r.setCharacterEncoding(encodingName)
     val os = r.getOutputStream
     val jsonReps = PostgresUniverseCommon.jsonReps(datasetInfo)
 
@@ -71,7 +72,7 @@ object CJSONWriter {
         (rc, rowData)
     }
 
-    using(new OutputStreamWriter(os)) { (writer: OutputStreamWriter) =>
+    using(new OutputStreamWriter(os, encodingName)) { (writer: OutputStreamWriter) =>
       writer.write("[{")
       rowCount.map { rc =>
         writer.write("\"approximate_row_count\": %s\n,".format(JNumber(rc).toString))
