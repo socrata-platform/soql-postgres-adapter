@@ -4,6 +4,9 @@ class SoQLMoneyFunctionsTest extends SoQLTest {
   test("where money = 'txt'") {
     compareSoqlResult("select make, name, price where price = '3000.00' order by price", "where-money-eq-txt.json")
   }
+  test("where money <> 'txt'") {
+    compareSoqlResult("select make, name, price where price <> '3200.00' order by price", "where-money-ne-txt.json")
+  }
   test("where money > 'txt'") {
     compareSoqlResult("select make, name, price where price > '3250.00' order by price", "where-money-gt-txt.json")
   }
@@ -18,6 +21,9 @@ class SoQLMoneyFunctionsTest extends SoQLTest {
   }
   test("where money = number") {
     compareSoqlResult("select make, name, price where price = 3000.00 order by price", "where-money-eq-txt.json")
+  }
+  test("where money <> number") {
+    compareSoqlResult("select make, name, price where price <> 3200.00 order by price", "where-money-ne-txt.json")
   }
   test("where money > number") {
     compareSoqlResult("select make, name, price where price > 3250.00 order by price", "where-money-gt-txt.json")
