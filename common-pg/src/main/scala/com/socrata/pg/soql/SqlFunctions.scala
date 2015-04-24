@@ -89,11 +89,11 @@ object SqlFunctions {
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
     NumberToText -> formatCall("%s::varchar") _,
-    TextToNumber -> formatCall("%s::numeric") _,
+    NumberToMoney -> formatCall("%s::numeric") _,
 
+    TextToNumber -> formatCall("%s::numeric") _,
     TextToFixedTimestamp -> formatCall("%s::timestamp with time zone") _,
     TextToFloatingTimestamp -> formatCall("%s::timestamp") _, // without time zone
-
     TextToMoney -> formatCall("%s::numeric") _,
 
     TextToBool -> formatCall("%s::boolean") _,
