@@ -31,6 +31,6 @@
 {"code":"BUZZ-Z4","make":"OZONE","name":"Buzz","class":"EN-B","v_min":23,"v_trim":37,"v_max":49,"aspect_ratio":5.15,"aspect_ratio_project":3.75,"line_length":-1,"price":3200,"three_liner":true,"size":"Medium-Small","available":"2013-08-01T15:12:34","certified":"2013-03-01T12:12:22-08","point":"POINT(6.649418 44.392089)","multipolygon":"MULTIPOLYGON(((0 1,1 1,1 2,0 2,0 1)))","country":"France", "color": ["Red", "Yellow", "Blue"],"spec": {"weight" : 5.5, "risers" : { "material" : [ "Dyneema", "Aramid"] , "config" : { "a" : [3, 1], "b": [3], "c": [4] }} }},
 {"code":"RUSH-3","make":"OZONE","name":"Rush","class":"EN-B","v_min":25,"v_trim":40,"v_max":53,"aspect_ratio":5.5,"aspect_ratio_project":4.12,"line_length":-1,"price":3250,"three_liner":true,"size":"Small","available":"2011-08-01T15:12:34","certified":"2011-03-01T12:11:22-08","point":"POINT(6.649418 44.392089)","multipolygon":"MULTIPOLYGON(((0 2,1 2,1 3,0 3,0 2)))","country":"France", "color": ["Red", "Yellow", "Blue"],"spec": {"weight" : 5.4 }},
 {"code":"ATLAS","make":"GIN","name":"Atlas","class":"EN-B","v_min":null,"three_liner":null,"size":null,"available":null,"certified":null, "color":null,"spec":null},
-{"code":"SPRINT-EVO","make":"GIN","name":"Sprint Evo","class":"EN-B"}
+{"code":"SPRINT-EVO","make":"GIN","name":"Sprint Evo","class":"EN-B","point":"POINT(11.574601 48.148484)","multipolygon":"MULTIPOLYGON(((11.578791 48.144026,11.582921 48.143088,11.582181 48.141649,11.578136 48.142515,11.578791 48.144026)))"}
 ]
 

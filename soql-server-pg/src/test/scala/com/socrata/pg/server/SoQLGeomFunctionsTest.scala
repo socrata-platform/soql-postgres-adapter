@@ -67,4 +67,13 @@ class SoQLGeomFunctionsTest extends SoQLTest {
     compareSoqlResult("select make, name, multipolygon where intersects(multipolygon, 'MULTIPOLYGON(((2 3,3 3,3 4,2 4,2 3)))')", "empty.json")
   }
 
+  test("distance with literals") {
+    // Distance between London and New York
+    compareSoqlResult("select distance_in_meters('POINT(-0.127691 51.517320)', 'POINT(-73.976248 40.767049)') " +
+      "as distance_in_meters limit 1", "select-distance-literal.json")
+  }
+
+  test("distance with columns") {
+    compareSoqlResult("select distance_in_meters(point, multipolygon) as distance_in_meters where code = 'SPRINT-EVO'", "select-distance-columns.json")
+  }
 }

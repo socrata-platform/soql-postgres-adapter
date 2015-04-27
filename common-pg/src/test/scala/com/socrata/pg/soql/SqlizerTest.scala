@@ -89,6 +89,15 @@ class SqlizerTest extends FunSuite with Matchers {
     params should be (Seq("MULTIPOLYGON (((1 1, 2 1, 2 2, 1 2, 1 1)))"))
   }
 
+  test("distance in meters") {
+    val soql = "select distance_in_meters(point, 'POINT(0 0)')"
+    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT (ST_Distance(point::geography, (ST_GeomFromText(?, 4326))::geography)) FROM t1")
+    setParams.length should be (1)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq("POINT(0 0)"))
+  }
+
   test("expr and expr") {
     val soql = "select id where id = 1 and case_number = 'cn001'"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)

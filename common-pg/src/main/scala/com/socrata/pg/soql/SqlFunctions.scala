@@ -44,6 +44,7 @@ object SqlFunctions {
     ConcaveHull -> formatCall("ST_Multi(ST_ConcaveHull(ST_Union(%s), %s))") _,
     ConvexHull -> formatCall("ST_Multi(ST_ConvexHull(ST_Union(%s)))"),
     Intersects -> formatCall("ST_Intersects(%s, %s)") _,
+    DistanceInMeters -> formatCall("ST_Distance(%s::geography, %s::geography)") _,
     Between -> formatCall("%s between %s and %s") _,
     Lt -> infix("<") _,
     Lte -> infix("<=") _,
