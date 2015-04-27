@@ -62,7 +62,7 @@ object SqlFunctions {
 
     // Number
     // http://beta.dev.socrata.com/docs/datatypes/numeric.html
-    UnaryPlus -> formatCall("%s"),
+    UnaryPlus -> passthrough,
     UnaryMinus -> formatCall("-%s") _,
     SignedMagnitude10 -> formatCall("sign(%s) * length(floor(abs(%s))::text)", Some(Seq(0,0))),
     BinaryPlus -> infix("+") _,
@@ -89,11 +89,11 @@ object SqlFunctions {
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
     NumberToText -> formatCall("%s::varchar") _,
-    TextToNumber -> formatCall("%s::numeric") _,
+    NumberToMoney -> passthrough,
 
+    TextToNumber -> formatCall("%s::numeric") _,
     TextToFixedTimestamp -> formatCall("%s::timestamp with time zone") _,
     TextToFloatingTimestamp -> formatCall("%s::timestamp") _, // without time zone
-
     TextToMoney -> formatCall("%s::numeric") _,
 
     TextToBool -> formatCall("%s::boolean") _,
@@ -111,8 +111,7 @@ object SqlFunctions {
     Count -> nary("count") _,
     CountStar -> formatCall("count(*)") _
     // TODO: Complete the function list.
-  ) ++ castIdentities.map(castIdentity => Tuple2(castIdentity, formatCall("%s") _))
-
+  ) ++ castIdentities.map(castIdentity => Tuple2(castIdentity, passthrough))
 
   private val Wildcard = StringLiteral("%", SoQLText)(NoPosition)
 
@@ -123,6 +122,8 @@ object SqlFunctions {
     }.toMap
     MonomorphicFunction(SoQLFunctions.Concat, bindings)
   }
+
+  private def passthrough: FunCallToSql = formatCall("%s")
 
   private def infix(fnName: String)
                    (fn: FunCall,

@@ -1,0 +1,7 @@
+[{ "make" : "APCO", "name" : "Karma", "price" : 2500 },
+ { "make" : "APCO", "name" : "Karma SP", "price" : 2650 },
+ { "make" : "Skywalk", "name" : "Mescal", "price" : 3000 },
+ { "make" : "Skywalk", "name" : "Tequila", "price" : 3100 },
+ { "make" : "OZONE", "name" : "Rush", "price" : 3250 },
+ { "make" : "Skywalk", "name" : "Chili", "price" : 3300 },
+ { "make" : "APCO", "name" : "Zefira", "price" : 3600 }]
