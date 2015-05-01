@@ -8,5 +8,6 @@
     <include file="com/socrata/pg/store/schema/20140307-add-column-last-modified.xml"/>
     <include file="com/socrata/pg/store/schema/20140703-create-postgis-extension.xml"/>
     <include file="com/socrata/pg/store/schema/20140629-create-rollup-map.xml"/>
+    <include file="com/socrata/pg/store/schema/20150501-add-missing-timezone.xml"/>
 
 </databaseChangeLog>
