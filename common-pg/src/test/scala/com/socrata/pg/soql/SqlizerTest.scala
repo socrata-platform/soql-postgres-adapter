@@ -181,6 +181,14 @@ class SqlizerTest extends FunSuite with Matchers {
     sql should be ("SELECT (sign(year) * length(floor(abs(year))::text)) FROM t1")
     setParams.length should be (0)
   }
+
+  test("case fn") {
+    val soql = "select case(primary_type = 'A', 'X', primary_type = 'B', 'Y')"
+    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT (case WHEN (primary_type = ?) THEN ? WHEN (primary_type = ?) THEN ? end) FROM t1")
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq("A", "X", "B", "Y"))
+  }
 }
 
 object SqlizerTest {

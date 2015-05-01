@@ -104,6 +104,8 @@ object SqlFunctions {
     TextToMultiLine -> formatCall("ST_GeomFromText(%s, 4326)") _,
     TextToMultiPolygon -> formatCall("ST_GeomFromText(%s, 4326)") _,
 
+    Case -> caseCall _,
+
     // aggregate functions
     Avg -> nary("avg") _,
     Min -> nary("min") _,
@@ -170,6 +172,27 @@ object SqlFunctions {
     }
 
     ParametricSql(sqlFragsAndParams._1.mkString(head + " " + fnName + "(", ",", ")"), sqlFragsAndParams._2)
+  }
+
+  private def caseCall(fn: FunCall,
+                       rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                       setParams: Seq[SetParam],
+                       ctx: Sqlizer.Context,
+                       escape: Escape): ParametricSql = {
+    val whenThens = fn.parameters.toSeq.grouped(2) // make each when, then expressions into a pair (seq)
+    val (sqls, params) = whenThens.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
+      param match {
+        case Seq(when, then) =>
+          val ParametricSql(whenSql, whenSetParams) = when.sql(rep, acc._2, ctx, escape)
+          val ParametricSql(thenSql, thenSetParams) = then.sql(rep, whenSetParams, ctx, escape)
+          (acc._1 :+ s"WHEN $whenSql" :+ s"THEN $thenSql", thenSetParams)
+        case _ =>
+          throw new Exception("invalid case statement")
+      }
+    }
+
+    val caseSql = sqls.mkString("case ", " ", " end")
+    ParametricSql(caseSql, params)
   }
 
   private def formatCall(template: String, paramPosition: Option[Seq[Int]] = None)
