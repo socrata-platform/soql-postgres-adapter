@@ -233,4 +233,61 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       } rows.size shouldEqual 3
     }
   }
+
+  test("rollup of previous published copy is still good after a working copy is dropped") {
+    withPgu() { pgu =>
+
+      val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
+      val dataVersion = 0L
+      val copyId = new CopyId(100)
+
+      val copyInfo = CopyInfo(copyId, 1, LifecycleStage.Published, dataVersion, new DateTime())
+
+      WorkingCopyCreatedHandler(pgu, None, datasetInfo, copyInfo)
+
+      val firstCopy = getTruthCopyInfo(pgu, datasetInfo)
+      firstCopy.lifecycleStage should be (metadata.LifecycleStage.Unpublished)
+      firstCopy.copyNumber should be (1L)
+
+      val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(testInternalName)
+      datasetId.isDefined should be (true)
+      WorkingCopyPublishedHandler(pgu, firstCopy)
+      val firstCopyPublished: TruthCopyInfo = getTruthCopyInfo(pgu, datasetInfo)
+      firstCopyPublished.lifecycleStage should be (metadata.LifecycleStage.Published)
+
+      val rollup = RollupInfo("ru", "select count(1)")
+      RollupCreatedOrUpdatedHandler(pgu, firstCopy, rollup)
+
+      val rollupsInFirstCopy = pgu.datasetMapReader.rollups(firstCopy)
+      rollupsInFirstCopy.size should be (1)
+      val rollupInFirstCopy = rollupsInFirstCopy.head
+      RollupManager.makeSecondaryRollupInfo(rollupInFirstCopy) should be (rollup)
+
+      // create the rollup table
+      (new RollupManager(pgu, firstCopyPublished)).updateRollup(rollupInFirstCopy, firstCopy.dataVersion)
+
+      val tableNameFirstCopy = RollupManager.rollupTableName(rollupInFirstCopy, firstCopy.dataVersion)
+      jdbcColumnCount(pgu.conn, tableNameFirstCopy) should be (1)
+      jdbcRowCount(pgu.conn, tableNameFirstCopy) should be (1)
+
+      val secondCopyInfo = CopyInfo(copyId, 2, LifecycleStage.Unpublished, dataVersion, new DateTime())
+      WorkingCopyCreatedHandler(pgu, datasetId, datasetInfo, secondCopyInfo)
+      val secondCopy = getTruthCopyInfo(pgu, datasetInfo)
+      secondCopy.lifecycleStage should be (metadata.LifecycleStage.Unpublished)
+      secondCopy.copyNumber should be (2L)
+
+      val pgs = new PGSecondary(config)
+      pgs._version(pgu, datasetInfo, secondCopy.dataVersion + 1, None, Iterator(WorkingCopyDropped))
+
+      // Check that the rollup in the previous copy is still good.
+      val previousCopy = getTruthCopyInfo(pgu, datasetInfo)
+      val previousRollups = pgu.datasetMapReader.rollups(previousCopy)
+      previousRollups.size should be (1)
+      val previousRollup = previousRollups.head
+
+      val tableNamePreviousRollup = RollupManager.rollupTableName(previousRollup, previousCopy.dataVersion)
+      jdbcColumnCount(pgu.conn, tableNamePreviousRollup) should be (1)
+      jdbcRowCount(pgu.conn, tableNamePreviousRollup) should be (1)
+    }
+  }
 }

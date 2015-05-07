@@ -246,20 +246,21 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       throw new ResyncSecondaryException(s"Current version ${truthCopyInfo.dataVersion}, next version ${newDataVersion} but should be ${truthCopyInfo.dataVersion+1}")
     }
 
-    val startCtx = (false, Option.empty[SqlPrevettedLoader[SoQLType, SoQLValue]]) // no rebuild index and no rows loader.
-    val (rebuildIndex, _) = remainingEvents.foldLeft(startCtx) { (ctx, e) =>
+    // no rebuild index, no refresh rollup and no rows loader.
+    val startCtx = (false, false, Option.empty[SqlPrevettedLoader[SoQLType, SoQLValue]])
+    val (rebuildIndex, refreshRollup, _) = remainingEvents.foldLeft(startCtx) { (ctx, e) =>
       logger.debug("got event: {}", e)
-      val (rebuildIndex, dataLoader) = ctx
+      val (rebuildIndex, refreshRollup, dataLoader) = ctx
       e match {
         case Truncated =>
           TruncateHandler(pgu, truthCopyInfo)
-          ctx
+          (rebuildIndex, true, dataLoader)
         case ColumnCreated(secondaryColInfo) =>
           ColumnCreatedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          (rebuildIndex, None)
+          (rebuildIndex, refreshRollup, None)
         case ColumnRemoved(secondaryColInfo) =>
           ColumnRemovedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          (rebuildIndex, None)
+          (rebuildIndex, refreshRollup, None)
         case RowIdentifierSet(info) =>  // no-op
           ctx
         case RowIdentifierCleared(info) =>  // no-op
@@ -275,10 +276,10 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         // version anywhere... ?
         case WorkingCopyDropped =>
           WorkingCopyDroppedHandler(pgu, truthDatasetInfo)
-          (rebuildIndex, None)
+          (rebuildIndex, refreshRollup, None)
         case DataCopied =>
           DataCopiedHandler(pgu, truthDatasetInfo, truthCopyInfo)
-          ctx
+          (rebuildIndex, true, dataLoader)
         case SnapshotDropped(info) =>
           logger.info("drop snapshot system id - {}, copy number - {}", info.systemId.toString, info.copyNumber.toString)
           pgu.datasetMapReader.copyNumber(truthDatasetInfo, info.copyNumber) match {
@@ -287,20 +288,20 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
             case None =>
               throw new Exception("cannot find copy to drop")
           }
-          (rebuildIndex, None)
+          (rebuildIndex, refreshRollup, None)
         case WorkingCopyPublished =>
           WorkingCopyPublishedHandler(pgu, truthCopyInfo)
-          (true, dataLoader)
+          (true, true, dataLoader)
         case RowDataUpdated(ops) =>
           val loader = dataLoader.getOrElse(prevettedLoader(pgu, truthCopyInfo))
           RowDataUpdatedHandler(loader, ops)
-          (rebuildIndex, Some(loader))
+          (rebuildIndex, true, Some(loader))
         case LastModifiedChanged(lastModified) =>
           pgu.datasetMapWriter.updateLastModified(truthCopyInfo, lastModified)
           ctx
         case RollupCreatedOrUpdated(rollupInfo) =>
           RollupCreatedOrUpdatedHandler(pgu, truthCopyInfo, rollupInfo)
-          ctx
+          (rebuildIndex, true, dataLoader)
         case RollupDropped(rollupInfo) =>
           RollupDroppedHandler(pgu, truthCopyInfo, rollupInfo)
           ctx
@@ -318,13 +319,11 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       sLoader.createFullTextSearchIndex(schema.values)
     }
 
-    // Right now we take the naive approach and rebuild every rollup after every
-    // version event.  However, it does not materialize if stage is unpublished.
-    // This simplifies tracking what has changed and also
-    // simplifies cleaning up old versions of rollups.  Obviously this can be
-    // improved on when and if warranted.
-    val postUpdateTruthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
-    updateRollups(pgu, postUpdateTruthCopyInfo)
+    // Rollups do not materialize if stage is unpublished.
+    if (refreshRollup) {
+      val postUpdateTruthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
+      updateRollups(pgu, postUpdateTruthCopyInfo, true)
+    }
 
     cookie
   }
@@ -436,7 +435,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       RollupCreatedOrUpdatedHandler(pgu, postUpdateTruthCopyInfo, rollup)
     }
     // re-create rollup tables
-    updateRollups(pgu, postUpdateTruthCopyInfo)
+    updateRollups(pgu, postUpdateTruthCopyInfo, false)
 
     cookie
   }
@@ -450,8 +449,11 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
   }
 
-  private def updateRollups(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: TruthCopyInfo) {
+  private def updateRollups(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: TruthCopyInfo, dropFirst: Boolean) {
     val rm = new RollupManager(pgu, copyInfo)
+    if (dropFirst) {
+      rm.dropRollups(true)
+    }
     pgu.datasetMapReader.rollups(copyInfo).foreach { ri =>
       rm.updateRollup(ri, copyInfo.dataVersion)
     }
