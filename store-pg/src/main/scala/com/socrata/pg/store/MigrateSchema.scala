@@ -33,12 +33,15 @@ object MigrateSchema extends App {
       }
     }
     val config = ConfigFactory.load
-    val dbConfigPath = args.length match {
-      case 1 => "com.socrata.pg.store.database"
+
+    val configRoot = args.length match {
+      case 1 => "com.socrata.pg"
       case 2 => args(1)
     }
 
-    PropertyConfigurator.configure(Propertizer("log4j", config.getConfig("com.socrata.pg.store.log4j")))
+    val dbConfigPath = s"$configRoot.store.database"
+
+    PropertyConfigurator.configure(Propertizer("log4j", config.getConfig(s"$configRoot.log4j")))
 
     SchemaMigrator(dbConfigPath, operation, config)
   }
