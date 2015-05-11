@@ -10,7 +10,9 @@ import com.socrata.datacoordinator.common.DataSourceConfig
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, _}
 import com.socrata.datacoordinator.id.DatasetId
-import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, LifecycleStage => TruthLifecycleStage, ColumnInfo, DatasetCopyContext}
+import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, DatasetInfo => TruthDatasetInfo}
+import com.socrata.datacoordinator.truth.metadata.{LifecycleStage => TruthLifecycleStage}
+import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, DatasetCopyContext}
 import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo}
 import com.socrata.datacoordinator.secondary.VersionColumnChanged
 import com.socrata.datacoordinator.secondary.WorkingCopyCreated
@@ -275,6 +277,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         // version anywhere... ?
         case WorkingCopyDropped =>
           WorkingCopyDroppedHandler(pgu, truthDatasetInfo)
+          updateLatestCopyDataVersion(pgu, truthDatasetInfo, newDataVersion)
           (rebuildIndex, None)
         case DataCopied =>
           DataCopiedHandler(pgu, truthDatasetInfo, truthCopyInfo)
@@ -287,6 +290,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
             case None =>
               throw new Exception("cannot find copy to drop")
           }
+          updateLatestCopyDataVersion(pgu, truthDatasetInfo, newDataVersion)
           (rebuildIndex, None)
         case WorkingCopyPublished =>
           WorkingCopyPublishedHandler(pgu, truthCopyInfo)
@@ -448,6 +452,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     } yield {
       pgu.datasetMapReader.latest(truthDatasetInfo)
     }
+  }
+
+  private def updateLatestCopyDataVersion(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                                          datasetInfo: TruthDatasetInfo, dataVersion: Long): Unit = {
+    val previousPublishedCopy = pgu.datasetMapReader.latest(datasetInfo)
+    pgu.datasetMapWriter.updateDataVersion(previousPublishedCopy, dataVersion)
   }
 
   private def updateRollups(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: TruthCopyInfo) {
