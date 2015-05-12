@@ -36,13 +36,12 @@ object MigrateSchema extends App {
 
     val configRoot = args.length match {
       case 1 =>
-        // Run migration on each secondary from the perspective of query server.
-        // Migration does not have to logic like secondary watcher that handles multiple secondary query servers.
-        "com.socrata.soql-server-pg"
+        // Run migration on each secondary instance from the perspective of secondary-watcher/pg store plugin.
+        "com.socrata.pg.store"
       case 2 => args(1)
     }
 
-    val dbConfigPath = s"$configRoot.store.database"
+    val dbConfigPath = s"$configRoot.database"
 
     PropertyConfigurator.configure(Propertizer("log4j", config.getConfig(s"$configRoot.log4j")))
 
