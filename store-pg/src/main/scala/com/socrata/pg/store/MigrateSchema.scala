@@ -35,7 +35,10 @@ object MigrateSchema extends App {
     val config = ConfigFactory.load
 
     val configRoot = args.length match {
-      case 1 => "com.socrata.pg"
+      case 1 =>
+        // Run migration on each secondary from the perspective of query server.
+        // Migration does not have to logic like secondary watcher that handles multiple secondary query servers.
+        "com.socrata.soql-server-pg"
       case 2 => args(1)
     }
 
