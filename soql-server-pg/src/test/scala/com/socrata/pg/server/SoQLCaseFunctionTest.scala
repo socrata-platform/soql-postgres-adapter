@@ -11,7 +11,7 @@ class SoQLCaseFunctionsTest extends SoQLTest {
              class,
              name
        ORDER By category, name
-       LIMIT 10""",
+       LIMIT 12""",
       "where-case-or.json")
   }
 
@@ -25,7 +25,7 @@ class SoQLCaseFunctionsTest extends SoQLTest {
                class,
                name
          ORDER By category, name
-         LIMIT 10""",
+         LIMIT 12""",
       "where-case-or.json")
   }
 

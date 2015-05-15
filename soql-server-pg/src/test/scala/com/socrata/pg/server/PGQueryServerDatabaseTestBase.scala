@@ -49,6 +49,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
             }
           }
         val jsonReps = PostgresUniverseCommon.jsonReps(copyInfo.datasetInfo)
+
         val qryReps = qrySchema.mapValues( cinfo => jsonReps(cinfo.typ))
 
         for (result <- mresult) {
@@ -65,6 +66,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
             next should be (expectedRow)
             remainingResult
           }
+
           whatLeft.hasNext should be (false)
           // check row count
           result.rowCount should be (expectedRowCount)

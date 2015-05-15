@@ -11,6 +11,10 @@ class SoQLGeomFunctionsTest extends SoQLTest {
   }
 
   test("within_polygon matching apco") {
+    compareSoqlResult("select make, name, point where within_polygon(point, 'POLYGON ((34.8 32.4, 35.0 32.4, 35.0 32.6, 34.8 32.6, 34.8 32.4))') order by name", "where-within-polygon.json")
+  }
+
+  test("within_polygon matching apco (multipolygon)") {
     compareSoqlResult("select make, name, point where within_polygon(point, 'MULTIPOLYGON(((34.8 32.4, 35.0 32.4, 35.0 32.6, 34.8 32.6, 34.8 32.4)))') order by name", "where-within-polygon.json")
   }
 
@@ -37,6 +41,18 @@ class SoQLGeomFunctionsTest extends SoQLTest {
 
   test("multiline conversion") {
     compareSoqlResult("select name, 'multilinestring((10.123456 -20.123456, -30.654321 40.654321))'::multiline as multiline where name = 'Chili'", "select-mline-lit.json")
+  }
+
+  test("line conversion") {
+    compareSoqlResult("select name, 'linestring(100.123456 0.123456, 100.123456 100.123456)'::line as line where name = 'Chili'", "select-line-lit.json")
+  }
+
+  test("multipoint conversion") {
+    compareSoqlResult("select name, 'multipoint((10.123456 -20.123456), (-30.654321 40.654321))'::multipoint as multipoint where name = 'Chili'", "select-multipoint-lit.json")
+  }
+
+  test("polygon conversion") {
+    compareSoqlResult("select name, 'polygon ((30.123456 10.123456, 40.123456 40.123456, 20.123456 40.123456, 10.123456 20.123456, 30.123456 10.123456))'::polygon as polygon where name = 'Chili'", "select-polygon-lit.json")
   }
 
   test("extent") {
