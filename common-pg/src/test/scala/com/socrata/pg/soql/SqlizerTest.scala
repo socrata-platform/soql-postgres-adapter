@@ -54,29 +54,30 @@ class SqlizerTest extends FunSuite with Matchers {
   }
 
   test("extent") {
-    val soql = "select extent(point), extent(line), extent(polygon)"
+    val soql = "select extent(point), extent(multiline), extent(multipolygon)"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT ST_AsBinary((ST_Multi(ST_Extent(point)))),ST_AsBinary((ST_Multi(ST_Extent(line)))),ST_AsBinary((ST_Multi(ST_Extent(polygon)))) FROM t1")
+    println(s"SQL IS $sql")
+    sql should be ("SELECT ST_AsBinary((ST_Multi(ST_Extent(point)))),ST_AsBinary((ST_Multi(ST_Extent(multiline)))),ST_AsBinary((ST_Multi(ST_Extent(multipolygon)))) FROM t1")
     setParams.length should be (0)
   }
 
   test("concave hull") {
-    val soql = "select concave_hull(point, 0.99), concave_hull(line, 0.89), concave_hull(polygon, 0.79)"
+    val soql = "select concave_hull(point, 0.99), concave_hull(multiline, 0.89), concave_hull(multipolygon, 0.79)"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT ST_AsBinary((ST_Multi(ST_ConcaveHull(ST_Union(point), ?))))," +
-                          "ST_AsBinary((ST_Multi(ST_ConcaveHull(ST_Union(line), ?))))," +
-                          "ST_AsBinary((ST_Multi(ST_ConcaveHull(ST_Union(polygon), ?)))) FROM t1")
+                          "ST_AsBinary((ST_Multi(ST_ConcaveHull(ST_Union(multiline), ?))))," +
+                          "ST_AsBinary((ST_Multi(ST_ConcaveHull(ST_Union(multipolygon), ?)))) FROM t1")
     setParams.length should be (3)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq(0.99, 0.89, 0.79).map(BigDecimal(_)))
   }
 
   test("convex hull") {
-    val soql = "select convex_hull(point), convex_hull(line), convex_hull(polygon)"
+    val soql = "select convex_hull(point), convex_hull(multiline), convex_hull(multipolygon)"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT ST_AsBinary((ST_Multi(ST_ConvexHull(ST_Union(point)))))," +
-                          "ST_AsBinary((ST_Multi(ST_ConvexHull(ST_Union(line)))))," +
-                          "ST_AsBinary((ST_Multi(ST_ConvexHull(ST_Union(polygon))))) FROM t1")
+                          "ST_AsBinary((ST_Multi(ST_ConvexHull(ST_Union(multiline)))))," +
+                          "ST_AsBinary((ST_Multi(ST_ConvexHull(ST_Union(multipolygon))))) FROM t1")
     setParams.length should be (0)
   }
 
@@ -230,8 +231,11 @@ object SqlizerTest {
     ColumnName("object") -> (11, SoQLObject),
     ColumnName("array") -> (12, SoQLArray),
     ColumnName("point") -> (13, SoQLPoint),
-    ColumnName("line") -> (14, SoQLMultiLine),
-    ColumnName("polygon") -> (15, SoQLMultiPolygon)
+    ColumnName("multiline") -> (14, SoQLMultiLine),
+    ColumnName("multipolygon") -> (15, SoQLMultiPolygon),
+    ColumnName("polygon") -> (16, SoQLPolygon),
+    ColumnName("line") -> (17, SoQLLine),
+    ColumnName("multipoint") -> (18, SoQLMultiPoint)
   )
 
   private val columnInfos = columnMap.foldLeft(Seq.empty[ColumnInfo[SoQLType]]) { (acc, colNameAndType) => colNameAndType match {

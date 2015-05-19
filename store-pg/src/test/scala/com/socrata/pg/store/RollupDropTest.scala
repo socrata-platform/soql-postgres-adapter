@@ -84,7 +84,7 @@ class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBas
       val expectedTable = if (materialized) 1 else 0
       jdbcColumnCount(pgu.conn, rollupTableName) should be (expectedTable)
       if (materialized) {
-        jdbcRowCount(pgu.conn, rollupTableName) should be (11)
+        jdbcRowCount(pgu.conn, rollupTableName) should be (14)
       }
       pgu.conn.commit()
       rollupTableName
