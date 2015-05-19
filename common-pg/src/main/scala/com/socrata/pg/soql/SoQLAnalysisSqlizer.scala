@@ -104,7 +104,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
     else sql
   }
 
-  private val GeoTypes: Set[SoQLType] = Set(SoQLPoint, SoQLMultiLine, SoQLMultiPolygon)
+  private val GeoTypes: Set[SoQLType] = Set(SoQLPoint, SoQLMultiPoint, SoQLLine, SoQLMultiLine, SoQLPolygon, SoQLMultiPolygon)
   /**
    * When we pull data out of pg we only want to translate it when we pull it out for performance reasons,
    * in particular if we are doing aggregations on geo types in the SQL query, so we do so against the top

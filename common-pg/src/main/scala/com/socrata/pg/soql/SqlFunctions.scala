@@ -101,7 +101,10 @@ object SqlFunctions {
     BoolToText -> formatCall("%s::varchar") _,
 
     TextToPoint -> formatCall("ST_GeomFromText(%s, 4326)") _,
+    TextToMultiPoint -> formatCall("ST_GeomFromText(%s, 4326)") _,
+    TextToLine -> formatCall("ST_GeomFromText(%s, 4326)") _,
     TextToMultiLine -> formatCall("ST_GeomFromText(%s, 4326)") _,
+    TextToPolygon -> formatCall("ST_GeomFromText(%s, 4326)") _,
     TextToMultiPolygon -> formatCall("ST_GeomFromText(%s, 4326)") _,
 
     Case -> caseCall _,
