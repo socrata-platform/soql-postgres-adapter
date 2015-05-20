@@ -257,10 +257,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           (rebuildIndex, true, dataLoader)
         case ColumnCreated(secondaryColInfo) =>
           ColumnCreatedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          (rebuildIndex, refreshRollup, None)
+          val shouldRefreshRollup = refreshRollup || (truthCopyInfo.lifecycleStage == TruthLifecycleStage.Published)
+          (rebuildIndex, shouldRefreshRollup, None)
         case ColumnRemoved(secondaryColInfo) =>
           ColumnRemovedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          (rebuildIndex, refreshRollup, None)
+          val shouldRefreshRollup = refreshRollup || (truthCopyInfo.lifecycleStage == TruthLifecycleStage.Published)
+          (rebuildIndex, shouldRefreshRollup, None)
         case RowIdentifierSet(info) =>  // no-op
           ctx
         case RowIdentifierCleared(info) =>  // no-op
