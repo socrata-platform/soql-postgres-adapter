@@ -1,7 +1,6 @@
 package com.socrata.pg.server
 
 import java.io.ByteArrayInputStream
-import java.net.{InetAddress, InetSocketAddress}
 import java.nio.charset.StandardCharsets
 import java.sql.Connection
 import java.util.concurrent.{ExecutorService, Executors}
@@ -22,10 +21,11 @@ import com.socrata.datacoordinator.truth.metadata._
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.http.common.AuxiliaryData
+import com.socrata.http.common.livenesscheck.LivenessCheckInfo
 import com.socrata.http.server._
 import com.socrata.http.server.curator.CuratorBroker
 import com.socrata.http.server.implicits._
-import com.socrata.http.server.livenesscheck.LivenessCheckResponder
+import com.socrata.http.server.livenesscheck.{LivenessCheckConfig, LivenessCheckResponder}
 import com.socrata.http.server.responses._
 import com.socrata.http.server.routing.{SimpleResource, SimpleRouteContext}
 import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, StrongEntityTag}
@@ -35,7 +35,7 @@ import com.socrata.http.server.util.RequestId.ReqIdHeader
 import com.socrata.pg.{SecondaryBase, Version}
 import com.socrata.pg.Schema._
 import com.socrata.pg.query.{DataSqlizerQuerier, RowCount, RowReaderQuerier}
-import com.socrata.pg.server.config.QueryServerConfig
+import com.socrata.pg.server.config.{DynamicPortMap, QueryServerConfig}
 import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity, Sqlizer, SqlizerContext}
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.store._
@@ -389,7 +389,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   }
 }
 
-object QueryServer extends Logging {
+object QueryServer extends DynamicPortMap with Logging {
 
   sealed abstract class QueryResult
   case class NotModified(etags: Seq[EntityTag]) extends QueryResult
@@ -444,11 +444,17 @@ object QueryServer extends Logging {
     } {
       pong.start()
       val queryServer = new QueryServer(dsInfo, CaseSensitive)
-      val auxData = new AuxiliaryData(livenessCheckInfo = Some(pong.livenessCheckInfo))
+      val advertisedLivenessCheckInfo = new LivenessCheckInfo(hostPort(pong.livenessCheckInfo.getPort),
+                                                              pong.livenessCheckInfo.getResponse)
+      val auxData = new AuxiliaryData(livenessCheckInfo = Some(advertisedLivenessCheckInfo))
       val curatorBroker = new CuratorBroker(discovery,
                                             address,
                                             config.discovery.name + "." + config.instance,
-                                            Some(auxData))
+                                            Some(auxData)) {
+        override def register(port: Int): Cookie = {
+          super.register(hostPort(port))
+        }
+      }
       val logOptions = NewLoggingHandler.defaultOptions.copy(
                          logRequestHeaders = Set(ReqIdHeader, "X-Socrata-Resource"))
       val handler = ThreadRenamingHandler(NewLoggingHandler(logOptions)(queryServer.route))
