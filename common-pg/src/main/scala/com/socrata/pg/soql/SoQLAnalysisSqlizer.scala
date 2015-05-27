@@ -56,7 +56,7 @@ class SoQLAnalysisSqlizer(analysis: SoQLAnalysis[UserColumnId, SoQLType], tableN
       PostgresUniverseCommon.searchVector(allColumnReps) match {
         case Some(sv) =>
           val andOrWhere = if (where.isDefined) " AND" else " WHERE"
-          val fts = s"$andOrWhere $sv @@ plainto_tsquery($searchSql)"
+          val fts = s"$andOrWhere $sv @@ plainto_tsquery('english', $searchSql)"
           ParametricSql(fts, searchSetParams)
         case None =>
           ParametricSql("", setParamsWhere)
