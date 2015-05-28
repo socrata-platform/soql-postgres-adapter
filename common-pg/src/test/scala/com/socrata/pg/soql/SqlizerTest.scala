@@ -170,7 +170,7 @@ class SqlizerTest extends FunSuite with Matchers {
   test("search") {
     val soql = "select id search 'oNe Two'"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT id FROM t1 WHERE to_tsvector('english', coalesce(array_12,'') || ' ' || coalesce(case_number_6,'') || ' ' || coalesce(object_11,'') || ' ' || coalesce(primary_type_7,'')) @@ plainto_tsquery(?)")
+    sql should be ("SELECT id FROM t1 WHERE to_tsvector('english', coalesce(array_12,'') || ' ' || coalesce(case_number_6,'') || ' ' || coalesce(object_11,'') || ' ' || coalesce(primary_type_7,'')) @@ plainto_tsquery('english', ?)")
     setParams.length should be (1)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq("oNe Two"))
