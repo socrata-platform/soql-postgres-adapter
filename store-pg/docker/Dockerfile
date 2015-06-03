@@ -1,7 +1,7 @@
-FROM registry.docker.aws-us-west-2-infrastructure.socrata.net:5000/internal/secondary-watcher:0.7.1-394
+FROM registry.docker.aws-us-west-2-infrastructure.socrata.net:5000/internal/secondary-watcher:0.7.5_999_f0f2e8f6_45659cef
 
 # TODO expose JMX
-# EXPOSE 
+# EXPOSE
 
 ENV SECONDARY_ARTIFACT store-pg-assembly.jar
 ENV SECONDARY_CONFIG secondary.conf
