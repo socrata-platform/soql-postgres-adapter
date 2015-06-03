@@ -45,6 +45,7 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
     val table = tableName(columnInfos)
     val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
       throw new Exception(table + " does not exist when creating search index.")))
+    logger.info("creating fts index")
     fullTextSearch.searchVector(columnInfos.map(repFor).toSeq) match {
       case Some(allColumnsVector) =>
         using(conn.createStatement()) { (stmt: Statement) =>
@@ -91,9 +92,10 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
         throw new Exception(table + " does not exist when creating index.")))
       using(conn.createStatement()) { stmt =>
         for {
-          ci <- columnInfos
+          (ci, idx) <- columnInfos.zipWithIndex
           createIndexSql <- repFor(ci).createIndex(table, tablespace)
         } {
+          logger.info("creating index {} {}", ci.userColumnId.underlying, idx.toString)
           sqlErrorHandler.guard(conn) {
             stmt.execute(createIndexSql)
           }
