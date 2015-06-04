@@ -258,21 +258,21 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         case ColumnCreated(secondaryColInfo) =>
           ColumnCreatedHandler(pgu, truthCopyInfo, secondaryColInfo)
           val shouldRefreshRollup = refreshRollup || (truthCopyInfo.lifecycleStage == TruthLifecycleStage.Published)
-          (rebuildIndex, shouldRefreshRollup, None)
+          (rebuildIndex, true, None)
         case ColumnRemoved(secondaryColInfo) =>
           ColumnRemovedHandler(pgu, truthCopyInfo, secondaryColInfo)
           val shouldRefreshRollup = refreshRollup || (truthCopyInfo.lifecycleStage == TruthLifecycleStage.Published)
-          (rebuildIndex, shouldRefreshRollup, None)
+          (rebuildIndex, true, None)
         case RowIdentifierSet(info) =>  // no-op
-          ctx
+          (rebuildIndex, true, dataLoader)
         case RowIdentifierCleared(info) =>  // no-op
-          ctx
+          (rebuildIndex, true, dataLoader)
         case SystemRowIdentifierChanged(secondaryColInfo) =>
           SystemRowIdentifierChangedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          ctx
+          (rebuildIndex, true, dataLoader)
         case VersionColumnChanged(secondaryColInfo) =>
           VersionColumnChangedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          ctx
+          (rebuildIndex, true, dataLoader)
         // TODO when dealing with dropped, figure out what version we have to updated afterwards and how that works...
         // maybe workingcopydropped is guaranteed to be the last event in a batch, and then we can skip updating the
         // version anywhere... ?
@@ -300,13 +300,13 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           (rebuildIndex, true, Some(loader))
         case LastModifiedChanged(lastModified) =>
           pgu.datasetMapWriter.updateLastModified(truthCopyInfo, lastModified)
-          ctx
+          (rebuildIndex, true, dataLoader)
         case RollupCreatedOrUpdated(rollupInfo) =>
           RollupCreatedOrUpdatedHandler(pgu, truthCopyInfo, rollupInfo)
           (rebuildIndex, true, dataLoader)
         case RollupDropped(rollupInfo) =>
           RollupDroppedHandler(pgu, truthCopyInfo, rollupInfo)
-          ctx
+          (rebuildIndex, true, dataLoader)
         case otherOps =>
           throw new UnsupportedOperationException(s"Unexpected operation $otherOps")
       }
