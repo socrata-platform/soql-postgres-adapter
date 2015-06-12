@@ -1,0 +1,16 @@
+[
+  { "name" : "Atlas", "line_length" : null, "signed_magnitude_linear_line_length_10" : null, "z" : 0, "p" : 1, "n" : -1 },
+  { "name" : "Buzz",  "line_length" : -1, "signed_magnitude_linear_line_length_10" : -1, "z" : 0, "p" : 1, "n" : -1 },
+  { "name" : "Chili", "line_length" : -1, "signed_magnitude_linear_line_length_10" : -1, "z" : 0, "p" : 1, "n" : -1 },
+  { "name" : "Foxtrot", "line_length" : null, "signed_magnitude_linear_line_length_10" : null, "z" : 0, "p" : 1, "n" : -1 },
+  { "name" : "Hotel", "line_length" : null, "signed_magnitude_linear_line_length_10" : null, "z" : 0, "p" : 1, "n" : -1 },
+  { "name" : "Karma", "line_length" : 412, "signed_magnitude_linear_line_length_10" : 42, "z" : 0, "p" : 1, "n" : -1 },
+  { "name" : "Karma SP", "line_length" : 412, "signed_magnitude_linear_line_length_10" : 42, "z" : 0, "p" : 1, "n" : -1 },
+  { "name" : "Mescal", "line_length" : 295, "signed_magnitude_linear_line_length_10" : 30, "z" : 0, "p" : 1, "n" : -1 },
+  { "name" : "Rush", "line_length" : -1, "signed_magnitude_linear_line_length_10" : -1, "z" : 0, "p" : 1, "n" : -1 },
+  { "name" : "Sprint Evo", "line_length" : null, "signed_magnitude_linear_line_length_10" : null, "z" : 0, "p" : 1, "n" : -1 },
+  { "name" : "Tequila", "line_length" : -1, "signed_magnitude_linear_line_length_10" : -1, "z" : 0, "p" : 1, "n" : -1 },
+  { "name" : "Vista II SP", "line_length" : 250, "signed_magnitude_linear_line_length_10" : 26, "z" : 0, "p" : 1, "n" : -1 },
+  { "name" : "Yankee", "line_length": null, "signed_magnitude_linear_line_length_10" : null, "z" : 0, "p" : 1, "n" : -1 },
+  { "name" : "Zefira", "line_length" : 285, "signed_magnitude_linear_line_length_10" : 29, "z" : 0, "p" : 1, "n" : -1 }
+]

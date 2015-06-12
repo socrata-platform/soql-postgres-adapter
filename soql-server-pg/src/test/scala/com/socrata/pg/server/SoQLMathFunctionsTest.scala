@@ -11,4 +11,15 @@ class SoQLMathFunctionsTest extends SoQLTest {
           order by name""",
       "select-signed_magnitude_10.json")
   }
+
+  test("signed_magnitude_linear(x,width)") {
+    compareSoqlResult(
+      """select name, line_length, signed_magnitude_linear(line_length,10),
+        |       signed_magnitude_linear(0,10) as z,
+        |       signed_magnitude_linear(9.9,10) as p,
+        |       signed_magnitude_linear(-9.8,10) as n
+        | order by name
+      """.stripMargin,
+    "select-signed_magnitude_linear.json")
+  }
 }
