@@ -22,5 +22,13 @@ com.socrata.soql-server-pg {
     {{ PG_SECONDARY_DB_PASSWORD_LINE }}
   }
 
+  store.database-migrate {
+    host = "{{ PG_SECONDARY_DB_HOST }}"
+    port = "{{ PG_SECONDARY_DB_PORT }}"
+    database = "{{ PG_SECONDARY_DB_NAME }}"
+    username = "{{ PG_SECONDARY_MIGRATE_DB_USER }}"
+    {{ PG_SECONDARY_MIGRATE_DB_PASSWORD_LINE }}
+  }
+
   instance = {{ PG_SECONDARY_INSTANCE }}
 }
