@@ -7,7 +7,7 @@ su socrata -c '/usr/bin/java \
     -Dconfig.file=${SERVER_CONFIG} \
     -cp $SERVER_ARTIFACT \
     com.socrata.pg.store.MigrateSchema Migrate \
-    com.socrata.soql-server-pg.store.database-migrate \
+    com.socrata.soql-server-pg.migrations \
     '
 
 exec su socrata -c '/usr/bin/java \
