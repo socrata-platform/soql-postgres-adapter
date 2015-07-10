@@ -25,4 +25,5 @@ In addition, the following optional variables are supported.  For defaults, see 
 * `PG_SECONDARY_DB_PORT` - soql-server-pg DB port number.  Must be the same across all instances.
 * `PG_SECONDARY_DB_USER` - soql-server-pg DB user name.  Must be the same across all instances.
 * `PG_SECONDARY_NUM_WORKERS` - Number of workers to run per secondary instance.
+* `PG_SECONDARY_WORK_MEM` - The postgres `work_mem` setting to use for updating the secondary.  This is primarily useful for allowing PostgreSQL to do in memory hash aggregations when building rollup tables instead of having to spool to a temporary on disk structure.
 * `PG_SECONDARY_TABLESPACE_FN` - A Clojure function used to generate the tablespace name for datasets.
