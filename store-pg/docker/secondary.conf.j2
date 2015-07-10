@@ -26,7 +26,7 @@ pg-secondary-config {
       maxIdleTimeExcessConnections = 300
       connectionCustomizerClassName = com.socrata.thirdparty.c3p0.ConnectionCustomizer
       extensions {
-        onAcquire = "SET work_mem = '768MB'; COMMIT"
+        onAcquire = "SET work_mem = '{{ PG_SECONDARY_WORK_MEM }}'; COMMIT"
       }
     }
   }
