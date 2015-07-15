@@ -37,12 +37,10 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
         None
       }
 
-    // For some weird reason, when you iterate over the querySchema, a new Rep is created from scratch
-    // every time, which is very expensive.  Move that out of the inner loop of decodeRow.
-    // Also, the orderedMap is extremely inefficient and very complex to debug.
+    // The orderedMap is extremely inefficient and very complex to debug.
     // TODO: refactor PG server not to use Ordered Map.
-    val decoders = querySchema.map { case (cid, rep) =>
-      (cid, rep.fromResultSet(_, _), rep.physColumns.length)
+    val decoders = querySchema.map { (cidRep: Tuple2[ColumnId, SqlColumnRep[CT, CV]]) =>
+      (cidRep._1, cidRep._2.fromResultSet(_, _), cidRep._2.physColumns.length)
     }.toArray
 
     // get rows
