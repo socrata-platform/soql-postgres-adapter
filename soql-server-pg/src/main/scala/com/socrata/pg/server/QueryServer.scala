@@ -5,6 +5,8 @@ import java.nio.charset.StandardCharsets
 import java.sql.Connection
 import java.util.concurrent.{ExecutorService, Executors}
 
+import buildinfo.BuildInfo
+
 import scala.language.existentials
 
 import com.rojoma.json.v3.ast.JString
@@ -32,7 +34,7 @@ import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, St
 import com.socrata.http.server.util.Precondition._
 import com.socrata.http.server.util.handlers.{NewLoggingHandler, ThreadRenamingHandler}
 import com.socrata.http.server.util.RequestId.ReqIdHeader
-import com.socrata.pg.{SecondaryBase, Version}
+import com.socrata.pg.SecondaryBase
 import com.socrata.pg.Schema._
 import com.socrata.pg.query.{DataSqlizerQuerier, RowCount, RowReaderQuerier}
 import com.socrata.pg.server.config.{DynamicPortMap, QueryServerConfig}
@@ -85,7 +87,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   }
 
   object VersionResource extends SimpleResource {
-    val response = OK ~> Json(Version("soql-server-pg"))
+    val response = OK ~> Content("application/json", BuildInfo.toJson)
 
     override val get = { _: HttpRequest => response }
   }

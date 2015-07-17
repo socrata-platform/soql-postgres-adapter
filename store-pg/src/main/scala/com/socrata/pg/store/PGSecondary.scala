@@ -1,5 +1,7 @@
 package com.socrata.pg.store
 
+import buildinfo.BuildInfo
+
 import com.mchange.v2.c3p0.DataSources
 import com.rojoma.json.v3.util.JsonUtil
 import com.rojoma.simplearm.Managed
@@ -29,14 +31,13 @@ import com.socrata.datacoordinator.secondary.ColumnRemoved
 import com.socrata.datacoordinator.truth.loader.sql.SqlPrevettedLoader
 import com.socrata.datacoordinator.truth.universe.sql.{PostgresCopyIn, C3P0WrappedPostgresCopyIn}
 import com.socrata.pg.store.events.WorkingCopyPublishedHandler
-import com.socrata.pg.{Version, SecondaryBase}
+import com.socrata.pg.SecondaryBase
 import com.socrata.thirdparty.typesafeconfig.C3P0Propertizer
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.slf4j.Logging
 import java.io.Closeable
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import org.postgresql.ds.PGSimpleDataSource
-
 
 /**
  * Postgres Secondary Store Implementation
@@ -47,7 +48,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
   override val dsConfig =  storeConfig.database
 
-  logger.info(JsonUtil.renderJson(Version("store-pg")))
+  logger.info(BuildInfo.toJson)
 
   private val dsInfo = dataSourceFromConfig(dsConfig)
 

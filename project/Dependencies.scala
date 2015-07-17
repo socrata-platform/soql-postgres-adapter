@@ -12,7 +12,6 @@ object Dependencies {
     val liquibaseCore = "2.0.0"
     val liquibasePlugin = "1.9.5.0"
     val postgresql = "9.3-1102-jdbc41"
-    val scalaTest = "2.1.0-RC2"
     val simpleArm = "1.1.10"
     val slf4j = "1.7.5"
     val socrataUtils = "0.8.0"
@@ -48,8 +47,6 @@ object Dependencies {
   val liquibasePlugin = "org.liquibase" % "liquibase-plugin" % versions.liquibasePlugin
 
   val postgresql = "org.postgresql" % "postgresql" % versions.postgresql
-
-  val scalaTest = "org.scalatest" %% "scalatest" % versions.scalaTest
 
   val simpleArm = "com.rojoma" %% "simple-arm" % versions.simpleArm
 

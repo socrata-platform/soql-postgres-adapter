@@ -14,7 +14,6 @@ import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
 
-
 class SqlizerTest extends FunSuite with Matchers {
 
   import SqlizerTest._
@@ -238,24 +237,24 @@ object SqlizerTest {
   private val passThrough = (s: String) => s
 
   private val columnMap = Map(
-    ColumnName(":id") -> (1, SoQLID),
-    ColumnName(":version") -> (2, SoQLVersion),
-    ColumnName(":created_at") -> (3, SoQLFixedTimestamp),
-    ColumnName(":updated_at") -> (4, SoQLFixedTimestamp),
-    ColumnName("id") -> (5, SoQLNumber),
-    ColumnName("case_number") -> (6, SoQLText),
-    ColumnName("primary_type") -> (7, SoQLText),
-    ColumnName("year") -> (8, SoQLNumber),
-    ColumnName("arrest") -> (9, SoQLBoolean),
-    ColumnName("updated_on") -> (10, SoQLFloatingTimestamp),
-    ColumnName("object") -> (11, SoQLObject),
-    ColumnName("array") -> (12, SoQLArray),
-    ColumnName("point") -> (13, SoQLPoint),
-    ColumnName("multiline") -> (14, SoQLMultiLine),
-    ColumnName("multipolygon") -> (15, SoQLMultiPolygon),
-    ColumnName("polygon") -> (16, SoQLPolygon),
-    ColumnName("line") -> (17, SoQLLine),
-    ColumnName("multipoint") -> (18, SoQLMultiPoint)
+    ColumnName(":id") -> ((1, SoQLID)),
+    ColumnName(":version") -> ((2, SoQLVersion)),
+    ColumnName(":created_at") -> ((3, SoQLFixedTimestamp)),
+    ColumnName(":updated_at") -> ((4, SoQLFixedTimestamp)),
+    ColumnName("id") -> ((5, SoQLNumber)),
+    ColumnName("case_number") -> ((6, SoQLText)),
+    ColumnName("primary_type") -> ((7, SoQLText)),
+    ColumnName("year") -> ((8, SoQLNumber)),
+    ColumnName("arrest") -> ((9, SoQLBoolean)),
+    ColumnName("updated_on") -> ((10, SoQLFloatingTimestamp)),
+    ColumnName("object") -> ((11, SoQLObject)),
+    ColumnName("array") -> ((12, SoQLArray)),
+    ColumnName("point") -> ((13, SoQLPoint)),
+    ColumnName("multiline") -> ((14, SoQLMultiLine)),
+    ColumnName("multipolygon") -> ((15, SoQLMultiPolygon)),
+    ColumnName("polygon") -> ((16, SoQLPolygon)),
+    ColumnName("line") -> ((17, SoQLLine)),
+    ColumnName("multipoint") -> ((18, SoQLMultiPoint))
   )
 
   private val columnInfos = columnMap.foldLeft(Seq.empty[ColumnInfo[SoQLType]]) { (acc, colNameAndType) => colNameAndType match {

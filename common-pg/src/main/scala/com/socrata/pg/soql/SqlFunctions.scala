@@ -188,9 +188,9 @@ object SqlFunctions {
     val whenThens = fn.parameters.toSeq.grouped(2) // make each when, then expressions into a pair (seq)
     val (sqls, params) = whenThens.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
       param match {
-        case Seq(when, then) =>
+        case Seq(when, thenDo) =>
           val ParametricSql(whenSql, whenSetParams) = Sqlizer.sql(when)(rep, acc._2, ctx, escape)
-          val ParametricSql(thenSql, thenSetParams) = Sqlizer.sql(then)(rep, whenSetParams, ctx, escape)
+          val ParametricSql(thenSql, thenSetParams) = Sqlizer.sql(thenDo)(rep, whenSetParams, ctx, escape)
           (acc._1 :+ s"WHEN $whenSql" :+ s"THEN $thenSql", thenSetParams)
         case _ =>
           throw new Exception("invalid case statement")

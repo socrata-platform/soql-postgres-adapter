@@ -87,7 +87,7 @@ trait PGSecondaryUniverseTestBase {
 
     expect foreach {
       colInfo =>  {
-        existing should contain (colInfo.systemId, colInfo.typ)
+        existing should contain ((colInfo.systemId, colInfo.typ))
       }
     }
   }
