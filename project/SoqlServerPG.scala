@@ -1,11 +1,9 @@
-import sbt._
-import Keys._
-
 import Dependencies._
+import sbt.Keys._
+import sbt._
 
 object SoqlServerPG {
-  lazy val settings: Seq[Setting[_]] = BuildSettings.projectSettings(assembly=true) ++ Seq(
-    resourceGenerators in Compile <+= (resourceManaged in Compile, name in Compile, version in Compile, scalaVersion in Compile) map CommonPG.genVersion,
+  lazy val settings: Seq[Setting[_]] = BuildSettings.projectSettings ++ Seq(
     libraryDependencies ++= libraries()
   )
 

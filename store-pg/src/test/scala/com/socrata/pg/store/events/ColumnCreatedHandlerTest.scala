@@ -3,6 +3,8 @@ package com.socrata.pg.store.events
 import com.socrata.pg.store.{PGSecondaryUniverseTestBase, PGStoreTestBase, PGSecondaryTestBase}
 import com.socrata.datacoordinator.secondary.ColumnCreated
 
+import scala.language.reflectiveCalls
+
 class ColumnCreatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
   test("handle ColumnCreated") {
