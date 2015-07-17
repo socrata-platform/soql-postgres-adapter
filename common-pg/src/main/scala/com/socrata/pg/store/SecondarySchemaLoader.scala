@@ -1,10 +1,10 @@
 package com.socrata.pg.store
 
 import com.rojoma.simplearm.util._
-import com.socrata.datacoordinator.truth.loader.sql.{SqlLogger, RepBasedPostgresSchemaLoader}
+import com.socrata.datacoordinator.truth.loader.sql.{ChangeOwner, RepBasedPostgresSchemaLoader}
 import com.socrata.datacoordinator.truth.loader.Logger
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo, ColumnInfo}
-import com.socrata.datacoordinator.truth.sql.{DatabasePopulator, SqlColumnRep}
+import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.pg.store.index.{FullTextSearch, Indexable}
 import com.socrata.pg.error.{SqlErrorPattern, SqlErrorHandler, SqlErrorHelper}
 import com.typesafe.scalalogging.slf4j.Logging
@@ -34,7 +34,8 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
       tablespace(copyInfo.dataTableName)
 
     using(conn.createStatement()) { stmt =>
-      stmt.execute("CREATE TABLE " + copyInfo.dataTableName + " ()" + tablespaceSqlPart(ts))
+      stmt.execute("CREATE TABLE " + copyInfo.dataTableName + " ()" + tablespaceSqlPart(ts) + ";" +
+                   ChangeOwner.sql(conn, copyInfo.dataTableName))
     }
     dsLogger.workingCopyCreated(copyInfo)
   }
