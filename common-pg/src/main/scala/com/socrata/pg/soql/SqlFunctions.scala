@@ -138,8 +138,8 @@ object SqlFunctions {
                     setParams: Seq[SetParam],
                     ctx: Sqlizer.Context,
                     escape: Escape): ParametricSql = {
-    val ParametricSql(l, setParamsL) = fn.parameters(0).sql(rep, setParams, ctx, escape)
-    val ParametricSql(r, setParamsLR) = fn.parameters(1).sql(rep, setParamsL, ctx, escape)
+    val ParametricSql(l, setParamsL) = Sqlizer.sql(fn.parameters(0))(rep, setParams, ctx, escape)
+    val ParametricSql(r, setParamsLR) = Sqlizer.sql(fn.parameters(1))(rep, setParamsL, ctx, escape)
     val s = s"$l $fnName $r"
     ParametricSql(s, setParamsLR)
   }
@@ -153,7 +153,7 @@ object SqlFunctions {
                    escape: Escape): ParametricSql = {
 
     val sqlFragsAndParams = fn.parameters.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
-      val ParametricSql(sql, newSetParams) = param.sql(rep, acc._2, ctx, escape)
+      val ParametricSql(sql, newSetParams) = Sqlizer.sql(param)(rep, acc._2, ctx, escape)
       (acc._1 :+ sql, newSetParams)
     }
 
@@ -168,10 +168,10 @@ object SqlFunctions {
                       ctx: Sqlizer.Context,
                       escape: Escape): ParametricSql = {
 
-    val ParametricSql(head, setParamsHead) = fn.parameters.head.sql(rep, setParams, ctx, escape)
+    val ParametricSql(head, setParamsHead) = Sqlizer.sql(fn.parameters.head)(rep, setParams, ctx, escape)
 
     val sqlFragsAndParams = fn.parameters.tail.foldLeft(Tuple2(Seq.empty[String], setParamsHead)) { (acc, param) =>
-      val ParametricSql(sql, newSetParams) = param.sql(rep, acc._2, ctx, escape)
+      val ParametricSql(sql, newSetParams) = Sqlizer.sql(param)(rep, acc._2, ctx, escape)
       (acc._1 :+ sql, newSetParams)
     }
 
@@ -187,8 +187,8 @@ object SqlFunctions {
     val (sqls, params) = whenThens.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
       param match {
         case Seq(when, then) =>
-          val ParametricSql(whenSql, whenSetParams) = when.sql(rep, acc._2, ctx, escape)
-          val ParametricSql(thenSql, thenSetParams) = then.sql(rep, whenSetParams, ctx, escape)
+          val ParametricSql(whenSql, whenSetParams) = Sqlizer.sql(when)(rep, acc._2, ctx, escape)
+          val ParametricSql(thenSql, thenSetParams) = Sqlizer.sql(then)(rep, whenSetParams, ctx, escape)
           (acc._1 :+ s"WHEN $whenSql" :+ s"THEN $thenSql", thenSetParams)
         case _ =>
           throw new Exception("invalid case statement")
@@ -214,7 +214,7 @@ object SqlFunctions {
       case None => fn.parameters
     }
     val sqlFragsAndParams = fnParams.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
-      val ParametricSql(sql, newSetParams) = param.sql(rep, acc._2, ctx, escape)
+      val ParametricSql(sql, newSetParams) = Sqlizer.sql(param)(rep, acc._2, ctx, escape)
       (acc._1 :+ sql, newSetParams)
     }
 
@@ -226,12 +226,12 @@ object SqlFunctions {
     typ match {
       case SoQLID =>
         idRep.unapply(encrypted.value) match {
-          case Some(SoQLID(num)) => NumberLiteral(num, SoQLNumber)(encrypted.position)
+          case Some(SoQLID(num)) => NumberLiteral[SoQLType](num, SoQLNumber)(encrypted.position)
           case _ => throw new Exception("Cannot decrypt id")
         }
       case SoQLVersion =>
         verRep.unapply(encrypted.value) match {
-          case Some(SoQLVersion(num)) => NumberLiteral(num, SoQLNumber)(encrypted.position)
+          case Some(SoQLVersion(num)) => NumberLiteral[SoQLType](num, SoQLNumber)(encrypted.position)
           case _ => throw new Exception("Cannot decrypt version")
         }
       case _ =>
@@ -252,7 +252,7 @@ object SqlFunctions {
           val idRep = ctx(SqlizerContext.IdRep).asInstanceOf[SoQLIDRep]
           val verRep = ctx(SqlizerContext.VerRep).asInstanceOf[SoQLVersionRep]
           val numLit = decryptToNumLit(typ)(idRep, verRep, strLit)
-          val ParametricSql(sql, newSetParams) = numLit.sql(rep, acc._2, ctx, escape)
+          val ParametricSql(sql, newSetParams) = Sqlizer.sql(numLit)(rep, acc._2, ctx, escape)
           (acc._1 :+ sql, newSetParams)
         case unexpected =>
           throw new Exception("Row id is not string literal")
@@ -269,10 +269,10 @@ object SqlFunctions {
                                   ctx: Sqlizer.Context,
                                   escape: Escape): ParametricSql = {
 
-    val ParametricSql(l, setParamsL) = fn.parameters(0).sql(rep, setParams, ctx, escape)
+    val ParametricSql(l, setParamsL) = Sqlizer.sql(fn.parameters(0))(rep, setParams, ctx, escape)
     val params = Seq(fn.parameters(1), Wildcard)
     val suffixWildcard = FunctionCall(SuffixWildcard, params)(fn.position, fn.functionNamePosition)
-    val ParametricSql(r, setParamsLR) = suffixWildcard.sql(rep, setParamsL, ctx, escape)
+    val ParametricSql(r, setParamsLR) = Sqlizer.sql(suffixWildcard)(rep, setParamsL, ctx, escape)
     val s = s"$l $fnName $r"
     ParametricSql(s, setParamsLR)
   }
