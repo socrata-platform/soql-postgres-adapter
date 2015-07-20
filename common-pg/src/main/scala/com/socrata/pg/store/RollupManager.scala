@@ -9,7 +9,7 @@ import scala.util.{Failure, Success, Try}
 import com.rojoma.simplearm.util.using
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.secondary.{RollupInfo => SecondaryRollupInfo}
-import com.socrata.datacoordinator.truth.loader.sql.SqlTableDropper
+import com.socrata.datacoordinator.truth.loader.sql.{ChangeOwner, SqlTableDropper}
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, LifecycleStage, RollupInfo}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
@@ -172,9 +172,10 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       } yield (s"${colName} ${colType} NULL")
 
       using(pgu.conn.createStatement()) { stmt =>
-        val createSql = s"CREATE TABLE ${tableName} (${colDdls.mkString(", ")} )${tablespaceSql}"
+        val createSql = s"CREATE TABLE ${tableName} (${colDdls.mkString(", ")} )${tablespaceSql};"
+
         logger.info(s"Creating rollup table ${tableName} for ${copyInfo} / ${rollupInfo} using sql: ${createSql}")
-        stmt.execute(createSql)
+        stmt.execute(createSql + ChangeOwner.sql(pgu.conn, tableName))
 
         // sadly the COMMENT statement can't use prepared statement params...
         val commentSql = s"COMMENT ON TABLE ${tableName} IS '" +
