@@ -18,14 +18,14 @@ object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
 
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
-        val v = toUpper(lit)(quote(lit.value, escape), ctx)
+        val v = toUpper(lit, quote(lit.value, escape), ctx)
         ParametricSql(v, setParams)
       case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(lit)(ctx) =>
-        val v = toUpper(lit)(quote(lit.value, escape), ctx)
+        val v = toUpper(lit, quote(lit.value, escape), ctx)
         ParametricSql(v, setParams)
       case _ =>
         val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
-          val maybeUpperLitVal = toUpper(lit)(lit.value, ctx)
+          val maybeUpperLitVal = toUpper(lit, lit.value, ctx)
           stmt.foreach(_.setString(pos, maybeUpperLitVal))
           Some(maybeUpperLitVal)
         }
@@ -37,7 +37,7 @@ object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
     s"e'${escape(s)}'"
   }
 
-  private def toUpper(lit: StringLiteral[SoQLType])(v: String, ctx: Context): String =
+  private def toUpper(lit: StringLiteral[SoQLType], v: String, ctx: Context): String =
     if (useUpper(lit)(ctx)) v.toUpperCase else v
 }
 
