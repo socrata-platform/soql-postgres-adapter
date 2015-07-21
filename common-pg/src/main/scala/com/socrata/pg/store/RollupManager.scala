@@ -9,12 +9,12 @@ import scala.util.{Failure, Success, Try}
 import com.rojoma.simplearm.util.using
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.secondary.{RollupInfo => SecondaryRollupInfo}
-import com.socrata.datacoordinator.truth.loader.sql.SqlTableDropper
+import com.socrata.datacoordinator.truth.loader.sql.{ChangeOwner, SqlTableDropper}
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, LifecycleStage, RollupInfo}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
-import com.socrata.pg.soql.{ParametricSql, SoQLAnalysisSqlizer, SqlizerContext}
+import com.socrata.pg.soql.{Sqlizer, ParametricSql, SoQLAnalysisSqlizer, SqlizerContext}
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.store.index.{Indexable, SoQLIndexableRep}
 import com.socrata.soql.{SoQLAnalysis, SoQLAnalyzer}
@@ -172,9 +172,10 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       } yield (s"${colName} ${colType} NULL")
 
       using(pgu.conn.createStatement()) { stmt =>
-        val createSql = s"CREATE TABLE ${tableName} (${colDdls.mkString(", ")} )${tablespaceSql}"
+        val createSql = s"CREATE TABLE ${tableName} (${colDdls.mkString(", ")} )${tablespaceSql};"
+
         logger.info(s"Creating rollup table ${tableName} for ${copyInfo} / ${rollupInfo} using sql: ${createSql}")
-        stmt.execute(createSql)
+        stmt.execute(createSql + ChangeOwner.sql(pgu.conn, tableName))
 
         // sadly the COMMENT statement can't use prepared statement params...
         val commentSql = s"COMMENT ON TABLE ${tableName} IS '" +
@@ -201,7 +202,6 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
   {
     time("populate-rollup-table", "dataset_id" -> copyInfo.datasetInfo.systemId.underlying, "rollupName" -> rollupInfo.name.underlying) {
       val soqlAnalysis = analysisToSoQLType(rollupAnalysis)
-      val sqlizer = new SoQLAnalysisSqlizer(soqlAnalysis, copyInfo.dataTableName, rollupReps)
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.CaseSensitivity -> true,
         SqlizerContext.LeaveGeomAsIs -> true
@@ -210,7 +210,8 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       val dsRepMap: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]] =
         dsSchema.values.map(ci => ci.userColumnId -> SoQLIndexableRep.sqlRep(ci)).toMap
 
-      val selectParamSql = sqlizer.sql(
+
+      val selectParamSql = Sqlizer.sql(Tuple3(soqlAnalysis, copyInfo.dataTableName, rollupReps))(
         rep = dsRepMap,
         setParams = Seq(),
         ctx = sqlCtx,

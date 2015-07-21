@@ -38,7 +38,7 @@ import com.socrata.pg.SecondaryBase
 import com.socrata.pg.Schema._
 import com.socrata.pg.query.{DataSqlizerQuerier, RowCount, RowReaderQuerier}
 import com.socrata.pg.server.config.{DynamicPortMap, QueryServerConfig}
-import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity, Sqlizer, SqlizerContext}
+import com.socrata.pg.soql._
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.store._
 import com.socrata.soql.SoQLAnalysis
@@ -213,7 +213,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
   ): QueryResult = {
-    import Sqlizer._
 
     def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], latestCopy: CopyInfo, analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
       val cryptProvider = new CryptProvider(latestCopy.datasetInfo.obfuscationKey)
@@ -234,10 +233,12 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
 
         val results = querier.query(
           analysis,
+          (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) => {
+            import Sqlizer._
+            Sqlizer.sql((a, tableName, sqlReps.values.toSeq))(sqlReps, Seq.empty, sqlCtx, escape)
+          },
           (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-            (a, tableName, sqlReps.values.toSeq).sql(sqlReps, Seq.empty, sqlCtx, escape),
-          (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-            (a, tableName, sqlReps.values.toSeq).rowCountSql(sqlReps, Seq.empty, sqlCtx, escape),
+            SoQLAnalysisSqlizer.rowCountSql((a, tableName, sqlReps.values.toSeq))(sqlReps, Seq.empty, sqlCtx, escape),
           rowCount,
           qryReps)
         (qrySchema, latestCopy.dataVersion, results)

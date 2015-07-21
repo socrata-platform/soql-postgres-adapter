@@ -16,11 +16,11 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
   this: AbstractRepBasedDataSqlizer[CT, CV] =>
 
   def query(conn: Connection, analysis: SoQLAnalysis[UserColumnId, CT],
-               toSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
-               toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
-               reqRowCount: Boolean,
-               querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]]) :
-               CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
+            toSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
+            toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
+            reqRowCount: Boolean,
+            querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]]):
+    CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
 
     // get row count
     val rowCount: Option[Long] =
