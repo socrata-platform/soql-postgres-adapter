@@ -20,6 +20,11 @@ com.socrata.soql-server-pg {
     database = "{{ PG_SECONDARY_DB_NAME }}"
     username = "{{ PG_SECONDARY_DB_USER }}"
     {{ PG_SECONDARY_DB_PASSWORD_LINE }}
+    c3p0 {
+      extensions {
+        onAcquire = "SET work_mem = '{{ PG_SECONDARY_WORK_MEM }}'; COMMIT"
+      }
+    }
   }
 
   migrations {
