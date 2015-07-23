@@ -11,7 +11,7 @@ import com.socrata.soql.environment.TypeName
 import com.socrata.soql.types._
 import org.postgresql.util.PSQLException
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Matchers}
-
+import scala.concurrent.duration.{MILLISECONDS, Duration, FiniteDuration}
 /**
  *
  */
@@ -220,7 +220,8 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
         "columnValue" -> "now() - ('2 day' :: INTERVAL)",
         "whereClause" -> s"table_name = '$dataTableName'"
       ))
-      val deletedSomeTables = new SqlTableCleanup(conn).cleanupPendingDrops()
+      val tableCleanupDelay = new FiniteDuration (0, MILLISECONDS)
+      val deletedSomeTables = new SqlTableCleanup(conn, tableCleanupDelay).cleanupPendingDrops()
       assert(deletedSomeTables, "Expected to have deleted at least one row from pending_table_drops")
       val tableName = fetchColumnFromTable(connection = conn, Map(
         "tableName" -> "pending_table_drops",
