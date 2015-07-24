@@ -6,7 +6,8 @@ import com.socrata.pg.error.RowSizeBufferSqlErrorResync
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.scalalogging.slf4j.Logging
 
-case class RowDataUpdatedHandler(loader: SqlPrevettedLoader[SoQLType, SoQLValue], ops: Seq[Operation[SoQLValue]]) extends Logging {
+case class RowDataUpdatedHandler(loader: SqlPrevettedLoader[SoQLType, SoQLValue],
+                                 ops: Seq[Operation[SoQLValue]]) extends Logging {
   RowSizeBufferSqlErrorResync.guard(loader.conn) {
     ops.foreach {
       o =>

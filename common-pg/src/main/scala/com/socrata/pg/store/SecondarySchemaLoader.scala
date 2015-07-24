@@ -17,21 +17,19 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
                                     sqlErrorHandler: SqlErrorHandler) extends
   RepBasedPostgresSchemaLoader[CT, CV](conn, dsLogger, repFor, tablespace) with Logging {
 
-  override def addColumns(columnInfos: Iterable[ColumnInfo[CT]]) {
-    if(columnInfos.isEmpty) return; // ok? copied from parent schema loader
-    super.addColumns(columnInfos)
+  override def addColumns(columnInfos: Iterable[ColumnInfo[CT]]): Unit = {
+    if (columnInfos.nonEmpty) super.addColumns(columnInfos)
     // createIndexes(columnInfos) was moved to publish time.
   }
 
-  override def create(copyInfo: CopyInfo) {
+  override def create(copyInfo: CopyInfo): Unit = {
     // we don't create audit or log tables because we don't need them.
 
     // TODO: this means we no longer keep copies of a dataset in the same tablespace.
     // This is a moot point right now, because we only support one copy.  When and if
     // we do so, we may need another solution for keeping copies in the same tablespace
     // depending on what tablespace/storage model we may adopt.
-    val ts: Option[String] =
-      tablespace(copyInfo.dataTableName)
+    val ts: Option[String] = tablespace(copyInfo.dataTableName)
 
     using(conn.createStatement()) { stmt =>
       stmt.execute("CREATE TABLE " + copyInfo.dataTableName + " ()" + tablespaceSqlPart(ts) + ";" +
@@ -40,43 +38,43 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
     dsLogger.workingCopyCreated(copyInfo)
   }
 
-  def createFullTextSearchIndex(columnInfos: Iterable[ColumnInfo[CT]]) {
-    if(columnInfos.isEmpty) return
-    dropFullTextSearchIndex(columnInfos)
-    val table = tableName(columnInfos)
-    val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
-      throw new Exception(table + " does not exist when creating search index.")))
-    logger.info("creating fts index")
-    fullTextSearch.searchVector(columnInfos.map(repFor).toSeq) match {
-      case Some(allColumnsVector) =>
-        using(conn.createStatement()) { (stmt: Statement) =>
-          SecondarySchemaLoader.fullTextIndexCreateSqlErrorHandler.guard(stmt) {
-            stmt.execute(s"CREATE INDEX idx_search_${table} on ${table} USING GIN ($allColumnsVector) $tablespace")
+  def createFullTextSearchIndex(columnInfos: Iterable[ColumnInfo[CT]]): Unit =
+    if (columnInfos.nonEmpty) {
+      dropFullTextSearchIndex(columnInfos)
+      val table = tableName(columnInfos)
+      val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
+        throw new Exception(table + " does not exist when creating search index.")))
+      logger.info("creating fts index")
+      fullTextSearch.searchVector(columnInfos.map(repFor).toSeq) match {
+        case None => // nothing to do
+        case Some(allColumnsVector) =>
+          using(conn.createStatement()) { (stmt: Statement) =>
+            SecondarySchemaLoader.fullTextIndexCreateSqlErrorHandler.guard(stmt) {
+              stmt.execute(s"CREATE INDEX idx_search_${table} on ${table} USING GIN ($allColumnsVector) $tablespace")
+            }
           }
-        }
-      case None => // nothing to do
+      }
     }
-  }
 
-  def deoptimize(columnInfos: Iterable[ColumnInfo[CT]]) {
+  def deoptimize(columnInfos: Iterable[ColumnInfo[CT]]): Unit = {
     dropFullTextSearchIndex(columnInfos)
     dropIndexes(columnInfos)
   }
 
-  def optimize(columnInfos: Iterable[ColumnInfo[CT]]) {
+  def optimize(columnInfos: Iterable[ColumnInfo[CT]]): Unit = {
     createFullTextSearchIndex(columnInfos)
     createIndexes(columnInfos)
   }
 
-  protected def dropFullTextSearchIndex(columnInfos: Iterable[ColumnInfo[CT]]) {
-    if(columnInfos.isEmpty) return
-    val table = tableName(columnInfos)
-    using(conn.createStatement()) { (stmt: Statement) =>
-      stmt.execute(s"DROP INDEX IF EXISTS idx_search_${table}")
+  protected def dropFullTextSearchIndex(columnInfos: Iterable[ColumnInfo[CT]]): Unit =
+    if (columnInfos.nonEmpty) {
+      val table = tableName(columnInfos)
+      using(conn.createStatement()) { (stmt: Statement) =>
+        stmt.execute(s"DROP INDEX IF EXISTS idx_search_${table}")
+      }
     }
-  }
 
-  protected def dropIndexes(columnInfos: Iterable[ColumnInfo[CT]]) {
+  protected def dropIndexes(columnInfos: Iterable[ColumnInfo[CT]]): Unit = {
     val table = tableName(columnInfos)
     using(conn.createStatement()) { stmt =>
       for {
@@ -86,11 +84,11 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
     }
   }
 
-  def createIndexes(columnInfos: Iterable[ColumnInfo[CT]]) {
+  def createIndexes(columnInfos: Iterable[ColumnInfo[CT]]): Unit = {
     if (columnInfos.nonEmpty) {
       val table = tableName(columnInfos)
       val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
-        throw new Exception(table + " does not exist when creating index.")))
+        throw new Exception(s"${table} does not exist when creating index.")))
       using(conn.createStatement()) { stmt =>
         for {
           (ci, idx) <- columnInfos.zipWithIndex
@@ -108,19 +106,14 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
   private def tableName(columnInfo: Iterable[ColumnInfo[CT]]) = columnInfo.head.copyInfo.dataTableName
 
   private def tablespaceSqlPart(tablespace: Option[String]): String = {
-    tablespace.map(" TABLESPACE " + _).getOrElse("")
+    tablespace.map(" TABLESPACE $_" + _).getOrElse("")
   }
 }
 
 object SecondarySchemaLoader {
-
   val fullTextIndexCreateSqlErrorHandler = new SqlErrorHandler {
-
     // Example: ERROR: row is too big: size 17880, maximum size 8160
     private val rowIsTooBig = new SqlErrorHelper(SqlErrorPattern("54000", "^row is too big".r))
-
-    def guard(conn: Connection)(f: => Unit) {
-      rowIsTooBig.guard(conn, None)(f)
-    }
+    def guard(conn: Connection)(f: => Unit): Unit = rowIsTooBig.guard(conn, None)(f)
   }
 }

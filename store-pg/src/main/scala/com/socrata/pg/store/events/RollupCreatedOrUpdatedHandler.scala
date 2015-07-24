@@ -11,6 +11,8 @@ import com.socrata.soql.types.{SoQLType, SoQLValue}
  * actually rebuild the rollups.  That is done separately at a higher level because they need rebuilding
  * when (almost) anything changes.
  */
-case class RollupCreatedOrUpdatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo, secRollupInfo: SecRollupInfo) {
+case class RollupCreatedOrUpdatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                                         copyInfo: CopyInfo,
+                                         secRollupInfo: SecRollupInfo) {
   pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName(secRollupInfo.name), secRollupInfo.soql)
 }

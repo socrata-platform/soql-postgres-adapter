@@ -3,24 +3,25 @@ package com.socrata.pg.soql
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.soql.functions._
-import com.socrata.soql.types._
-import com.socrata.soql.typed.{CoreExpr, NumberLiteral, StringLiteral, FunctionCall}
+import com.socrata.soql.typed.{CoreExpr, FunctionCall, NumberLiteral, StringLiteral}
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
 import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
+import com.socrata.soql.types._
+import Sqlizer._
+
 import scala.util.parsing.input.NoPosition
-import com.socrata.soql.ast.SpecialFunctions
 
+// scalastyle:off magic.number multiple.string.literals
 object SqlFunctions {
-
-  import SoQLFunctions._
-
-  import Sqlizer._
+  import SoQLFunctions._ // scalastyle:ignore import.grouping
 
   type FunCall = FunctionCall[UserColumnId, SoQLType]
 
-  type FunCallToSql = (FunCall, Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], Seq[SetParam], Sqlizer.Context, Escape) => ParametricSql
+  type FunCallToSql =
+    (FunCall, Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], Seq[SetParam], Sqlizer.Context, Escape)
+      => ParametricSql
 
-  def apply(function: Function[SoQLType]) = funMap(function)
+  def apply(function: Function[SoQLType]): FunCallToSql = funMap(function)
 
   private val funMap = Map[Function[SoQLType], FunCallToSql](
     IsNull -> formatCall("%s is null") _,
@@ -35,10 +36,15 @@ object SqlFunctions {
     And -> infix("and") _,
     Or -> infix("or") _,
     NotBetween -> formatCall("not %s between %s and %s") _,
-    WithinCircle -> formatCall("ST_within(%s, ST_Buffer(ST_MakePoint(%s, %s)::geography, %s)::geometry)", Some(Seq(0, 2, 1, 3))) _,
+    WithinCircle -> formatCall(
+      "ST_within(%s, ST_Buffer(ST_MakePoint(%s, %s)::geography, %s)::geometry)", Some(Seq(0, 2, 1, 3))) _,
     WithinPolygon -> formatCall("ST_within(%s, %s)") _,
-    // ST_MakeEnvelope(double precision xmin, double precision ymin, double precision xmax, double precision ymax, integer srid=unknown)
-    // within_box(location_col_identifier, top_left_latitude, top_left_longitude, bottom_right_latitude, bottom_right_longitude)
+    // ST_MakeEnvelope(double precision xmin, double precision ymin,
+    //   double precision xmax, double precision ymax,
+    //   integer srid=unknown)
+    // within_box(location_col_identifier,
+    //   top_left_latitude, top_left_longitude,
+    //   bottom_right_latitude, bottom_right_longitude)
     WithinBox -> formatCall("ST_MakeEnvelope(%s, %s, %s, %s, 4326) ~ %s", Some(Seq(2, 3, 4, 1, 0))) _,
     Extent -> formatCall("ST_Multi(ST_Extent(%s))") _,
     ConcaveHull -> formatCall("ST_Multi(ST_ConcaveHull(ST_Union(%s), %s))") _,
@@ -122,11 +128,11 @@ object SqlFunctions {
     // TODO: Complete the function list.
   ) ++ castIdentities.map(castIdentity => Tuple2(castIdentity, passthrough))
 
-  private val Wildcard = StringLiteral("%", SoQLText)(NoPosition)
+  private val wildcard = StringLiteral("%", SoQLText)(NoPosition)
 
-  private val SuffixWildcard = {
+  private val suffixWildcard = {
     val bindings = SoQLFunctions.Concat.parameters.map {
-      case VariableType(name) =>  (name -> SoQLText)
+      case VariableType(name) => name -> SoQLText
       case _ => throw new Exception("Unexpected concat function signature")
     }.toMap
     MonomorphicFunction(SoQLFunctions.Concat, bindings)
@@ -192,8 +198,7 @@ object SqlFunctions {
           val ParametricSql(whenSql, whenSetParams) = Sqlizer.sql(when)(rep, acc._2, ctx, escape)
           val ParametricSql(thenSql, thenSetParams) = Sqlizer.sql(thenDo)(rep, whenSetParams, ctx, escape)
           (acc._1 :+ s"WHEN $whenSql" :+ s"THEN $thenSql", thenSetParams)
-        case _ =>
-          throw new Exception("invalid case statement")
+        case _ => throw new Exception("invalid case statement")
       }
     }
 
@@ -224,7 +229,9 @@ object SqlFunctions {
   }
 
 
-  private def decryptToNumLit(typ: SoQLType)(idRep: SoQLIDRep, verRep: SoQLVersionRep, encrypted: StringLiteral[SoQLType]) = {
+  private def decryptToNumLit(typ: SoQLType)(idRep: SoQLIDRep,
+                                             verRep: SoQLVersionRep,
+                                             encrypted: StringLiteral[SoQLType]) = {
     typ match {
       case SoQLID =>
         idRep.unapply(encrypted.value) match {
@@ -236,8 +243,7 @@ object SqlFunctions {
           case Some(SoQLVersion(num)) => NumberLiteral[SoQLType](num, SoQLNumber)(encrypted.position)
           case _ => throw new Exception("Cannot decrypt version")
         }
-      case _ =>
-        throw new Exception("Internal error")
+      case _ => throw new Exception("Internal error")
     }
   }
 
@@ -256,8 +262,7 @@ object SqlFunctions {
           val numLit = decryptToNumLit(typ)(idRep, verRep, strLit)
           val ParametricSql(sql, newSetParams) = Sqlizer.sql(numLit)(rep, acc._2, ctx, escape)
           (acc._1 :+ sql, newSetParams)
-        case unexpected =>
-          throw new Exception("Row id is not string literal")
+        case _ => throw new Exception("Row id is not string literal")
       }
     }
     ParametricSql(sqlFragsAndParams._1.mkString(","), sqlFragsAndParams._2)
@@ -272,9 +277,9 @@ object SqlFunctions {
                                   escape: Escape): ParametricSql = {
 
     val ParametricSql(l, setParamsL) = Sqlizer.sql(fn.parameters(0))(rep, setParams, ctx, escape)
-    val params = Seq(fn.parameters(1), Wildcard)
-    val suffixWildcard = FunctionCall(SuffixWildcard, params)(fn.position, fn.functionNamePosition)
-    val ParametricSql(r, setParamsLR) = Sqlizer.sql(suffixWildcard)(rep, setParamsL, ctx, escape)
+    val params = Seq(fn.parameters(1), wildcard)
+    val suffix = FunctionCall(suffixWildcard, params)(fn.position, fn.functionNamePosition)
+    val ParametricSql(r, setParamsLR) = Sqlizer.sql(suffix)(rep, setParamsL, ctx, escape)
     val s = s"$l $fnName $r"
     ParametricSql(s, setParamsLR)
   }

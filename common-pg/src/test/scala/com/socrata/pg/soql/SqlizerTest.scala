@@ -15,7 +15,6 @@ import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
 
 class SqlizerTest extends FunSuite with Matchers {
-
   import SqlizerTest._
 
   test("string literal with quotes") {
@@ -212,9 +211,6 @@ class SqlizerTest extends FunSuite with Matchers {
 }
 
 object SqlizerTest {
-
-  import Sqlizer._
-
   private val cryptProvider = new CryptProvider(CryptProvider.generateKey())
   val sqlCtx = Map[SqlizerContext, Any](
     SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),

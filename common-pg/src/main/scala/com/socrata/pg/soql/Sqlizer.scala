@@ -13,8 +13,8 @@ import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 
 case class ParametricSql(sql: String, setParams: Seq[SetParam])
 
+// scalastyle:off import.grouping
 trait Sqlizer[T] {
-
   import Sqlizer._
   import SqlizerContext._
 
@@ -22,14 +22,14 @@ trait Sqlizer[T] {
           setParams: Seq[SetParam], ctx: Context, escape: Escape): ParametricSql
 
   protected def useUpper(e: T)(ctx: Context): Boolean = {
-    if (caseInsensitive(ctx))
+    if (caseInsensitive(ctx)) {
       ctx(SoqlPart) match {
         case SoqlWhere | SoqlGroup | SoqlOrder | SoqlHaving => true
         case SoqlSelect => usedInGroupBy(e)(ctx)
         case SoqlSearch => false
         case _ => false
       }
-    else false
+    } else { false }
   }
 
   protected def usedInGroupBy(e: T)(ctx: Context): Boolean = {
@@ -63,9 +63,10 @@ object Sqlizer {
 
   type SetParam = (Option[PreparedStatement], Int) => Option[Any]
 
-  def sql[T](e: T)
-            (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context, escape: Escape)
-            (implicit ev: Sqlizer[T]): ParametricSql = {
+  def sql[T](e: T)(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                   setParams: Seq[SetParam],
+                   ctx: Context,
+                   escape: Escape)(implicit ev: Sqlizer[T]): ParametricSql = {
     ev.sql(e)(rep, setParams, ctx, escape)
   }
 
@@ -78,8 +79,10 @@ object Sqlizer {
   implicit val soqlAnalysisSqlizer = SoQLAnalysisSqlizer
 
   implicit object CoreExprSqlizer extends Sqlizer[CoreExpr[UserColumnId, SoQLType]] {
-    def sql(expr: CoreExpr[UserColumnId, SoQLType])(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context, escape: Escape)
-    : ParametricSql = {
+    def sql(expr: CoreExpr[UserColumnId, SoQLType])(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                                                    setParams: Seq[SetParam],
+                                                    ctx: Context,
+                                                    escape: Escape): ParametricSql = {
       expr match {
         case fc: FunctionCall[UserColumnId, SoQLType] => FunctionCallSqlizer.sql(fc)(rep, setParams, ctx, escape)
         case cr: ColumnRef[UserColumnId, SoQLType] => ColumnRefSqlizer.sql(cr)(rep, setParams, ctx, escape)
@@ -92,9 +95,8 @@ object Sqlizer {
   }
 
   implicit object OrderBySqlizer extends Sqlizer[OrderBy[UserColumnId, SoQLType]] {
-
-    def sql(orderBy: OrderBy[UserColumnId, SoQLType])
-           (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], setParams: Seq[SetParam], ctx: Context, escape: Escape) = {
+    def sql(orderBy: OrderBy[UserColumnId, SoQLType])(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+            setParams: Seq[SetParam], ctx: Context, escape: Escape): ParametricSql = {
       val ParametricSql(s, setParamsOrderBy) = Sqlizer.sql(orderBy.expression)(rep, setParams, ctx, escape)
       val se = s + (if (orderBy.ascending) "" else " desc") + (if (orderBy.nullLast) " nulls last" else "")
       ParametricSql(se, setParamsOrderBy)
@@ -122,7 +124,5 @@ object SqlizerContext extends Enumeration {
 }
 
 sealed trait CaseSensitivity
-
 object CaseInsensitive extends CaseSensitivity
-
 object CaseSensitive extends CaseSensitivity

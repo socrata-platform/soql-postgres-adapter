@@ -11,7 +11,7 @@ class ColumnCreatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUnive
     withPgu() { pgu =>
       val f = columnsCreatedFixture
 
-      f.pgs._version(pgu, f.datasetInfo, f.dataVersion+1, None, f.events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion+1, None, f.events.iterator)
 
       val truthCopyInfo = getTruthCopyInfo(pgu, f.datasetInfo)
       val schema = pgu.datasetMapReader.schema(truthCopyInfo)
