@@ -5,7 +5,9 @@ import com.socrata.pg.store._
 import com.socrata.datacoordinator.secondary.ColumnInfo
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo}
 
-case class SystemRowIdentifierChangedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], truthCopyInfo: TruthCopyInfo, secColumnInfo: ColumnInfo[SoQLType]) {
+case class SystemRowIdentifierChangedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                                             truthCopyInfo: TruthCopyInfo,
+                                             secColumnInfo: ColumnInfo[SoQLType]) {
   val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
 
   val schema = pgu.datasetMapReader.schema(truthCopyInfo)

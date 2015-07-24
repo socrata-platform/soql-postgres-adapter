@@ -12,7 +12,7 @@ import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
 
 trait RowReaderQuerier[CT, CV] {
-  this: PGSecondaryRowReader[CT, CV] =>
+  this: PGSecondaryRowReader[CT, CV] => ()
 
   def query(analysis: SoQLAnalysis[UserColumnId, CT],
             toSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql,
@@ -20,21 +20,18 @@ trait RowReaderQuerier[CT, CV] {
             reqRowCount: Boolean,
             querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]]):
             Managed[CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount] = {
-
     val sqlizerq = sqlizer.asInstanceOf[DataSqlizer[CT, CV] with DataSqlizerQuerier[CT, CV]]
     val resultIter = sqlizerq.query(connection, analysis, toSql, toRowCountSql, reqRowCount, querySchema)
     managed(resultIter)
   }
 
-  def getSqlReps(systemToUserColumnMap: Map[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.id.UserColumnId]):
-                 Map[com.socrata.datacoordinator.id.UserColumnId, com.socrata.datacoordinator.truth.sql.SqlColumnRep[CT, CV]] = {
-
+  def getSqlReps(systemToUserColumnMap: Map[ColumnId, UserColumnId]): Map[UserColumnId, SqlColumnRep[CT, CV]] = {
     val sqlizerq = sqlizer.asInstanceOf[DataSqlizer[CT, CV] with DataSqlizerQuerier[CT, CV]]
-    val userColumnIdRepMap = sqlizerq.repSchema.foldLeft(Map.empty[com.socrata.datacoordinator.id.UserColumnId, com.socrata.datacoordinator.truth.sql.SqlColumnRep[CT, CV]]) { (map, colIdAndsqlRep) =>
-      colIdAndsqlRep match {
-        case (columnId, sqlRep) =>
-          map + (systemToUserColumnMap(columnId) -> sqlRep)
-      }
+    val userColumnIdRepMap = sqlizerq.repSchema.foldLeft(Map.empty[UserColumnId, SqlColumnRep[CT, CV]]) {
+      (map, colIdAndsqlRep) =>
+        colIdAndsqlRep match {
+          case (columnId, sqlRep) => map + (systemToUserColumnMap(columnId) -> sqlRep)
+        }
     }
     userColumnIdRepMap
   }

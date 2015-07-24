@@ -1,26 +1,27 @@
 package com.socrata.pg.query
 
 import com.rojoma.simplearm.util._
+import com.socrata.datacoordinator.{MutableRow, Row}
+import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.loader.sql.AbstractRepBasedDataSqlizer
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import com.socrata.datacoordinator.MutableRow
 import com.socrata.datacoordinator.util.CloseableIterator
-import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.pg.soql.ParametricSql
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
 import com.typesafe.scalalogging.slf4j.Logging
-import java.sql.{SQLException, PreparedStatement, Connection, ResultSet}
+import java.sql.{Connection, ResultSet, SQLException}
 
 trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
-  this: AbstractRepBasedDataSqlizer[CT, CV] =>
+  this: AbstractRepBasedDataSqlizer[CT, CV] => ()
+  private val sqlFetchSize = 1000
 
   def query(conn: Connection, analysis: SoQLAnalysis[UserColumnId, CT],
             toSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
             toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
             reqRowCount: Boolean,
             querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]]):
-    CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount = {
+    CloseableIterator[Row[CV]] with RowCount = {
 
     // get row count
     val rowCount: Option[Long] =
@@ -42,7 +43,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     // Also, the orderedMap is extremely inefficient and very complex to debug.
     // TODO: refactor PG server not to use Ordered Map.
     val decoders = querySchema.map { case (cid, rep) =>
-      (cid, rep.fromResultSet(_, _), rep.physColumns.length)
+      (cid, rep.fromResultSet _, rep.physColumns.length)
     }.toArray
 
     // get rows
@@ -56,9 +57,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     }
   }
 
-  def decodeRow(decoders: Array[(ColumnId, (ResultSet, Int) => CV, Int)])(rs: ResultSet):
-    com.socrata.datacoordinator.Row[CV] = {
-
+  def decodeRow(decoders: Array[(ColumnId, (ResultSet, Int) => CV, Int)])(rs: ResultSet): Row[CV] = {
     val row = new MutableRow[CV]
     var i = 1
 
@@ -75,7 +74,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
       // Statement to be closed by caller
       val stmt = conn.prepareStatement(pSql.sql)
       // need to explicitly set a fetch size to stream results
-      stmt.setFetchSize(1000)
+      stmt.setFetchSize(sqlFetchSize)
       pSql.setParams.zipWithIndex.foreach { case (setParamFn, idx) =>
         setParamFn(Some(stmt), idx + 1)
       }
@@ -87,32 +86,32 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     }
   }
 
-  class ResultSetIt(val rowCount: Option[Long], rs: ResultSet, toRow: (ResultSet) => com.socrata.datacoordinator.Row[CV])
-    extends CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount {
+  class ResultSetIt(val rowCount: Option[Long], rs: ResultSet, toRow: (ResultSet) => Row[CV])
+    extends CloseableIterator[Row[CV]] with RowCount {
 
-    private var _hasNext: Option[Boolean] = None
+    private var nextOpt: Option[Boolean] = None
 
     def hasNext: Boolean = {
-      _hasNext = _hasNext match {
-        case Some(b) => _hasNext
+      nextOpt = nextOpt match {
+        case Some(b) => nextOpt
         case None => Some(rs.next())
       }
-      _hasNext.get
+      nextOpt.get
     }
 
-    def next(): com.socrata.datacoordinator.Row[CV] = {
+    def next(): Row[CV] = {
       if (hasNext) {
         val row = toRow(rs)
-        _hasNext = None
+        nextOpt = None
         row
       } else {
         throw new Exception("No more data for the iterator.")
       }
     }
 
-    def close() {
+    def close(): Unit = {
       try {
-        rs.getStatement().close()
+        rs.getStatement.close()
       } finally {
         rs.close()
       }
@@ -121,14 +120,12 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 
   object EmptyIt extends CloseableIterator[Nothing] with RowCount {
     val rowCount = Some(0L)
-    def hasNext = false
-    def next() = throw new Exception("Called next() on an empty iterator")
-    def close() {}
+    def hasNext: Boolean = false
+    def next(): Nothing = throw new Exception("Called next() on an empty iterator")
+    def close(): Unit = {}
   }
 }
 
 trait RowCount {
-
   val rowCount: Option[Long]
-
 }

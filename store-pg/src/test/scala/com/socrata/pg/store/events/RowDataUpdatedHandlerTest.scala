@@ -31,7 +31,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
           RowDataUpdated(insertOps)
         )
 
-        f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
+        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
 
         for {
           truthCopyInfo <- unmanaged(getTruthCopyInfo(pgu, f.datasetInfo))
@@ -49,7 +49,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
         val f = columnsCreatedFixture
         val events = f.events :+ RowDataUpdated(insertOps)
 
-        f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
+        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
 
         val updateOps = Seq(
           (1000, 110, "bar"),
@@ -63,7 +63,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
 
         val updateEvents = Seq(RowDataUpdated(updateOps))
 
-        f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 2, None, updateEvents.iterator)
+        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 2, None, updateEvents.iterator)
 
         for {
           truthCopyInfo <- unmanaged(getTruthCopyInfo(pgu, f.datasetInfo))
@@ -79,7 +79,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
       val f = columnsCreatedFixture
       val events = f.events :+ RowDataUpdated(insertOps)
 
-      f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
 
       val deleteOps = Seq(
         1000,
@@ -89,7 +89,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
 
       val deleteEvents = Seq(RowDataUpdated(deleteOps))
 
-      f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 2, None, deleteEvents.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 2, None, deleteEvents.iterator)
 
       for {
         truthCopyInfo <- unmanaged(getTruthCopyInfo(pgu, f.datasetInfo))

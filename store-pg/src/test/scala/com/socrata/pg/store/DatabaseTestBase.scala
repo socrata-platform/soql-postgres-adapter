@@ -29,7 +29,7 @@ import com.typesafe.scalalogging.slf4j.Logging
  * Recreate test databases of truth and secondary.
  * Provide the tools for creating a dataset and replicated to secondary.
  */
-trait DatabaseTestBase extends Logging {  //this: Matchers =>
+trait DatabaseTestBase extends Logging {
 
   val dcInstance: String // alpha
 

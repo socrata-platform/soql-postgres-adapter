@@ -6,9 +6,10 @@ import com.socrata.datacoordinator.common.DataSourceConfig
 import scala.collection.JavaConverters._
 
 class StoreConfig(config: Config, root: String) extends ConfigClass(config, root) {
+  private val defaultResyncBatchSize = 1000
 
   // handle blank root
-  override protected def path(key: String*) = {
+  override protected def path(key: String*): String = {
     val fullKey = if (root.isEmpty) key else ConfigUtil.splitPath(root).asScala ++ key
     ConfigUtil.joinPath(fullKey: _*)
   }
@@ -17,6 +18,5 @@ class StoreConfig(config: Config, root: String) extends ConfigClass(config, root
 
   val tablespace = optionally(getString("tablespace"))
 
-  val resyncBatchSize = optionally(getInt("resyncBatchSize")).getOrElse(1000)
-
+  val resyncBatchSize = optionally(getInt("resyncBatchSize")).getOrElse(defaultResyncBatchSize)
 }

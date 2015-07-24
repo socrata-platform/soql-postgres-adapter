@@ -1,47 +1,44 @@
 package com.socrata.pg.store.index
 
 import com.socrata.datacoordinator.common.soql.sqlreps._
-import com.socrata.datacoordinator.truth.sql.{SqlColumnRep, SqlColumnCommonRep}
 import com.socrata.datacoordinator.truth.metadata.ColumnInfo
+import com.socrata.datacoordinator.truth.sql.SqlColumnCommonRep
+import com.socrata.pg.soql.SqlColIdx
 import com.socrata.soql.types._
-import com.vividsolutions.jts.geom.{LineString, MultiLineString, Polygon, MultiPolygon, Point, MultiPoint}
+import com.vividsolutions.jts.geom.{LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon}
 
 trait Indexable[T] { this: SqlColumnCommonRep[T] =>
-
   def createIndex(tableName: String, tablespace: String): Option[String]
-
   def createRollupIndex(tableName: String, tablespace: String): Option[String] = createIndex(tableName, tablespace)
-
   def dropIndex(tableName: String): Option[String]
-
 }
 
 trait NoIndex[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
-
   def createIndex(tableName: String, tablespace: String): Option[String] = None
-
   def dropIndex(tableName: String): Option[String] = None
-
 }
 
+// scalastyle:off regex
 trait TextIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
-
   override def createIndex(tableName: String, tablespace: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
       // nl for order by col asc nulls lasts and col desc nulls first and range scans
       // text_pattern_ops for like 'prefix%' or equality
-      s"""
-      DO $$$$ BEGIN
-        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_u_$phyCol') THEN
-          CREATE INDEX idx_${tableName}_u_$phyCol on $tableName USING BTREE (upper($phyCol) text_pattern_ops)$tablespace;
-        END IF;
-        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_nl_$phyCol') THEN
-          CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last)$tablespace;
-        END IF;
-        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_unl_$phyCol') THEN
-          CREATE INDEX idx_${tableName}_unl_$phyCol on $tableName USING BTREE (upper($phyCol) nulls last)$tablespace;
-        END IF;
-      END; $$$$;"""
+      s"""DO $$$$ BEGIN
+         |  IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_u_${phyCol}') THEN
+         |    CREATE INDEX idx_${tableName}_u_${phyCol} on ${tableName}
+         |    USING BTREE (upper(${phyCol}) text_pattern_ops)${tablespace};
+         |  END IF;
+         |  IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_nl_${phyCol}') THEN
+         |    CREATE INDEX idx_${tableName}_nl_${phyCol} on ${tableName}
+         |    USING BTREE (${phyCol} nulls last)${tablespace};
+         |  END IF;
+         |  IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_unl_${phyCol}') THEN
+         |    CREATE INDEX idx_${tableName}_unl_${phyCol} on ${tableName}
+         |    USING BTREE (upper(${phyCol}) nulls last)${tablespace};
+         |  END IF;
+         |END; $$$$;
+       """.stripMargin
     }.mkString(";")
     Some(sql)
   }
@@ -127,16 +124,13 @@ trait GeoIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] =>
   override def dropIndex(tableName: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
       s"""DROP INDEX IF EXISTS idx_${tableName}_${phyCol}_gist"""
-    }.mkString((";"))
+    }.mkString(";")
     Some(sql)
   }
 }
 
-
 object SoQLIndexableRep {
-  type IndexableSqlColumnRep = SqlColumnRep[SoQLType, SoQLValue] with Indexable[SoQLType]
-
-  private val sqlRepFactories = Map[SoQLType, String => IndexableSqlColumnRep] (
+  private val sqlRepFactories = Map[SoQLType, String => SqlColIdx] (
     SoQLID -> (base => new IDRep(base)  with NoIndex[SoQLType]), // Already indexed
     SoQLVersion -> (base => new VersionRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
     SoQLText -> (base => new TextRep(base) with TextIndexable[SoQLType]),
@@ -198,9 +192,8 @@ object SoQLIndexableRep {
         base) with GeoIndexable[SoQLType])
   )
 
-  def sqlRep(columnInfo: ColumnInfo[SoQLType]): SqlColumnRep[SoQLType, SoQLValue] with Indexable[SoQLType] =
+  def sqlRep(columnInfo: ColumnInfo[SoQLType]): SqlColIdx =
     sqlRepFactories(columnInfo.typ)(columnInfo.physicalColumnBase)
-
-  def sqlRep(typ: SoQLType, baseName: String) =
+  def sqlRep(typ: SoQLType, baseName: String): SqlColIdx =
     sqlRepFactories(typ)(baseName)
 }

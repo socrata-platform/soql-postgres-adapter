@@ -5,9 +5,13 @@ import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.id.DatasetId
 
 class PGSecondaryDatasetMapReader(val conn: Connection) {
-
+  val idFromName =
+    """SELECT dataset_system_id
+      |  FROM dataset_internal_name_map
+      | WHERE dataset_internal_name = ?
+    """.stripMargin
   def datasetIdForInternalName(datasetInternalName: String): Option[DatasetId] = {
-    using(conn.prepareStatement("SELECT dataset_system_id FROM dataset_internal_name_map WHERE dataset_internal_name = ?")) { stmt =>
+    using(conn.prepareStatement(idFromName)) { stmt =>
       stmt.setString(1, datasetInternalName)
       using(stmt.executeQuery()) { rs =>
         if (rs.next()) {
@@ -18,5 +22,4 @@ class PGSecondaryDatasetMapReader(val conn: Connection) {
       }
     }
   }
-
 }

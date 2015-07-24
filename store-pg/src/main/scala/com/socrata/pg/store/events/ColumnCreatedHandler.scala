@@ -10,7 +10,9 @@ import com.rojoma.simplearm.util._
 
 
 // TODO2 we should be batching these
-case class ColumnCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], truthCopyInfo: TruthCopyInfo, secColInfo: SecondaryColumnInfo[SoQLType]) {
+case class ColumnCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                                truthCopyInfo: TruthCopyInfo,
+                                secColInfo: SecondaryColumnInfo[SoQLType]) {
   val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
 
   val truthColInfo = pgu.datasetMapWriter.addColumnWithId(

@@ -1,5 +1,6 @@
 package com.socrata.soql.analyzer
 
+import com.socrata.pg.soql._
 import com.socrata.soql.{SoQLAnalysis, SoQLAnalyzer, AnalysisDeserializer, AnalysisSerializer}
 import com.socrata.soql.functions.{SoQLFunctions, SoQLFunctionInfo, SoQLTypeInfo}
 import com.socrata.soql.environment.{ColumnName, TypeName, DatasetContext}
@@ -8,14 +9,15 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import com.socrata.datacoordinator.id.UserColumnId
 
 object SoQLAnalyzerHelper {
-
   val serializer = new AnalysisSerializer(serializeColumn, serializeAnalysisType)
 
   val deserializer = new AnalysisDeserializer(deserializeColumn, deserializeType, SoQLFunctions.functionsByIdentity)
 
   private val analyzer = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
 
-  def analyzeSoQL(soql: String, datasetCtx: DatasetContext[SoQLType], idMap: ColumnName => UserColumnId): SoQLAnalysis[UserColumnId, SoQLType] = {
+  def analyzeSoQL(soql: String,
+                  datasetCtx: DatasetContext[SoQLType],
+                  idMap: ColumnName => UserColumnId): SoQLAnalysis[UserColumnId, SoQLType] = {
     implicit val ctx: DatasetContext[SoQLAnalysisType] = toAnalysisType(datasetCtx)
 
     val analysis: SoQLAnalysis[ColumnName, SoQLAnalysisType] = analyzer.analyzeFullQuery(soql)

@@ -1,7 +1,6 @@
 package com.socrata.pg.server
 
 import com.rojoma.json.v3.ast.JObject
-import com.rojoma.json.v3.util.JsonUtil
 import com.socrata.pg.store._
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
@@ -12,15 +11,12 @@ import com.socrata.soql.SoQLAnalysis
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
-import org.scalatest.{BeforeAndAfterAll, Matchers}
-import scala.language.existentials
 import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity}
 import com.socrata.http.server.util.NoPrecondition
-import com.typesafe.config.{ConfigFactory, Config}
+
+import scala.language.existentials
 
 trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUniverseTestBase {
-  this : Matchers with BeforeAndAfterAll =>
-
   private lazy val datasourceConfig = new DataSourceConfig(config, "database")
 
   protected lazy val ds = DataSourceFromConfig(datasourceConfig)

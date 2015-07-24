@@ -20,7 +20,7 @@ object Migration {
    */
   def migrateDb(conn: Connection,
                 operation: MigrationOperation = MigrationOperation.Migrate,
-                changeLogPath: String = MigrationScriptPath) {
+                changeLogPath: String = MigrationScriptPath): Unit = {
 
     LogFactory.getLogger().setLogLevel("warning")
     val liquibase = new Liquibase(changeLogPath, new ClassLoaderResourceAccessor, new JdbcConnection(conn))

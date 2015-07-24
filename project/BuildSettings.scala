@@ -9,8 +9,6 @@ object BuildSettings {
 
   val projectSettings = buildSettings ++
     Seq(
-      // TODO: enable style build failures
-      com.socrata.sbtplugins.StylePlugin.StyleKeys.styleFailOnError in Compile := false,
       // TODO: enable code coverage build failures
       scoverage.ScoverageSbtPlugin.ScoverageKeys.coverageFailOnMinimum := false
     )

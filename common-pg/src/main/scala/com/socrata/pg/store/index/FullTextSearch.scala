@@ -15,7 +15,6 @@ trait FullTextSearch[CT] {
   def searchVector(reps: Seq[SqlColumnCommonRep[CT]]): Option[String] = {
     val repsSearchableTypes = reps.filter(r => SearchableTypes.contains(r.representedType))
     val phyCols = repsSearchableTypes.flatMap(rep => rep.physColumns.map(phyCol => s"coalesce($phyCol,'')"))
-    if (phyCols.isEmpty) None
-    else Some(phyCols.sorted.mkString("to_tsvector('english', ", " || ' ' || ", ")"))
+    if (phyCols.isEmpty) None else Some(phyCols.sorted.mkString("to_tsvector('english', ", " || ' ' || ", ")"))
   }
 }
