@@ -81,7 +81,8 @@ trait DatabaseTestBase extends Logging {  //this: Matchers =>
           new File(System.getProperty("java.io.tmpdir")),
           Duration(10, TimeUnit.SECONDS),
           Duration(10, TimeUnit.SECONDS),
-          NullCache
+          Duration(1,  TimeUnit.SECONDS),
+	  NullCache
         )
         f(common)
       } finally {

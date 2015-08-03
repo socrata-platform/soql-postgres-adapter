@@ -22,7 +22,8 @@ import com.socrata.datacoordinator.truth.metadata.DatasetInfo
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
-
+import scala.concurrent.duration.{MILLISECONDS, Duration, FiniteDuration}
+ 
 /**
  *
  */
@@ -121,7 +122,7 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
         // Does not apply to secondary.  Suppress what data coordinator implementation does.
       }
     }
-
+  val tableCleanupDelay = new FiniteDuration (0, MILLISECONDS)
   lazy val tableCleanup: TableCleanup =
-    new SqlTableCleanup(conn, 0)
+    new SqlTableCleanup(conn, tableCleanupDelay)
 }
