@@ -40,7 +40,7 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
         )
 
       // first we resync a datset that doesn't exist
-      pgs._resync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows.iterator), Seq.empty)
+      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows.iterator), Seq.empty)
 
       // most basic validation... we have 2 rows
       for {
@@ -57,7 +57,7 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
           new ColumnId(12) -> new SoQLText("taz"))
 
       // now we resync again with an extra row
-      pgs._resync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows2.iterator), Seq.empty)
+      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows2.iterator), Seq.empty)
 
       // most basic validation... we have 3 rows
       for {

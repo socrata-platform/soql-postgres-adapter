@@ -10,7 +10,6 @@ import com.socrata.datacoordinator.util.collection.UserColumnIdMap
 import com.socrata.soql.environment.TypeName
 
 object Schema {
-
   implicit object SchemaCodec extends JsonDecode[TruthSchema] with JsonEncode[TruthSchema] {
 
     private implicit val schemaProperCodec = new JsonDecode[UserColumnIdMap[TypeName]]
@@ -46,7 +45,7 @@ object Schema {
       "locale" -> localeVar
     )
 
-    def encode(schemaObj: TruthSchema) = {
+    def encode(schemaObj: TruthSchema): JValue = {
       PSchema.generate(
         hashVar := schemaObj.hash,
         schemaVar := schemaObj.schema,
@@ -54,7 +53,7 @@ object Schema {
         localeVar := schemaObj.locale)
     }
 
-    def decode(x: JValue) = PSchema.matches(x) match {
+    def decode(x: JValue): DecodeResult[TruthSchema] = PSchema.matches(x) match {
       case Right(results) =>
         Right(new TruthSchema(
           hashVar(results),

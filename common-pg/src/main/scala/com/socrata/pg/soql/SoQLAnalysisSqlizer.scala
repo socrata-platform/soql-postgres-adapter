@@ -4,53 +4,54 @@ import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.pg.store.PostgresUniverseCommon
 import com.socrata.soql.SoQLAnalysis
+import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.types._
 import com.socrata.soql.typed.{StringLiteral, OrderBy, CoreExpr}
 import scala.util.parsing.input.NoPosition
 
-
-object SoQLAnalysisSqlizer extends Sqlizer[Tuple3[SoQLAnalysis[UserColumnId, SoQLType], String, Seq[SqlColumnRep[SoQLType, SoQLValue]]]] {
-
+// scalastyle:off import.grouping
+object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
   import Sqlizer._
   import SqlizerContext._
 
-
-  def sql(analysis: Tuple3[SoQLAnalysis[UserColumnId, SoQLType], String, Seq[SqlColumnRep[SoQLType, SoQLValue]]])
+  def sql(analysis: AnalysisTarget)
          (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
           escape: Escape): ParametricSql = {
-    sql(analysis, false, rep, setParams, ctx, escape)
+    sql(analysis, reqRowCount = false, rep, setParams, ctx, escape)
   }
 
   /**
    * For rowcount w/o group by, just replace the select with count(*).
    * For rowcount with group by, wrap the original group by sql with a select count(*) from ( {original}) t1
    */
-  def rowCountSql(analysis: Tuple3[SoQLAnalysis[UserColumnId, SoQLType], String, Seq[SqlColumnRep[SoQLType, SoQLValue]]])
+  def rowCountSql(analysis: AnalysisTarget)
                  (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                   setParams: Seq[SetParam],
                   ctx: Context,
-                  escape: Escape) = {
-    sql(analysis, true, rep, setParams, ctx, escape)
+                  escape: Escape): ParametricSql = {
+    sql(analysis, reqRowCount = true, rep, setParams, ctx, escape)
   }
 
-  private def sql(analysisTuple3: Tuple3[SoQLAnalysis[UserColumnId, SoQLType], String, Seq[SqlColumnRep[SoQLType, SoQLValue]]],
+  private def sql(analysisTarget: AnalysisTarget, // scalastyle:ignore method.length
                   reqRowCount: Boolean,
                   rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                   setParams: Seq[SetParam],
                   context: Context,
-                  escape: Escape) = {
-
-    val (analysis, tableName, allColumnReps) = analysisTuple3
+                  escape: Escape): ParametricSql = {
+    val (analysis, tableName, allColumnReps) = analysisTarget
     val ana = if (reqRowCount) rowCountAnalysis(analysis) else analysis
     val ctx = context + (Analysis -> analysis)
 
     // SELECT
     val ctxSelect = ctx + (SoqlPart -> SoqlSelect)
     val (selectPhrase, setParamsSelect) =
-      if (reqRowCount && analysis.groupBy.isEmpty) (Seq("count(*)"), setParams)
-      else select(analysis)(rep, setParams, ctxSelect, escape)
+      if (reqRowCount && analysis.groupBy.isEmpty) {
+        (Seq("count(*)"), setParams)
+      } else {
+        select(analysis)(rep, setParams, ctxSelect, escape)
+      }
 
     // WHERE
     val where = ana.where.map(Sqlizer.sql(_)(rep, setParamsSelect, ctx + (SoqlPart -> SoqlWhere), escape))
@@ -59,7 +60,8 @@ object SoQLAnalysisSqlizer extends Sqlizer[Tuple3[SoQLAnalysis[UserColumnId, SoQ
     // SEARCH
     val search = ana.search.map { search =>
       val searchLit = StringLiteral[SoQLType](search, SoQLText)(NoPosition)
-      val ParametricSql(searchSql, searchSetParams) =  Sqlizer.sql(searchLit)(rep, setParamsWhere, ctx + (SoqlPart -> SoqlSearch), escape)
+      val ParametricSql(searchSql, searchSetParams) =
+        Sqlizer.sql(searchLit)(rep, setParamsWhere, ctx + (SoqlPart -> SoqlSearch), escape)
 
       PostgresUniverseCommon.searchVector(allColumnReps) match {
         case Some(sv) =>
@@ -85,7 +87,6 @@ object SoQLAnalysisSqlizer extends Sqlizer[Tuple3[SoQLAnalysis[UserColumnId, SoQ
     val setParamsHaving = having.map(_.setParams).getOrElse(setParamsGroupBy)
 
     // ORDER BY
-
     val orderBy = ana.orderBy.map { (orderBys: Seq[OrderBy[UserColumnId, SoQLType]]) =>
       orderBys.foldLeft(Tuple2(Seq.empty[String], setParamsHaving)) { (t2, ob: OrderBy[UserColumnId, SoQLType]) =>
         val ParametricSql(sql, newSetParams) =
@@ -108,21 +109,18 @@ object SoQLAnalysisSqlizer extends Sqlizer[Tuple3[SoQLAnalysis[UserColumnId, SoQ
     ParametricSql(countBySubQuery(analysis)(reqRowCount, completeSql), setParamsOrderBy)
   }
 
-  private def countBySubQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType])(reqRowCount: Boolean, sql: String) = {
-    if (reqRowCount && analysis.groupBy.isDefined) s"SELECT count(*) FROM ($sql) t1"
-    else sql
-  }
+  private def countBySubQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType])(reqRowCount: Boolean, sql: String) =
+    if (reqRowCount && analysis.groupBy.isDefined) s"SELECT count(*) FROM ($sql) t1" else sql
 
-  private val GeoTypes: Set[SoQLType] = Set(SoQLPoint, SoQLMultiPoint, SoQLLine, SoQLMultiLine, SoQLPolygon, SoQLMultiPolygon)
+  private val GeoTypes: Set[SoQLType] =
+    Set(SoQLPoint, SoQLMultiPoint, SoQLLine, SoQLMultiLine, SoQLPolygon, SoQLMultiPolygon)
+
   /**
    * When we pull data out of pg we only want to translate it when we pull it out for performance reasons,
    * in particular if we are doing aggregations on geo types in the SQL query, so we do so against the top
    * level types of the final select list.
    */
-  private def toGeoText(sql: String, typ: SoQLType): String = {
-    if (GeoTypes.contains(typ)) s"ST_AsBinary($sql)"
-    else sql
-  }
+  private def toGeoText(sql: String, typ: SoQLType): String = if (GeoTypes.contains(typ)) s"ST_AsBinary($sql)" else sql
 
   private def select(analysis: SoQLAnalysis[UserColumnId, SoQLType])
                     (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
@@ -145,5 +143,4 @@ object SoQLAnalysisSqlizer extends Sqlizer[Tuple3[SoQLAnalysis[UserColumnId, SoQ
    */
   private def rowCountAnalysis(a: SoQLAnalysis[UserColumnId, SoQLType]): SoQLAnalysis[UserColumnId, SoQLType] =
     a.copy(selection = a.selection.empty, orderBy =  None, limit = None, offset = None)
-
 }

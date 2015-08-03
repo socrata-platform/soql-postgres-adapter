@@ -13,11 +13,9 @@ import com.socrata.soql.environment.TypeName
 import com.socrata.soql.types._
 import com.typesafe.config.Config
 import org.joda.time.{DateTime, LocalDate, LocalDateTime, LocalTime}
-import org.scalatest.{BeforeAndAfterAll, Matchers}
+import org.scalatest.{BeforeAndAfterAll, FunSuiteLike, Matchers}
 
-trait PGSecondaryUniverseTestBase {
-  this : Matchers with BeforeAndAfterAll =>
-
+trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with BeforeAndAfterAll {
   type CT = SoQLType
   type CV = SoQLValue
   val common = PostgresUniverseCommon
@@ -87,7 +85,7 @@ trait PGSecondaryUniverseTestBase {
 
     expect foreach {
       colInfo =>  {
-        existing should contain (colInfo.systemId, colInfo.typ)
+        existing should contain ((colInfo.systemId, colInfo.typ))
       }
     }
   }

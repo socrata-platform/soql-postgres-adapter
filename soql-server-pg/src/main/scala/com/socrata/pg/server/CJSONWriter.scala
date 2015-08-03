@@ -4,6 +4,7 @@ import com.rojoma.json.v3.ast._
 import com.rojoma.json.v3.io.CompactJsonWriter
 import com.rojoma.json.v3.util.{AutomaticJsonCodecBuilder, JsonUtil}
 import com.rojoma.simplearm.util._
+import com.socrata.datacoordinator.Row
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.metadata.{DatasetInfo, ColumnInfo}
 import com.socrata.datacoordinator.util.CloseableIterator
@@ -43,15 +44,14 @@ object CJSONWriter {
   val dateTimeFormat = ISODateTimeFormat.dateTime
   val utf8EncodingName = scala.io.Codec.UTF8.name
 
-  def writeCJson(datasetInfo: DatasetInfo,
-                 qrySchema: OrderedMap[com.socrata.datacoordinator.id.ColumnId, com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]],
-                 rowData:CloseableIterator[com.socrata.datacoordinator.Row[SoQLValue]],
+  def writeCJson(datasetInfo: DatasetInfo, // scalastyle:ignore method.length
+                 qrySchema: OrderedMap[ColumnId, ColumnInfo[SoQLType]],
+                 rowData:CloseableIterator[Row[SoQLValue]],
                  reqRowCount: Boolean,
                  givenRowCount: Option[Long],
                  dataVersion: Long,
                  lastModified: DateTime,
-                 locale: String = "en_US") = (r:HttpServletResponse) => {
-
+                 locale: String = "en_US"): HttpServletResponse => Unit = (r: HttpServletResponse) => {
     r.setContentType("application/json")
     r.setCharacterEncoding(utf8EncodingName)
     val os = r.getOutputStream
@@ -62,20 +62,19 @@ object CJSONWriter {
         logger.warn("FIXME: I am brute forcing row count!")
         val consumedRowData = rowData.toSeq
         val it = consumedRowData.iterator
-        val cit = new CloseableIterator[com.socrata.datacoordinator.Row[SoQLValue]] {
+        val cit = new CloseableIterator[Row[SoQLValue]] {
           def next() = { it.next() }
           def hasNext = it.hasNext
           def close() = { }
         }
         (Some(consumedRowData.size.toLong), cit)
-      case rc =>
-        (rc, rowData)
+      case rc: Option[Long] => (rc, rowData)
     }
 
     using(new OutputStreamWriter(os, utf8EncodingName)) { (writer: OutputStreamWriter) =>
       writer.write("[{")
-      rowCount.map { rc =>
-        writer.write("\"approximate_row_count\": %s\n,".format(JNumber(rc).toString))
+      rowCount.foreach { rc =>
+        writer.write("\"approximate_row_count\": %s\n,".format(JNumber(rc).toString()))
       }
       writer.write("\"data_version\":%d\n,".format(dataVersion))
       writer.write("\"last_modified\":\"%s\"\n,".format(dateTimeFormat.print(lastModified)))
@@ -92,9 +91,9 @@ object CJSONWriter {
       writeSchema(cjsonSortedSchema, writer)
       writer.write("\n }")
 
-      for (row <- rows) {
+      for { row <- rows } {
         assert(row.size == cids.length)
-        var result = new Array[JValue](row.size)
+        val result = new Array[JValue](row.size)
 
         for (i <- 0 until result.length) {
           result(i) = reps(i).toJValue(row(cids(i)))
@@ -107,8 +106,10 @@ object CJSONWriter {
     }
   }
 
-  private def writeSchema(cjsonSortedSchema:Seq[ColumnInfo[SoQLType]], writer: Writer) {
-    val sel = cjsonSortedSchema.map { colInfo => Field(colInfo.userColumnId.underlying, colInfo.typ.toString()) }.toArray
+  private def writeSchema(cjsonSortedSchema:Seq[ColumnInfo[SoQLType]], writer: Writer): Unit = {
+    val sel = cjsonSortedSchema.map {
+      colInfo => Field(colInfo.userColumnId.underlying, colInfo.typ.toString())
+    }.toArray
     writer.write("\n ,\"schema\":")
     JsonUtil.writeJson(writer, sel)
   }

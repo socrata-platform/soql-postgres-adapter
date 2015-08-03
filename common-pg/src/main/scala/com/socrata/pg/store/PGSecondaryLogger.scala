@@ -10,45 +10,54 @@ import org.joda.time.format.ISODateTimeFormat
 
 class PGSecondaryLogger[CT, CV] extends Logger[CT, CV] with Logging {
 
-  def close() { logger.debug("closed") }
+  def close(): Unit = logger.debug("closed")
 
-  def truncated() = logger.debug("truncated")
+  def truncated(): Unit = logger.debug("truncated")
 
-  def columnCreated(info: ColumnInfo[CT]) = logger.debug("column created")
+  def columnCreated(info: ColumnInfo[CT]): Unit = logger.debug("column created")
 
-  def columnRemoved(info: ColumnInfo[CT]) = logger.debug("column removed")
+  def columnRemoved(info: ColumnInfo[CT]): Unit = logger.debug("column removed")
 
-  def rowIdentifierSet(newIdentifier: ColumnInfo[CT]) = logger.debug("rowIdentifierSet: " + newIdentifier)
+  def rowIdentifierSet(newIdentifier: ColumnInfo[CT]): Unit = logger.debug("rowIdentifierSet: " + newIdentifier)
 
-  def rowIdentifierCleared(oldIdentifier: ColumnInfo[CT]) = logger.debug("rowIdentifierCleared: " + oldIdentifier)
+  def rowIdentifierCleared(oldIdentifier: ColumnInfo[CT]): Unit = logger.debug("rowIdentifierCleared: " + oldIdentifier)
 
-  def systemIdColumnSet(info: ColumnInfo[CT]) = { logger.debug("systemIdColumnSet: " + info)}
+  def systemIdColumnSet(info: ColumnInfo[CT]): Unit = logger.debug("systemIdColumnSet: " + info)
 
-  def versionColumnSet(info: ColumnInfo[CT]) = { logger.debug("versionColumnSet: " + info)}
+  def versionColumnSet(info: ColumnInfo[CT]): Unit = logger.debug("versionColumnSet: " + info)
 
-  def workingCopyCreated(info: CopyInfo) = { logger.debug("workingCopyCreated: " + info)}
+  def workingCopyCreated(info: CopyInfo): Unit = logger.debug("workingCopyCreated: " + info)
 
-  def lastModifiedChanged(lastModified: DateTime) = { logger.debug("lastModifiedChanged: " + ISODateTimeFormat.dateTime.print(lastModified)) }
+  def lastModifiedChanged(lastModified: DateTime): Unit =
+    logger.debug("lastModifiedChanged: " + ISODateTimeFormat.dateTime.print(lastModified))
 
-  def dataCopied() = logger.debug("dataCopied")
+  def dataCopied(): Unit = logger.debug("dataCopied")
 
-  def workingCopyDropped() = logger.debug("workingCopyDropped")
+  def workingCopyDropped(): Unit = logger.debug("workingCopyDropped")
 
-  def snapshotDropped(info: CopyInfo) = logger.debug("snapshotDropped")
+  def snapshotDropped(info: CopyInfo): Unit = logger.debug("snapshotDropped")
 
-  def workingCopyPublished() = logger.debug("workingCopyPublished")
+  def workingCopyPublished(): Unit = logger.debug("workingCopyPublished")
 
-  def endTransaction() = { logger.debug("endTransaction"); Some(0L) }
+  def endTransaction(): Option[Long] = {
+    logger.debug("endTransaction")
+    Some(0L)
+  }
 
-  def insert(systemID: RowId, row: _root_.com.socrata.datacoordinator.Row[CV]) = { logger.debug("insert: " + systemID + " row: " + row); }
+  def insert(systemID: RowId, row: _root_.com.socrata.datacoordinator.Row[CV]): Unit =
+    logger.debug("insert: " + systemID + " row: " + row)
 
-  def update(systemID: RowId, oldRow: Option[_root_.com.socrata.datacoordinator.Row[CV]], newRow: _root_.com.socrata.datacoordinator.Row[CV]) = { logger.debug("update: " + systemID + " oldRow: " + oldRow + " newRow: " + newRow); }
+  def update(systemID: RowId,
+             oldRow: Option[_root_.com.socrata.datacoordinator.Row[CV]],
+             newRow: _root_.com.socrata.datacoordinator.Row[CV]): Unit =
+    logger.debug("update: " + systemID + " oldRow: " + oldRow + " newRow: " + newRow)
 
-  def delete(systemID: RowId, oldRow: Option[_root_.com.socrata.datacoordinator.Row[CV]]) = { logger.debug("delete: " + systemID + " oldRow: " + oldRow); }
+  def delete(systemID: RowId, oldRow: Option[_root_.com.socrata.datacoordinator.Row[CV]]): Unit =
+    logger.debug("delete: " + systemID + " oldRow: " + oldRow)
 
-  def counterUpdated(nextCounter: Long) = { logger.debug("counterUpdated")}
+  def counterUpdated(nextCounter: Long): Unit = logger.debug("counterUpdated")
 
-  def rollupCreatedOrUpdated(info: RollupInfo) = { logger.debug(s"rollupCreatedOrUpdated: ${info}")}
+  def rollupCreatedOrUpdated(info: RollupInfo): Unit = logger.debug(s"rollupCreatedOrUpdated: $info")
 
-  def rollupDropped(info: RollupInfo): Unit = { logger.debug(s"rollupDropped: ${info}")}
+  def rollupDropped(info: RollupInfo): Unit = logger.debug(s"rollupDropped: $info")
 }

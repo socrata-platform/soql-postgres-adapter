@@ -18,7 +18,7 @@ class LastModifiedChangedTest extends PGSecondaryTestBase with PGSecondaryUniver
       val events = f.events ++ Seq(
         LastModifiedChanged(someRandomTime)
       )
-      f.pgs._version(pgu, f.datasetInfo, f.dataVersion+1, None, events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion+1, None, events.iterator)
 
       val truthCopyInfo = getTruthCopyInfo(pgu, f.datasetInfo)
       truthCopyInfo.lastModified should be (someRandomTime)

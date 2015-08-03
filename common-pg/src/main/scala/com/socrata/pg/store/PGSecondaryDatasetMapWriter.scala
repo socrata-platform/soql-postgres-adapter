@@ -12,40 +12,52 @@ import java.sql.Connection
 import org.postgresql.util.PSQLException
 
 
-class PGSecondaryDatasetMapWriter[CT](override val conn: Connection, tns: TypeNamespace[CT], timingReport: TimingReport, override val obfuscationKeyGenerator: () => Array[Byte], override val initialCounterValue: Long) extends
+class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
+                                      tns: TypeNamespace[CT],
+                                      timingReport: TimingReport,
+                                      override val obfuscationKeyGenerator: () => Array[Byte],
+                                      override val initialCounterValue: Long) extends
   PostgresDatasetMapWriter(conn, tns, timingReport, obfuscationKeyGenerator, initialCounterValue) with Logging {
 
-  private val createQuery_internalNameMap = "INSERT INTO dataset_internal_name_map (dataset_internal_name, dataset_system_id) VALUES (?, ?)"
+  private val createQueryInternalNameMap =
+    """INSERT INTO dataset_internal_name_map
+      |(dataset_internal_name, dataset_system_id)
+      |VALUES (?, ?)
+    """.stripMargin
+  private val deleteQueryInternalNameMap = "DELETE FROM dataset_internal_name_map where dataset_system_id = ?"
 
-  private val deleteQuery_internalNameMap = "DELETE FROM dataset_internal_name_map where dataset_system_id = ?"
-
-  override def delete(tableInfo: DatasetInfo) {
+  override def delete(tableInfo: DatasetInfo): Unit = {
     deleteInternalNameMapping(tableInfo.systemId)
     super.delete(tableInfo)
   }
 
-  def createInternalNameMapping(datasetInternalName: String, datasetSystemId: DatasetId) {
-    using(conn.prepareStatement(createQuery_internalNameMap)) { stmt =>
+  def createInternalNameMapping(datasetInternalName: String, datasetSystemId: DatasetId): Unit = {
+    using(conn.prepareStatement(createQueryInternalNameMap)) { stmt =>
       stmt.setString(1, datasetInternalName)
       stmt.setLong(2, datasetSystemId.underlying)
       stmt.execute()
     }
   }
 
-  def deleteInternalNameMapping(datasetSystemId: DatasetId) {
-    using(conn.prepareStatement(deleteQuery_internalNameMap)) { stmt =>
+  def deleteInternalNameMapping(datasetSystemId: DatasetId): Unit = {
+    using(conn.prepareStatement(deleteQueryInternalNameMap)) { stmt =>
       stmt.setLong(1, datasetSystemId.underlying)
       stmt.execute()
     }
   }
 
-  def createDatasetOnlyQuery_tableMap = "INSERT INTO dataset_map (next_counter_value, locale_name, obfuscation_key) VALUES (?, ?, ?) RETURNING system_id"
+  val createDatasetOnlyQueryTableMap =
+    """INSERT INTO dataset_map
+      |(next_counter_value, locale_name, obfuscation_key)
+      |VALUES (?, ?, ?)
+      |RETURNING system_id
+    """.stripMargin
 
   /**
    * Creates a dataset_map entry with no copy info.
    */
   def createDatasetOnly(localeName: String): DatasetId = {
-    using(conn.prepareStatement(createDatasetOnlyQuery_tableMap)) { stmt =>
+    using(conn.prepareStatement(createDatasetOnlyQueryTableMap)) { stmt =>
       stmt.setLong(1, initialCounterValue)
       stmt.setString(2, localeName)
       stmt.setBytes(3, obfuscationKeyGenerator())
@@ -63,22 +75,22 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection, tns: TypeNa
     }
   }
 
-  def deleteCopyQuery_columnMap = "DELETE FROM column_map WHERE copy_system_id = ?"
-  def deleteCopyQuery_copyMap = "DELETE FROM copy_map WHERE system_id = ?"
+  val deleteCopyQueryColumnMap = "DELETE FROM column_map WHERE copy_system_id = ?"
+  val deleteCopyQueryCopyMap = "DELETE FROM copy_map WHERE system_id = ?"
 
   /**
    * Deletes/drops a copy entirely, including column_map, copy_info and the actual table.
    */
-  def deleteCopy(copyInfo: CopyInfo) {
+  def deleteCopy(copyInfo: CopyInfo): Unit = {
 
     dropRollup(copyInfo, None) // drop all related rollups metadata
 
-    using(conn.prepareStatement(deleteCopyQuery_columnMap)) { stmt =>
+    using(conn.prepareStatement(deleteCopyQueryColumnMap)) { stmt =>
       stmt.setLong(1, copyInfo.systemId.underlying)
       stmt.executeUpdate()
     }
 
-    using(conn.prepareStatement(deleteCopyQuery_copyMap)) { stmt =>
+    using(conn.prepareStatement(deleteCopyQueryCopyMap)) { stmt =>
       stmt.setLong(1, copyInfo.systemId.underlying)
       stmt.executeUpdate()
     }
@@ -100,8 +112,11 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection, tns: TypeNa
   def allocateCopyId(): CopyId = {
     using(conn.prepareStatement("select nextval('copy_map_system_id_seq')")) { stmt =>
       val rs = stmt.executeQuery()
-      if (rs.next()) new com.socrata.datacoordinator.id.CopyId(rs.getLong(1))
-      else throw new Exception("cannot get new copy id from sequence")
+      if (rs.next()) {
+        new com.socrata.datacoordinator.id.CopyId(rs.getLong(1))
+      } else {
+        throw new Exception("cannot get new copy id from sequence")
+      }
     }
   }
 }

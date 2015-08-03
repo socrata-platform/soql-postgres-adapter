@@ -9,13 +9,11 @@ import Sqlizer._
 import SqlizerContext._
 
 object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
-
   def sql(lit: StringLiteral[SoQLType])
          (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
-          escape: Escape) = {
-
+          escape: Escape): ParametricSql = {
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
         val v = toUpper(lit, quote(lit.value, escape), ctx)
@@ -33,22 +31,18 @@ object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
     }
   }
 
-  private def quote(s: String, escape: Escape) = {
-    s"e'${escape(s)}'"
-  }
+  private def quote(s: String, escape: Escape) = s"e'${escape(s)}'"
 
   private def toUpper(lit: StringLiteral[SoQLType], v: String, ctx: Context): String =
     if (useUpper(lit)(ctx)) v.toUpperCase else v
 }
 
 object NumberLiteralSqlizer extends Sqlizer[NumberLiteral[SoQLType]] {
-
   def sql(lit: NumberLiteral[SoQLType])
          (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
-          escape: Escape) = {
-
+          escape: Escape): ParametricSql = {
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
         ParametricSql(lit.value.bigDecimal.toPlainString, setParams)
@@ -65,19 +59,17 @@ object NumberLiteralSqlizer extends Sqlizer[NumberLiteral[SoQLType]] {
 }
 
 object BooleanLiteralSqlizer extends Sqlizer[BooleanLiteral[SoQLType]] {
-
   def sql(lit: BooleanLiteral[SoQLType])
          (rep: Map[UserColumnId,
           SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
-          escape: Escape) = {
-
+          escape: Escape): ParametricSql = {
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
-        ParametricSql(lit.toString, setParams)
+        ParametricSql(lit.toString(), setParams)
       case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(lit)(ctx) =>
-        ParametricSql(lit.toString, setParams)
+        ParametricSql(lit.toString(), setParams)
       case _ =>
         val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
           stmt.foreach(_.setBoolean(pos, lit.value))
@@ -89,23 +81,20 @@ object BooleanLiteralSqlizer extends Sqlizer[BooleanLiteral[SoQLType]] {
 }
 
 object NullLiteralSqlizer extends Sqlizer[NullLiteral[SoQLType]] {
-
   def sql(lit: NullLiteral[SoQLType])
          (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
-          escape: Escape) =
+          escape: Escape): ParametricSql =
     ParametricSql("null", setParams)
 }
 
 object FunctionCallSqlizer extends Sqlizer[FunctionCall[UserColumnId, SoQLType]] {
-
-
   def sql(expr: FunctionCall[UserColumnId, SoQLType])
          (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
-          escape: Escape) = {
+          escape: Escape): ParametricSql = {
     val fn = SqlFunctions(expr.function.function)
     val ParametricSql(sql, fnSetParams) = fn(expr, rep, setParams, ctx, escape)
     // SoQL parsing bakes parenthesis into the ast tree without explicitly spitting out parenthesis.
@@ -115,12 +104,11 @@ object FunctionCallSqlizer extends Sqlizer[FunctionCall[UserColumnId, SoQLType]]
 }
 
 object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
-
   def sql(expr: ColumnRef[UserColumnId, SoQLType])
          (reps: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
-          escape: Escape) = {
+          escape: Escape): ParametricSql = {
     reps.get(expr.column) match {
       case Some(rep) =>
         val maybeUpperPhysColumns = rep.physColumns.map(toUpper(expr)(_, ctx))
@@ -131,6 +119,5 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
   }
 
   private def toUpper(expr: ColumnRef[UserColumnId, SoQLType])(phyColumn: String, ctx: Context): String =
-    if (expr.typ == SoQLText && useUpper(expr)(ctx) ) s"upper($phyColumn)"
-    else phyColumn
+    if (expr.typ == SoQLText && useUpper(expr)(ctx)) s"upper($phyColumn)" else phyColumn
 }

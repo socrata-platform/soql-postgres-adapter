@@ -7,7 +7,6 @@ import com.socrata.pg.store.{RollupManager, PGSecondaryLogger, PGSecondaryUniver
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.scalalogging.slf4j.Logging
 
-
 /**
  * Handles WorkingCopyCreated Event
  */
@@ -19,11 +18,15 @@ case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
     case 1 =>
       logger.info("create first copy {}", datasetInfo.internalName)
       val (copyInfoSecondary: TruthCopyInfo, sLoader) = createDataset(pgu, datasetInfo.localeName)
-      pgu.secondaryDatasetMapWriter.createInternalNameMapping(datasetInfo.internalName, copyInfoSecondary.datasetInfo.systemId)
-    case copyNumBeyondOne =>
+      pgu.secondaryDatasetMapWriter.createInternalNameMapping(
+        datasetInfo.internalName,
+        copyInfoSecondary.datasetInfo.systemId
+      )
+    case copyNumBeyondOne: Long =>
 
       pgu.datasetMapReader.datasetInfo(datasetId.get).map { truthDatasetInfo =>
-        logger.info("create working copy {} {} {}", datasetInfo.internalName, truthDatasetInfo.toString, copyNumBeyondOne.toString)
+        logger.info("create working copy {} {} {}",
+          datasetInfo.internalName, truthDatasetInfo.toString, copyNumBeyondOne.toString)
         val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
         val copyIdFromSequence = pgu.secondaryDatasetMapWriter.allocateCopyId()
         val newCopyInfo = pgu.datasetMapWriter.unsafeCreateCopy(
@@ -47,7 +50,8 @@ case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
       }
   }
 
-  private def createDataset(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], locale:String): (TruthCopyInfo, SchemaLoader[SoQLType]) = {
+  private def createDataset(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                            locale:String): (TruthCopyInfo, SchemaLoader[SoQLType]) = {
     val copyInfo = pgu.datasetMapWriter.create(locale)
     val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
     sLoader.create(copyInfo)

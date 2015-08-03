@@ -15,11 +15,14 @@ object MigrateSchema extends App {
    * @param args(0) Migration operation to perform.
    *        args(1) Optional dotted path reference the database config tree to migrate
    * */
-  override def main(args: Array[String]) {
+  override def main(args: Array[String]): Unit = {
     // Verify that two arguments were passed
-    if (args.length < 1 || args.length > 2)
+    if (args.length < 1 || args.length > 2) {
       throw new IllegalArgumentException(
-        s"Usage: com.socrata.pg.store.MigrateSchema ${MigrationOperation.values.mkString("|")} [<dotted path reference to database config in config>]")
+        "Usage: com.socrata.pg.store.MigrateSchema" +
+          MigrationOperation.values.mkString("|") +
+          "[<dotted path reference to database config in config>]")
+    }
 
     // Verify that the argument provided is actually a valid operation
     val operation = {

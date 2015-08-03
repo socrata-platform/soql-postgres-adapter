@@ -9,7 +9,7 @@ import com.socrata.datacoordinator.truth.migration.Migration.MigrationOperation.
  * Performs Liquibase migrations on the pg secondary.
  */
 object SchemaMigrator {
-  def apply(databaseTree: String, operation: MigrationOperation, config: Config) {
+  def apply(databaseTree: String, operation: MigrationOperation, config: Config): Unit = {
     for {
       dataSourceInfo <- DataSourceFromConfig(new DataSourceConfig(config, databaseTree))
       conn <- managed(dataSourceInfo.dataSource.getConnection)

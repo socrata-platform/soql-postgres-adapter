@@ -17,9 +17,9 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
           (1001, 112, "foo2"),
           (1002, 114, "foo3")).map { r =>
           Insert(new RowId(r._1), ColumnIdMap()
-            + (new ColumnId(9124), new SoQLID(r._1))
-            + (new ColumnId(9125), new SoQLVersion(r._2))
-            + (new ColumnId(9126), new SoQLText(r._3))
+            + ((new ColumnId(9124), new SoQLID(r._1)))
+            + ((new ColumnId(9125), new SoQLVersion(r._2)))
+            + ((new ColumnId(9126), new SoQLText(r._3)))
           )
         }
 
@@ -31,7 +31,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
           RowDataUpdated(insertOps)
         )
 
-        f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
+        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
 
         for {
           truthCopyInfo <- unmanaged(getTruthCopyInfo(pgu, f.datasetInfo))
@@ -49,21 +49,21 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
         val f = columnsCreatedFixture
         val events = f.events :+ RowDataUpdated(insertOps)
 
-        f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
+        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
 
         val updateOps = Seq(
           (1000, 110, "bar"),
           (1002, 114, "bar3")).map { r =>
           Update(new RowId(r._1), ColumnIdMap()
-            + (new ColumnId(9124), new SoQLID(r._1))
-            + (new ColumnId(9125), new SoQLVersion(r._2))
-            + (new ColumnId(9126), new SoQLText(r._3))
+            + ((new ColumnId(9124), new SoQLID(r._1)))
+            + ((new ColumnId(9125), new SoQLVersion(r._2)))
+            + ((new ColumnId(9126), new SoQLText(r._3)))
           )(None)
         }
 
         val updateEvents = Seq(RowDataUpdated(updateOps))
 
-        f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 2, None, updateEvents.iterator)
+        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 2, None, updateEvents.iterator)
 
         for {
           truthCopyInfo <- unmanaged(getTruthCopyInfo(pgu, f.datasetInfo))
@@ -79,7 +79,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
       val f = columnsCreatedFixture
       val events = f.events :+ RowDataUpdated(insertOps)
 
-      f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
 
       val deleteOps = Seq(
         1000,
@@ -89,7 +89,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
 
       val deleteEvents = Seq(RowDataUpdated(deleteOps))
 
-      f.pgs._version(pgu, f.datasetInfo, f.dataVersion + 2, None, deleteEvents.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 2, None, deleteEvents.iterator)
 
       for {
         truthCopyInfo <- unmanaged(getTruthCopyInfo(pgu, f.datasetInfo))

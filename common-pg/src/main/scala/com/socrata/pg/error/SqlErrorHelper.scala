@@ -10,7 +10,7 @@ case class SqlErrorPattern(sqlState: String, message: Regex)
 
 class SqlErrorHelper(patterns: SqlErrorPattern*) extends Logging {
 
-  def guard[E <: Exception](conn: Connection, exceptionClass: Option[Class[E]])(f : => Unit) {
+  def guard[E <: Exception](conn: Connection, exceptionClass: Option[Class[E]])(f: => Unit): Unit = {
 
     val savepoint = Option(conn.setSavepoint())
     try {
@@ -22,11 +22,13 @@ class SqlErrorHelper(patterns: SqlErrorPattern*) extends Logging {
           pat.message.findFirstMatchIn(ex.getServerErrorMessage.getMessage).isDefined } match {
           case Some(rx) =>
             logger.warn("guard", ex)
-            savepoint.foreach(conn.rollback(_))
-            exceptionClass.foreach(exClass => throw exClass.getDeclaredConstructor(classOf[String]).newInstance(ex.getMessage))
+            savepoint.foreach(conn.rollback)
+            exceptionClass.foreach(
+              exClass => throw exClass.getDeclaredConstructor(classOf[String]).newInstance(ex.getMessage)
+            )
           case None =>
             logger.info("got some PSQL exception, trying to roll back...", ex)
-            savepoint.foreach(conn.rollback(_))
+            savepoint.foreach(conn.rollback)
             throw ex
         }
     } finally {

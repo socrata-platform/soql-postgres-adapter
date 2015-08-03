@@ -10,13 +10,13 @@ import com.typesafe.scalalogging.slf4j.Logging
 import org.postgresql.util.PSQLException
 
 object RowSizeBufferSqlErrorContinue extends SqlErrorHandler {
-  def guard(conn: Connection)(f: => Unit) {
+  def guard(conn: Connection)(f: => Unit): Unit = {
     RowSizeBufferSqlErrorHandler.guard(conn, None)(f)
   }
 }
 
 object RowSizeBufferSqlErrorResync extends SqlErrorHandler {
-  def guard(conn: Connection)(f: => Unit) {
+  def guard(conn: Connection)(f: => Unit): Unit = {
     RowSizeBufferSqlErrorHandler.guard(conn, Some(classOf[ResyncSecondaryException]))(f)
   }
 }
@@ -25,34 +25,33 @@ object RowSizeBufferSqlErrorHandler extends Logging {
   /**
    * Catch index row size buffer exception and optionally rethrow another exception or just ignore it.
    */
-  def guard[E <: Exception](conn: Connection, exceptionClass: Option[Class[E]])(f : => Unit) {
-
+  def guard[E <: Exception](conn: Connection, exceptionClass: Option[Class[E]])(f: => Unit): Unit = {
     val savepoint = Option(conn.setSavepoint())
 
-    def resyncIfIndexRowSizeError(ex: PSQLException) {
+    def resyncIfIndexRowSizeError(ex: PSQLException): Unit = {
       isIndexRowSizeError(ex) match {
         case Success(indexOpt) =>
           val index = indexOpt.getOrElse("*unknown*")
-          val msg = s"index row size buffer exceeded $index " + exceptionClass.map("rethrow " + _.getName).getOrElse("ignore")
+          val exAction = exceptionClass.map("rethrow " + _.getName).getOrElse("ignore")
+          val msg = s"index row size buffer exceeded $index $exAction"
           logger.warn(msg)
-          savepoint.foreach(conn.rollback(_))
+          savepoint.foreach(conn.rollback)
           exceptionClass.foreach(exClass => throw exClass.getDeclaredConstructor(classOf[String]).newInstance(msg))
-        case Failure(ex) =>
-          logger.info("got some PSQL exception, trying to roll back...", ex)
-          savepoint.foreach(conn.rollback(_))
-          throw ex
+        case Failure(innerEx) =>
+          logger.info("got some PSQL exception, trying to roll back...", innerEx)
+          savepoint.foreach(conn.rollback)
+          throw innerEx
       }
     }
 
     try {
       f
     } catch {
-      case ex: PSQLException =>
-        resyncIfIndexRowSizeError(ex)
-      case itex: InvocationTargetException => // copy in calls have sql exceptions wrapped in invocation target exception.
+      case ex: PSQLException => resyncIfIndexRowSizeError(ex)
+      case itex: InvocationTargetException => // sql exceptions wrapped in invocation target exception
         itex.getCause match {
           case ex: PSQLException => resyncIfIndexRowSizeError(ex)
-          case ex => throw ex
+          case ex: Throwable => throw ex
         }
     } finally {
       try {
@@ -76,9 +75,9 @@ object RowSizeBufferSqlErrorHandler extends Logging {
         ex.getServerErrorMessage.getMessage match {
           case IndexRowSizeError(_, _, index) => Success(Some(index))
           case IndexRowSizeErrorWoIndexName(_, _) => Success(None)
-          case msg => Failure(ex)
+          case _ => Failure(ex)
         }
-      case unknownState => Failure(ex)
+      case _ => Failure(ex)
     }
   }
 

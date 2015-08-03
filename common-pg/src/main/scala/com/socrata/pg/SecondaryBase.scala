@@ -14,7 +14,7 @@ trait SecondaryBase {
 
   val postgresUniverseCommon: PostgresUniverseCommon
 
-  protected def populateDatabase(conn: Connection) { }
+  protected def populateDatabase(conn: Connection): Unit = { }
 
   protected def withDb[T](dsInfo:DSInfo)(f: (Connection) => T): T = {
     for {
@@ -25,14 +25,16 @@ trait SecondaryBase {
     }
   }
 
-  protected def withPgu[T](dsInfo:DSInfo, truthStoreDatasetInfo:Option[DatasetInfo])(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
+  protected def withPgu[T](dsInfo:DSInfo, truthStoreDatasetInfo:Option[DatasetInfo])
+                          (f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
     withDb(dsInfo) { conn =>
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, postgresUniverseCommon, truthStoreDatasetInfo)
       f(pgu)
     }
   }
 
-  protected def withPgu[T](truthStoreDatasetInfo:Option[DatasetInfo])(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
+  protected def withPgu[T](truthStoreDatasetInfo:Option[DatasetInfo])
+                          (f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
     for {
       dsInfo <- DataSourceFromConfig(dsConfig)
     } yield {

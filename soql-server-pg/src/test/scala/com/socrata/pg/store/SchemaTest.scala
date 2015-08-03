@@ -1,21 +1,17 @@
 package com.socrata.pg.store
 
+import com.rojoma.json.v3.util.JsonUtil
+import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
+import com.socrata.pg.Schema._
+import com.socrata.pg.query.PGQueryTestBase
+import com.socrata.pg.server.{PGQueryServerDatabaseTestBase, QueryServerTest}
+import com.socrata.pg.store.PGSecondaryUtil._
+
 import scala.io.Source
 import scala.language.reflectiveCalls
 
-import com.rojoma.json.v3.util.JsonUtil
-import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
-import com.socrata.pg.Schema
-import com.socrata.pg.server.{PGQueryServerDatabaseTestBase, QueryServerTest}
-import com.socrata.pg.query.PGQueryTestBase
-
 class SchemaTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase with PGQueryTestBase {
-  import com.socrata.pg.store.PGSecondaryUtil._
-  import Schema._
-
-  override def beforeAll() {
-    createDatabases()
-  }
+  override def beforeAll: Unit = createDatabases()
 
   test("schema json codec") {
     val dsConfig = new DataSourceConfig(config, "database")
@@ -23,7 +19,7 @@ class SchemaTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase 
     for (dsInfo <- ds) {
       withPgu() { pgu =>
       val f = columnsCreatedFixture
-      f.pgs._version(pgu, f.datasetInfo, f.dataVersion+1, None, f.events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion+1, None, f.events.iterator)
       val qs = new QueryServerTest(dsInfo, pgu)
       val schema = qs.getSchema(testInternalName, None).get
       val schemaj = JsonUtil.renderJson(schema)

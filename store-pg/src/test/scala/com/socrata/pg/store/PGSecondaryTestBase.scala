@@ -9,7 +9,7 @@ import com.socrata.pg.store.PGSecondaryUtil._
 import com.socrata.soql.types._
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import org.apache.log4j.PropertyConfigurator
-import org.scalatest.{Matchers, BeforeAndAfterAll, FunSuite}
+import org.scalatest.{BeforeAndAfterAll, FunSuite, Matchers}
 import com.socrata.datacoordinator.secondary.ColumnInfo
 import com.socrata.datacoordinator.secondary.WorkingCopyCreated
 import com.socrata.datacoordinator.secondary.ResyncSecondaryException
@@ -19,8 +19,7 @@ import com.socrata.datacoordinator.secondary.DatasetInfo
 import org.joda.time.DateTime
 
 abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAndAfterAll with DatabaseTestBase {
-
-  override def beforeAll = {
+  override def beforeAll(): Unit = {
     PropertyConfigurator.configure(Propertizer("log4j", config.getConfig("log4j")))
     createDatabases()
   }

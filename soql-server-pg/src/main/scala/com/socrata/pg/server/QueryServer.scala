@@ -4,18 +4,18 @@ import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
 import java.sql.Connection
 import java.util.concurrent.{ExecutorService, Executors}
+import javax.servlet.http.HttpServletResponse
 
-import scala.language.existentials
-
+import buildinfo.BuildInfo
 import com.rojoma.json.v3.ast.JString
 import com.rojoma.json.v3.util.JsonUtil
 import com.rojoma.simplearm.Managed
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.Row
-import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
-import com.socrata.datacoordinator.id.{RollupName, ColumnId, UserColumnId}
+import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
+import com.socrata.datacoordinator.id.{ColumnId, RollupName, UserColumnId}
 import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
 import com.socrata.datacoordinator.truth.metadata._
 import com.socrata.datacoordinator.util.CloseableIterator
@@ -25,48 +25,49 @@ import com.socrata.http.common.livenesscheck.LivenessCheckInfo
 import com.socrata.http.server._
 import com.socrata.http.server.curator.CuratorBroker
 import com.socrata.http.server.implicits._
-import com.socrata.http.server.livenesscheck.{LivenessCheckConfig, LivenessCheckResponder}
+import com.socrata.http.server.livenesscheck.LivenessCheckResponder
 import com.socrata.http.server.responses._
-import com.socrata.http.server.routing.{SimpleResource, SimpleRouteContext}
-import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, StrongEntityTag}
+import com.socrata.http.server.routing.SimpleResource
+import com.socrata.http.server.routing.SimpleRouteContext._
 import com.socrata.http.server.util.Precondition._
-import com.socrata.http.server.util.handlers.{NewLoggingHandler, ThreadRenamingHandler}
 import com.socrata.http.server.util.RequestId.ReqIdHeader
-import com.socrata.pg.{SecondaryBase, Version}
-import com.socrata.pg.Schema._
+import com.socrata.http.server.util.handlers.{NewLoggingHandler, ThreadRenamingHandler}
+import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, StrongEntityTag}
+import com.socrata.pg.SecondaryBase
 import com.socrata.pg.query.{DataSqlizerQuerier, RowCount, RowReaderQuerier}
+import com.socrata.pg.Schema._
 import com.socrata.pg.server.config.{DynamicPortMap, QueryServerConfig}
-import com.socrata.pg.soql._
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
+import com.socrata.pg.soql._
 import com.socrata.pg.store._
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.typed.CoreExpr
-import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion}
 import com.socrata.soql.types.obfuscation.CryptProvider
+import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion}
 import com.socrata.thirdparty.curator.{CuratorFromConfig, DiscoveryFromConfig}
+import com.socrata.thirdparty.metrics.{MetricsReporter, SocrataHttpSupport}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
-import com.socrata.thirdparty.metrics.{SocrataHttpSupport, Metrics, MetricsReporter}
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.slf4j.Logging
-import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 import org.apache.curator.x.discovery.ServiceInstanceBuilder
 import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
 
-class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase with Logging {
-  import QueryServer._
+import scala.language.existentials
 
-  val dsConfig: DataSourceConfig = null // unused
+class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase with Logging {
+  import QueryServer._ // scalastyle:ignore import.grouping
+
+  val dsConfig: DataSourceConfig = null // scalastyle:ignore null // unused
 
   val postgresUniverseCommon = PostgresUniverseCommon
 
   private val JsonContentType = "application/json; charset=utf-8"
 
   private val routerSet = locally {
-    import SimpleRouteContext._
     Routes(
       Route("/schema", SchemaResource),
       Route("/rollups", RollupResource),
@@ -85,7 +86,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   }
 
   object VersionResource extends SimpleResource {
-    val response = OK ~> Json(Version("soql-server-pg"))
+    val response = OK ~> Content("application/json", BuildInfo.toJson)
 
     override val get = { _: HttpRequest => response }
   }
@@ -105,8 +106,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
           OK ~>
             copyInfoHeader(copyInfo.copyNumber, copyInfo.dataVersion, copyInfo.lastModified) ~>
             Write(JsonContentType)(JsonUtil.writeJson(_, schema, buffer = true))
-        case None =>
-          NotFound
+        case None => NotFound
       }
     }
   }
@@ -151,7 +151,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
 
     logger.info("Performing query on dataset " + datasetId)
-    streamQueryResults(analysis, datasetId, reqRowCount, copy, rollupName, req.precondition, req.dateTimeHeader("If-Modified-Since"))
+    streamQueryResults(analysis, datasetId, reqRowCount, copy, rollupName,
+      req.precondition, req.dateTimeHeader("If-Modified-Since"))
   }
 
   /**
@@ -161,21 +162,25 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
    */
   def streamQueryResults(
     analysis: SoQLAnalysis[UserColumnId, SoQLType],
-    datasetId:String,
+    datasetId: String,
     reqRowCount: Boolean,
     copy: Option[String],
     rollupName: Option[RollupName],
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
-  ) (resp:HttpServletResponse) = {
+  ) (resp:HttpServletResponse): Unit = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetId) match {
+        case None => NotFound(resp)
         case Some(dsId) =>
           pgu.datasetMapReader.datasetInfo(dsId) match {
+            case None => NotFound(resp)
             case Some(datasetInfo) =>
               def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
-
-              execQuery(pgu, datasetId, datasetInfo, analysis, reqRowCount, copy, rollupName, precondition, ifModifiedSince) match {
+              execQuery(pgu, datasetId, datasetInfo, analysis, reqRowCount, copy,
+                rollupName, precondition, ifModifiedSince) match {
+                case NotModified(etags) => notModified(etags)(resp)
+                case PreconditionFailed => responses.PreconditionFailed(resp)
                 case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
                   // Very weird separation of concerns between execQuery and streaming. Most likely we will
                   // want yet-another-refactoring where much of execQuery is lifted out into this function.
@@ -183,24 +188,17 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
                   ETag(etag)(resp)
                   copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
                   rollupName.foreach(r => Header("X-SODA2-Rollup", r.underlying)(resp))
-                  for (r <- results) yield {
-                    CJSONWriter.writeCJson(datasetInfo, qrySchema, r, reqRowCount, r.rowCount, dataVersion, lastModified)(resp)
+                  for { r <- results } yield {
+                    CJSONWriter.writeCJson(datasetInfo, qrySchema,
+                      r, reqRowCount, r.rowCount, dataVersion, lastModified)(resp)
                   }
-                case NotModified(etags) =>
-                  notModified(etags)(resp)
-                case PreconditionFailed =>
-                  responses.PreconditionFailed(resp)
               }
-            case None =>
-              NotFound(resp)
           }
-        case None =>
-          NotFound(resp)
       }
     }
   }
 
-  def execQuery(
+  def execQuery( // scalastyle:ignore method.length parameter.number
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     datasetInternalName: String,
     datasetInfo: DatasetInfo,
@@ -212,7 +210,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     ifModifiedSince: Option[DateTime]
   ): QueryResult = {
 
-    def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], latestCopy: CopyInfo, analysis: SoQLAnalysis[UserColumnId, SoQLType], rowCount: Boolean) = {
+    def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                 latestCopy: CopyInfo,
+                 analysis: SoQLAnalysis[UserColumnId, SoQLType],
+                 rowCount: Boolean) = {
       val cryptProvider = new CryptProvider(latestCopy.datasetInfo.obfuscationKey)
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
@@ -221,18 +222,17 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
       )
       val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit)
 
-      for (readCtx <- pgu.datasetReader.openDataset(latestCopy)) yield {
+      for { readCtx <- pgu.datasetReader.openDataset(latestCopy) } yield {
         val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema
         val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
         val qrySchema = querySchema(pgu, analysis, latestCopy)
-        val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor(_))
+        val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor)
         val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
         val sqlReps = querier.getSqlReps(systemToUserColumnMap)
 
         val results = querier.query(
           analysis,
           (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) => {
-            import Sqlizer._
             Sqlizer.sql((a, tableName, sqlReps.values.toSeq))(sqlReps, Seq.empty, sqlCtx, escape)
           },
           (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
@@ -284,8 +284,13 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
 
     new PGSecondaryRowReader[SoQLType, SoQLValue] (
       conn,
-      new PostgresRepBasedDataSqlizer(tableName, pgu.datasetContextFactory(schema), pgu.commonSupport.copyInProvider) with DataSqlizerQuerier[SoQLType, SoQLValue],
-      pgu.commonSupport.timingReport) with RowReaderQuerier[SoQLType, SoQLValue]
+      new PostgresRepBasedDataSqlizer(
+        tableName,
+        pgu.datasetContextFactory(schema),
+        pgu.commonSupport.copyInProvider
+      ) with DataSqlizerQuerier[SoQLType, SoQLValue],
+      pgu.commonSupport.timingReport
+    ) with RowReaderQuerier[SoQLType, SoQLValue]
   }
 
   /**
@@ -313,7 +318,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
             coreExpr.typ == SoQLID,
             false, // isUserKey
             coreExpr.typ == SoQLVersion
-          )(SoQLTypeContext.typeNamespace, null)
+          )(SoQLTypeContext.typeNamespace, null) // scalastyle:ignore null
           map + (cid -> cinfo)
       }
     }
@@ -366,7 +371,9 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     }
   }
 
-  private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInfo: DatasetInfo, reqCopy: Option[String]): CopyInfo = {
+  private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                      datasetInfo: DatasetInfo,
+                      reqCopy: Option[String]): CopyInfo = {
     val intRx = "^[0-9]+$".r
     val rd = pgu.datasetMapReader
     reqCopy match {
@@ -407,8 +414,9 @@ object QueryServer extends DynamicPortMap with Logging {
 
   def withDefaultAddress(config: Config): Config = {
     val ifaces = ServiceInstanceBuilder.getAllLocalIPs
-    if(ifaces.isEmpty) config
-    else {
+    if (ifaces.isEmpty) {
+      config
+    } else {
       val first = JString(ifaces.iterator.next().getHostAddress)
       val addressConfig = ConfigFactory.parseString("com.socrata.soql-server-pg.service-advertisement.address=" + first)
       config.withFallback(addressConfig)
@@ -419,19 +427,18 @@ object QueryServer extends DynamicPortMap with Logging {
     new QueryServerConfig(withDefaultAddress(ConfigFactory.load()), "com.socrata.soql-server-pg")
   } catch {
     case e: Exception =>
-      Console.err.println(e)
+      logger.error(e.toString)
       sys.exit(1)
   }
 
   PropertyConfigurator.configure(Propertizer("log4j", config.log4j))
 
-  def main(args:Array[String]) {
-
+  def main(args:Array[String]): Unit = {
     val address = config.discovery.address
     val datasourceConfig = new DataSourceConfig(config.getRawConfig("store"), "database")
 
     implicit object executorResource extends com.rojoma.simplearm.Resource[ExecutorService] {
-      def close(a: ExecutorService) { a.shutdown() }
+      def close(a: ExecutorService): Unit = a.shutdown()
     }
 
     for {
