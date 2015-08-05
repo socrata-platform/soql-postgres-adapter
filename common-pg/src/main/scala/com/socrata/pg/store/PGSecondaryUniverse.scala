@@ -43,6 +43,7 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
   with RowReaderProvider[SoQLType, SoQLValue]
   with TruncatorProvider
   with DatasetDropperProvider
+  with DatasetRemoverProvider
   with TableCleanupProvider
 {
   import commonSupport._
@@ -122,6 +123,11 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
         // Does not apply to secondary.  Suppress what data coordinator implementation does.
       }
     }
+
+  lazy val datasetRemover =
+    new SqlDatasetRemover (conn, writeLockTimeout, datasetMapWriter) {
+    }
+
   val tableCleanupDelay = new FiniteDuration (0, MILLISECONDS)
   lazy val tableCleanup: TableCleanup =
     new SqlTableCleanup(conn, tableCleanupDelay)
