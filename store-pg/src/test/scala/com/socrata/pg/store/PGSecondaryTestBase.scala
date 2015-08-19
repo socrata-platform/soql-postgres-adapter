@@ -90,8 +90,4 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
     pgu.commit()
   }
 
-  def cleanupDroppedTables(pgu: PGSecondaryUniverse[SoQLType, SoQLValue]) = {
-    while (pgu.tableCleanup.cleanupPendingDrops()) { }
-    pgu.commit()
-  }
 }

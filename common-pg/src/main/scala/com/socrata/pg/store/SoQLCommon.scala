@@ -57,7 +57,6 @@ class PostgresUniverseCommon(val tablespace: String => Option[String],
   // unused
   def logTableCleanupDeleteEvery: FiniteDuration = ???
   def logTableCleanupDeleteOlderThan: FiniteDuration = ???
-  def tableCleanupDelay: FiniteDuration = ???
 
   val SystemColumns = SoQLSystemColumns
 

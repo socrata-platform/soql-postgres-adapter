@@ -21,7 +21,6 @@ class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBas
       pgu.commit()
       val allCopies = createTwoCopiesAndRollup(pgu, truthDatasetId, secDatasetId, publishSecondCopy = true)
       dropDataset(pgu, truthDatasetId)
-      cleanupDroppedTables(pgu)
       allCopies.foreach { copy =>
         val dataTableName = copy.dataTableName
         hasDataTables(pgu.conn, dataTableName, copy.datasetInfo) should be (false)
@@ -39,7 +38,6 @@ class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBas
       val copy2 = allCopies(1)
       CopyDroppedHandler(pgu, copy2)
       pgu.commit()
-      cleanupDroppedTables(pgu)
       rollupTableExists(pgu, copy1)
       val dataTableName = copy2.dataTableName
       hasDataTables(pgu.conn, dataTableName, copy2.datasetInfo) should be (false)
