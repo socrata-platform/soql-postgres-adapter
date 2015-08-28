@@ -84,7 +84,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           val datasetId = copyInfo.datasetInfo.systemId
           for (copy <- pgu.datasetMapReader.allCopies(copyInfo.datasetInfo)) {
             val rm = new RollupManager(pgu, copy)
-            rm.dropRollups(immediate = false)
+            rm.dropRollups(immediate = true)
           }
           pgu.datasetDropper.dropDataset(datasetId)
           pgu.commit()
