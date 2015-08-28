@@ -2,11 +2,10 @@ package com.socrata.pg.store
 
 import java.sql.Connection
 import com.socrata.datacoordinator.truth.universe._
-import com.socrata.datacoordinator.truth.universe.sql.{SqlTableCleanup, PostgresCommonSupport}
+import com.socrata.datacoordinator.truth.universe.sql.{PostgresCommonSupport}
 import com.socrata.datacoordinator.truth.loader.{DatasetContentsCopier, Logger}
 import com.socrata.datacoordinator.truth.metadata._
 import com.socrata.datacoordinator.util.NullCache
-import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.truth.loader.sql._
 import org.joda.time.DateTime
 import com.socrata.datacoordinator.truth.metadata.sql.PostgresDatasetMapReader
@@ -22,7 +21,7 @@ import com.socrata.datacoordinator.truth.metadata.DatasetInfo
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
-
+ 
 /**
  *
  */
@@ -42,7 +41,6 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
   with RowReaderProvider[SoQLType, SoQLValue]
   with TruncatorProvider
   with DatasetDropperProvider
-  with TableCleanupProvider
 {
   import commonSupport._
   private val txnStart = DateTime.now()
@@ -121,7 +119,4 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
         // Does not apply to secondary.  Suppress what data coordinator implementation does.
       }
     }
-
-  lazy val tableCleanup: TableCleanup =
-    new SqlTableCleanup(conn, 0)
 }

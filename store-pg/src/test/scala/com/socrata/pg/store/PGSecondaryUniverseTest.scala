@@ -5,13 +5,11 @@ import java.sql.Connection
 import com.socrata.datacoordinator.secondary
 import com.socrata.datacoordinator.id._
 import com.socrata.datacoordinator.truth.metadata._
-import com.socrata.datacoordinator.truth.universe.sql.SqlTableCleanup
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.soql.environment.TypeName
 import com.socrata.soql.types._
 import org.postgresql.util.PSQLException
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Matchers}
-
 /**
  *
  */
@@ -194,53 +192,5 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
   // TODO Verify this statement: Can't delete the table if it's the only instance of the table that exists
   // TODO Verify this statement: Can't delete the table if it's published
   // TODO Verify this statement: Maybe can delete the table if it's a snapshot?
-  test("Universe can delete a table by adding row to pending_table_drops") {
-    withDb() { conn =>
-      val (_, copyInfo, sLoader) = createTable(conn)
-      sLoader.drop(copyInfo)
-      val dataTableName = copyInfo.dataTableName
-      // Check to see if dropped table is in pending drop table operations collection
-      val tableName = fetchColumnFromTable(connection = conn, Map(
-        "tableName" -> "pending_table_drops",
-        "columnName" -> "table_name",
-        "whereClause" -> s"table_name = '$dataTableName'"
-      ))
-      assert(tableName.length > 0, s"Expected to find $dataTableName in the pending_table_drops table")
-    }
-  }
 
-  test("Universe can delete a table that is referenced by pending_table_drops") {
-    withDb() { conn =>
-      val (_, copyInfo, sLoader) = createTable(conn)
-      sLoader.drop(copyInfo)
-      val dataTableName = copyInfo.dataTableName
-      updateColumnValueInTable(connection = conn, options = Map(
-        "tableName" -> "pending_table_drops",
-        "columnName" -> "queued_at",
-        "columnValue" -> "now() - ('2 day' :: INTERVAL)",
-        "whereClause" -> s"table_name = '$dataTableName'"
-      ))
-      val deletedSomeTables = new SqlTableCleanup(conn).cleanupPendingDrops()
-      assert(deletedSomeTables, "Expected to have deleted at least one row from pending_table_drops")
-      val tableName = fetchColumnFromTable(connection = conn, Map(
-        "tableName" -> "pending_table_drops",
-        "columnName" -> "table_name",
-        "whereClause" -> s"table_name = '$dataTableName'"
-      ))
-      assert(tableName.length == 0, s"Expected NOT to find $dataTableName in the pending_table_drops table")
-      val publicTableName = fetchColumnFromTable(connection = conn, Map(
-        "tableName" -> "pg_tables",
-        "columnName" -> "tablename",
-        "whereClause" -> s"schemaname = 'public' AND tablename = '$dataTableName'"
-      ))
-      assert(publicTableName.length == 0, "Expected NOT to find $dataTableName in the pg_tables table")
-    }
-  }
-
-  // TODO Is this deleting a "working copy" ?
-  // TODO Is this deleting a "snapshot" ?
-  // TODO Does it matter if the dataset has been published or not?
-  test("Universe can delete a published copy") {
-
-  }
 }
