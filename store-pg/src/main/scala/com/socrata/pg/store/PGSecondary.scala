@@ -55,15 +55,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
   private val finished = new CountDownLatch(1)
 
-  private val tableDropper = startTableDropper()
-
   private val resyncBatchSize = storeConfig.resyncBatchSize
 
   // Called when this process is shutting down (or being killed)
   def shutdown() {
     logger.info("shutting down {} {} ...", dsConfig.host, dsConfig.database)
     finished.countDown()
-    tableDropper.join()
     dsInfo.close()
     logger.info("shut down {} {}", dsConfig.host, dsConfig.database)
   }
@@ -467,27 +464,6 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       pgu.prevettedLoader(copyCtx, pgu.logger(truthCopyInfo.datasetInfo, "user"))
   }
 
-  private def startTableDropper() = {
-    val tableDropper = new Thread() {
-      setName(s"pg-sec-table-dropper-${storeConfig.database.host}")
-      override def run() {
-        while(!finished.await(60, TimeUnit.SECONDS)) {
-          try {
-            withPgu(dsInfo, None) { pgu =>
-              while(finished.getCount > 0 && pgu.tableCleanup.cleanupPendingDrops()) {
-                pgu.commit()
-              }
-            }
-          } catch {
-            case e: Exception =>
-              logger.error("Unexpected error while dropping secondary tables", e)
-          }
-        }
-      }
-    }
-    tableDropper.start()
-    tableDropper
-  }
 
   private def dataSourceFromConfig(config: DataSourceConfig): DSInfo with Closeable = {
     val dataSource = new PGSimpleDataSource
