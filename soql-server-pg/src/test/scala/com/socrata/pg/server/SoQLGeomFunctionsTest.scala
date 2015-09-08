@@ -100,4 +100,12 @@ class SoQLGeomFunctionsTest extends SoQLTest {
   test("curated region test too complex") {
     compareSoqlResult("select name, curated_region_test(multipolygon, 1) as test_result where name = 'Chili'", "select-curated-region-test-too-complex.json")
   }
+
+  test("curated region test invalid geometry") {
+    compareSoqlResult(
+      """select name, curated_region_test('multipolygon(((1 1, 2 1, 2 2, 1 2, 1 1),
+        |                                                (1 1, 2 1, 2 2, 1 2, 1 1)))'::multipolygon, 50) as test_result
+        | where name = 'Chili'""".stripMargin,
+     "select-curated-region-test-invalid-geometry.json")
+  }
 }
