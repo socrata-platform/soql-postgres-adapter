@@ -281,7 +281,7 @@ object SqlFunctions {
 
   private def curatedRegionTest = {
     formatCall(
-      """case when st_npoints(%s) > %s then 'too many points'
+      """case when st_npoints(%s) > %s then 'too complex'
               when st_xmin(%s) < -180 or st_xmax(%s) > 180 or st_ymin(%s) < -90 or st_ymax(%s) > 90 then 'out of bound'
               when not st_isvalid(%s) then st_isvaliddetail(%s)::text
          end

@@ -199,6 +199,17 @@ class SqlizerTest extends FunSuite with Matchers {
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq("A", "X", "B", "Y"))
   }
+
+  test("curated region test") {
+    val soql = "select curated_region_test(multipolygon, 20)"
+    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    sql.replaceAll("""\s+""", " ") should be ("""SELECT
+                  (case when st_npoints(multipolygon) > ? then 'too complex'
+                        when st_xmin(multipolygon) < -180 or st_xmax(multipolygon) > 180 or st_ymin(multipolygon) < -90 or st_ymax(multipolygon) > 90 then 'out of bound'
+                        when not st_isvalid(multipolygon) then st_isvaliddetail(multipolygon)::text
+                   end ) FROM t1""".replaceAll("""\s+""", " "))
+    setParams.length should be (1)
+  }
 }
 
 object SqlizerTest {
