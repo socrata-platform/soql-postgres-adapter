@@ -108,6 +108,8 @@ object SqlFunctions {
     TextToPolygon -> formatCall("ST_GeomFromText(%s, 4326)") _,
     TextToMultiPolygon -> formatCall("ST_GeomFromText(%s, 4326)") _,
 
+    CuratedRegionTest -> curatedRegionTest,
+
     Case -> caseCall _,
 
     // aggregate functions
@@ -275,5 +277,15 @@ object SqlFunctions {
     val ParametricSql(r, setParamsLR) = Sqlizer.sql(suffixWildcard)(rep, setParamsL, ctx, escape)
     val s = s"$l $fnName $r"
     ParametricSql(s, setParamsLR)
+  }
+
+  private def curatedRegionTest = {
+    formatCall(
+      """case when st_npoints(%s) > %s then 'too many points'
+              when st_xmin(%s) < -180 or st_xmax(%s) > 180 or st_ymin(%s) < -90 or st_ymax(%s) > 90 then 'out of bound'
+              when not st_isvalid(%s) then st_isvaliddetail(%s)::text
+         end
+      """.stripMargin,
+      Some(Seq(0, 1, 0, 0, 0, 0, 0, 0))) _
   }
 }
