@@ -16,11 +16,12 @@ object Dependencies {
     val simpleArm = "1.1.10"
     val slf4j = "1.7.5"
     val socrataUtils = "0.8.0"
-    val socrataThirdPartyUtil = "3.1.2"
+    val socrataCuratorUtils = "1.0.1"
+    val socrataThirdPartyUtils = "4.0.1"
     val socrataHttpCuratorBroker = "3.3.0"
-    val soqlStdlib = "0.5.4"
+    val soqlStdlib = "0.7.3"
     val typesafeConfig = "1.0.0"
-    val dataCoordinator = "0.7.10"
+    val dataCoordinator = "0.7.17"
     val typesafeScalaLogging = "1.1.0"
     val rojomaJson = "3.2.0"
     val metricsJetty = "3.1.0"
@@ -54,7 +55,8 @@ object Dependencies {
 
   val socrataUtil = "com.socrata" %% "socrata-utils" % versions.socrataUtils
 
-  val socrataThirdPartyUtil = "com.socrata" %% "socrata-thirdparty-utils" % versions.socrataThirdPartyUtil
+  val socrataCuratorUtils = "com.socrata" %% "socrata-curator-utils" % versions.socrataCuratorUtils
+  val socrataThirdPartyUtils = "com.socrata" %% "socrata-thirdparty-utils" % versions.socrataThirdPartyUtils
 
   val socrataHttpCuratorBroker = "com.socrata" %% "socrata-http-curator-broker" % versions.socrataHttpCuratorBroker
 
