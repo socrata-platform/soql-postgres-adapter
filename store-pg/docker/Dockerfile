@@ -1,4 +1,4 @@
-FROM registry.docker.aws-us-west-2-infrastructure.socrata.net:5000/internal/secondary-watcher:0.7.10_1669_b2108da8
+FROM registry.docker.aws-us-west-2-infrastructure.socrata.net:5000/internal/secondary-watcher:0.7.17_2570_f0bf37db
 
 # TODO expose JMX
 # EXPOSE
