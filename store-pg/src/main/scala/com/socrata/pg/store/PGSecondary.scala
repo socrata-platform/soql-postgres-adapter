@@ -3,7 +3,7 @@ package com.socrata.pg.store
 import java.io.Closeable
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
-import buildinfo.BuildInfo
+import com.socrata.pg.BuildInfo
 import com.mchange.v2.c3p0.DataSources
 import com.rojoma.simplearm.Managed
 import com.socrata.datacoordinator.common.DataSourceConfig

@@ -6,7 +6,7 @@ import java.sql.Connection
 import java.util.concurrent.{ExecutorService, Executors}
 import javax.servlet.http.HttpServletResponse
 
-import buildinfo.BuildInfo
+import com.socrata.pg.BuildInfo
 import com.rojoma.json.v3.ast.JString
 import com.rojoma.json.v3.util.JsonUtil
 import com.rojoma.simplearm.Managed
