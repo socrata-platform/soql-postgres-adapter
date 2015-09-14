@@ -108,4 +108,8 @@ class SoQLGeomFunctionsTest extends SoQLTest {
         | where name = 'Chili'""".stripMargin,
      "select-curated-region-test-invalid-geometry.json")
   }
+
+  test("curated region test contains null") {
+    compareSoqlResult("select name, curated_region_test(multipolygon, 1) as test_result where code = 'FOO'", "select-curated-region-test-contains-null.json")
+  }
 }

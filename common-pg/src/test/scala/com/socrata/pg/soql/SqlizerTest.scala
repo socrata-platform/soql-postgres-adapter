@@ -205,6 +205,7 @@ class SqlizerTest extends FunSuite with Matchers {
                   (case when st_npoints(multipolygon) > ? then 'too complex'
                         when st_xmin(multipolygon) < -180 or st_xmax(multipolygon) > 180 or st_ymin(multipolygon) < -90 or st_ymax(multipolygon) > 90 then 'out of bounds'
                         when not st_isvalid(multipolygon) then st_isvalidreason(multipolygon)::text
+                        when (multipolygon) is null then 'empty'
                    end ) FROM t1""".replaceAll("""\s+""", " "))
     setParams.length should be (1)
   }

@@ -289,8 +289,9 @@ object SqlFunctions {
       """case when st_npoints(%s) > %s then 'too complex'
               when st_xmin(%s) < -180 or st_xmax(%s) > 180 or st_ymin(%s) < -90 or st_ymax(%s) > 90 then 'out of bounds'
               when not st_isvalid(%s) then st_isvalidreason(%s)::text
+              when (%s) is null then 'empty'
          end
       """.stripMargin,
-      Some(Seq(0, 1, 0, 0, 0, 0, 0, 0))) _
+      Some(Seq(0, 1, 0, 0, 0, 0, 0, 0, 0))) _
   }
 }
