@@ -6,6 +6,8 @@ object BuildSettings {
   val buildSettings: Seq[Setting[_]] = Seq(
     fork in test := true,
     scalacOptions ++= Seq("-language:implicitConversions"),
+    // For debugging, disable stylecheck by uncommenting the next line
+    // com.socrata.sbtplugins.StylePlugin.StyleKeys.styleFailOnError in Compile := false,
     BuildInfoKeys.buildInfoPackage := "com.socrata.pg"
   )
 

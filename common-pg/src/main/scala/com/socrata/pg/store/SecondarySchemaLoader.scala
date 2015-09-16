@@ -106,7 +106,7 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
   private def tableName(columnInfo: Iterable[ColumnInfo[CT]]) = columnInfo.head.copyInfo.dataTableName
 
   private def tablespaceSqlPart(tablespace: Option[String]): String = {
-    tablespace.map(" TABLESPACE $_" + _).getOrElse("")
+    tablespace.map(" TABLESPACE " + _).getOrElse("")
   }
 }
 
