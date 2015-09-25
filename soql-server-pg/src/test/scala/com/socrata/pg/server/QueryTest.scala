@@ -40,7 +40,7 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase w
       val rowValues = row.row.values.toSet
 
       // Check that all our dummy values can be read; except for json.
-      dummyVals filterKeys (!Set(TypeName("json")).contains(_)) foreach {
+      dummyVals filterKeys (!UnsupportedTypes.contains(_)) foreach {
         (v) => assert(rowValues.contains(v._2), "Could not find " + v + " in row values: " + rowValues)
       }
 
