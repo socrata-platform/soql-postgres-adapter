@@ -93,6 +93,15 @@ class SoQLGeomFunctionsTest extends SoQLTest {
     compareSoqlResult("select distance_in_meters(point, multipolygon) as distance_in_meters where code = 'SPRINT-EVO'", "select-distance-columns.json")
   }
 
+  test("simplify geometry") {
+    compareSoqlResult(
+      """select name,
+                simplify('polygon((1 1, 1.5 1, 2 1, 2 1.5,  2 2, 1.5 2,  1 2, 1 1.5, 1 1))'::polygon, 0.5) as simplified,
+                'polygon((1 1, 2 1, 2 2, 1 2, 1 1))'::polygon as original
+          where name = 'Chili'""",
+      "select-simply-geometry.json")
+  }
+
   test("curated region test") {
     compareSoqlResult("select name, curated_region_test(multipolygon, 10) as test_result where name = 'Chili'", "select-curated-region-test.json")
   }

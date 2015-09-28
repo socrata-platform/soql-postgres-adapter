@@ -1,6 +1,7 @@
 package com.socrata.pg.store
 
 import java.sql.{Connection, DriverManager}
+import java.util.UUID
 
 import com.rojoma.json.v3.ast.{JArray, JObject, JString}
 import com.rojoma.simplearm.util._
@@ -51,7 +52,7 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
 
   def createTableWithSchema(pgu:PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo:CopyInfo, sLoader:SchemaLoader[SoQLType]) = {
     // Setup the data columns
-    val cols = SoQLType.typesByName filterKeys (!Set(TypeName("json")).contains(_)) map {
+    val cols = SoQLType.typesByName filterKeys (!UnsupportedTypes.contains(_)) map {
       case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(n + "_USERNAME"), t, n + "_PHYSNAME")
     }
 
@@ -164,7 +165,7 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
   }
 
   def dummyValues():Map[TypeName, SoQLValue] = {
-    SoQLType.typesByName map {
+    SoQLType.typesByName.filterKeys(!UnsupportedTypes.contains(_)) map {
       case ((name, typ)) => {
         val dummyVal = typ match {
           case SoQLText => SoQLText("Hello World")
@@ -188,10 +189,16 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
           case SoQLPolygon => SoQLPolygon(SoQLPolygon.WktRep.unapply("POLYGON ((30 10, 40 40, 20 40, 10 20, 30 10))").get)
           case SoQLMultiPolygon => SoQLMultiPolygon(SoQLMultiPolygon.WktRep.unapply(
             "MULTIPOLYGON (((40 40, 20 45, 45 30, 40 40)), ((20 35, 10 30, 10 10, 30 5, 45 20, 20 35), (30 20, 20 15, 20 25, 30 20)))").get)
+          case SoQLBlob => SoQLBlob(UUID.randomUUID().toString)
           case SoQLNull => SoQLNull
         }
         (name, dummyVal)
       }
     }
   }
+
+  /**
+   * TODO: Remove types in this set once support is added.
+   */
+  val UnsupportedTypes = Set("json", "blob").map(TypeName(_))
 }

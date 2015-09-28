@@ -43,7 +43,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
     withDb() { conn =>
       val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
 
-      val cols = SoQLType.typesByName filterKeys (!Set(TypeName("json")).contains(_)) map {
+      val cols = SoQLType.typesByName filterKeys (!UnsupportedTypes.contains(_)) map {
         case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(n + "_USERNAME"), t, n + "_PHYSNAME")
       }
       sLoader.addColumns(cols)
@@ -57,7 +57,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
   test("Universe can del columns") {
     withDb() { conn =>
       val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
-      val types = SoQLType.typesByName filterKeys (!Set(TypeName("json")).contains(_))
+      val types = SoQLType.typesByName filterKeys (!UnsupportedTypes.contains(_))
 
       val cols = types map {
         case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(n + "_USERNAME"), t, n + "_PHYSNAME")
@@ -94,8 +94,8 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
       val row = result.get(SoQLID(0)).get
       val rowValues = row.row.values.toSet
 
-      // Check that all our dummy values can be read; except for json.
-      dummyVals filterKeys (!Set(TypeName("json")).contains(_)) foreach {
+      // Check that all our dummy values can be read; except for unsupported types.
+      dummyVals filterKeys (!UnsupportedTypes.contains(_)) foreach {
         (v) => assert(rowValues.contains(v._2), "Could not find " + v + " in row values: " + rowValues)
       }
     }
