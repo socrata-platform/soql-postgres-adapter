@@ -37,6 +37,7 @@ com.socrata.soql-server-pg {
       {{ PG_SECONDARY_MIGRATE_DB_PASSWORD_LINE }}
     }
     log4j = ${common-log4j}
+    log4j.rootLogger = [ {{ LOG_LEVEL }}, console ]
   }
 
   instance = {{ PG_SECONDARY_INSTANCE }}
