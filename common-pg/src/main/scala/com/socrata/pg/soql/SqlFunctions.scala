@@ -51,7 +51,7 @@ object SqlFunctions {
     ConvexHull -> formatCall("ST_Multi(ST_ConvexHull(ST_Union(%s)))"),
     Intersects -> formatCall("ST_Intersects(%s, %s)") _,
     DistanceInMeters -> formatCall("ST_Distance(%s::geography, %s::geography)") _,
-    Simplify -> formatCall("ST_SimplifyPreserveTopology(%s, %s)") _,
+    Simplify -> formatSimplify("ST_SimplifyPreserveTopology(%s, %s)") _,
     Between -> formatCall("%s between %s and %s") _,
     Lt -> infix("<") _,
     Lte -> infix("<=") _,
@@ -229,6 +229,21 @@ object SqlFunctions {
     ParametricSql(template.format(sqlFragsAndParams._1:_*), sqlFragsAndParams._2)
   }
 
+  private def formatSimplify(template: String, paramPosition: Option[Seq[Int]] = None)
+                            (fn: FunCall,
+                             rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             setParams: Seq[SetParam],
+                             ctx: Sqlizer.Context,
+                             escape: Escape): ParametricSql = {
+    val result@ParametricSql(sql, params) = formatCall(template, paramPosition)(fn, rep, setParams, ctx, escape)
+    fn.parameters.head.typ match {
+      case SoQLMultiPolygon | SoQLMultiLine =>
+        // Simplify can change multipolygon to polygon.  Add ST_Multi to retain its multi nature.
+        ParametricSql("ST_Multi(%s)".format(sql), params)
+      case _ =>
+        result
+    }
+  }
 
   private def decryptToNumLit(typ: SoQLType)(idRep: SoQLIDRep,
                                              verRep: SoQLVersionRep,
