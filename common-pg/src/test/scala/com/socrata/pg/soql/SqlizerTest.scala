@@ -201,7 +201,7 @@ class SqlizerTest extends FunSuite with Matchers {
   test("simplify geometry") {
     val soql = "select simplify(multipolygon, 0.5)"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT ST_AsBinary((ST_SimplifyPreserveTopology(multipolygon, ?))) FROM t1")
+    sql should be ("SELECT ST_AsBinary((ST_Multi(ST_SimplifyPreserveTopology(multipolygon, ?)))) FROM t1")
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be(Seq(0.5))
   }
