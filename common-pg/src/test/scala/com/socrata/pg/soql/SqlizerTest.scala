@@ -54,7 +54,6 @@ class SqlizerTest extends FunSuite with Matchers {
   test("extent") {
     val soql = "select extent(point), extent(multiline), extent(multipolygon)"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    println(s"SQL IS $sql")
     sql should be ("SELECT ST_AsBinary((ST_Multi(ST_Extent(point)))),ST_AsBinary((ST_Multi(ST_Extent(multiline)))),ST_AsBinary((ST_Multi(ST_Extent(multipolygon)))) FROM t1")
     setParams.length should be (0)
   }
@@ -95,6 +94,21 @@ class SqlizerTest extends FunSuite with Matchers {
     setParams.length should be (1)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq("POINT(0 0)"))
+  }
+
+  test("visible at") {
+    val soql = "select visible_at(multipolygon, 0.03)"
+    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    val expected =
+      """SELECT (ST_GeometryType(multipolygon) = 'ST_Point'
+        |     OR ST_GeometryType(multipolygon) = 'ST_MultiPoint'
+        |     OR (ST_XMax(multipolygon) - ST_XMin(multipolygon)) >= ?
+        |     OR (ST_YMax(multipolygon) - ST_YMin(multipolygon)) >= ? )
+        | FROM t1""".stripMargin.replaceAll("\\s+", " ")
+    sql.replaceAll("\\s+", " ") should be (expected)
+    setParams.length should be (2)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq(0.03, 0.03).map(BigDecimal(_)))
   }
 
   test("expr and expr") {

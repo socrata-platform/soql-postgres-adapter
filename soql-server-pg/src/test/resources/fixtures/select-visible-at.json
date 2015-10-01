@@ -1,0 +1,7 @@
+[{
+  "smaller" : false,
+  "equal" : true,
+  "bigger" : true,
+  "point" : true,
+  "multipoint" : true
+}]

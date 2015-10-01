@@ -111,6 +111,22 @@ class SoQLGeomFunctionsTest extends SoQLTest {
       "select-simplify-multigeometry.json")
   }
 
+  test("visible at") {
+    val polygon1   = """polygon((1 1, 2 1, 2 2, 1 2, 1 1))"""
+    val polygon2   = """polygon((1 1, 3 1, 3 3, 1 3, 1 1))"""
+    val polygon3   = """polygon((1 1, 4 1, 4 4, 1 4, 1 1))"""
+    val point      = """point(10 40)"""
+    val multipoint = """multipoint((10 40), (40 30), (20 20), (30 10))"""
+    compareSoqlResult(
+      s"""select visible_at('$polygon1', 2) as smaller,
+                 visible_at('$polygon2', 2) as equal,
+                 visible_at('$polygon3', 2) as bigger,
+                 visible_at('$point', 2) as point,
+                 visible_at('$multipoint', 2) as multipoint
+          where name = 'Chili'""",
+      "select-visible-at.json")
+  }
+
   test("curated region test") {
     compareSoqlResult("select name, curated_region_test(multipolygon, 10) as test_result where name = 'Chili'", "select-curated-region-test.json")
   }
