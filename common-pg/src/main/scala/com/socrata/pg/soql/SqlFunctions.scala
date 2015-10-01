@@ -52,6 +52,7 @@ object SqlFunctions {
     Intersects -> formatCall("ST_Intersects(%s, %s)") _,
     DistanceInMeters -> formatCall("ST_Distance(%s::geography, %s::geography)") _,
     Simplify -> formatSimplify("ST_SimplifyPreserveTopology(%s, %s)") _,
+    VisibleAt -> visibleAt,
     Between -> formatCall("%s between %s and %s") _,
     Lt -> infix("<") _,
     Lte -> infix("<=") _,
@@ -310,4 +311,9 @@ object SqlFunctions {
       """.stripMargin,
       Some(Seq(0, 1, 0, 0, 0, 0, 0, 0, 0))) _
   }
+
+  private def visibleAt =
+    formatCall(
+      """(ST_XMax(%s) - ST_XMin(%s)) >= %s OR (ST_YMax(%s) - ST_YMin(%s)) >= %s""",
+      Some(Seq(0, 0, 1, 0, 0, 1))) _
 }
