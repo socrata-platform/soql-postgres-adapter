@@ -314,6 +314,8 @@ object SqlFunctions {
 
   private def visibleAt =
     formatCall(
-      """(ST_XMax(%s) - ST_XMin(%s)) >= %s OR (ST_YMax(%s) - ST_YMin(%s)) >= %s""",
-      Some(Seq(0, 0, 1, 0, 0, 1))) _
+      """ST_GeometryType(%s) = 'ST_Point' OR ST_GeometryType(%s) = 'ST_MultiPoint' OR
+         (ST_XMax(%s) - ST_XMin(%s)) >= %s OR (ST_YMax(%s) - ST_YMin(%s)) >= %s
+      """.stripMargin,
+      Some(Seq(0, 0, 0, 0, 1, 0, 0, 1))) _
 }
