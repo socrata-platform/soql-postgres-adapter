@@ -100,10 +100,11 @@ class SqlizerTest extends FunSuite with Matchers {
     val soql = "select visible_at(multipolygon, 0.03)"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
     val expected =
-      """SELECT (ST_GeometryType(multipolygon) = 'ST_Point'
+      """SELECT ((NOT ST_IsEmpty(multipolygon))
+        |     AND (ST_GeometryType(multipolygon) = 'ST_Point'
         |     OR ST_GeometryType(multipolygon) = 'ST_MultiPoint'
         |     OR (ST_XMax(multipolygon) - ST_XMin(multipolygon)) >= ?
-        |     OR (ST_YMax(multipolygon) - ST_YMin(multipolygon)) >= ? )
+        |     OR (ST_YMax(multipolygon) - ST_YMin(multipolygon)) >= ?) )
         | FROM t1""".stripMargin.replaceAll("\\s+", " ")
     sql.replaceAll("\\s+", " ") should be (expected)
     setParams.length should be (2)
