@@ -93,7 +93,7 @@ class SoQLGeomFunctionsTest extends SoQLTest {
     compareSoqlResult("select distance_in_meters(point, multipolygon) as distance_in_meters where code = 'SPRINT-EVO'", "select-distance-columns.json")
   }
 
-  test("simplify geometry") {
+  ignore("simplify geometry") {
     compareSoqlResult(
       """select name,
                 simplify('polygon((1 1, 1.5 1, 2 1, 2 1.5,  2 2, 1.5 2,  1 2, 1 1.5, 1 1))'::polygon, 0.5) as simplified,
@@ -102,7 +102,7 @@ class SoQLGeomFunctionsTest extends SoQLTest {
       "select-simplify-geometry.json")
   }
 
-  test("simplify geometry and preserve multipolygon") {
+  ignore("simplify geometry and preserve multipolygon") {
     compareSoqlResult(
       """select name,
                 simplify('multipolygon(((1 1, 1.5 1, 2 1, 2 1.5,  2 2, 1.5 2,  1 2, 1 1.5, 1 1)))'::multipolygon, 0.5) as simplified,
