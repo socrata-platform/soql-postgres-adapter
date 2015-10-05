@@ -111,6 +111,24 @@ class SoQLGeomFunctionsTest extends SoQLTest {
       "select-simplify-multigeometry.json")
   }
 
+  test("simplify geometry preserving topology") {
+    compareSoqlResult(
+      """select name,
+                simplify_preserve_topology('polygon((1 1, 1.5 1, 2 1, 2 1.5,  2 2, 1.5 2,  1 2, 1 1.5, 1 1))'::polygon, 0.5) as simplified,
+                'polygon((1 1, 2 1, 2 2, 1 2, 1 1))'::polygon as original
+          where name = 'Chili'""",
+      "select-simplify-geometry.json")
+  }
+
+  test("simplify (preserving topology) geometry and preserve multipolygon") {
+    compareSoqlResult(
+      """select name,
+                simplify_preserve_topology('multipolygon(((1 1, 1.5 1, 2 1, 2 1.5,  2 2, 1.5 2,  1 2, 1 1.5, 1 1)))'::multipolygon, 0.5) as simplified,
+                'multipolygon(((1 1, 2 1, 2 2, 1 2, 1 1)))'::multipolygon as original
+          where name = 'Chili'""",
+      "select-simplify-multigeometry.json")
+  }
+
   test("geometry snap to grid") {
     compareSoqlResult(
       """select snap_to_grid('polygon((1 1, 1.5 1, 2 1, 2 1.5,  2 2, 1.5 2,  1 2, 1 1.5, 1 1))'::polygon, 2) as snapped

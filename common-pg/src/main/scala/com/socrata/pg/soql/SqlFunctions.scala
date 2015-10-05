@@ -52,6 +52,7 @@ object SqlFunctions {
     Intersects -> formatCall("ST_Intersects(%s, %s)") _,
     DistanceInMeters -> formatCall("ST_Distance(%s::geography, %s::geography)") _,
     Simplify -> formatSimplify("ST_Simplify(%s, %s)") _,
+    SimplifyPreserveTopology -> formatSimplify("ST_SimplifyPreserveTopology(%s, %s)") _,
     SnapToGrid -> formatSimplify("ST_SnapToGrid(%s, %s)") _,
     VisibleAt -> visibleAt,
     Between -> formatCall("%s between %s and %s") _,
