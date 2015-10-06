@@ -9,24 +9,23 @@ import com.socrata.datacoordinator.common.StandardObfuscationKeyGenerator
 class PGSecondaryDatasetMapReaderTest extends FunSuite with Matchers with BeforeAndAfterAll
       with PGSecondaryUniverseTestBase with DatabaseTestBase with PGStoreTestBase {
 
-  override def beforeAll() {
+  override def beforeAll(): Unit = {
     createDatabases()
   }
 
-  override def afterAll() {
-  }
+  override def afterAll(): Unit = {}
 
-  def createSchema(conn: Connection) {
+  def createSchema(conn: Connection): Unit = {
     Migration.migrateDb(conn)
     loadFixtureData(conn)
   }
 
-  def loadFixtureData(conn: Connection) {
+  def loadFixtureData(conn: Connection): Unit = {
     loadDatasetMapRows(conn)
     loadDatasetInternalNameMapRows(conn)
   }
 
-  def loadDatasetMapRows(conn: Connection) {
+  def loadDatasetMapRows(conn: Connection): Unit = {
     val sql = "INSERT INTO dataset_map (system_id, next_counter_value, locale_name, obfuscation_key) values (?, ?, ?, ?)"
     using(conn.prepareStatement(sql)) { statement =>
       statement.setLong(1, 123)
@@ -37,7 +36,7 @@ class PGSecondaryDatasetMapReaderTest extends FunSuite with Matchers with Before
     }
   }
 
-  def loadDatasetInternalNameMapRows(conn: Connection) {
+  def loadDatasetInternalNameMapRows(conn: Connection): Unit = {
     val sql = "INSERT INTO dataset_internal_name_map (dataset_internal_name, dataset_system_id) values (?, ?)"
     using(conn.prepareStatement(sql)) { stmt =>
       stmt.setString(1, "Dataset Name")

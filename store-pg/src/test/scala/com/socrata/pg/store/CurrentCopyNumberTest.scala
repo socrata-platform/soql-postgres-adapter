@@ -2,15 +2,14 @@ package com.socrata.pg.store
 
 import scala.language.reflectiveCalls
 
+import PGSecondaryUtil._
+
 class CurrentCopyNumberTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
-
-  import PGSecondaryUtil._
-
   test("handle CurrentCopyNumber") {
     withPgu() { pgu =>
       val f = workingCopyCreatedFixture
 
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion+1, None, f.events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, f.events.iterator)
 
       val actualCopyNum = f.pgs.doCurrentCopyNumber(pgu, testInternalName, None)
 
@@ -19,6 +18,4 @@ class CurrentCopyNumberTest extends PGSecondaryTestBase with PGSecondaryUniverse
 
     }
   }
-
-
 }

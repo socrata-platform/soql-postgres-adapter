@@ -20,7 +20,7 @@ import com.socrata.pg.query.PGQueryTestBase
 
 class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase with PGQueryTestBase {
 
-  override def beforeAll = {
+  override def beforeAll: Unit = {
     PropertyConfigurator.configure(Propertizer("log4j", config.getConfig("log4j")))
     createDatabases()
   }
@@ -47,7 +47,7 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase w
       val idMap =  (cn: ColumnName) => new UserColumnId(cn.name)
       val soql = "select text_USERNAME, number_USERNAME"
 
-      for (readCtx <- pgu.datasetReader.openDataset(copyInfo)) yield {
+      pgu.datasetReader.openDataset(copyInfo).map { readCtx =>
         val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
         val columnNameTypeMap: OrderedMap[ColumnName, SoQLType] = baseSchema.values.foldLeft(OrderedMap.empty[ColumnName, SoQLType]) { (map, cinfo) =>
           map + (ColumnName(cinfo.userColumnId.underlying) -> cinfo.typ)
@@ -57,18 +57,18 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase w
         }
         val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
         val (requestColumns, version, mresult) =
-          for (dsInfo <- ds) yield {
+          ds.map { dsInfo =>
             val qs = new QueryServer(dsInfo, CaseSensitive)
             qs.execQuery(pgu, "someDatasetInternalName", copyInfo.datasetInfo, analysis, false, None, None, NoPrecondition, None) match {
               case QueryServer.Success(schema, _, version, results, etag, lastModified) =>
                 (schema, version, results)
-              case queryFail =>
+              case queryFail: QueryServer.QueryResult =>
                 throw new Exception(s"Query Fail ${queryFail.getClass.getName}")
             }
           }
-        for (result <- mresult) {
+
+        mresult.map { result =>
           result.foreach { row =>
-            println(row.toString())
             row.toString should be("{2=SoQLNumber(0),1=SoQLText(Hello World)}")
           }
         }

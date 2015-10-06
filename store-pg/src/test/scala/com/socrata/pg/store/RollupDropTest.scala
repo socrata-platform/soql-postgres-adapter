@@ -11,7 +11,7 @@ class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBas
   // Despite being in the store project, it is getting its mutation script in the query project.
   override val project: String = "soql-server-pg"
 
-  override def beforeAll = {
+  override def beforeAll: Unit = {
     createDatabases()
   }
 
@@ -77,7 +77,7 @@ class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBas
     allCopies
   }
 
-  private def rollupTableExists(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) {
+  private def rollupTableExists(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo): Unit = {
     val rollupTableName = pgu.datasetMapReader.rollups(copyInfo).map { rollupInfo =>
       val rollupTableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
       val materialized = RollupManager.shouldMaterializeRollups(copyInfo.lifecycleStage)

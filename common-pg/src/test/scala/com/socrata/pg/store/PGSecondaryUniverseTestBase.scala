@@ -5,9 +5,11 @@ import java.util.UUID
 
 import com.rojoma.json.v3.ast.{JArray, JObject, JString}
 import com.rojoma.simplearm.util._
-import com.socrata.datacoordinator.id.{RowId, UserColumnId}
+import com.socrata.datacoordinator.id.{ColumnId, RowId, UserColumnId}
 import com.socrata.datacoordinator.secondary.DatasetInfo
+import com.socrata.datacoordinator.truth.RowUserIdMap
 import com.socrata.datacoordinator.truth.loader.SchemaLoader
+import com.socrata.datacoordinator.truth.loader.sql.InspectedRow
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, DatasetCopyContext}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.soql.environment.TypeName
@@ -16,6 +18,7 @@ import com.typesafe.config.Config
 import org.joda.time.{DateTime, LocalDate, LocalDateTime, LocalTime}
 import org.scalatest.{BeforeAndAfterAll, FunSuiteLike, Matchers}
 
+// scalastyle:off null cyclomatic.complexity
 trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with BeforeAndAfterAll {
   type CT = SoQLType
   type CV = SoQLValue
@@ -50,7 +53,9 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
     (pgu, copyInfo, sLoader)
   }
 
-  def createTableWithSchema(pgu:PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo:CopyInfo, sLoader:SchemaLoader[SoQLType]) = {
+  def createTableWithSchema(pgu:PGSecondaryUniverse[SoQLType, SoQLValue],
+                            copyInfo:CopyInfo,
+                            sLoader:SchemaLoader[SoQLType]): ColumnIdMap[ColumnInfo[SoQLType]] = {
     // Setup the data columns
     val cols = SoQLType.typesByName filterKeys (!UnsupportedTypes.contains(_)) map {
       case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(n + "_USERNAME"), t, n + "_PHYSNAME")
@@ -75,11 +80,12 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
     schema
   }
 
-  def getSchema(pgu:PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo:CopyInfo):ColumnIdMap[ColumnInfo[SoQLType]] = {
-    for (reader <- pgu.datasetReader.openDataset(copyInfo)) yield reader.schema
-  }
+  def getSchema(pgu:PGSecondaryUniverse[SoQLType, SoQLValue],
+                copyInfo:CopyInfo):ColumnIdMap[ColumnInfo[SoQLType]] =
+    pgu.datasetReader.openDataset(copyInfo).map(_.schema)
 
-  def validateSchema(expect:Iterable[ColumnInfo[SoQLType]], schema:ColumnIdMap[ColumnInfo[SoQLType]]) {
+  def validateSchema(expect:Iterable[ColumnInfo[SoQLType]],
+                     schema:ColumnIdMap[ColumnInfo[SoQLType]]): Unit = {
     val existing = (schema.values map {
       colInfo => (colInfo.systemId, colInfo.typ)
     }).toMap
@@ -107,7 +113,11 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
     }
   }
 
-  def insertDummyRow(id:RowId, values:Map[TypeName, SoQLValue], pgu:PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo:CopyInfo, schema:ColumnIdMap[ColumnInfo[SoQLType]]) {
+  def insertDummyRow(id:RowId,
+                     values:Map[TypeName, SoQLValue],
+                     pgu:PGSecondaryUniverse[SoQLType, SoQLValue],
+                     copyInfo:CopyInfo,
+                     schema:ColumnIdMap[ColumnInfo[SoQLType]]): Unit = {
     // Setup our row data with column Ids
     val colIdMap = schema.foldLeft(ColumnIdMap[SoQLValue]())  { (acc, kv) =>
       val (cId, columnInfo) = kv
@@ -120,16 +130,18 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
 
     loader.insert(id, colIdMap)
     loader.flush()
-    //pgu.commit()
   }
 
-  def getRow(id:RowId,pgu:PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo:CopyInfo, schema:ColumnIdMap[ColumnInfo[SoQLType]]) = {
+  def getRow(id:RowId,
+             pgu:PGSecondaryUniverse[SoQLType, SoQLValue],
+             copyInfo:CopyInfo,
+             schema:ColumnIdMap[ColumnInfo[SoQLType]]): RowUserIdMap[SoQLValue, InspectedRow[SoQLValue]] = {
     val copyCtx = new DatasetCopyContext[SoQLType](copyInfo, schema)
     val reader = pgu.reader(copyCtx)
     reader.lookupRows(Seq(SoQLID(id.underlying)).iterator)
   }
 
-  def getSpecialColumnIds(schema:ColumnIdMap[ColumnInfo[SoQLType]]) = {
+  def getSpecialColumnIds(schema:ColumnIdMap[ColumnInfo[SoQLType]]): (ColumnId, ColumnId) = {
     val versionColId = schema.filterNot {
       (colId, colInfo) => colInfo.typ != SoQLVersion
     }.iterator.next()._1
@@ -141,7 +153,7 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
     (systemColId, versionColId)
   }
 
-  def fetchColumnFromTable(connection: Connection, options: Map[String, String]) = {
+  def fetchColumnFromTable(connection: Connection, options: Map[String, String]): String = {
     val tableName = options.getOrElse("tableName", "")
     val columnName = options.getOrElse("columnName", "")
     val whereClause = options.getOrElse("whereClause", "")
@@ -155,7 +167,7 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
     }
   }
 
-  def updateColumnValueInTable(connection: Connection, options: Map[String, String]) {
+  def updateColumnValueInTable(connection: Connection, options: Map[String, String]): Unit = {
     val tableName = options.getOrElse("tableName", "")
     val columnName = options.getOrElse("columnName", "")
     val columnValue = options.getOrElse("columnValue", "")

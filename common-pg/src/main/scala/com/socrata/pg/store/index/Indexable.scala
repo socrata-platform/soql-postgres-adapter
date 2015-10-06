@@ -18,7 +18,7 @@ trait NoIndex[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
   def dropIndex(tableName: String): Option[String] = None
 }
 
-// scalastyle:off regex
+// scalastyle:off regex multiple.string.literals
 trait TextIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
   override def createIndex(tableName: String, tablespace: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>

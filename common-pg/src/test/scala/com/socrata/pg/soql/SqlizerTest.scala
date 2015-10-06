@@ -14,6 +14,7 @@ import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
 
+// scalastyle:off null
 class SqlizerTest extends FunSuite with Matchers {
   import SqlizerTest._
 

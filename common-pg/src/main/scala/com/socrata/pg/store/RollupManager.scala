@@ -27,9 +27,10 @@ import com.socrata.soql.parsing.standalone_exceptions.StandaloneLexerException
 import com.socrata.soql.types.{SoQLAnalysisType, SoQLType, SoQLValue}
 import com.typesafe.scalalogging.slf4j.Logging
 
-class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) extends Logging {
-  import RollupManager._ // scalastyle:ignore import.grouping
+import RollupManager._
 
+// scalastyle:off multiple.string.literals
+class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) extends Logging {
   // put rollups in the same tablespace as the copy
   private val tablespaceSql = pgu.commonSupport.tablespace(copyInfo.dataTableName).map(" TABLESPACE " + _).getOrElse("")
 
@@ -79,7 +80,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     // Working copies do not materialize rollups.
     if (shouldMaterializeRollups(copyInfo.lifecycleStage)) doUpdateRollup(rollupInfo, newDataVersion)
 
-  private def doUpdateRollup(rollupInfo: RollupInfo, newDataVersion: Long): Unit = { // scalastyle:ignore method.length
+  private def doUpdateRollup(rollupInfo: RollupInfo, newDataVersion: Long): Unit = {
     logger.info(s"Updating copy $copyInfo, rollup $rollupInfo")
     time("update-rollup", "dataset_id" -> copyInfo.datasetInfo.systemId, "rollupName" -> rollupInfo.name) {
 

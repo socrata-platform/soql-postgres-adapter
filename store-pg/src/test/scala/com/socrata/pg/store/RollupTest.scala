@@ -16,7 +16,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
   // Despite being in the store project, it is getting its mutation script in the query project.
   override val project = "soql-server-pg"
 
-  override def beforeAll = {
+  override def beforeAll: Unit = {
     createDatabases()
     withDb() { conn =>
       importDataset(conn)

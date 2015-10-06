@@ -11,14 +11,14 @@ class ColumnRemovedHandlerTest extends PGSecondaryTestBase with PGSecondaryUnive
     withPgu() { pgu =>
       val f = columnsRemovedFixture
 
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion+1, None, f.events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, f.events.iterator)
 
       val truthCopyInfo = getTruthCopyInfo(pgu, f.datasetInfo)
       val schema = pgu.datasetMapReader.schema(truthCopyInfo)
 
       val expectedColumns = scala.collection.mutable.ArrayBuffer[Tuple2[UserColumnId, ColumnId]]()
 
-      for(event <- f.events) {
+      f.events.foreach { event =>
         event match {
           case ColumnCreated(ci) => expectedColumns.+=: ((ci.id, ci.systemId))
           case ColumnRemoved(ci) => expectedColumns -= ((ci.id, ci.systemId))

@@ -2,14 +2,15 @@ package com.socrata.pg.store
 
 import java.sql.Connection
 
-import com.socrata.datacoordinator.secondary
 import com.socrata.datacoordinator.id._
+import com.socrata.datacoordinator.secondary
 import com.socrata.datacoordinator.truth.metadata._
 import com.socrata.datacoordinator.truth.universe.sql.SqlTableCleanup
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.soql.environment.TypeName
 import com.socrata.soql.types._
 import org.postgresql.util.PSQLException
+import org.scalatest.exceptions.TestFailedException
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Matchers}
 
 /**
@@ -18,7 +19,7 @@ import org.scalatest.{BeforeAndAfterAll, FunSuite, Matchers}
 class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfterAll
       with PGSecondaryUniverseTestBase with PGStoreTestBase with DatabaseTestBase  {
 
-  override def beforeAll() {
+  override def beforeAll(): Unit = {
     createDatabases()
   }
 
@@ -49,7 +50,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
       sLoader.addColumns(cols)
 
       // if you want to examine the tables...
-      //pgu.commit
+      // pgu.commit
       validateSchema(cols, getSchema(pgu, copyInfo))
     }
   }
@@ -72,7 +73,11 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
       try {
         sLoader.dropColumns(cols)
       } catch {
-        case pex:PSQLException => println("Failing Query: " + pex.getServerErrorMessage.getHint + " - " + pex.getSQLState); throw pex
+        case pex:PSQLException =>
+          throw new TestFailedException(
+            "Failing Query: " + pex.getServerErrorMessage.getHint + " - " + pex.getSQLState,
+            pex,
+            5)
       }
 
       assert(getSchema(pgu, copyInfo).size == 0, "We expect no columns")
@@ -116,7 +121,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
 
       // Setup our row data for insert with a "notupdated" field
       val dummyVals = dummyValues()
-      for (id <- 1 until 10) {
+      (1 until 10).foreach { id =>
         insertDummyRow(new RowId(id), dummyVals.updated(SoQLID.name,SoQLID(id)).updated(SoQLText.name, SoQLText("notupdated")), pgu, copyInfo, schema)
       }
 
@@ -127,7 +132,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
       val loader = pgu.prevettedLoader(copyCtx, pgu.logger(copyInfo.datasetInfo, "test-user"))
 
 
-      for (id <- 1 until 10) {
+      (1 until 10).foreach { id =>
         val rowId = new RowId(id)
         // Setup our row; adding in the special version and system column values
         val colIdMap = schema.foldLeft(ColumnIdMap[SoQLValue]())  { (acc, kv) =>
@@ -141,7 +146,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
       }
 
       // Verify every row was updated
-      for (id <- 1 until 10) {
+      (1 until 10).foreach { id =>
         val rowId = new RowId(id)
         val result = getRow(rowId, pgu, copyInfo, schema)
         assert(result.size == 1, "Expected only a single row for id " + id + " but got " + result.size)
@@ -157,12 +162,12 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
 
       // Setup our row data for insert with a "notupdated" field
       val dummyVals = dummyValues()
-      for (id <- 1 until 10) {
+      (1 until 10).foreach { id =>
         insertDummyRow(new RowId(id), dummyVals.updated(SoQLID.name,SoQLID(id)).updated(SoQLText.name, SoQLText("notupdated")), pgu, copyInfo, schema)
       }
       val copyCtx = new DatasetCopyContext[SoQLType](copyInfo, schema)
       val loader = pgu.prevettedLoader(copyCtx, pgu.logger(copyInfo.datasetInfo, "test-user"))
-      for (id <- 1 until 10) {
+      (1 until 10).foreach { id =>
         val rowId = new RowId(id)
         loader.delete(rowId, None)
       }
@@ -180,11 +185,11 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
       // Setup our row data
       val dummyVals = dummyValues()
 
-      for (id <- 1 until 10) {
+      (1 until 10).foreach { id =>
         insertDummyRow(new RowId(id), dummyVals.updated(SoQLID.name,SoQLID(id)), pgu, copyInfo, schema)
       }
 
-      for (id <- 1 until 10) {
+      (1 until 10).foreach { id =>
         val result = getRow(new RowId(id), pgu, copyInfo, schema)
         assert(result.size == 1, "Expected only a single row for id " + id + " but got " + result.size)
       }

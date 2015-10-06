@@ -7,14 +7,14 @@ import com.socrata.pg.query.PGQueryTestBase
 
 abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase with PGQueryTestBase {
 
-  override def beforeAll = {
+  override def beforeAll: Unit = {
     createDatabases()
     withDb() { conn =>
       importDataset(conn)
     }
   }
 
-  override def afterAll = {
+  override def afterAll: Unit = {
     withPgu() { pgu =>
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val tableName = pgu.datasetMapReader.latest(datasetInfo).dataTableName
