@@ -96,6 +96,14 @@ class SqlizerTest extends FunSuite with Matchers {
     params should be (Seq("POINT(0 0)"))
   }
 
+  test("is empty") {
+    val soql = "select is_empty(multipolygon)"
+    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    val expected = "SELECT (ST_IsEmpty(multipolygon) or multipolygon is null) FROM t1"
+    sql.replaceAll("\\s+", " ") should be (expected)
+    setParams.length should be (0)
+  }
+
   test("visible at") {
     val soql = "select visible_at(multipolygon, 0.03)"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)

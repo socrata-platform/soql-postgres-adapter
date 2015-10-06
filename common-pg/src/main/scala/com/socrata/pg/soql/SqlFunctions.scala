@@ -1,5 +1,7 @@
 package com.socrata.pg.soql
 
+import scala.util.parsing.input.NoPosition
+
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.soql.functions._
@@ -7,14 +9,12 @@ import com.socrata.soql.typed.{CoreExpr, FunctionCall, NumberLiteral, StringLite
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
 import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
 import com.socrata.soql.types._
-import Sqlizer._
 
-import scala.util.parsing.input.NoPosition
+import Sqlizer._
+import SoQLFunctions._
 
 // scalastyle:off magic.number multiple.string.literals
 object SqlFunctions {
-  import SoQLFunctions._ // scalastyle:ignore import.grouping
-
   type FunCall = FunctionCall[UserColumnId, SoQLType]
 
   type FunCallToSql =
@@ -54,6 +54,7 @@ object SqlFunctions {
     Simplify -> formatSimplify("ST_Simplify(%s, %s)") _,
     SimplifyPreserveTopology -> formatSimplify("ST_SimplifyPreserveTopology(%s, %s)") _,
     SnapToGrid -> formatSimplify("ST_SnapToGrid(%s, %s)") _,
+    IsEmpty -> isEmpty,
     VisibleAt -> visibleAt,
     Between -> formatCall("%s between %s and %s") _,
     Lt -> infix("<") _,
@@ -313,6 +314,9 @@ object SqlFunctions {
       """.stripMargin,
       Some(Seq(0, 1, 0, 0, 0, 0, 0, 0, 0))) _
   }
+
+  private def isEmpty =
+    formatCall("ST_IsEmpty(%s) or %s is null", Some(Seq(0, 0))) _
 
   private def visibleAt =
     formatCall(
