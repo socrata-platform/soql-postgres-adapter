@@ -141,7 +141,7 @@ class SoQLGeomFunctionsTest extends SoQLTest {
     val multipolygon = "MULTIPOLYGON(((1 1, 2 1, 2 2, 1 2, 1 1)))"
     val point = "POINT(10 40)"
     val multipoint = "MULTIPOINT((10 40), (40 30), (20 20), (30 10))"
-    val emptyPoly = "MULTIPOINT EMPTY"
+    val emptyPoly = "MULTIPOLYGON EMPTY"
     val emptyPt = "MULTIPOINT EMPTY"
     // Inserting a null literal is tricky.
     val nullGeom = "simplify('POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))', 16)"
