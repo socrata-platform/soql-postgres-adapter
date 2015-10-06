@@ -1,0 +1,9 @@
+[{
+  "poly" : false,
+  "mpoly" : false,
+  "point" : false,
+  "mpoint" : false,
+  "empty_poly" : true,
+  "empty_pt" : true,
+  "null_geom" : true
+}]
