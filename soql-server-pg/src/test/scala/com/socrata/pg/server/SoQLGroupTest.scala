@@ -14,11 +14,11 @@ class SoQLGroupTest extends SoQLTest {
 
 
   test("group by text order by count") {
-    compareSoqlResult("select upper(make) as umake, count(name) group by upper(make) order by count(name) desc", "group-text-order-count.json")
+    compareSoqlResult("select upper(make) as umake, count(name) group by upper(make) order by count(name) desc, umake", "group-text-order-count.json")
   }
 
   test("group by text order by count ci") {
-    compareSoqlResult("select make as umake, count(name) group by make order by count(name) desc", "group-text-order-count.json", caseSensitivity = CaseInsensitive)
+    compareSoqlResult("select make as umake, count(name) group by make order by count(name) desc, umake", "group-text-order-count.json", caseSensitivity = CaseInsensitive)
   }
 
   test("group by text, numeric fn where having") {
