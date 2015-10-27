@@ -31,6 +31,10 @@ class SoQLConversionFunctionsTest extends SoQLTest {
     compareSoqlResult("select name, make::text as make_ident, code where code::number=14200 and upper(name) = 'KARMA'", "where-conv-txt2txt.json")
   }
 
+  test("text::blob") {
+    compareSoqlResult("select code, blob where blob='some-blob-identifier'", "where-conv-txt2blob.json")
+  }
+
   test("num::num") {
     compareSoqlResult("select make, name, v_max::number as v_max_ident where make = 'APCO' order by name", "where-conv-num2num.json")
   }

@@ -200,5 +200,5 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
   /**
    * TODO: Remove types in this set once support is added.
    */
-  val UnsupportedTypes = Set("json", "blob").map(TypeName(_))
+  val UnsupportedTypes = Set("json").map(TypeName(_))
 }
