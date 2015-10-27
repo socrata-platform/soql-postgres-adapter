@@ -39,6 +39,6 @@
 {"code":"FOO","make":"YANKEE","name":"Yankee","class":"EN-B","line":"LINESTRING(0.123456 0.123456, 0.123456 10.123456, 10.123456 10.123456)"},
 {"code":"BAR","make":"HOTEL","name":"Hotel","class":"EN-B","multipoint":"MULTIPOINT(0.123456 0.123456, 0.123456 10.123456)"},
 {"code":"BAZ","make":"FOXTROT","name":"Foxtrot","class":"EN-B","polygon":"POLYGON((0.123456 0.123456, 0.123456 10.123456, 10.123456 10.123456, 0.123456 0.123456))"},
-{"code":"GNU","make":"A THING","name":"Richard M. Stallman","blob":"some-blob-identifier"}
+{"code":"GNU","make":"ATHING","name":"Richard M. Stallman","blob":"some-blob-identifier"}
 ]
 
