@@ -34,6 +34,17 @@
   },
   {
     "v_max_is_null": true,
+    "name": "Richard M. Stallman",
+    "color_is_null": true,
+    "make": "ATHING",
+    "certified_is_null": true,
+    "available_is_null": true,
+    "three_liner_is_null": true,
+    "spec_is_null": true,
+    "size_is_null": true
+  },
+  {
+    "v_max_is_null": true,
     "name": "Sprint Evo",
     "color_is_null": true,
     "make": "GIN",
