@@ -107,6 +107,8 @@ trait TimestampLikeIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommon
 
 trait BooleanIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] => }
 
+trait BlobIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] => }
+
 trait GeoIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] =>
 
   override def createIndex(tableName: String, tablespace: String): Option[String] = {
@@ -154,6 +156,7 @@ object SoQLIndexableRep {
     SoQLDouble -> (base => new DoubleRep(base) with NumberLikeIndexable[SoQLType]),
     SoQLObject -> (base => new ObjectRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
     SoQLArray -> (base => new ArrayRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
+    SoQLBlob -> (base => new BlobRep(base) with BlobIndexable[SoQLType]), // TODO: Revisit index need
     SoQLPoint -> (base =>
       new GeometryLikeRep[Point](
         SoQLPoint,

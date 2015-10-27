@@ -108,6 +108,7 @@ object SqlFunctions {
     TextToFixedTimestamp -> formatCall("%s::timestamp with time zone") _,
     TextToFloatingTimestamp -> formatCall("%s::timestamp") _, // without time zone
     TextToMoney -> formatCall("%s::numeric") _,
+    TextToBlob -> passthrough,
 
     TextToBool -> formatCall("%s::boolean") _,
     BoolToText -> formatCall("%s::varchar") _,

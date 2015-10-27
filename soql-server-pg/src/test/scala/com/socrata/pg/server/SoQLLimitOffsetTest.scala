@@ -3,7 +3,7 @@ package com.socrata.pg.server
 class SoQLLimitOffsetTest  extends SoQLTest {
 
   test("plain with row count") {
-    compareSoqlResult("select make, name order by name offset 2 limit 5", "limitoffset-plain.json", Some(14))
+    compareSoqlResult("select make, name order by name offset 2 limit 5", "limitoffset-plain.json", Some(15))
   }
 
   test("plain w/o row count") {
@@ -11,11 +11,11 @@ class SoQLLimitOffsetTest  extends SoQLTest {
   }
 
   test("group by with row count") {
-    compareSoqlResult("select make, count(name) where not starts_with(make, 'z') group by make having count(name) > 0 order by make limit 1 offset 4", "limitoffset-group.json", Some(7))
+    compareSoqlResult("select make, count(name) where not starts_with(make, 'z') group by make having count(name) > 0 order by make limit 1 offset 5", "limitoffset-group.json", Some(8))
   }
 
   test("group by w/o row count") {
-    compareSoqlResult("select make, count(name) where not starts_with(make, 'z') group by make having count(name) > 0 order by make limit 1 offset 4", "limitoffset-group.json", None)
+    compareSoqlResult("select make, count(name) where not starts_with(make, 'z') group by make having count(name) > 0 order by make limit 1 offset 5", "limitoffset-group.json", None)
   }
 
   test("search with row count") {

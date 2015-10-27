@@ -23,6 +23,7 @@
 { c: "add column", id: "multipoint", type: "multipoint" },
 { c: "add column", id: "line", type: "line" },
 { c: "add column", id: "polygon", type: "polygon" },
+{ c: "add column", id: "blob", type: "blob" },
 { c: "row data" },
 {"code":"14200","make":"APCO","name":"Karma","class":"DHV-1","v_min":20,"v_trim":36,"v_max":45,"aspect_ratio":4.9,"aspect_ratio_project":3.5,"line_length":412,"price":2500,"three_liner":false,"size":"Small","available":"2008-08-01T15:12:34","certified":"2008-03-01T12:11:22-05","point":"POINT(34.89265 32.505781)","multipolygon":"MULTIPOLYGON(((0 0,1 0,1 1,0 1,0 0)))","country":"Israel", "color": ["Red", "Yellow", "Royal Blue", "Purple", "Turquoise"],"spec": {"root_chord": 2.84, "tip_chord": 0.48,  "weight" : 6.0 }},
 {"code":"14210","make":"APCO","name":"Karma SP","class":"EN-A","v_min":20,"v_trim":37,"v_max":46,"aspect_ratio":4.9,"aspect_ratio_project":3.5,"line_length":412,"price":2650,"three_liner":false,"size":"Small","available":"2010-08-01T15:12:34","certified":"2010-03-01T12:11:22-06","point":"POINT(34.89265 32.505781)","multipolygon":"MULTIPOLYGON(((1 0,2 0,2 1,1 1,1 0)))","country":"Israel", "color": ["Tangerine","Patriot", "Brasiliera", "Lagoon", "Flame"],"spec": {"root_chord": 2.84, "tip_chord": 0.48,  "weight" : 5.4 }},
@@ -37,6 +38,7 @@
 {"code":"SPRINT-EVO","make":"GIN","name":"Sprint Evo","class":"EN-B","point":"POINT(11.574601 48.148484)","multipolygon":"MULTIPOLYGON(((11.578791 48.144026,11.582921 48.143088,11.582181 48.141649,11.578136 48.142515,11.578791 48.144026)))"},
 {"code":"FOO","make":"YANKEE","name":"Yankee","class":"EN-B","line":"LINESTRING(0.123456 0.123456, 0.123456 10.123456, 10.123456 10.123456)"},
 {"code":"BAR","make":"HOTEL","name":"Hotel","class":"EN-B","multipoint":"MULTIPOINT(0.123456 0.123456, 0.123456 10.123456)"},
-{"code":"BAZ","make":"FOXTROT","name":"Foxtrot","class":"EN-B","polygon":"POLYGON((0.123456 0.123456, 0.123456 10.123456, 10.123456 10.123456, 0.123456 0.123456))"}
+{"code":"BAZ","make":"FOXTROT","name":"Foxtrot","class":"EN-B","polygon":"POLYGON((0.123456 0.123456, 0.123456 10.123456, 10.123456 10.123456, 0.123456 0.123456))"},
+{"code":"GNU","make":"A THING","name":"Richard M. Stallman","blob":"some-blob-identifier"}
 ]
 
