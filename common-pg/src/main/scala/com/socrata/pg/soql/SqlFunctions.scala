@@ -77,7 +77,8 @@ object SqlFunctions {
     UnaryPlus -> passthrough,
     UnaryMinus -> formatCall("-%s") _,
     SignedMagnitude10 -> formatCall("sign(%s) * length(floor(abs(%s))::text)", Some(Seq(0,0))),
-    SignedMagnitudeLinear -> formatCall("sign(%s) * floor(abs(%s)/%s + 1)", Some(Seq(0,0,1))),
+    SignedMagnitudeLinear ->
+      formatCall("case when %s = 1 then floor(%s) else sign(%s) * floor(abs(%s)/%s + 1) end", Some(Seq(1,0,0,0,1))),
     BinaryPlus -> infix("+") _,
     BinaryMinus -> infix("-") _,
     TimesNumNum -> infix("*") _,
