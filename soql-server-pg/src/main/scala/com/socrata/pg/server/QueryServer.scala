@@ -45,6 +45,7 @@ import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.typed.CoreExpr
+import com.socrata.soql.types.SoQLID.ClearNumberRep
 import com.socrata.soql.types.{SoQLVersion, SoQLID, SoQLValue, SoQLType}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.curator.{CuratorFromConfig, DiscoveryFromConfig}
@@ -149,9 +150,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val reqRowCount = Option(servReq.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     val copy = Option(servReq.getParameter("copy"))
     val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
+    val obfuscateId = !Option(servReq.getParameter("idAppearance")).exists(_ == "clear")
 
     logger.info("Performing query on dataset " + datasetId)
-    streamQueryResults(analysis, datasetId, reqRowCount, copy, rollupName,
+    streamQueryResults(analysis, datasetId, reqRowCount, copy, rollupName, obfuscateId,
       req.precondition, req.dateTimeHeader("If-Modified-Since"))
   }
 
@@ -160,12 +162,13 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
    * passed back to SocrataHttp so the transaction can be maintained through the duration of the
    * streaming.
    */
-  def streamQueryResults(
+  def streamQueryResults( // scalastyle:ignore parameter.number
     analysis: SoQLAnalysis[UserColumnId, SoQLType],
     datasetId: String,
     reqRowCount: Boolean,
     copy: Option[String],
     rollupName: Option[RollupName],
+    obfuscateId: Boolean,
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
   ) (resp:HttpServletResponse): Unit = {
@@ -178,7 +181,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
             case Some(datasetInfo) =>
               def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
               execQuery(pgu, datasetId, datasetInfo, analysis, reqRowCount, copy,
-                rollupName, precondition, ifModifiedSince) match {
+                rollupName, obfuscateId, precondition, ifModifiedSince) match {
                 case NotModified(etags) => notModified(etags)(resp)
                 case PreconditionFailed => responses.PreconditionFailed(resp)
                 case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
@@ -190,7 +193,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
                   rollupName.foreach(r => Header("X-SODA2-Rollup", r.underlying)(resp))
                   for { r <- results } yield {
                     CJSONWriter.writeCJson(datasetInfo, qrySchema,
-                      r, reqRowCount, r.rowCount, dataVersion, lastModified)(resp)
+                      r, reqRowCount, r.rowCount, dataVersion, lastModified, obfuscateId)(resp)
                   }
               }
           }
@@ -206,6 +209,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     rowCount: Boolean,
     reqCopy: Option[String],
     rollupName: Option[RollupName],
+    obfuscateId: Boolean,
     precondition: Precondition,
     ifModifiedSince: Option[DateTime]
   ): QueryResult = {
@@ -216,7 +220,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
                  rowCount: Boolean) = {
       val cryptProvider = new CryptProvider(latestCopy.datasetInfo.obfuscationKey)
       val sqlCtx = Map[SqlizerContext, Any](
-        SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
+        SqlizerContext.IdRep -> (if (obfuscateId) { new SoQLID.StringRep(cryptProvider) }
+                                 else { new ClearNumberRep(cryptProvider) }),
         SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
         SqlizerContext.CaseSensitivity -> caseSensitivity
       )
