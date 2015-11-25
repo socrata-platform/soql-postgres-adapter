@@ -51,11 +51,12 @@ object CJSONWriter {
                  givenRowCount: Option[Long],
                  dataVersion: Long,
                  lastModified: DateTime,
+                 obfuscateId: Boolean,
                  locale: String = "en_US"): HttpServletResponse => Unit = (r: HttpServletResponse) => {
     r.setContentType("application/json")
     r.setCharacterEncoding(utf8EncodingName)
     val os = r.getOutputStream
-    val jsonReps = PostgresUniverseCommon.jsonReps(datasetInfo)
+    val jsonReps = PostgresUniverseCommon.jsonReps(datasetInfo, obfuscateId)
 
     val (rowCount, rows) = givenRowCount match {
       case None if reqRowCount =>
