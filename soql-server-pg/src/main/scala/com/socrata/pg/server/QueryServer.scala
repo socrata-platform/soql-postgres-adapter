@@ -150,7 +150,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val reqRowCount = Option(servReq.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     val copy = Option(servReq.getParameter("copy"))
     val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
-    val obfuscateId = !Option(servReq.getParameter("idAppearance")).exists(_ == "clear")
+    val obfuscateId = !Option(servReq.getParameter("obfuscateId")).exists(_ == "false")
 
     logger.info("Performing query on dataset " + datasetId)
     streamQueryResults(analysis, datasetId, reqRowCount, copy, rollupName, obfuscateId,
