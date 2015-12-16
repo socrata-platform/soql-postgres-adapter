@@ -20,10 +20,10 @@ object SoQLAnalyzerHelper {
                   idMap: ColumnName => UserColumnId): SoQLAnalysis[UserColumnId, SoQLType] = {
     implicit val ctx: DatasetContext[SoQLAnalysisType] = toAnalysisType(datasetCtx)
 
-    val analysis: SoQLAnalysis[ColumnName, SoQLAnalysisType] = analyzer.analyzeFullQuery(soql)
+    val analysis: SoQLAnalysis[ColumnName, SoQLAnalysisType] = analyzer.analyzeUnchainedQuery(soql)
     val baos = new ByteArrayOutputStream
-    serializer(baos, analysis.mapColumnIds(idMap))
-    deserializer(new ByteArrayInputStream(baos.toByteArray))
+    serializer(baos, Seq(analysis.mapColumnIds(idMap)))
+    deserializer(new ByteArrayInputStream(baos.toByteArray)).head
   }
 
   private def serializeColumn(c: UserColumnId) = c.underlying

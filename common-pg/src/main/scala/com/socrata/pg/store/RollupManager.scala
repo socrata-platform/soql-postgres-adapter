@@ -101,7 +101,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       // the column back.  It would be ideal if we had a better way to communicate this failure upwards through
       // the stack.
       val prefixedRollupAnalysis: Try[SoQLAnalysis[ColumnName, SoQLAnalysisType]] =
-        Try { analyzer.analyzeFullQuery(rollupInfo.soql)(prefixedDsContext) }
+        Try { analyzer.analyzeUnchainedQuery(rollupInfo.soql)(prefixedDsContext) }
 
 
       prefixedRollupAnalysis match {
@@ -265,8 +265,8 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
   private def analysisToSoQLType(analysis: ASysCol): AUserCol = {
     val baos = new ByteArrayOutputStream
-    SoQLAnalyzerHelper.serializer(baos, analysis.mapColumnIds(name => new UserColumnId(name.name)))
-    SoQLAnalyzerHelper.deserializer(new ByteArrayInputStream(baos.toByteArray))
+    SoQLAnalyzerHelper.serializer(baos, Seq(analysis.mapColumnIds(name => new UserColumnId(name.name))))
+    SoQLAnalyzerHelper.deserializer(new ByteArrayInputStream(baos.toByteArray)).head
   }
 }
 
