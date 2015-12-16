@@ -11,12 +11,14 @@ import com.socrata.datacoordinator.id.UserColumnId
 object SoQLAnalyzerHelper {
   private val serializer = new AnalysisSerializer(serializeColumn, serializeAnalysisType)
 
-  private val deserializer = new AnalysisDeserializer(deserializeColumn, deserializeType, SoQLFunctions.functionsByIdentity)
+  private val deserializer = new AnalysisDeserializer(deserializeColumn,
+                                                      deserializeType,
+                                                      SoQLFunctions.functionsByIdentity)
 
-  def serialize(outputStream: OutputStream, analysis: SoQLAnalysis[UserColumnId, SoQLAnalysisType]) =
+  def serialize(outputStream: OutputStream, analysis: SoQLAnalysis[UserColumnId, SoQLAnalysisType]): Unit =
     serializer(outputStream, Seq(analysis))
 
-  def deserialize(inputStream: InputStream) = deserializer(inputStream).head
+  def deserialize(inputStream: InputStream): SoQLAnalysis[UserColumnId, SoQLType] = deserializer(inputStream).head
 
   private val analyzer = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
 
