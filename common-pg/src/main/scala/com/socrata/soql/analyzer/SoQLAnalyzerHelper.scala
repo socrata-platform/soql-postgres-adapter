@@ -5,13 +5,18 @@ import com.socrata.soql.{SoQLAnalysis, SoQLAnalyzer, AnalysisDeserializer, Analy
 import com.socrata.soql.functions.{SoQLFunctions, SoQLFunctionInfo, SoQLTypeInfo}
 import com.socrata.soql.environment.{ColumnName, TypeName, DatasetContext}
 import com.socrata.soql.types.{SoQLAnalysisType, SoQLType}
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
+import java.io.{OutputStream, InputStream, ByteArrayInputStream, ByteArrayOutputStream}
 import com.socrata.datacoordinator.id.UserColumnId
 
 object SoQLAnalyzerHelper {
-  val serializer = new AnalysisSerializer(serializeColumn, serializeAnalysisType)
+  private val serializer = new AnalysisSerializer(serializeColumn, serializeAnalysisType)
 
-  val deserializer = new AnalysisDeserializer(deserializeColumn, deserializeType, SoQLFunctions.functionsByIdentity)
+  private val deserializer = new AnalysisDeserializer(deserializeColumn, deserializeType, SoQLFunctions.functionsByIdentity)
+
+  def serialize(outputStream: OutputStream, analysis: SoQLAnalysis[UserColumnId, SoQLAnalysisType]) =
+    serializer(outputStream, Seq(analysis))
+
+  def deserialize(inputStream: InputStream) = deserializer(inputStream).head
 
   private val analyzer = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
 
@@ -22,8 +27,8 @@ object SoQLAnalyzerHelper {
 
     val analysis: SoQLAnalysis[ColumnName, SoQLAnalysisType] = analyzer.analyzeUnchainedQuery(soql)
     val baos = new ByteArrayOutputStream
-    serializer(baos, Seq(analysis.mapColumnIds(idMap)))
-    deserializer(new ByteArrayInputStream(baos.toByteArray)).head
+    serialize(baos, analysis.mapColumnIds(idMap))
+    deserialize(new ByteArrayInputStream(baos.toByteArray))
   }
 
   private def serializeColumn(c: UserColumnId) = c.underlying
