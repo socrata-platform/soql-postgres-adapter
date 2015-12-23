@@ -1,31 +1,36 @@
 package com.socrata.pg.server
 
 import com.rojoma.json.v3.ast.JObject
-import com.socrata.pg.store._
-import com.socrata.soql.types.{SoQLValue, SoQLType}
+import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
+import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
+import com.socrata.http.server.util.NoPrecondition
+import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity}
+import com.socrata.pg.store._
+import com.socrata.soql.SoQLAnalysis
+import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{DatasetContext, ColumnName}
-import com.socrata.soql.SoQLAnalysis
-import com.socrata.datacoordinator.id.UserColumnId
-import com.socrata.soql.analyzer.SoQLAnalyzerHelper
-import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
-import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity}
-import com.socrata.http.server.util.NoPrecondition
+import com.socrata.soql.types.{SoQLValue, SoQLType}
 
 import scala.language.existentials
 
+// scalastyle:off method.length
 trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUniverseTestBase {
   private lazy val datasourceConfig = new DataSourceConfig(config, "database")
 
   protected lazy val ds = DataSourceFromConfig(datasourceConfig)
 
-  def compareSoqlResult(soql: String, expectedFixture: String, expectedRowCount: Option[Long] = None, caseSensitivity: CaseSensitivity = CaseSensitive) {
+  def compareSoqlResult(soql: String,
+                        expectedFixture: String,
+                        expectedRowCount: Option[Long] = None,
+                        caseSensitivity: CaseSensitivity = CaseSensitive): Unit = {
     withDb() { conn =>
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon)
       val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secDatasetId).get)
-      for (readCtx <- pgu.datasetReader.openDataset(copyInfo)) yield {
+
+      pgu.datasetReader.openDataset(copyInfo).map { readCtx =>
         val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
         val columnNameTypeMap: OrderedMap[ColumnName, SoQLType] = baseSchema.values.foldLeft(OrderedMap.empty[ColumnName, SoQLType]) { (map, cinfo) =>
           map + (ColumnName(cinfo.userColumnId.underlying) -> cinfo.typ)
@@ -35,13 +40,13 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
         }
         val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
         val (qrySchema, dataVersion, mresult) =
-          for (dsInfo <- ds) yield {
+          ds.map { dsInfo =>
             val qs = new QueryServer(dsInfo, caseSensitivity)
             qs.execQuery(pgu, "someDatasetInternalName", copyInfo.datasetInfo, analysis, expectedRowCount.isDefined, None, None, true,
               NoPrecondition, None) match {
               case QueryServer.Success(schema, _, version, results, etag, lastModified) =>
                 (schema, version, results)
-              case queryFail =>
+              case queryFail: QueryServer.QueryResult =>
                 throw new Exception(s"Query Fail ${queryFail.getClass.getName}")
             }
           }
@@ -49,7 +54,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
 
         val qryReps = qrySchema.mapValues( cinfo => jsonReps(cinfo.typ))
 
-        for (result <- mresult) {
+        mresult.map { result =>
           val resultJo = result.map { row =>
             val rowJson = qryReps.map { case (cid, rep) =>
               (qrySchema(cid).userColumnId.underlying -> rep.toJValue(row(cid)))

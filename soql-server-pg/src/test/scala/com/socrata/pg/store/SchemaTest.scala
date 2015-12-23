@@ -16,10 +16,10 @@ class SchemaTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase 
   test("schema json codec") {
     val dsConfig = new DataSourceConfig(config, "database")
     val ds = DataSourceFromConfig(dsConfig)
-    for (dsInfo <- ds) {
+    ds.map { dsInfo =>
       withPgu() { pgu =>
       val f = columnsCreatedFixture
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion+1, None, f.events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, f.events.iterator)
       val qs = new QueryServerTest(dsInfo, pgu)
       val schema = qs.getSchema(testInternalName, None).get
       val schemaj = JsonUtil.renderJson(schema)

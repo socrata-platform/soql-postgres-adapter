@@ -6,28 +6,29 @@ import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.datacoordinator.common.StandardObfuscationKeyGenerator
 import scala.language.reflectiveCalls
 
+// scalastyle:off null
 class PGSecondaryDatasetMapWriterTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
-  def noopKeyGen() = new Array[Byte](0)
+  def noopKeyGen(): Array[Byte] = new Array[Byte](0)
   val ZeroID = 0L
 
-  override def beforeAll() {
+  override def beforeAll(): Unit = {
     createDatabases()
   }
 
-  override def afterAll() {
+  override def afterAll(): Unit = {
   }
 
-  def createSchema(conn: Connection) {
+  def createSchema(conn: Connection): Unit = {
     Migration.migrateDb(conn)
     loadFixtureData(conn)
   }
 
-  def loadFixtureData(conn: Connection) {
+  def loadFixtureData(conn: Connection): Unit = {
     loadDatasetMapRows(conn)
   }
 
-  def loadDatasetMapRows(conn: Connection) {
+  def loadDatasetMapRows(conn: Connection): Unit = {
     val sql = "INSERT INTO dataset_map (system_id, next_counter_value, locale_name, obfuscation_key) values (?, ?, ?, ?)"
     using(conn.prepareStatement(sql)) { statement =>
       statement.setLong(1, 123)
@@ -64,7 +65,7 @@ class PGSecondaryDatasetMapWriterTest extends PGSecondaryTestBase with PGSeconda
     withPgu() { pgu =>
       val f = columnsCreatedFixture
 
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion+1, None, f.events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, f.events.iterator)
 
       val truthCopyInfo = getTruthCopyInfo(pgu, f.datasetInfo)
 
@@ -74,7 +75,7 @@ class PGSecondaryDatasetMapWriterTest extends PGSecondaryTestBase with PGSeconda
 
       pgu.secondaryDatasetMapWriter.deleteCopy(truthCopyInfo)
 
-      an [Exception] should be thrownBy getTruthCopyInfo(pgu, f.datasetInfo)
+      an [Exception] should be thrownBy getTruthCopyInfo(pgu, f.datasetInfo) // scalastyle:ignore
 
       pgu.conn.getMetaData().getTables(null, null, tableName, null).next() should be (false)
     }

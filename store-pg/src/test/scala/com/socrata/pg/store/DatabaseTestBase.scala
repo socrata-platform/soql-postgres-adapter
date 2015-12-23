@@ -15,7 +15,7 @@ import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig, SoQLCommon}
 import com.socrata.datacoordinator.id.{DatasetId, RollupName, UserColumnId}
 import com.socrata.datacoordinator.secondary.NamedSecondary
-import com.socrata.datacoordinator.service.{Mutator, ProcessCreationReturns}
+import com.socrata.datacoordinator.service.{Mutator, ProcessCreationReturns, ProcessMutationReturns}
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo, DatasetInfo}
 import com.socrata.datacoordinator.truth.migration.Migration.MigrationOperation
 import com.socrata.datacoordinator.truth.universe.sql.PostgresCopyIn
@@ -61,12 +61,12 @@ trait DatabaseTestBase extends Logging {
    * Create both truth and secondary databases
    * To be called during beforeAll
    */
-  def createDatabases() {
+  def createDatabases(): Unit = {
     DatabaseTestBase.createDatabases(truthDb, secondaryDb, config)
   }
 
   def withSoQLCommon[T](datasourceConfig: DataSourceConfig)(f: (SoQLCommon) => T): T = {
-    val result = for (dsc <- DataSourceFromConfig(truthDataSourceConfig)) yield {
+    val result = DataSourceFromConfig(truthDataSourceConfig).map { dsc =>
       val executor = java.util.concurrent.Executors.newCachedThreadPool()
       try {
         val common = new SoQLCommon(
@@ -126,7 +126,7 @@ trait DatabaseTestBase extends Logging {
     JsonArrayIterator[JValue](jsonEventIter)
   }
 
-  def processMutationCreate(common: SoQLCommon, script: File) = {
+  def processMutationCreate(common: SoQLCommon, script: File): ProcessCreationReturns = {
     for {
       u <- common.universe
       indexedTempFile <- managed(new IndexedTempFile(10 * 1024, 10 * 1024))
@@ -137,7 +137,7 @@ trait DatabaseTestBase extends Logging {
     }
   }
 
-  def processMutation(common: SoQLCommon, script: File, datasetId: DatasetId) = {
+  def processMutation(common: SoQLCommon, script: File, datasetId: DatasetId): ProcessMutationReturns = {
     for {
       u <- common.universe
       indexedTempFile <- managed(new IndexedTempFile(10 * 1024, 10 * 1024))
@@ -148,15 +148,15 @@ trait DatabaseTestBase extends Logging {
     }
   }
 
-  def pushToSecondary(common: SoQLCommon, datasetId: DatasetId, isNew: Boolean = true) {
-    for(u <- common.universe) {
+  def pushToSecondary(common: SoQLCommon, datasetId: DatasetId, isNew: Boolean = true): Unit = {
+    common.universe.map { u =>
       val secondary = new PGSecondary(config)
       val pb = u.playbackToSecondary
       val secondaryMfst = u.secondaryManifest
       val claimantId = UUID.randomUUID()
       val claimTimeout = FiniteDuration(1, TimeUnit.MINUTES)
       if (isNew) secondaryMfst.addDataset(storeId, datasetId)
-      for(job <- secondaryMfst.claimDatasetNeedingReplication(storeId, claimantId, claimTimeout)) {
+      secondaryMfst.claimDatasetNeedingReplication(storeId, claimantId, claimTimeout).foreach { job =>
         try {
           pb(NamedSecondary(storeId, secondary), job)
         } finally {
@@ -205,7 +205,7 @@ object DatabaseTestBase extends Logging {
 
   private var dbInitialized = false
 
-  def createDatabases(truthDb: String, secondaryDb: String, secondaryConfig: Config) {
+  def createDatabases(truthDb: String, secondaryDb: String, secondaryConfig: Config): Unit = {
     synchronized {
       if (!DatabaseTestBase.dbInitialized) {
         logger.info("*** Creating test databases *** ")
@@ -220,7 +220,7 @@ object DatabaseTestBase extends Logging {
     }
   }
 
-  private def createDatabase(dbName: String) {
+  private def createDatabase(dbName: String): Unit = {
     try {
       Class.forName("org.postgresql.Driver").newInstance()
     } catch {
@@ -242,7 +242,7 @@ object DatabaseTestBase extends Logging {
     }
   }
 
-  private def populateTruth(dbName: String) {
+  private def populateTruth(dbName: String): Unit = {
     using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/$dbName", "blist", "blist")) { conn =>
       conn.setAutoCommit(true)
       com.socrata.datacoordinator.truth.migration.Migration.migrateDb(conn)

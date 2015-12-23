@@ -44,6 +44,7 @@ class SoQLStringFunctionsTest extends SoQLTest {
   }
 
   test("contains(c, x)") {
-    println("Search should be used instead of contains.")
+    // ...What even is this for?
+    println("Search should be used instead of contains.") // scalastyle:ignore
   }
 }

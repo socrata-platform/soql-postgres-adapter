@@ -24,72 +24,70 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
     createDatabases()
   }
 
-  def workingCopyCreatedFixture =
-    new {
-      val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
-      val dataVersion = 0L
-      val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
-      val pgs = new PGSecondary(config)
-      val events = Seq(
-        WorkingCopyCreated(copyInfo)
-      )
-    }
+  def workingCopyCreatedFixture = new { // scalastyle:ignore
+    val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
+    val dataVersion = 0L
+    val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
+    val pgs = new PGSecondary(config)
+    val events = Seq(
+      WorkingCopyCreated(copyInfo)
+    )
+  }
 
-  def columnsCreatedFixture =
-    new {
-      val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
-      val dataVersion = 0L
-      val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
-      val pgs = new PGSecondary(config)
-      val events = Seq(
-        WorkingCopyCreated(copyInfo),
-        ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, false, false, false)),
-        ColumnCreated(ColumnInfo(new ColumnId(9125), new UserColumnId(":version"), SoQLVersion, false, false, true)),
-        ColumnCreated(ColumnInfo(new ColumnId(9126), new UserColumnId("mycolumn"), SoQLText, false, false, false)),
-        SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, true, false, false))
-      )
-    }
+  def columnsCreatedFixture = new { // scalastyle:ignore
+    val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
+    val dataVersion = 0L
+    val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
+    val pgs = new PGSecondary(config)
+    val events = Seq(
+      WorkingCopyCreated(copyInfo),
+      ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, false, false, false)),
+      ColumnCreated(ColumnInfo(new ColumnId(9125), new UserColumnId(":version"), SoQLVersion, false, false, true)),
+      ColumnCreated(ColumnInfo(new ColumnId(9126), new UserColumnId("mycolumn"), SoQLText, false, false, false)),
+      SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, true, false, false))
+    )
+  }
 
-  def columnsRemovedFixture =
-    new {
-      val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
-      val dataVersion = 0L
-      val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
-      val pgs = new PGSecondary(config)
-      val testColInfo = ColumnInfo(new ColumnId(9126), new UserColumnId("mycolumn"), SoQLText, false, false, false)
-      val events = Seq(
-        WorkingCopyCreated(copyInfo),
-        ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, false, false, false)),
-        ColumnCreated(ColumnInfo(new ColumnId(9125), new UserColumnId(":version"), SoQLVersion, false, false, true)),
-        ColumnCreated(testColInfo),
-        ColumnRemoved(testColInfo),
-        SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, true, false, false))
-      )
-    }
+  def columnsRemovedFixture = new { // scalastyle:ignore
+    val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
+    val dataVersion = 0L
+    val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
+    val pgs = new PGSecondary(config)
+    val testColInfo = ColumnInfo(new ColumnId(9126), new UserColumnId("mycolumn"), SoQLText, false, false, false)
+    val events = Seq(
+      WorkingCopyCreated(copyInfo),
+      ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, false, false, false)),
+      ColumnCreated(ColumnInfo(new ColumnId(9125), new UserColumnId(":version"), SoQLVersion, false, false, true)),
+      ColumnCreated(testColInfo),
+      ColumnRemoved(testColInfo),
+      SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, true, false, false))
+    )
+  }
 
-  def getTruthDatasetInfo(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], secondaryDatasetInfo: SecondaryDatasetInfo): TruthDatasetInfo = {
+  def getTruthDatasetInfo(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                          secondaryDatasetInfo: SecondaryDatasetInfo): TruthDatasetInfo = {
     val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName).getOrElse(
       throw new ResyncSecondaryException(s"Couldn't find mapping for datasetInternalName ${secondaryDatasetInfo.internalName}")
     )
     pgu.datasetMapReader.datasetInfo(datasetId).get
   }
 
-  def getTruthCopyInfo(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], secondaryDatasetInfo: SecondaryDatasetInfo): TruthCopyInfo = {
+  def getTruthCopyInfo(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                       secondaryDatasetInfo: SecondaryDatasetInfo): TruthCopyInfo =
     pgu.datasetMapReader.latest(getTruthDatasetInfo(pgu, secondaryDatasetInfo))
-  }
 
-  def getTruthCopies(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], secondaryDatasetInfo: SecondaryDatasetInfo): Iterable[TruthCopyInfo] = {
+  def getTruthCopies(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                     secondaryDatasetInfo: SecondaryDatasetInfo): Iterable[TruthCopyInfo] =
     pgu.datasetMapReader.allCopies(getTruthDatasetInfo(pgu, secondaryDatasetInfo))
-  }
 
-  def dropDataset(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], truthDatasetId: DatasetId) = {
+  def dropDataset(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], truthDatasetId: DatasetId): Unit = {
     val secondary = new PGSecondary(config)
     val dsName = s"$dcInstance.${truthDatasetId.underlying}"
     secondary.dropDataset(dsName, None)
     pgu.commit()
   }
 
-  def cleanupDroppedTables(pgu: PGSecondaryUniverse[SoQLType, SoQLValue]) = {
+  def cleanupDroppedTables(pgu: PGSecondaryUniverse[SoQLType, SoQLValue]): Unit = {
     while (pgu.tableCleanup.cleanupPendingDrops()) { }
     pgu.commit()
   }

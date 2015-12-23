@@ -60,8 +60,8 @@ class PostgresUniverseCommon(val tablespace: String => Option[String],
 
   def tmpDir: File = File.createTempFile("pg-store", "pg").getParentFile
   // unused
-  def logTableCleanupDeleteEvery: FiniteDuration = ???
-  def logTableCleanupDeleteOlderThan: FiniteDuration = ???
+  def logTableCleanupDeleteEvery: FiniteDuration = ??? // scalastyle:ignore
+  def logTableCleanupDeleteOlderThan: FiniteDuration = ??? // scalastyle:ignore
 
   val SystemColumns = SoQLSystemColumns
 

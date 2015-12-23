@@ -13,7 +13,7 @@ class RowSizeBufferSqlErrorHandlerTest extends FunSuite with Matchers with Befor
 
   val dbName = "secondary_sql_error_test"
 
-  override def beforeAll() {
+  override def beforeAll(): Unit = {
     createDatabase(dbName)
   }
 
@@ -84,7 +84,7 @@ class RowSizeBufferSqlErrorHandlerTest extends FunSuite with Matchers with Befor
     }
   }
 
-  private def createDatabase(dbName: String) {
+  private def createDatabase(dbName: String): Unit = {
     try {
       Class.forName("org.postgresql.Driver").newInstance()
     } catch {
