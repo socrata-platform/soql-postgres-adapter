@@ -3,7 +3,7 @@ package com.socrata.pg.server
 class SoQLLimitOffsetTest  extends SoQLTest {
 
   test("plain with row count") {
-    compareSoqlResult("select make, name order by name offset 2 limit 5", "limitoffset-plain.json", Some(15))
+    compareSoqlResult("select make, name order by name offset 2 limit 5", "limitoffset-plain.json", Some(16))
   }
 
   test("plain w/o row count") {

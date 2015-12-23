@@ -112,6 +112,10 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
   private def countBySubQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType])(reqRowCount: Boolean, sql: String) =
     if (reqRowCount && analysis.groupBy.isDefined) s"SELECT count(*) FROM ($sql) t1" else sql
 
+  /**
+   * This cannot handle SoQLLocation because it is mapped to multiple sql columns.
+   * SoQLLocation is handled in Sqlizer.
+   */
   private val GeoTypes: Set[SoQLType] =
     Set(SoQLPoint, SoQLMultiPoint, SoQLLine, SoQLMultiLine, SoQLPolygon, SoQLMultiPolygon)
 

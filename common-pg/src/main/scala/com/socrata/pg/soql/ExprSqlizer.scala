@@ -111,8 +111,17 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           escape: Escape): ParametricSql = {
     reps.get(expr.column) match {
       case Some(rep) =>
-        val maybeUpperPhysColumns = rep.physColumns.map(toUpper(expr)(_, ctx))
-        ParametricSql(maybeUpperPhysColumns.mkString(","), setParams)
+        if (expr.typ == SoQLLocation &&
+            ctx.get(SoqlPart).exists(_ == SoqlSelect) &&
+            ctx.get(RootExpr).exists(_ == expr)) {
+          val maybeUpperPhysColumns =
+            rep.physColumns.take(1).map(col => "ST_AsBinary(" + (toUpper(expr)(col, ctx)) + ")") ++
+            rep.physColumns.drop(1).map(toUpper(expr)(_, ctx))
+          ParametricSql(maybeUpperPhysColumns.mkString(","), setParams)
+        } else {
+          val maybeUpperPhysColumns = rep.physColumns.map(toUpper(expr)(_, ctx))
+          ParametricSql(maybeUpperPhysColumns.mkString(","), setParams)
+        }
       case None =>
         ParametricSql(toUpper(expr)(expr.column.underlying, ctx), setParams) // for tests
     }

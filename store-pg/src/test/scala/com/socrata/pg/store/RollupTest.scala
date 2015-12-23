@@ -29,7 +29,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
       val dsName = s"$dcInstance.${truthDatasetId.underlying}"
-      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"), "select * (EXCEPT _point, _multipolygon)")
+      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"), "select * (EXCEPT _point, _multipolygon, _location)")
 
       val rm = new RollupManager(pgu, copyInfo)
       rm.updateRollup(rollupInfo, copyInfo.dataVersion)
@@ -37,7 +37,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val tableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
 
       jdbcColumnCount(pgu.conn, tableName) should be (22)
-      jdbcRowCount(pgu.conn,tableName) should be (15)
+      jdbcRowCount(pgu.conn,tableName) should be (16)
       secondary.shutdown()
     }
   }
@@ -56,7 +56,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val tableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
 
       jdbcColumnCount(pgu.conn, tableName) should be (5)
-      jdbcRowCount(pgu.conn,tableName) should be (15)
+      jdbcRowCount(pgu.conn,tableName) should be (16)
       secondary.shutdown()
     }
   }
