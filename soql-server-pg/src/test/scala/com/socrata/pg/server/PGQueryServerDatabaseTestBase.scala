@@ -42,14 +42,15 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
         val (qrySchema, dataVersion, mresult) =
           ds.map { dsInfo =>
             val qs = new QueryServer(dsInfo, caseSensitivity)
-            qs.execQuery(pgu, "someDatasetInternalName", copyInfo.datasetInfo, analysis, expectedRowCount.isDefined, None, None, NoPrecondition, None) match {
+            qs.execQuery(pgu, "someDatasetInternalName", copyInfo.datasetInfo, analysis, expectedRowCount.isDefined, None, None, true,
+              NoPrecondition, None) match {
               case QueryServer.Success(schema, _, version, results, etag, lastModified) =>
                 (schema, version, results)
               case queryFail: QueryServer.QueryResult =>
                 throw new Exception(s"Query Fail ${queryFail.getClass.getName}")
             }
           }
-        val jsonReps = PostgresUniverseCommon.jsonReps(copyInfo.datasetInfo)
+        val jsonReps = PostgresUniverseCommon.jsonReps(copyInfo.datasetInfo, true)
 
         val qryReps = qrySchema.mapValues( cinfo => jsonReps(cinfo.typ))
 

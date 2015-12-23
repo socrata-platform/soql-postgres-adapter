@@ -97,6 +97,14 @@ class SqlizerTest extends FunSuite with Matchers {
     params should be (Seq("POINT(0 0)"))
   }
 
+  test("is empty") {
+    val soql = "select is_empty(multipolygon)"
+    val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
+    val expected = "SELECT (ST_IsEmpty(multipolygon) or multipolygon is null) FROM t1"
+    sql.replaceAll("\\s+", " ") should be (expected)
+    setParams.length should be (0)
+  }
+
   test("visible at") {
     val soql = "select visible_at(multipolygon, 0.03)"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
@@ -200,10 +208,10 @@ class SqlizerTest extends FunSuite with Matchers {
   test("signed magnitude linear") {
     val soql = "select signed_magnitude_linear(year, 42)"
     val ParametricSql(sql, setParams) = sqlize(soql, CaseSensitive)
-    sql should be("SELECT (sign(year) * floor(abs(year)/? + 1)) FROM t1")
-    setParams.length should be(1)
+    sql should be("SELECT (case when ? = 1 then floor(year) else sign(year) * floor(abs(year)/? + 1) end) FROM t1")
+    setParams.length should be(2)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be(Seq(42))
+    params should be(Seq(42,42))
   }
 
   test("case fn") {

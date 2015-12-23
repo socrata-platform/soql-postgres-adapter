@@ -83,14 +83,17 @@ class PostgresUniverseCommon(val tablespace: String => Option[String],
 
   val writeLockTimeout = Duration.create(1, TimeUnit.MINUTES)
 
-  def idObfuscationContextFor(cryptProvider: CryptProvider): SoQLID.StringRep = new SoQLID.StringRep(cryptProvider)
+  def idObfuscationContextFor(cryptProvider: CryptProvider, obfuscateId: Boolean): SoQLID.StringRep = {
+    if (obfuscateId) { new SoQLID.StringRep(cryptProvider) }
+    else { new SoQLID.ClearNumberRep(cryptProvider) }
+  }
 
   def versionObfuscationContextFor(cryptProvider: CryptProvider): SoQLVersion.StringRep =
     new SoQLVersion.StringRep(cryptProvider)
 
-  def jsonReps(datasetInfo: DatasetInfo): SoQLType => JsonColumnRep[SoQLType,SoQLValue] = {
+  def jsonReps(datasetInfo: DatasetInfo, obfuscateId: Boolean): SoQLType => JsonColumnRep[SoQLType,SoQLValue] = {
     val cp = new CryptProvider(datasetInfo.obfuscationKey)
-    SoQLRep.jsonRep(idObfuscationContextFor(cp), versionObfuscationContextFor(cp))
+    SoQLRep.jsonRep(idObfuscationContextFor(cp, obfuscateId), versionObfuscationContextFor(cp))
   }
 
   def rowPreparer(transactionStart: DateTime, // scalastyle:ignore method.length
@@ -98,7 +101,7 @@ class PostgresUniverseCommon(val tablespace: String => Option[String],
                   replaceUpdatedRows: Boolean): RowPreparer[SoQLValue] =
     new RowPreparer[SoQLValue] {
       val schema = ctx.schemaByUserColumnId
-      lazy val jsonRepFor = jsonReps(ctx.datasetInfo)
+      lazy val jsonRepFor = jsonReps(ctx.datasetInfo, true)
 
       def findCol(name: UserColumnId) =
         schema.getOrElse(name, sys.error(s"No $name column?")).systemId

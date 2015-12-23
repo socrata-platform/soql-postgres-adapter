@@ -86,7 +86,7 @@ class SoQLGeomFunctionsTest extends SoQLTest {
   test("distance with literals") {
     // Distance between London and New York
     compareSoqlResult("select distance_in_meters('POINT(-0.127691 51.517320)', 'POINT(-73.976248 40.767049)') " +
-      "as distance_in_meters limit 1", "select-distance-literal.json")
+                        "as distance_in_meters limit 1", "select-distance-literal.json")
   }
 
   test("distance with columns") {
@@ -136,6 +136,28 @@ class SoQLGeomFunctionsTest extends SoQLTest {
       "select-snap-to-grid.json")
   }
 
+  test("is empty") {
+    val polygon = "POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))"
+    val multipolygon = "MULTIPOLYGON(((1 1, 2 1, 2 2, 1 2, 1 1)))"
+    val point = "POINT(10 40)"
+    val multipoint = "MULTIPOINT((10 40), (40 30), (20 20), (30 10))"
+    val emptyPoly = "MULTIPOLYGON EMPTY"
+    val emptyPt = "MULTIPOINT EMPTY"
+    // Inserting a null literal is tricky.
+    val nullGeom = "simplify('POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))', 16)"
+    compareSoqlResult(
+      s"""
+      select is_empty('$polygon') as poly,
+        is_empty('$multipolygon') as mpoly,
+        is_empty('$point') as point,
+        is_empty('$multipoint') as mpoint,
+        is_empty('$emptyPoly') as empty_poly,
+        is_empty('$emptyPt') as empty_pt,
+        is_empty($nullGeom) as null_geom
+         where name = 'Chili'""",
+      "select-is-empty.json")
+  }
+
   test("visible at") {
     val polygon1   = """polygon((1 1, 2 1, 2 2, 1 2, 1 1))"""
     val polygon2   = """polygon((1 1, 3 1, 3 3, 1 3, 1 1))"""
@@ -165,7 +187,7 @@ class SoQLGeomFunctionsTest extends SoQLTest {
       """select name, curated_region_test('multipolygon(((1 1, 2 1, 2 2, 1 2, 1 1),
         |                                                (1 1, 2 1, 2 2, 1 2, 1 1)))'::multipolygon, 50) as test_result
         | where name = 'Chili'""".stripMargin,
-     "select-curated-region-test-invalid-geometry.json")
+      "select-curated-region-test-invalid-geometry.json")
   }
 
   test("curated region test contains null") {

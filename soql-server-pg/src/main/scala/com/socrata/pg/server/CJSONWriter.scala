@@ -44,18 +44,20 @@ object CJSONWriter {
   val dateTimeFormat = ISODateTimeFormat.dateTime
   val utf8EncodingName = scala.io.Codec.UTF8.name
 
-  def writeCJson(datasetInfo: DatasetInfo, // scalastyle:ignore method.length
+  def writeCJson(// scalastyle:ignore method.length parameter.number
+                 datasetInfo: DatasetInfo,
                  qrySchema: OrderedMap[ColumnId, ColumnInfo[SoQLType]],
                  rowData:CloseableIterator[Row[SoQLValue]],
                  reqRowCount: Boolean,
                  givenRowCount: Option[Long],
                  dataVersion: Long,
                  lastModified: DateTime,
+                 obfuscateId: Boolean,
                  locale: String = "en_US"): HttpServletResponse => Unit = (r: HttpServletResponse) => {
     r.setContentType("application/json")
     r.setCharacterEncoding(utf8EncodingName)
     val os = r.getOutputStream
-    val jsonReps = PostgresUniverseCommon.jsonReps(datasetInfo)
+    val jsonReps = PostgresUniverseCommon.jsonReps(datasetInfo, obfuscateId)
 
     val (rowCount, rows) = givenRowCount match {
       case None if reqRowCount =>
