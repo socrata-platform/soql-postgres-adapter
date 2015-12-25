@@ -72,7 +72,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     try {
       logger.debug("sql: {}", pSql.sql)
       // Statement to be closed by caller
-      val stmt = conn.prepareStatement(pSql.sql)
+      val stmt = conn.prepareStatement(pSql.sql.head)
       // need to explicitly set a fetch size to stream results
       stmt.setFetchSize(sqlFetchSize)
       pSql.setParams.zipWithIndex.foreach { case (setParamFn, idx) =>

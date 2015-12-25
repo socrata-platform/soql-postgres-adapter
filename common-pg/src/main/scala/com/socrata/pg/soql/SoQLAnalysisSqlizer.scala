@@ -60,16 +60,16 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     // SEARCH
     val search = ana.search.map { search =>
       val searchLit = StringLiteral[SoQLType](search, SoQLText)(NoPosition)
-      val ParametricSql(searchSql, searchSetParams) =
+      val ParametricSql(Seq(searchSql), searchSetParams) =
         Sqlizer.sql(searchLit)(rep, setParamsWhere, ctx + (SoqlPart -> SoqlSearch), escape)
 
       PostgresUniverseCommon.searchVector(allColumnReps) match {
         case Some(sv) =>
           val andOrWhere = if (where.isDefined) " AND" else " WHERE"
           val fts = s"$andOrWhere $sv @@ plainto_tsquery('english', $searchSql)"
-          ParametricSql(fts, searchSetParams)
+          ParametricSql(Seq(fts), searchSetParams)
         case None =>
-          ParametricSql("", setParamsWhere)
+          ParametricSql(Seq(""), setParamsWhere)
       }
     }
     val setParamsSearch = search.map(_.setParams).getOrElse(setParamsWhere)
@@ -77,7 +77,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     // GROUP BY
     val groupBy = ana.groupBy.map { (groupBys: Seq[CoreExpr[UserColumnId, SoQLType]]) =>
       groupBys.foldLeft(Tuple2(Seq.empty[String], setParamsSearch)) { (t2, gb: CoreExpr[UserColumnId, SoQLType]) =>
-        val ParametricSql(sql, newSetParams) = Sqlizer.sql(gb)(rep, t2._2, ctx + (SoqlPart -> SoqlGroup), escape)
+        val ParametricSql(Seq(sql), newSetParams) = Sqlizer.sql(gb)(rep, t2._2, ctx + (SoqlPart -> SoqlGroup), escape)
       (t2._1 :+ sql, newSetParams)
     }}
     val setParamsGroupBy = groupBy.map(_._2).getOrElse(setParamsSearch)
@@ -89,7 +89,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     // ORDER BY
     val orderBy = ana.orderBy.map { (orderBys: Seq[OrderBy[UserColumnId, SoQLType]]) =>
       orderBys.foldLeft(Tuple2(Seq.empty[String], setParamsHaving)) { (t2, ob: OrderBy[UserColumnId, SoQLType]) =>
-        val ParametricSql(sql, newSetParams) =
+        val ParametricSql(Seq(sql), newSetParams) =
           Sqlizer.sql(ob)(rep, t2._2, ctx + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression), escape)
         (t2._1 :+ sql, newSetParams)
       }}
@@ -98,15 +98,15 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     // COMPLETE SQL
     val completeSql = selectPhrase.mkString("SELECT ", ",", "") +
       s" FROM $tableName" +
-      where.map(" WHERE " +  _.sql).getOrElse("") +
-      search.map(_.sql).getOrElse("") +
+      where.flatMap(_.sql.headOption.map(" WHERE " +  _)).getOrElse("") +
+      search.flatMap(_.sql.headOption).getOrElse("") +
       groupBy.map(_._1.mkString(" GROUP BY ", ",", "")).getOrElse("") +
-      having.map(" HAVING " +  _.sql).getOrElse("") +
+      having.flatMap(_.sql.headOption.map(" HAVING " + _)).getOrElse("") +
       orderBy.map(_._1.mkString(" ORDER BY ", ",", "")).getOrElse("") +
       ana.limit.map(" LIMIT " + _.toString).getOrElse("") +
       ana.offset.map(" OFFSET " + _.toString).getOrElse("")
 
-    ParametricSql(countBySubQuery(analysis)(reqRowCount, completeSql), setParamsOrderBy)
+    ParametricSql(Seq(countBySubQuery(analysis)(reqRowCount, completeSql)), setParamsOrderBy)
   }
 
   private def countBySubQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType])(reqRowCount: Boolean, sql: String) =
@@ -133,9 +133,11 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
                      escape: Escape) = {
     analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams)) { (t2, columnNameAndcoreExpr) =>
       val (columnName, coreExpr) = columnNameAndcoreExpr
-      val ParametricSql(sql, newSetParams) = Sqlizer.sql(coreExpr)(rep, t2._2, ctx + (RootExpr -> coreExpr), escape)
-      val sqlGeomConverted = if (ctx.contains(LeaveGeomAsIs)) sql else toGeoText(sql, coreExpr.typ)
-      (t2._1 :+ sqlGeomConverted, newSetParams)
+      val ParametricSql(sqls, newSetParams) = Sqlizer.sql(coreExpr)(rep, t2._2, ctx + (RootExpr -> coreExpr), escape)
+      val sqlGeomConverted =
+        if (ctx.contains(LeaveGeomAsIs)) { sqls }
+        else { sqls.map(toGeoText(_, coreExpr.typ)) }
+      (t2._1 ++ sqlGeomConverted, newSetParams)
     }
   }
 

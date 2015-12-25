@@ -133,6 +133,10 @@ trait GeoIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] =>
   }
 }
 
+/**
+ * TODO: Is there a need to create index for latitude, longitude and address fields?
+ * @tparam T
+ */
 trait LocationIndexable[T] extends GeoIndexable[T] { this: SqlColumnCommonRep[T] =>
 
   override def indexableColumns: Array[String] = this.physColumns.take(1)

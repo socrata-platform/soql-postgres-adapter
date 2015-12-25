@@ -17,17 +17,17 @@ object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
         val v = toUpper(lit, quote(lit.value, escape), ctx)
-        ParametricSql(v, setParams)
+        ParametricSql(Seq(v), setParams)
       case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(lit)(ctx) =>
         val v = toUpper(lit, quote(lit.value, escape), ctx)
-        ParametricSql(v, setParams)
+        ParametricSql(Seq(v), setParams)
       case _ =>
         val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
           val maybeUpperLitVal = toUpper(lit, lit.value, ctx)
           stmt.foreach(_.setString(pos, maybeUpperLitVal))
           Some(maybeUpperLitVal)
         }
-        ParametricSql(ParamPlaceHolder, setParams :+ setParam)
+        ParametricSql(Seq(ParamPlaceHolder), setParams :+ setParam)
     }
   }
 
@@ -45,15 +45,15 @@ object NumberLiteralSqlizer extends Sqlizer[NumberLiteral[SoQLType]] {
           escape: Escape): ParametricSql = {
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
-        ParametricSql(lit.value.bigDecimal.toPlainString, setParams)
+        ParametricSql(Seq(lit.value.bigDecimal.toPlainString), setParams)
       case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(lit)(ctx) =>
-        ParametricSql(lit.value.bigDecimal.toPlainString, setParams)
+        ParametricSql(Seq(lit.value.bigDecimal.toPlainString), setParams)
       case _ =>
         val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
           stmt.foreach(_.setBigDecimal(pos, lit.value.bigDecimal))
           Some(lit.value)
         }
-        ParametricSql(ParamPlaceHolder, setParams :+ setParam)
+        ParametricSql(Seq(ParamPlaceHolder), setParams :+ setParam)
     }
   }
 }
@@ -67,15 +67,15 @@ object BooleanLiteralSqlizer extends Sqlizer[BooleanLiteral[SoQLType]] {
           escape: Escape): ParametricSql = {
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
-        ParametricSql(lit.toString(), setParams)
+        ParametricSql(Seq(lit.toString), setParams)
       case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(lit)(ctx) =>
-        ParametricSql(lit.toString(), setParams)
+        ParametricSql(Seq(lit.toString), setParams)
       case _ =>
         val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
           stmt.foreach(_.setBoolean(pos, lit.value))
           Some(lit.value)
         }
-        ParametricSql(ParamPlaceHolder, setParams :+ setParam)
+        ParametricSql(Seq(ParamPlaceHolder), setParams :+ setParam)
     }
   }
 }
@@ -86,7 +86,7 @@ object NullLiteralSqlizer extends Sqlizer[NullLiteral[SoQLType]] {
           setParams: Seq[SetParam],
           ctx: Context,
           escape: Escape): ParametricSql =
-    ParametricSql("null", setParams)
+    ParametricSql(Seq("null"), setParams)
 }
 
 object FunctionCallSqlizer extends Sqlizer[FunctionCall[UserColumnId, SoQLType]] {
@@ -96,10 +96,10 @@ object FunctionCallSqlizer extends Sqlizer[FunctionCall[UserColumnId, SoQLType]]
           ctx: Context,
           escape: Escape): ParametricSql = {
     val fn = SqlFunctions(expr.function.function)
-    val ParametricSql(sql, fnSetParams) = fn(expr, rep, setParams, ctx, escape)
+    val ParametricSql(sqls, fnSetParams) = fn(expr, rep, setParams, ctx, escape)
     // SoQL parsing bakes parenthesis into the ast tree without explicitly spitting out parenthesis.
     // We add parenthesis to every function call to preserve semantics.
-    ParametricSql(s"($sql)", fnSetParams)
+    ParametricSql(sqls.map(s => s"($s)"), fnSetParams)
   }
 }
 
@@ -117,13 +117,13 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           val maybeUpperPhysColumns =
             rep.physColumns.take(1).map(col => "ST_AsBinary(" + (toUpper(expr)(col, ctx)) + ")") ++
             rep.physColumns.drop(1).map(toUpper(expr)(_, ctx))
-          ParametricSql(maybeUpperPhysColumns.mkString(","), setParams)
+          ParametricSql(maybeUpperPhysColumns, setParams)
         } else {
           val maybeUpperPhysColumns = rep.physColumns.map(toUpper(expr)(_, ctx))
-          ParametricSql(maybeUpperPhysColumns.mkString(","), setParams)
+          ParametricSql(maybeUpperPhysColumns, setParams)
         }
       case None =>
-        ParametricSql(toUpper(expr)(expr.column.underlying, ctx), setParams) // for tests
+        ParametricSql(Seq(toUpper(expr)(expr.column.underlying, ctx)), setParams) // for tests
     }
   }
 
