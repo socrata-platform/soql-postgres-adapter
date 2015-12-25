@@ -11,7 +11,7 @@ import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
 import com.socrata.pg.soql.Sqlizer._
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 
-case class ParametricSql(sql: String, setParams: Seq[SetParam])
+case class ParametricSql(sql: Seq[String], setParams: Seq[SetParam])
 
 // scalastyle:off import.grouping
 trait Sqlizer[T] {
@@ -97,8 +97,9 @@ object Sqlizer {
   implicit object OrderBySqlizer extends Sqlizer[OrderBy[UserColumnId, SoQLType]] {
     def sql(orderBy: OrderBy[UserColumnId, SoQLType])(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
             setParams: Seq[SetParam], ctx: Context, escape: Escape): ParametricSql = {
-      val ParametricSql(s, setParamsOrderBy) = Sqlizer.sql(orderBy.expression)(rep, setParams, ctx, escape)
-      val se = s + (if (orderBy.ascending) "" else " desc") + (if (orderBy.nullLast) " nulls last" else "")
+      val ParametricSql(ss, setParamsOrderBy) = Sqlizer.sql(orderBy.expression)(rep, setParams, ctx, escape)
+      val se = ss.map { s =>
+        s + (if (orderBy.ascending) "" else " desc") + (if (orderBy.nullLast) " nulls last" else "") }
       ParametricSql(se, setParamsOrderBy)
     }
   }
