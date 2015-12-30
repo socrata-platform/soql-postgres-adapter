@@ -111,8 +111,10 @@ trait BlobIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] =>
 
 trait GeoIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] =>
 
+  def indexableColumns: Array[String] = this.physColumns
+
   override def createIndex(tableName: String, tablespace: String): Option[String] = {
-    val sql = this.physColumns.map { phyCol =>
+    val sql = indexableColumns.map { phyCol =>
       s"""
       DO $$$$ BEGIN
         IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_${phyCol}_gist') THEN
@@ -124,12 +126,22 @@ trait GeoIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] =>
   }
 
   override def dropIndex(tableName: String): Option[String] = {
-    val sql = this.physColumns.map { phyCol =>
+    val sql = indexableColumns.map { phyCol =>
       s"""DROP INDEX IF EXISTS idx_${tableName}_${phyCol}_gist"""
     }.mkString(";")
     Some(sql)
   }
 }
+
+/**
+ * TODO: Is there a need to create index for latitude, longitude and address fields?
+ * @tparam T
+ */
+trait LocationIndexable[T] extends GeoIndexable[T] { this: SqlColumnCommonRep[T] =>
+
+  override def indexableColumns: Array[String] = this.physColumns.take(1)
+}
+
 
 object SoQLIndexableRep {
   private val sqlRepFactories = Map[SoQLType, String => SqlColIdx] (
@@ -157,6 +169,7 @@ object SoQLIndexableRep {
     SoQLObject -> (base => new ObjectRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
     SoQLArray -> (base => new ArrayRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
     SoQLBlob -> (base => new BlobRep(base) with BlobIndexable[SoQLType]), // TODO: Revisit index need
+    SoQLLocation -> (base => new LocationRep(base) with LocationIndexable[SoQLType]),
     SoQLPoint -> (base =>
       new GeometryLikeRep[Point](
         SoQLPoint,

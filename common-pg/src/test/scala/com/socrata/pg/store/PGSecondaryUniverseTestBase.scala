@@ -202,6 +202,10 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
           case SoQLMultiPolygon => SoQLMultiPolygon(SoQLMultiPolygon.WktRep.unapply(
             "MULTIPOLYGON (((40 40, 20 45, 45 30, 40 40)), ((20 35, 10 30, 10 10, 30 5, 45 20, 20 35), (30 20, 20 15, 20 25, 30 20)))").get)
           case SoQLBlob => SoQLBlob(UUID.randomUUID().toString)
+          case SoQLLocation => SoQLLocation(
+            Some(java.math.BigDecimal.valueOf(1.1)),
+            Some(java.math.BigDecimal.valueOf(2.2)),
+            Some("""{ "address": "101 Main St", "city": "Seattle", "state": "WA", "zip": "98104" }"""))
           case SoQLNull => SoQLNull
         }
         (name, dummyVal)

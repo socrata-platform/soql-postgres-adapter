@@ -221,7 +221,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
         ctx = sqlCtx,
         stringLit => SqlUtils.escapeString(pgu.conn, stringLit))
 
-      val insertParamSql = selectParamSql.copy(sql = s"INSERT INTO ${tableName} ( ${selectParamSql.sql} )")
+      val insertParamSql = selectParamSql.copy(sql = Seq(s"INSERT INTO ${tableName} ( ${selectParamSql.sql.head} )"))
 
       logger.info(s"Populating rollup table ${tableName} for ${copyInfo} / ${rollupInfo} using sql: ${insertParamSql}")
       executeParamSqlUpdate(pgu.conn, insertParamSql)
@@ -250,8 +250,8 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
   private def executeParamSqlUpdate(conn: Connection, pSql: ParametricSql): Int = {
     try {
-      using(conn.prepareStatement(pSql.sql)) { stmt =>
-        val stmt = conn.prepareStatement(pSql.sql)
+      using(conn.prepareStatement(pSql.sql.head)) { stmt =>
+        val stmt = conn.prepareStatement(pSql.sql.head)
         pSql.setParams.zipWithIndex.foreach { case (setParamFn, idx) =>
           setParamFn(Some(stmt), idx + 1)
         }

@@ -39,4 +39,8 @@ class SoQLConversionFunctionsTest extends SoQLTest {
     compareSoqlResult("select make, name, v_max::number as v_max_ident where make = 'APCO' order by name", "where-conv-num2num.json")
   }
 
+  test("text::location") {
+    compareSoqlResult("""select code, location where location='{ "latitude": 1.1, "longitude": 2.2, "human_address": "{\"address\":\"101 Main St\", \"city\": \"Seattle\", \"state\": \"WA\", \"zip\": \"98104\"}"}'::location""",
+      "select-location.json")
+  }
 }

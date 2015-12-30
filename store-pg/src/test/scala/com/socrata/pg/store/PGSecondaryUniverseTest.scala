@@ -66,7 +66,9 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
       sLoader.addColumns(cols)
 
       validateSchema(cols, getSchema(pgu, copyInfo))
-      assert(jdbcColumnCount(conn, copyInfo.dataTableName) == cols.size, s"Expected table to have ${cols.size} columns")
+      val locationMultiColumnsAdjust = 1
+      assert(jdbcColumnCount(conn, copyInfo.dataTableName) == cols.size + locationMultiColumnsAdjust,
+        s"Expected table to have ${cols.size} columns")
 
       cols.foreach(pgu.datasetMapWriter.dropColumn(_))
 
