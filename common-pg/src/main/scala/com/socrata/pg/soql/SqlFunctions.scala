@@ -162,7 +162,7 @@ object SqlFunctions extends SqlFunctionsLocation {
 
   private def passthrough: FunCallToSql = formatCall("%s")
 
-  private def infix(fnName: String, combineFieldOp: String = " AND ")
+  private def infix(fnName: String, foldOp: String = " and ")
                    (fn: FunCall,
                     rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                     setParams: Seq[SetParam],
@@ -171,7 +171,7 @@ object SqlFunctions extends SqlFunctionsLocation {
     val ParametricSql(ls, setParamsL) = Sqlizer.sql(fn.parameters(0))(rep, setParams, ctx, escape)
     val ParametricSql(rs, setParamsLR) = Sqlizer.sql(fn.parameters(1))(rep, setParamsL, ctx, escape)
     val lrs = ls.zip(rs).map { case (l, r) => s"$l $fnName $r" }
-    val s = lrs.mkString(combineFieldOp)
+    val s = foldSegments(lrs, foldOp)
     ParametricSql(Seq(s), setParamsLR)
   }
 
@@ -229,11 +229,16 @@ object SqlFunctions extends SqlFunctionsLocation {
     ParametricSql(Seq(caseSql), params)
   }
 
-  private def combine(sqls: Seq[String], combineOp: String): String = {
-    sqls.mkString(combineOp)
+  /**
+   * Fold sql segments into one for datatypes that has multiple pg columns.
+   * SoQL is the only type.  Multiple pg columns type is not something
+   * that we would normally like to use.
+   */
+  private def foldSegments(sqls: Seq[String], foldOp: String): String = {
+    sqls.mkString(foldOp)
   }
 
-  private def formatCall(template: String, fieldCombineOp: Option[String] = None,
+  private def formatCall(template: String, foldOp: Option[String] = None,
                          paramPosition: Option[Seq[Int]] = None)
                         (fn: FunCall,
                          rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
@@ -254,12 +259,12 @@ object SqlFunctions extends SqlFunctionsLocation {
       (acc._1 ++ sqls, newSetParams)
     }
 
-    val combinedSql = fieldCombineOp match {
+    val foldedSql = foldOp match {
       case None => template.format(sqlFragsAndParams._1:_*)
       case Some(op) =>
-        combine(sqlFragsAndParams._1.map(s => template.format(s)), op)
+        foldSegments(sqlFragsAndParams._1.map(s => template.format(s)), op)
     }
-    ParametricSql(Seq(combinedSql), sqlFragsAndParams._2)
+    ParametricSql(Seq(foldedSql), sqlFragsAndParams._2)
   }
 
   private def formatSimplify(template: String, paramPosition: Option[Seq[Int]] = None)
@@ -318,7 +323,7 @@ object SqlFunctions extends SqlFunctionsLocation {
     ParametricSql(Seq(sqlFragsAndParams._1.mkString(",")), sqlFragsAndParams._2)
   }
 
-  private def infixSuffixWildcard(fnName: String, combineFieldOp: String = " AND ")
+  private def infixSuffixWildcard(fnName: String, foldOp: String = " and ")
                                  (fn: FunCall,
                                   rep: Map[UserColumnId,
                                   SqlColumnRep[SoQLType, SoQLValue]],
@@ -331,8 +336,8 @@ object SqlFunctions extends SqlFunctionsLocation {
     val suffix = FunctionCall(suffixWildcard, params)(fn.position, fn.functionNamePosition)
     val ParametricSql(rs, setParamsLR) = Sqlizer.sql(suffix)(rep, setParamsL, ctx, escape)
     val lrs = ls.zip(rs).map { case (l, r) => s"$l $fnName $r" }
-    val s = lrs.mkString(combineFieldOp)
-    ParametricSql(Seq(s), setParamsLR)
+    val foldedSql = foldSegments(lrs, foldOp)
+    ParametricSql(Seq(foldedSql), setParamsLR)
   }
 
   private def curatedRegionTest = {
