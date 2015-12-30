@@ -92,7 +92,7 @@ trait SqlFunctionsLocation {
         val toPointCall = FunctionCall(toPointFn, fn.parameters.take(1))(NoPosition, NoPosition)
         val ParametricSql(sqls, params) = Sqlizer.sql(toPointCall)(rep, setParams, ctx, escape)
         val (bindName, bindType) = fn.function.bindings.head
-        val geomFn = MonomorphicFunction(geomFunction, fn.function.bindings - bindName + (bindName -> SoQLPoint))
+        val geomFn = MonomorphicFunction(geomFunction, Map(bindName -> SoQLPoint, "b" -> bindType))
         val geomParams = toPointCall +: fn.parameters.drop(1)
         val geomCall = FunctionCall(geomFn, geomParams)(NoPosition, NoPosition)
         Sqlizer.sql(geomCall)(rep, setParams, ctx, escape)
