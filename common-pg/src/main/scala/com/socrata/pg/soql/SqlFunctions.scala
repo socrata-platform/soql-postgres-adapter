@@ -230,9 +230,9 @@ object SqlFunctions extends SqlFunctionsLocation {
   }
 
   /**
-   * Fold sql segments into one for datatypes that has multiple pg columns.
-   * SoQL is the only type.  Multiple pg columns type is not something
-   * that we would normally like to use.
+   * Fold sql segments into one for datatypes that have multiple pg columns.
+   * SoQLLocation is the only type.  Multiple pg columns type is not something
+   * that we would normally like to use except for compatibility with legacy types.
    */
   private def foldSegments(sqls: Seq[String], foldOp: String): String = {
     sqls.mkString(foldOp)
