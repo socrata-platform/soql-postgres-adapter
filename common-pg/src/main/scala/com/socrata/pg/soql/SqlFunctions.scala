@@ -25,6 +25,7 @@ object SqlFunctions extends SqlFunctionsLocation {
   val SqlNullInParan = "(null)"
   val SqlParamPlaceHolder = "?"
   val SqlEq = "="
+  val SqlNeq = "!="
 
   def apply(function: Function[SoQLType]): FunCallToSql = funMap(function)
 
@@ -36,8 +37,8 @@ object SqlFunctions extends SqlFunctionsLocation {
     NotIn -> naryish("not in") _,
     Eq -> infix(SqlEq) _,
     EqEq -> infix(SqlEq) _,
-    Neq -> infix("!=", " or ") _,
-    BangEq -> infix("!=", " or ") _,
+    Neq -> infix(SqlNeq, " or ") _,
+    BangEq -> infix(SqlNeq, " or ") _,
     And -> infix("and") _,
     Or -> infix("or", " or ") _,
     NotBetween -> formatCall("not %s between %s and %s") _,
@@ -177,6 +178,7 @@ object SqlFunctions extends SqlFunctionsLocation {
     val ParametricSql(rs, setParamsLR) = Sqlizer.sql(fn.parameters(1))(rep, setParamsL, ctx, escape)
     val lrs = ls.zip(rs).map { case (l, r) =>
       if (fnName == SqlEq && r == SqlNullInParan) { s"$l is null" }
+      else if (fnName == SqlNeq && r == SqlNullInParan) { s"$l is not null" }
       else { s"$l $fnName $r" }
     }
     val s = foldSegments(lrs, foldOp)
