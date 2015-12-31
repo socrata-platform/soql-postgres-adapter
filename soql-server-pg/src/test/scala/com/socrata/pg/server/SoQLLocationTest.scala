@@ -54,7 +54,7 @@ class SoQLLocationTest extends SoQLTest {
   }
 
   test("location address") {
-    compareSoqlResult("select code, location_address(location) as address where location is not null order by code",
+    compareSoqlResult("select code, location_human_address(location) as address where location is not null order by code",
       "select-location-address.json")
   }
 
@@ -82,17 +82,30 @@ class SoQLLocationTest extends SoQLTest {
     compareSoqlResult(
       "select code, location where location_latitude(location) = 1.1 order by code",
       "select-location-with-lat-lng.json")
+
+    compareSoqlResult(
+      "select code, location where location.latitude = 1.1 order by code",
+      "select-location-with-lat-lng.json")
   }
 
   test("location longitude") {
     compareSoqlResult(
       "select code, location where location_longitude(location) = 2.2 order by code",
       "select-location-with-lat-lng.json")
+
+    compareSoqlResult(
+      "select code, location where location.longitude = 2.2 order by code",
+      "select-location-with-lat-lng.json")
   }
 
   test("location address in where") {
     compareSoqlResult(
-      """select code, location where location_address(location) =
+      """select code, location where location_human_address(location) =
+        |'{"address":"101 Main St", "city": "Seattle", "state": "WA", "zip": "98104"}'""".stripMargin,
+      "select-location-with-address.json")
+
+    compareSoqlResult(
+      """select code, location where location.human_address =
         |'{"address":"101 Main St", "city": "Seattle", "state": "WA", "zip": "98104"}'""".stripMargin,
       "select-location-with-address.json")
   }
