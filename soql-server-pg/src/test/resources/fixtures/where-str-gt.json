@@ -3,4 +3,6 @@
 ,{"make":"YANKEE","name":"Yankee"}
 ,{"make":"APCO","name":"Zefira"}
 ,{"make":"zNA","name":"zLocation"}
+,{"make":"zNA","name":"zLocationAddress"}
+,{"make":"zNA","name":"zLocationLatLng"}
 ]

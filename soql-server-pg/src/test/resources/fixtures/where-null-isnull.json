@@ -75,5 +75,27 @@
     "three_liner_is_null": true,
     "spec_is_null": true,
     "size_is_null": true
+  },
+  {
+    "v_max_is_null": true,
+    "name": "zLocationAddress",
+    "color_is_null": true,
+    "make": "zNA",
+    "certified_is_null": true,
+    "available_is_null": true,
+    "three_liner_is_null": true,
+    "spec_is_null": true,
+    "size_is_null": true
+  },
+  {
+    "v_max_is_null": true,
+    "name": "zLocationLatLng",
+    "color_is_null": true,
+    "make": "zNA",
+    "certified_is_null": true,
+    "available_is_null": true,
+    "three_liner_is_null": true,
+    "spec_is_null": true,
+    "size_is_null": true
   }
 ]

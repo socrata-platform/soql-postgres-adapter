@@ -21,6 +21,11 @@ object SqlFunctions extends SqlFunctionsLocation {
     (FunCall, Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]], Seq[SetParam], Sqlizer.Context, Escape)
       => ParametricSql
 
+  val SqlNull = "null"
+  val SqlNullInParan = "(null)"
+  val SqlParamPlaceHolder = "?"
+  val SqlEq = "="
+
   def apply(function: Function[SoQLType]): FunCallToSql = funMap(function)
 
   private val funMap = Map[Function[SoQLType], FunCallToSql](
@@ -29,8 +34,8 @@ object SqlFunctions extends SqlFunctionsLocation {
     Not -> formatCall("not %s") _,
     In -> naryish("in") _,
     NotIn -> naryish("not in") _,
-    Eq -> infix("=") _,
-    EqEq -> infix("=") _,
+    Eq -> infix(SqlEq) _,
+    EqEq -> infix(SqlEq) _,
     Neq -> infix("!=", " or ") _,
     BangEq -> infix("!=", " or ") _,
     And -> infix("and") _,
@@ -170,7 +175,10 @@ object SqlFunctions extends SqlFunctionsLocation {
                     escape: Escape): ParametricSql = {
     val ParametricSql(ls, setParamsL) = Sqlizer.sql(fn.parameters(0))(rep, setParams, ctx, escape)
     val ParametricSql(rs, setParamsLR) = Sqlizer.sql(fn.parameters(1))(rep, setParamsL, ctx, escape)
-    val lrs = ls.zip(rs).map { case (l, r) => s"$l $fnName $r" }
+    val lrs = ls.zip(rs).map { case (l, r) =>
+      if (fnName == SqlEq && r == SqlNullInParan) { s"$l is null" }
+      else { s"$l $fnName $r" }
+    }
     val s = foldSegments(lrs, foldOp)
     ParametricSql(Seq(s), setParamsLR)
   }

@@ -14,5 +14,7 @@
   { "name" : "Vista II SP", "line_length" : 250, "signed_magnitude_linear_line_length_10" : 26, "unit": 250, "uz": 0, "up": 11, "un": -3, "z" : 0, "p" : 1, "n" : -1 },
   { "name" : "Yankee", "line_length": null, "signed_magnitude_linear_line_length_10" : null, "unit": null, "uz": 0, "up": 11, "un": -3, "z" : 0, "p" : 1, "n" : -1 },
   { "name" : "Zefira", "line_length" : 285, "signed_magnitude_linear_line_length_10" : 29, "unit": 285, "uz": 0, "up": 11, "un": -3, "z" : 0, "p" : 1, "n" : -1 },
-  { "name" : "zLocation", "line_length" : null, "signed_magnitude_linear_line_length_10" : null, "unit": null, "uz": 0, "up": 11, "un": -3, "z" : 0, "p" : 1, "n" : -1 }
+  { "name" : "zLocation", "line_length" : null, "signed_magnitude_linear_line_length_10" : null, "unit": null, "uz": 0, "up": 11, "un": -3, "z" : 0, "p" : 1, "n" : -1 },
+  { "name" : "zLocationAddress", "line_length" : null, "signed_magnitude_linear_line_length_10" : null, "unit": null, "uz": 0, "up": 11, "un": -3, "z" : 0, "p" : 1, "n" : -1 },
+  { "name" : "zLocationLatLng", "line_length" : null, "signed_magnitude_linear_line_length_10" : null, "unit": null, "uz": 0, "up": 11, "un": -3, "z" : 0, "p" : 1, "n" : -1 }
 ]

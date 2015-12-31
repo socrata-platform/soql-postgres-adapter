@@ -19,6 +19,9 @@ import com.socrata.datacoordinator.secondary.DatasetInfo
 import org.joda.time.DateTime
 
 abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAndAfterAll with DatabaseTestBase {
+
+  val totalRows = 18
+
   override def beforeAll(): Unit = {
     PropertyConfigurator.configure(Propertizer("log4j", config.getConfig("log4j")))
     createDatabases()
