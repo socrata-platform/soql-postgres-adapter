@@ -1,2 +1,4 @@
-[{"code":"LOCATION","point": "AAAAAAFAAZmZmZmZmj/xmZmZmZma" }
+[{"code":"LOCATION","point": "AAAAAAFAAZmZmZmZmj/xmZmZmZma" },
+ {"code":"LOCATION_ADDRESS", "point": null },
+ {"code":"LOCATION_LATLNG","point": "AAAAAAFAAZmZmZmZmj/xmZmZmZma" }
 ]

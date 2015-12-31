@@ -37,7 +37,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val tableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
 
       jdbcColumnCount(pgu.conn, tableName) should be (22)
-      jdbcRowCount(pgu.conn,tableName) should be (16)
+      jdbcRowCount(pgu.conn,tableName) should be (totalRows)
       secondary.shutdown()
     }
   }
@@ -56,7 +56,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val tableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
 
       jdbcColumnCount(pgu.conn, tableName) should be (5)
-      jdbcRowCount(pgu.conn,tableName) should be (16)
+      jdbcRowCount(pgu.conn,tableName) should be (totalRows)
       secondary.shutdown()
     }
   }

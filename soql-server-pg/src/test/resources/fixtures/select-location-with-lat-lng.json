@@ -1,0 +1,3 @@
+[{"code":"LOCATION","location": { "latitude": 1.1, "longitude": 2.2, "human_address": "{\"address\":\"101 Main St\", \"city\": \"Seattle\", \"state\": \"WA\", \"zip\": \"98104\"}"}},
+ {"code":"LOCATION_LATLNG","location": { "latitude": 1.1, "longitude": 2.2 }}
+]

@@ -10,4 +10,6 @@
 ,{"make":"Skywalk","name":"Tequila"}
 ,{"make":"YANKEE","name":"Yankee"}
 ,{"make":"zNA","name":"zLocation"}
+,{"make":"zNA","name":"zLocationAddress"}
+,{"make":"zNA","name":"zLocationLatLng"}
 ]

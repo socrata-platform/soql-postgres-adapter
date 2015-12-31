@@ -7,6 +7,9 @@
     "umake": "SKYWALK",
     "count_name": 3
   },
+  { "umake": "ZNA",
+    "count_name": 3
+  },
   {
     "umake": "GIN",
     "count_name": 2
@@ -31,5 +34,4 @@
     "umake": "YANKEE",
     "count_name": 1
   }
-  ,{"umake": "ZNA", "count_name": 1}
 ]
