@@ -6,13 +6,14 @@ import com.rojoma.json.v3.util.JsonUtil
 
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import com.socrata.pg.soql.SqlFunctions.FunCall
 import com.socrata.pg.soql.Sqlizer._
 import com.socrata.soql.functions.{MonomorphicFunction, SoQLFunctions}
 import com.socrata.soql.typed.{FunctionCall, StringLiteral}
 import com.socrata.soql.types._
 
 import scala.util.parsing.input.NoPosition
+
+import SqlFunctions._
 
 trait SqlFunctionsLocation {
 
@@ -25,13 +26,19 @@ trait SqlFunctionsLocation {
       case Seq(strLit@StringLiteral(value: String, _)) =>
         val location = JsonUtil.parseJson[SoQLLocation](value).right.get
         val sqls = Seq(
-          s"ST_GeomFromEWKT('SRID=4326;POINT(${location.longitude.get} ${location.latitude.get})')",
-          "?")
-        val setParam: SetParam = (stmt: Option[PreparedStatement], pos: Int) => {
-          stmt.foreach(_.setString(pos, location.address.getOrElse("")))
-          None
-        }
-        ParametricSql(sqls, setParams :+ setParam)
+          ( for {
+              lat <- location.latitude
+              lng <- location.longitude
+            } yield {
+              s"ST_GeomFromEWKT('SRID=4326;POINT($lng $lat)')"
+            }
+          ).getOrElse(SqlNull),
+          (if (location.address.isDefined) { SqlParamPlaceHolder } else { SqlNull } ))
+        val setParam: Seq[SetParam] = location.address.map { addr =>
+          (stmt: Option[PreparedStatement], pos: Int) => { stmt.foreach(_.setString(pos, addr))
+            Some(addr)
+          }}.toSeq
+        ParametricSql(sqls, setParams ++ setParam)
       case _ => throw new Exception("should never get anything but string literal")
     }
   }

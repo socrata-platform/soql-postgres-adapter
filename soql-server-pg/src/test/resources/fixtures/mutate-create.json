@@ -41,6 +41,8 @@
 {"code":"BAR","make":"HOTEL","name":"Hotel","class":"EN-B","multipoint":"MULTIPOINT(0.123456 0.123456, 0.123456 10.123456)"},
 {"code":"BAZ","make":"FOXTROT","name":"Foxtrot","class":"EN-B","polygon":"POLYGON((0.123456 0.123456, 0.123456 10.123456, 10.123456 10.123456, 0.123456 0.123456))"},
 {"code":"GNU","make":"ATHING","name":"Richard M. Stallman","blob":"some-blob-identifier"},
-{"code":"LOCATION","make":"zNA","name":"zLocation","location":{ "latitude": 1.1, "longitude": 2.2, "human_address": "{\"address\":\"101 Main St\", \"city\": \"Seattle\", \"state\": \"WA\", \"zip\": \"98104\"}"}}
+{"code":"LOCATION","make":"zNA","name":"zLocation","location":{ "latitude": 1.1, "longitude": 2.2, "human_address": "{\"address\":\"101 Main St\", \"city\": \"Seattle\", \"state\": \"WA\", \"zip\": \"98104\"}"}},
+{"code":"LOCATION_ADDRESS","make":"zNA","name":"zLocationAddress","location":{ "human_address": "{\"address\":\"101 Main St\", \"city\": \"Seattle\", \"state\": \"WA\", \"zip\": \"98104\"}"}},
+{"code":"LOCATION_LATLNG","make":"zNA","name":"zLocationLatLng","location":{ "latitude": 1.1, "longitude": 2.2 }}
 ]
 

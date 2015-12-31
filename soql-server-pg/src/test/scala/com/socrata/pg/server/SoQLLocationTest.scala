@@ -6,8 +6,37 @@ class SoQLLocationTest extends SoQLTest {
     compareSoqlResult("""select code, location where code='LOCATION'""", "select-location.json")
   }
 
+  test("text to location and equality check") {
+    compareSoqlResult(
+      """SELECT code, location
+        | WHERE location = '{
+        |   latitude: 1.1,
+        |   longitude: 2.2,
+        |   human_address: ''{"address":"101 Main St", "city": "Seattle", "state": "WA", "zip": "98104"}''
+        |   }'"""
+        .stripMargin,
+      "select-location.json")
+  }
+
+  test("text to location address only and equality check") {
+    compareSoqlResult(
+      """SELECT code, location
+        | WHERE location = '{
+        |   human_address: ''{"address":"101 Main St", "city": "Seattle", "state": "WA", "zip": "98104"}''
+        |   }'"""
+        .stripMargin,
+      "select-location-address-only.json")
+  }
+
+  test("text to location lat lng only and equality check") {
+    compareSoqlResult(
+      """SELECT code, location WHERE location = '{ latitude: 1.1, longitude: 2.2 }'"""
+        .stripMargin,
+      "select-location-lat-lng-only.json")
+  }
+
   test("location is not null") {
-    compareSoqlResult("select code, location where location is not null", "select-location.json")
+    compareSoqlResult("select code, location where location is not null order by code", "select-location-all.json")
   }
 
   test("location latitude longtitude") {
@@ -20,17 +49,19 @@ class SoQLLocationTest extends SoQLTest {
   }
 
   test("location point") {
-    compareSoqlResult("select code, location::point as point where location is not null",
+    compareSoqlResult("select code, location::point as point where location is not null order by code",
       "select-location-point.json")
   }
 
   test("location address") {
-    compareSoqlResult("select code, location_address(location) as address where location is not null",
+    compareSoqlResult("select code, location_address(location) as address where location is not null order by code",
       "select-location-address.json")
   }
 
   test("location within_circle") {
-    compareSoqlResult("select code, location where within_circle(location, 1.101, 2.201, 100000)", "select-location.json")
+    compareSoqlResult(
+      "select code, location where within_circle(location, 1.101, 2.201, 100000) order by code",
+      "select-location-with-lat-lng.json")
   }
 
   test("location within_circle negative") {
@@ -38,7 +69,9 @@ class SoQLLocationTest extends SoQLTest {
   }
 
   test("location within_box") {
-    compareSoqlResult("select code, location where within_box(location, 1.09, 2.21, 1.11, 2.19)", "select-location.json")
+    compareSoqlResult(
+      "select code, location where within_box(location, 1.09, 2.21, 1.11, 2.19) order by code",
+      "select-location-with-lat-lng.json")
   }
 
   test("location within_box negative") {
@@ -46,17 +79,21 @@ class SoQLLocationTest extends SoQLTest {
   }
 
   test("location latitude") {
-    compareSoqlResult("select code, location where location_latitude(location) = 1.1", "select-location.json")
+    compareSoqlResult(
+      "select code, location where location_latitude(location) = 1.1 order by code",
+      "select-location-with-lat-lng.json")
   }
 
   test("location longitude") {
-    compareSoqlResult("select code, location where location_longitude(location) = 2.2", "select-location.json")
+    compareSoqlResult(
+      "select code, location where location_longitude(location) = 2.2 order by code",
+      "select-location-with-lat-lng.json")
   }
 
   test("location address in where") {
     compareSoqlResult(
       """select code, location where location_address(location) =
         |'{"address":"101 Main St", "city": "Seattle", "state": "WA", "zip": "98104"}'""".stripMargin,
-      "select-location.json")
+      "select-location-with-address.json")
   }
 }
