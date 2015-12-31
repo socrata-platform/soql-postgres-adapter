@@ -44,4 +44,19 @@ class SoQLLocationTest extends SoQLTest {
   test("location within_box negative") {
     compareSoqlResult("select code, location where within_box(location, 1.09, 2.21, 1.11, 2.205)", "empty.json")
   }
+
+  test("location latitude") {
+    compareSoqlResult("select code, location where location_latitude(location) = 1.1", "select-location.json")
+  }
+
+  test("location longitude") {
+    compareSoqlResult("select code, location where location_longitude(location) = 2.2", "select-location.json")
+  }
+
+  test("location address in where") {
+    compareSoqlResult(
+      """select code, location where location_address(location) =
+        |'{"address":"101 Main St", "city": "Seattle", "state": "WA", "zip": "98104"}'""".stripMargin,
+      "select-location.json")
+  }
 }
