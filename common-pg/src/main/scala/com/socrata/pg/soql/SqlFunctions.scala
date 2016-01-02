@@ -14,7 +14,7 @@ import Sqlizer._
 import SoQLFunctions._
 
 // scalastyle:off magic.number multiple.string.literals
-object SqlFunctions extends SqlFunctionsLocation {
+object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry {
   type FunCall = FunctionCall[UserColumnId, SoQLType]
 
   type FunCallToSql =
@@ -42,29 +42,6 @@ object SqlFunctions extends SqlFunctionsLocation {
     And -> infix("and") _,
     Or -> infix("or", " or ") _,
     NotBetween -> formatCall("not %s between %s and %s") _,
-    WithinCircle -> formatCall(
-      "ST_within(%s, ST_Buffer(ST_MakePoint(%s, %s)::geography, %s)::geometry)",
-      paramPosition = Some(Seq(0, 2, 1, 3))) _,
-    WithinPolygon -> formatCall("ST_within(%s, %s)") _,
-    // ST_MakeEnvelope(double precision xmin, double precision ymin,
-    //   double precision xmax, double precision ymax,
-    //   integer srid=unknown)
-    // within_box(location_col_identifier,
-    //   top_left_latitude, top_left_longitude,
-    //   bottom_right_latitude, bottom_right_longitude)
-    WithinBox -> formatCall(
-      "ST_MakeEnvelope(%s, %s, %s, %s, 4326) ~ %s",
-      paramPosition = Some(Seq(2, 3, 4, 1, 0))) _,
-    Extent -> formatCall("ST_Multi(ST_Extent(%s))") _,
-    ConcaveHull -> formatCall("ST_Multi(ST_ConcaveHull(ST_Union(%s), %s))") _,
-    ConvexHull -> formatCall("ST_Multi(ST_ConvexHull(ST_Union(%s)))"),
-    Intersects -> formatCall("ST_Intersects(%s, %s)") _,
-    DistanceInMeters -> formatCall("ST_Distance(%s::geography, %s::geography)") _,
-    Simplify -> formatSimplify("ST_Simplify(%s, %s)") _,
-    SimplifyPreserveTopology -> formatSimplify("ST_SimplifyPreserveTopology(%s, %s)") _,
-    SnapToGrid -> formatSimplify("ST_SnapToGrid(%s, %s)") _,
-    IsEmpty -> isEmpty,
-    VisibleAt -> visibleAt,
     Between -> formatCall("%s between %s and %s") _,
     Lt -> infix("<") _,
     Lte -> infix("<=") _,
@@ -127,21 +104,6 @@ object SqlFunctions extends SqlFunctionsLocation {
     TextToBool -> formatCall("%s::boolean") _,
     BoolToText -> formatCall("%s::varchar") _,
 
-    TextToPoint -> formatCall("ST_GeomFromText(%s, 4326)") _,
-    TextToMultiPoint -> formatCall("ST_GeomFromText(%s, 4326)") _,
-    TextToLine -> formatCall("ST_GeomFromText(%s, 4326)") _,
-    TextToMultiLine -> formatCall("ST_GeomFromText(%s, 4326)") _,
-    TextToPolygon -> formatCall("ST_GeomFromText(%s, 4326)") _,
-    TextToMultiPolygon -> formatCall("ST_GeomFromText(%s, 4326)") _,
-
-    TextToLocation -> textToLocation _,
-    LocationToPoint -> locationToPoint _,
-    LocationToLatitude -> locationLatLng("latitude"),
-    LocationToLongitude -> locationLatLng("longitude"),
-    LocationToAddress -> locationAddress _,
-    LocationWithinCircle -> geometryFunctionWithLocation(SoQLFunctions.WithinCircle),
-    LocationWithinBox -> geometryFunctionWithLocation(SoQLFunctions.WithinBox),
-
     CuratedRegionTest -> curatedRegionTest,
 
     Case -> caseCall _,
@@ -154,7 +116,10 @@ object SqlFunctions extends SqlFunctionsLocation {
     Count -> nary("count") _,
     CountStar -> formatCall("count(*)") _
     // TODO: Complete the function list.
-  ) ++ castIdentities.map(castIdentity => Tuple2(castIdentity, passthrough))
+  ) ++
+    funGeometryMap ++
+    funLocationMap ++
+    castIdentities.map(castIdentity => Tuple2(castIdentity, passthrough))
 
   private val wildcard = StringLiteral("%", SoQLText)(NoPosition)
 
@@ -248,7 +213,7 @@ object SqlFunctions extends SqlFunctionsLocation {
     sqls.mkString(foldOp)
   }
 
-  private def formatCall(template: String, foldOp: Option[String] = None,
+  def formatCall(template: String, foldOp: Option[String] = None,
                          paramPosition: Option[Seq[Int]] = None)
                         (fn: FunCall,
                          rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
@@ -275,23 +240,6 @@ object SqlFunctions extends SqlFunctionsLocation {
         foldSegments(sqlFragsAndParams._1.map(s => template.format(s)), op)
     }
     ParametricSql(Seq(foldedSql), sqlFragsAndParams._2)
-  }
-
-  private def formatSimplify(template: String, paramPosition: Option[Seq[Int]] = None)
-                            (fn: FunCall,
-                             rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
-                             setParams: Seq[SetParam],
-                             ctx: Sqlizer.Context,
-                             escape: Escape): ParametricSql = {
-    val result@ParametricSql(Seq(sql), params) =
-      formatCall(template, paramPosition = paramPosition)(fn, rep, setParams, ctx, escape)
-    fn.parameters.head.typ match {
-      case SoQLMultiPolygon | SoQLMultiLine =>
-        // Simplify can change multipolygon to polygon.  Add ST_Multi to retain its multi nature.
-        ParametricSql(Seq("ST_Multi(%s)".format(sql)), params)
-      case _ =>
-        result
-    }
   }
 
   private def decryptToNumLit(typ: SoQLType)(idRep: SoQLIDRep,
@@ -360,14 +308,4 @@ object SqlFunctions extends SqlFunctionsLocation {
       """.stripMargin,
       paramPosition = Some(Seq(0, 1, 0, 0, 0, 0, 0, 0, 0))) _
   }
-
-  private def isEmpty =
-    formatCall("ST_IsEmpty(%s) or %s is null", paramPosition = Some(Seq(0, 0))) _
-
-  private def visibleAt =
-    formatCall(
-      """(NOT ST_IsEmpty(%s)) AND (ST_GeometryType(%s) = 'ST_Point' OR ST_GeometryType(%s) = 'ST_MultiPoint' OR
-         (ST_XMax(%s) - ST_XMin(%s)) >= %s OR (ST_YMax(%s) - ST_YMin(%s)) >= %s)
-      """.stripMargin,
-      paramPosition = Some(Seq(0, 0, 0, 0, 0, 1, 0, 0, 1))) _
 }

@@ -7,17 +7,28 @@ import com.rojoma.json.v3.util.JsonUtil
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.pg.soql.Sqlizer._
-import com.socrata.soql.functions.{MonomorphicFunction, SoQLFunctions}
+import com.socrata.soql.functions.SoQLFunctions._
+import com.socrata.soql.functions.{Function, MonomorphicFunction, SoQLFunctions}
 import com.socrata.soql.typed.{FunctionCall, StringLiteral}
 import com.socrata.soql.types._
 
 import scala.util.parsing.input.NoPosition
 
-import SqlFunctions._
+import com.socrata.pg.soql.SqlFunctions._
 
 trait SqlFunctionsLocation {
 
-  protected def textToLocation(fn: FunCall,
+  protected val funLocationMap = Map[Function[SoQLType], FunCallToSql](
+    TextToLocation -> textToLocation _,
+    LocationToPoint -> locationToPoint _,
+    LocationToLatitude -> locationLatLng("latitude"),
+    LocationToLongitude -> locationLatLng("longitude"),
+    LocationToAddress -> locationAddress _,
+    LocationWithinCircle -> geometryFunctionWithLocation(SoQLFunctions.WithinCircle),
+    LocationWithinBox -> geometryFunctionWithLocation(SoQLFunctions.WithinBox)
+  )
+
+  private def textToLocation(fn: FunCall,
                                rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                                setParams: Seq[SetParam],
                                ctx: Sqlizer.Context,
@@ -43,7 +54,7 @@ trait SqlFunctionsLocation {
     }
   }
 
-  protected def locationAddress(fn: FunCall,
+  private def locationAddress(fn: FunCall,
                               rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                               setParams: Seq[SetParam],
                               ctx: Sqlizer.Context,
@@ -56,7 +67,7 @@ trait SqlFunctionsLocation {
     }
   }
 
-  protected def locationLatLng(prop: String)(fn: FunCall,
+  private def locationLatLng(prop: String)(fn: FunCall,
                                              rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                                              setParams: Seq[SetParam],
                                              ctx: Sqlizer.Context,
@@ -76,7 +87,7 @@ trait SqlFunctionsLocation {
     }
   }
 
-  protected def locationToPoint(fn: FunCall,
+  private def locationToPoint(fn: FunCall,
                               rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                               setParams: Seq[SetParam],
                               ctx: Sqlizer.Context,
@@ -89,7 +100,7 @@ trait SqlFunctionsLocation {
     }
   }
 
-  protected def geometryFunctionWithLocation(geomFunction: com.socrata.soql.functions.Function[SoQLType])
+  private def geometryFunctionWithLocation(geomFunction: com.socrata.soql.functions.Function[SoQLType])
                                             (fn: FunCall,
                                              rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                                              setParams: Seq[SetParam],
