@@ -94,6 +94,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry {
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
     NumberToText -> formatCall("%s::varchar") _,
     NumberToMoney -> passthrough,
+    NumberToDouble -> formatCall("%s::float") _,
 
     TextToNumber -> formatCall("%s::numeric") _,
     TextToFixedTimestamp -> formatCall("%s::timestamp with time zone") _,
