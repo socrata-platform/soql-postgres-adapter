@@ -1,6 +1,6 @@
 package com.socrata.pg.server
 
-import com.rojoma.json.v3.ast.JObject
+import com.rojoma.json.v3.ast.{JArray, JNumber, JValue, JObject}
 import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
@@ -13,6 +13,7 @@ import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{DatasetContext, ColumnName}
 import com.socrata.soql.types.{SoQLValue, SoQLType}
+import org.scalatest.matchers.{MatchResult, BeMatcher}
 
 import scala.language.existentials
 
@@ -65,7 +66,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
           val whatLeft = expected.foldLeft(resultJo) { (remainingResult, expectedRow ) =>
             remainingResult.hasNext should be (true)
             val next = remainingResult.next
-            next should be (expectedRow)
+            next should be (approximatelyTheSameAs(expectedRow))
             remainingResult
           }
 
@@ -74,6 +75,27 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
           result.rowCount should be (expectedRowCount)
         }
       }
+    }
+  }
+
+  def approximatelyTheSameAs(expected: JValue) = new BeMatcher[JValue] {
+    override def apply(got: JValue): MatchResult =
+      MatchResult(approximatelyEqual(got, expected), got + " did not (approximtely) equal " + expected, got + " (approximtely) equalled " + expected)
+
+    private def approximatelyEqual(got: JValue, expected: JValue): Boolean = (got, expected) match {
+      case (gotN: JNumber, expectedN: JNumber) =>
+        // ok, here's the special case.  We don't want to be sensitive to changes in floating point
+        // values (this has happened before when PostGIS changed its distance algorithm) so, since
+        // we don't actually want to test that the functions do what they say they do, only that we're
+        // calling the right ones, we'll call these "equal" if "got" is within 0.001% of "expected".
+        val diff = (gotN.toBigDecimal - expectedN.toBigDecimal).abs
+        diff <= 0.00001 * expectedN.toBigDecimal.abs
+      case (JArray(gotA), JArray(expectedA)) =>
+        gotA.length == expectedA.length && (gotA, expectedA).zipped.forall(approximatelyEqual)
+      case (JObject(gotO), JObject(expectedO)) =>
+        gotO.keySet == expectedO.keySet && gotO.keySet.forall { k => approximatelyEqual(gotO(k), expectedO(k)) }
+      case (g, e) =>
+        g == e
     }
   }
 }
