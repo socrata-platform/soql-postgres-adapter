@@ -80,7 +80,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
 
   def approximatelyTheSameAs(expected: JValue) = new BeMatcher[JValue] {
     override def apply(got: JValue): MatchResult =
-      MatchResult(approximatelyEqual(got, expected), got + " did not (approximtely) equal " + expected, got + " (approximtely) equalled " + expected)
+      MatchResult(approximatelyEqual(got, expected), got + " did not (approximately) equal " + expected, got + " (approximately) equalled " + expected)
 
     private def approximatelyEqual(got: JValue, expected: JValue): Boolean = (got, expected) match {
       case (gotN: JNumber, expectedN: JNumber) =>
