@@ -108,6 +108,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry {
     CuratedRegionTest -> curatedRegionTest,
 
     Case -> caseCall _,
+    Coalesce -> coalesceCall _,
 
     // aggregate functions
     Avg -> nary("avg") _,
@@ -203,6 +204,19 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry {
 
     val caseSql = sqls.mkString("case ", " ", " end")
     ParametricSql(Seq(caseSql), params)
+  }
+
+  private def coalesceCall(fn: FunCall,
+                           rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                           setParams: Seq[SetParam],
+                           ctx: Sqlizer.Context,
+                           escape: Escape): ParametricSql = {
+    val (sqls, params) = fn.parameters.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
+      val ParametricSql(sqls, p) = Sqlizer.sql(param)(rep, acc._2, ctx, escape)
+      (acc._1 ++ sqls, p)
+    }
+    val sql = sqls.mkString("coalesce(", ",", ")")
+    ParametricSql(Seq(sql), params)
   }
 
   /**

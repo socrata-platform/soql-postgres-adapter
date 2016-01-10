@@ -4,7 +4,6 @@ import com.socrata.pg.soql.CaseInsensitive
 
 class SoQLSearchTest extends SoQLTest {
 
-
   test("one token") {
     compareSoqlResult("select name, make, color search 'blue' order by name", "search-1-token.json")
   }
