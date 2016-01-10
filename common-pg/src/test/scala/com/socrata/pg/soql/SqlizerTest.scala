@@ -27,7 +27,7 @@ object SqlizerTest {
 
   def sqlize(soql: String, caseSensitivity: CaseSensitivity): ParametricSql = {
     val allColumnReps = columnInfos.map(PostgresUniverseCommon.repForIndex(_))
-    val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
+    val analysis = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
     SoQLAnalysisSqlizer.sql((analysis, "t1", allColumnReps))(
       columnReps,
       Seq.empty,

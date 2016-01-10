@@ -1,5 +1,7 @@
 package com.socrata.pg.server
 
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
+
 import com.rojoma.json.v3.ast.{JArray, JNumber, JValue, JObject}
 import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
 import com.socrata.datacoordinator.id.UserColumnId
@@ -12,7 +14,7 @@ import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{DatasetContext, ColumnName}
-import com.socrata.soql.types.{SoQLValue, SoQLType}
+import com.socrata.soql.types.{SoQLAnalysisType, SoQLValue, SoQLType}
 import org.scalatest.matchers.{MatchResult, BeMatcher}
 
 import scala.language.existentials
@@ -39,11 +41,18 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
         val datasetCtx = new DatasetContext[SoQLType] {
           val schema = columnNameTypeMap
         }
-        val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
+
+        val columnNameIdMap = columnNameTypeMap.map { case (columnName, typ) =>
+          columnName -> idMap(columnName)
+        }
+
+        val analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]] =
+          SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, columnNameIdMap)
+
         val (qrySchema, dataVersion, mresult) =
           ds.map { dsInfo =>
             val qs = new QueryServer(dsInfo, caseSensitivity)
-            qs.execQuery(pgu, "someDatasetInternalName", copyInfo.datasetInfo, analysis, expectedRowCount.isDefined, None, None, true,
+            qs.execQuery(pgu, "someDatasetInternalName", copyInfo.datasetInfo, analyses, expectedRowCount.isDefined, None, None, true,
               NoPrecondition, None) match {
               case QueryServer.Success(schema, _, version, results, etag, lastModified) =>
                 (schema, version, results)

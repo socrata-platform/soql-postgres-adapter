@@ -4,6 +4,7 @@ import java.sql.PreparedStatement
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.soql.SoQLAnalysis
+import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.typed._
 import com.socrata.soql.types._
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
@@ -48,6 +49,21 @@ trait Sqlizer[T] {
         }
       case SoqlSearch => false
       case _ => false
+    }
+  }
+
+  /**
+   * Newly introduced selected expression in sub-soql needs aliases for chained soql.
+   */
+  protected def selectAlias(e: CoreExpr[_, _], subColumn: Option[String] = None)(ctx: Context): String = {
+    ctx(SoqlPart) match {
+      case SoqlSelect if (true != ctx(OutermostSoql) && e == ctx(RootExpr)) =>
+        // Geometry types require ST_AsBinary and does not work well with aliases
+        // Normally, aliases is not needed in the outermost soql.
+        val alias = ctx(SqlizerContext.ColumnName).asInstanceOf[String] + subColumn.getOrElse("")
+        " as \"%s\"".format(alias.replace("\"", "\"\""))
+      case _ =>
+        ""
     }
   }
 
@@ -121,7 +137,10 @@ object SqlizerContext extends Enumeration {
   val IdRep = Value("id-rep")
   val VerRep = Value("ver-rep")
   val RootExpr = Value("root-expr")
+  val ColumnName = Value("column-name")
   val CaseSensitivity = Value("case-sensitivity")
+  val InnermostSoql = Value("innermost-soql")
+  val OutermostSoql = Value("outermost-soql")
 }
 
 sealed trait CaseSensitivity
