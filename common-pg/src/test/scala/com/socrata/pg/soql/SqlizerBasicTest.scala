@@ -1,6 +1,7 @@
 package com.socrata.pg.soql
 
 import SqlizerTest._
+import com.socrata.soql.exceptions.TypecheckException
 
 // scalastyle:off null
 class SqlizerBasicTest extends SqlizerTest {
@@ -206,6 +207,22 @@ class SqlizerBasicTest extends SqlizerTest {
     sql should be ("SELECT (case WHEN (primary_type = ?) THEN ? WHEN (primary_type = ?) THEN ? end) FROM t1")
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq("A", "X", "B", "Y"))
+  }
+
+  test("coalesce") {
+    val soql = "select coalesce(case_number, primary_type, 'default')"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT (coalesce(case_number,primary_type,?)) FROM t1")
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq("default"))
+  }
+
+  test("coalesce parameters must have the same type") {
+    val soql = "select coalesce(primary_type, 123)"
+    val ex = intercept[TypecheckException] {
+      sqlize(soql, CaseSensitive)
+    }
+    ex.getMessage should be("Cannot pass a value of type `*number' to function `coalesce':\nselect coalesce(primary_type, 123)\n                              ^")
   }
 
   test("simplify multigeometry") {
