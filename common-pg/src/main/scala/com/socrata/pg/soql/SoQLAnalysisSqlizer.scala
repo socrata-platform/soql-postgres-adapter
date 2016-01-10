@@ -24,7 +24,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
 
   /**
    * For rowcount w/o group by, just replace the select with count(*).
-   * For rowcount with group by, wrap the original group by sql with a select count(*) from ( {original}) t1
+   * For rowcount with group by, wrap the original group by sql with a select count(*) from ( {original}) t_rc
    */
   def rowCountSql(analysis: AnalysisTarget)
                  (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
@@ -34,13 +34,48 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     sql(analysis, reqRowCount = true, rep, setParams, ctx, escape)
   }
 
+  /**
+   * Convert chained analyses to parameteric sql.
+   */
   private def sql(analysisTarget: AnalysisTarget, // scalastyle:ignore method.length
                   reqRowCount: Boolean,
                   rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                   setParams: Seq[SetParam],
                   context: Context,
                   escape: Escape): ParametricSql = {
-    val (analysis, tableName, allColumnReps) = analysisTarget
+    val (analyses, tableName, allColumnReps) = analysisTarget
+    val ctx = context + (Analysis -> analyses)
+    val firstAna = analyses.head
+    val lastAna = analyses.last
+    val rowCountForFirstAna = reqRowCount && (firstAna == lastAna)
+    val firstCtx = ctx + (OutermostSoql -> outermostSoql(firstAna, analyses)) +
+                         (InnermostSoql -> innermostSoql(firstAna, analyses))
+    val firstSql = sql(firstAna, tableName, allColumnReps, rowCountForFirstAna, rep, setParams, firstCtx, escape)
+    var subTableIdx = 0
+    val (result, _) = analyses.drop(1).foldLeft((firstSql, analyses.head)) { (acc, ana) =>
+      subTableIdx += 1
+      val (subParametricSql, prevAna) = acc
+      val subTableName = "(%s) AS x%d".format(subParametricSql.sql.head, subTableIdx)
+      val subCtx = ctx + (OutermostSoql -> outermostSoql(ana, analyses)) +
+                         (InnermostSoql -> innermostSoql(ana, analyses))
+      val sqls = sql(ana, subTableName, allColumnReps, reqRowCount &&  ana == lastAna,
+          rep, subParametricSql.setParams, subCtx, escape)
+      (sqls, ana)
+    }
+    result
+  }
+
+  /**
+   * Convert one analysis to parameteric sql.
+   */
+  private def sql(analysis: SoQLAnalysis[UserColumnId, SoQLType], // scalastyle:ignore method.length
+                  tableName: String,
+                  allColumnReps: Seq[SqlColumnRep[SoQLType, SoQLValue]],
+                  reqRowCount: Boolean,
+                  rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                  setParams: Seq[SetParam],
+                  context: Context,
+                  escape: Escape): ParametricSql = {
     val ana = if (reqRowCount) rowCountAnalysis(analysis) else analysis
     val ctx = context + (Analysis -> analysis)
 
@@ -78,8 +113,8 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     val groupBy = ana.groupBy.map { (groupBys: Seq[CoreExpr[UserColumnId, SoQLType]]) =>
       groupBys.foldLeft(Tuple2(Seq.empty[String], setParamsSearch)) { (t2, gb: CoreExpr[UserColumnId, SoQLType]) =>
         val ParametricSql(Seq(sql), newSetParams) = Sqlizer.sql(gb)(rep, t2._2, ctx + (SoqlPart -> SoqlGroup), escape)
-      (t2._1 :+ sql, newSetParams)
-    }}
+        (t2._1 :+ sql, newSetParams)
+      }}
     val setParamsGroupBy = groupBy.map(_._2).getOrElse(setParamsSearch)
 
     // HAVING
@@ -110,7 +145,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
   }
 
   private def countBySubQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType])(reqRowCount: Boolean, sql: String) =
-    if (reqRowCount && analysis.groupBy.isDefined) s"SELECT count(*) FROM ($sql) t1" else sql
+    if (reqRowCount && analysis.groupBy.isDefined) s"SELECT count(*) FROM ($sql) t_rc" else sql
 
   /**
    * This cannot handle SoQLLocation because it is mapped to multiple sql columns.
@@ -131,14 +166,21 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
                      setParams: Seq[SetParam],
                      ctx: Context,
                      escape: Escape) = {
-    analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams)) { (t2, columnNameAndcoreExpr) =>
+    val (sqls, setParamsInSelect) =
+      // Chain select handles setParams differently than others.  The current setParams are prepended
+      // to existing setParams.  Others are appended.
+      // That is why setParams starts with empty in foldLeft.
+      analysis.selection.foldLeft(Tuple2(Seq.empty[String], Seq.empty[SetParam])) { (acc, columnNameAndcoreExpr) =>
       val (columnName, coreExpr) = columnNameAndcoreExpr
-      val ParametricSql(sqls, newSetParams) = Sqlizer.sql(coreExpr)(rep, t2._2, ctx + (RootExpr -> coreExpr), escape)
+      val ctxSelect = ctx + (RootExpr -> coreExpr) + (SqlizerContext.ColumnName -> columnName.name)
+      val (_, selectSetParams) = acc
+      val ParametricSql(sqls, newSetParams) = Sqlizer.sql(coreExpr)(rep, selectSetParams, ctxSelect, escape)
       val sqlGeomConverted =
         if (ctx.contains(LeaveGeomAsIs)) { sqls }
         else { sqls.map(toGeoText(_, coreExpr.typ)) }
-      (t2._1 ++ sqlGeomConverted, newSetParams)
+      (acc._1 ++ sqlGeomConverted, newSetParams)
     }
+    (sqls, setParamsInSelect ++ setParams)
   }
 
   /**
@@ -147,6 +189,15 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
    * @param a original query analysis
    * @return Analysis for generating row count sql.
    */
-  private def rowCountAnalysis(a: SoQLAnalysis[UserColumnId, SoQLType]): SoQLAnalysis[UserColumnId, SoQLType] =
-    a.copy(selection = a.selection.empty, orderBy =  None, limit = None, offset = None)
+  private def rowCountAnalysis(a: SoQLAnalysis[UserColumnId, SoQLType]) = {
+    a.copy(selection = a.selection.empty, orderBy = None, limit = None, offset = None)
+  }
+
+  private def innermostSoql(a: SoQLAnalysis[_, _], as: Seq[SoQLAnalysis[_, _]] ): Boolean = {
+    a == as.head
+  }
+
+  private def outermostSoql(a: SoQLAnalysis[_, _], as: Seq[SoQLAnalysis[_, _]] ): Boolean = {
+    a == as.last
+  }
 }

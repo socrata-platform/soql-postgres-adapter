@@ -27,7 +27,9 @@ object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
           stmt.foreach(_.setString(pos, maybeUpperLitVal))
           Some(maybeUpperLitVal)
         }
-        ParametricSql(Seq(ParamPlaceHolder), setParams :+ setParam)
+        // Append value as comment for debug
+        // val comment = " /* %s */".format(lit.value)
+        ParametricSql(Seq(ParamPlaceHolder + selectAlias(lit)(ctx) /* + comment */), setParams :+ setParam)
     }
   }
 
@@ -53,7 +55,7 @@ object NumberLiteralSqlizer extends Sqlizer[NumberLiteral[SoQLType]] {
           stmt.foreach(_.setBigDecimal(pos, lit.value.bigDecimal))
           Some(lit.value)
         }
-        ParametricSql(Seq(ParamPlaceHolder), setParams :+ setParam)
+        ParametricSql(Seq(ParamPlaceHolder + selectAlias(lit)(ctx)), setParams :+ setParam)
     }
   }
 }
@@ -75,7 +77,7 @@ object BooleanLiteralSqlizer extends Sqlizer[BooleanLiteral[SoQLType]] {
           stmt.foreach(_.setBoolean(pos, lit.value))
           Some(lit.value)
         }
-        ParametricSql(Seq(ParamPlaceHolder), setParams :+ setParam)
+        ParametricSql(Seq(ParamPlaceHolder + selectAlias(lit)(ctx)), setParams :+ setParam)
     }
   }
 }
@@ -86,7 +88,7 @@ object NullLiteralSqlizer extends Sqlizer[NullLiteral[SoQLType]] {
           setParams: Seq[SetParam],
           ctx: Context,
           escape: Escape): ParametricSql =
-    ParametricSql(Seq("null"), setParams)
+    ParametricSql(Seq("null" + selectAlias(lit)(ctx)), setParams)
 }
 
 object FunctionCallSqlizer extends Sqlizer[FunctionCall[UserColumnId, SoQLType]] {
@@ -99,7 +101,7 @@ object FunctionCallSqlizer extends Sqlizer[FunctionCall[UserColumnId, SoQLType]]
     val ParametricSql(sqls, fnSetParams) = fn(expr, rep, setParams, ctx, escape)
     // SoQL parsing bakes parenthesis into the ast tree without explicitly spitting out parenthesis.
     // We add parenthesis to every function call to preserve semantics.
-    ParametricSql(sqls.map(s => s"($s)"), fnSetParams)
+    ParametricSql(sqls.map(s => s"($s)" + selectAlias(expr)(ctx)), fnSetParams)
   }
 }
 
@@ -110,20 +112,35 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           ctx: Context,
           escape: Escape): ParametricSql = {
     reps.get(expr.column) match {
-      case Some(rep) =>
+      case Some(rep) if ctx(InnermostSoql) == true => // scalastyle:off simplify.boolean.expression
         if (expr.typ == SoQLLocation &&
             ctx.get(SoqlPart).exists(_ == SoqlSelect) &&
             ctx.get(RootExpr).exists(_ == expr)) {
           val maybeUpperPhysColumns =
             rep.physColumns.take(1).map(col => "ST_AsBinary(" + (toUpper(expr)(col, ctx)) + ")") ++
-            rep.physColumns.drop(1).map(toUpper(expr)(_, ctx))
-          ParametricSql(maybeUpperPhysColumns, setParams)
+              rep.physColumns.drop(1).map(toUpper(expr)(_, ctx))
+          val subColumns = rep.physColumns.map(pc => pc.replace(rep.base, ""))
+          val physColumnsWithSubColumns = maybeUpperPhysColumns.zip(subColumns)
+          val columnsWithAlias = physColumnsWithSubColumns.map { case (physCol, subCol) =>
+            physCol + selectAlias(expr, Some(subCol))(ctx)
+          }
+          ParametricSql(columnsWithAlias, setParams)
         } else {
           val maybeUpperPhysColumns = rep.physColumns.map(toUpper(expr)(_, ctx))
-          ParametricSql(maybeUpperPhysColumns, setParams)
+          ParametricSql(maybeUpperPhysColumns.map(c => c + selectAlias(expr)(ctx)), setParams)
         }
-      case None =>
-        ParametricSql(Seq(toUpper(expr)(expr.column.underlying, ctx)), setParams) // for tests
+      case _ => // Outer soqls do not get rep by column id.  They get rep by datatype.
+        val typeReps = reps.values.map((rep: SqlColumnRep[SoQLType, SoQLValue]) => (rep.representedType -> rep)).toMap
+        typeReps.get(expr.typ) match {
+          case Some(rep) =>
+            val subColumns = rep.physColumns.map(pc => pc.replace(rep.base, ""))
+            val sqls = subColumns.map { subCol =>
+              toUpper(expr)(expr.column.underlying + subCol, ctx) + selectAlias(expr, Some(subCol))(ctx)
+            }
+            ParametricSql(sqls, setParams)
+          case None =>
+            throw new Exception("cannot find reps for ${expr.column.underlying}")
+        }
     }
   }
 

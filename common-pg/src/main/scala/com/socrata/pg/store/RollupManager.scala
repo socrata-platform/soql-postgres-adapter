@@ -101,21 +101,21 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       // We don't want to disable the rollup entirely since it could become valid again, eg. if they then add
       // the column back.  It would be ideal if we had a better way to communicate this failure upwards through
       // the stack.
-      val prefixedRollupAnalysis: Try[SoQLAnalysis[ColumnName, SoQLAnalysisType]] =
-        Try { analyzer.analyzeUnchainedQuery(rollupInfo.soql)(prefixedDsContext) }
+      val prefixedRollupAnalyses: Try[Seq[SoQLAnalysis[ColumnName, SoQLAnalysisType]]] =
+        Try { analyzer.analyzeFullQuery(rollupInfo.soql)(prefixedDsContext) }
 
 
-      prefixedRollupAnalysis match {
+      prefixedRollupAnalyses match {
         case Success(pra) =>
-          val rollupAnalysis = pra.mapColumnIds(columnNameRemovePrefixMap)
+          val rollupAnalyses = pra.map(_.mapColumnIds(columnNameRemovePrefixMap))
           // We are naming columns simply c1 .. c<n> based on the order they are in to avoid having
           // to maintain a mapping or deal with edge cases such as length and :system columns.
-          val rollupReps = rollupAnalysis.selection.values.zipWithIndex.map { case (colRep, idx) =>
+          val rollupReps = rollupAnalyses.last.selection.values.zipWithIndex.map { case (colRep, idx) =>
             SoQLIndexableRep.sqlRep(colRep.typ.canonical, "c" + (idx + 1))
           }.toSeq
 
           createRollupTable(rollupReps, newTableName, rollupInfo)
-          populateRollupTable(newTableName, rollupInfo, rollupAnalysis, rollupReps)
+          populateRollupTable(newTableName, rollupInfo, rollupAnalyses, rollupReps)
           createIndexes(newTableName, rollupInfo, rollupReps)
         case e@(Failure(_: SoQLException) | Failure(_: StandaloneLexerException)) =>
           logger.warn(s"Error updating $copyInfo, $rollupInfo, skipping building rollup", e)
@@ -200,12 +200,12 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
   private def populateRollupTable(tableName: String,
       rollupInfo: RollupInfo,
-      rollupAnalysis: SoQLAnalysis[ColumnName, SoQLAnalysisType],
+      rollupAnalyses: Seq[SoQLAnalysis[ColumnName, SoQLAnalysisType]],
       rollupReps: Seq[SqlColumnRep[SoQLType, SoQLValue]]): Unit = {
     time("populate-rollup-table",
       "dataset_id" -> copyInfo.datasetInfo.systemId.underlying,
       "rollupName" -> rollupInfo.name.underlying) {
-      val soqlAnalysis = analysisToSoQLType(rollupAnalysis)
+      val soqlAnalysis = analysesToSoQLType(rollupAnalyses)
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.CaseSensitivity -> true,
         SqlizerContext.LeaveGeomAsIs -> true
@@ -264,9 +264,10 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     }
   }
 
-  private def analysisToSoQLType(analysis: ASysCol): AUserCol = {
+  private def analysesToSoQLType(analyses: ASysCol): AUserCol = {
     val baos = new ByteArrayOutputStream
-    SoQLAnalyzerHelper.serialize(baos, analysis.mapColumnIds(name => new UserColumnId(name.name)))
+    val analysesColumnId = analyses.map(_.mapColumnIds(name => new UserColumnId(name.name)))
+    SoQLAnalyzerHelper.serialize(baos, analysesColumnId)
     SoQLAnalyzerHelper.deserialize(new ByteArrayInputStream(baos.toByteArray))
   }
 }

@@ -14,14 +14,14 @@ import com.socrata.soql.SoQLAnalysis
 trait RowReaderQuerier[CT, CV] {
   this: PGSecondaryRowReader[CT, CV] => ()
 
-  def query(analysis: SoQLAnalysis[UserColumnId, CT],
-            toSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql,
-            toRowCountSql: (SoQLAnalysis[UserColumnId, CT], String) => ParametricSql, // analsysis, tableName
+  def query(analyses: Seq[SoQLAnalysis[UserColumnId, CT]],
+            toSql: (Seq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql,
+            toRowCountSql: (Seq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
             reqRowCount: Boolean,
             querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]]):
             Managed[CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount] = {
     val sqlizerq = sqlizer.asInstanceOf[DataSqlizer[CT, CV] with DataSqlizerQuerier[CT, CV]]
-    val resultIter = sqlizerq.query(connection, analysis, toSql, toRowCountSql, reqRowCount, querySchema)
+    val resultIter = sqlizerq.query(connection, analyses, toSql, toRowCountSql, reqRowCount, querySchema)
     managed(resultIter)
   }
 

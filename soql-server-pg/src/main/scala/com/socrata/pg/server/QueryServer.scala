@@ -146,14 +146,14 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val analysisParam = servReq.getParameter("query")
     val analysisStream = new ByteArrayInputStream(analysisParam.getBytes(StandardCharsets.ISO_8859_1))
     val schemaHash = servReq.getParameter("schemaHash")
-    val analysis: SoQLAnalysis[UserColumnId, SoQLType] = SoQLAnalyzerHelper.deserialize(analysisStream)
+    val analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]] = SoQLAnalyzerHelper.deserialize(analysisStream)
     val reqRowCount = Option(servReq.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     val copy = Option(servReq.getParameter("copy"))
     val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
     val obfuscateId = !Option(servReq.getParameter("obfuscateId")).exists(_ == "false")
 
     logger.info("Performing query on dataset " + datasetId)
-    streamQueryResults(analysis, datasetId, reqRowCount, copy, rollupName, obfuscateId,
+    streamQueryResults(analyses, datasetId, reqRowCount, copy, rollupName, obfuscateId,
       req.precondition, req.dateTimeHeader("If-Modified-Since"))
   }
 
@@ -163,7 +163,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
    * streaming.
    */
   def streamQueryResults( // scalastyle:ignore parameter.number
-    analysis: SoQLAnalysis[UserColumnId, SoQLType],
+    analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]],
     datasetId: String,
     reqRowCount: Boolean,
     copy: Option[String],
@@ -180,7 +180,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
             case None => NotFound(resp)
             case Some(datasetInfo) =>
               def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
-              execQuery(pgu, datasetId, datasetInfo, analysis, reqRowCount, copy,
+              execQuery(pgu, datasetId, datasetInfo, analyses, reqRowCount, copy,
                 rollupName, obfuscateId, precondition, ifModifiedSince) match {
                 case NotModified(etags) => notModified(etags)(resp)
                 case PreconditionFailed => responses.PreconditionFailed(resp)
@@ -205,7 +205,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     datasetInternalName: String,
     datasetInfo: DatasetInfo,
-    analysis: SoQLAnalysis[UserColumnId, SoQLType],
+    analysis: Seq[SoQLAnalysis[UserColumnId, SoQLType]],
     rowCount: Boolean,
     reqCopy: Option[String],
     rollupName: Option[RollupName],
@@ -216,7 +216,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
 
     def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                  latestCopy: CopyInfo,
-                 analysis: SoQLAnalysis[UserColumnId, SoQLType],
+                 analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]],
                  rowCount: Boolean) = {
       val cryptProvider = new CryptProvider(latestCopy.datasetInfo.obfuscationKey)
       val sqlCtx = Map[SqlizerContext, Any](
@@ -230,18 +230,18 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
       for { readCtx <- pgu.datasetReader.openDataset(latestCopy) } yield {
         val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema
         val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
-        val qrySchema = querySchema(pgu, analysis, latestCopy)
+        val qrySchema = querySchema(pgu, analyses.last, latestCopy)
         val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor)
         val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
         val sqlReps = querier.getSqlReps(systemToUserColumnMap)
 
         val results = querier.query(
-          analysis,
-          (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) => {
-            Sqlizer.sql((a, tableName, sqlReps.values.toSeq))(sqlReps, Seq.empty, sqlCtx, escape)
+          analyses,
+          (as: Seq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) => {
+            Sqlizer.sql((as, tableName, sqlReps.values.toSeq))(sqlReps, Seq.empty, sqlCtx, escape)
           },
-          (a: SoQLAnalysis[UserColumnId, SoQLType], tableName: String) =>
-            SoQLAnalysisSqlizer.rowCountSql((a, tableName, sqlReps.values.toSeq))(sqlReps, Seq.empty, sqlCtx, escape),
+          (as: Seq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) =>
+            SoQLAnalysisSqlizer.rowCountSql((as, tableName, sqlReps.values.toSeq))(sqlReps, Seq.empty, sqlCtx, escape),
           rowCount,
           qryReps)
         (qrySchema, latestCopy.dataVersion, results)
