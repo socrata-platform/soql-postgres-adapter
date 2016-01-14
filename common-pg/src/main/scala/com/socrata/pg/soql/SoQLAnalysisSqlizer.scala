@@ -194,10 +194,10 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
   }
 
   private def innermostSoql(a: SoQLAnalysis[_, _], as: Seq[SoQLAnalysis[_, _]] ): Boolean = {
-    a == as.head
+    a.eq(as.head)
   }
 
   private def outermostSoql(a: SoQLAnalysis[_, _], as: Seq[SoQLAnalysis[_, _]] ): Boolean = {
-    a == as.last
+    a.eq(as.last)
   }
 }
