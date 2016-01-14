@@ -28,9 +28,7 @@ object SoQLAnalyzerHelper {
     implicit val ctx: DatasetContext[SoQLAnalysisType] = toAnalysisType(datasetCtx)
 
     val analyses: Seq[SoQLAnalysis[ColumnName, SoQLAnalysisType]] = analyzer.analyzeFullQuery(soql)
-    val baos = new ByteArrayOutputStream
-    serialize(baos, analyses.map(_.mapColumnIds(idMap)))
-    deserialize(new ByteArrayInputStream(baos.toByteArray))
+    analyses.map(_.mapColumnIds(idMap)).asInstanceOf[Seq[SoQLAnalysis[UserColumnId, SoQLType]]]
   }
 
   def analyzeSoQL(soql: String,
