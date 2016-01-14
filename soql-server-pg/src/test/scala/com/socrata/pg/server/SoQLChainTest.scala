@@ -1,5 +1,8 @@
 package com.socrata.pg.server
 
+/**
+ * Note that we do not run through soql merge in test but it does in real.
+ */
 class SoQLChainTest extends SoQLTest {
 
   test("chain basic") {
@@ -7,7 +10,6 @@ class SoQLChainTest extends SoQLTest {
       """SELECT code WHERE code = 'RUSH-3' |> SELECT code""".stripMargin,
       "chain-basic.json")
   }
-
 
   test("chain text") {
     compareSoqlResult(
