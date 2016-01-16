@@ -74,11 +74,13 @@ object SqlizerTest {
         null,
         new ColumnId(id),
         new UserColumnId(columnName.caseFolded),
+        None,
         typ,
         columnName.caseFolded,
         typ == SoQLID,
         false, // isUserKey
-        typ == SoQLVersion
+        typ == SoQLVersion,
+        None
       )(SoQLTypeContext.typeNamespace, null)
       acc :+ cinfo
   }}

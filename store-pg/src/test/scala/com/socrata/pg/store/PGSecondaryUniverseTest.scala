@@ -7,7 +7,7 @@ import com.socrata.datacoordinator.secondary
 import com.socrata.datacoordinator.truth.metadata._
 import com.socrata.datacoordinator.truth.universe.sql.SqlTableCleanup
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.soql.environment.TypeName
+import com.socrata.soql.environment.{ColumnName, TypeName}
 import com.socrata.soql.types._
 import org.postgresql.util.PSQLException
 import org.scalatest.exceptions.TestFailedException
@@ -45,7 +45,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
       val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
 
       val cols = SoQLType.typesByName filterKeys (!UnsupportedTypes.contains(_)) map {
-        case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(n + "_USERNAME"), t, n + "_PHYSNAME")
+        case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(n + "_USERNAME"), Some(ColumnName(n + "_FIELD")), t, n + "_PHYSNAME", None)
       }
       sLoader.addColumns(cols)
 
@@ -61,7 +61,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
       val types = SoQLType.typesByName filterKeys (!UnsupportedTypes.contains(_))
 
       val cols = types map {
-        case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(n + "_USERNAME"), t, n + "_PHYSNAME")
+        case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(n + "_USERNAME"), Some(ColumnName(n + "_FIELD")), t, n + "_PHYSNAME", None)
       }
       sLoader.addColumns(cols)
 

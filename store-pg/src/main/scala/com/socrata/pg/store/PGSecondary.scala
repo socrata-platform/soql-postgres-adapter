@@ -267,6 +267,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           ColumnRemovedHandler(pgu, truthCopyInfo, secondaryColInfo)
           val shouldRefreshRollup = refreshRollup || (truthCopyInfo.lifecycleStage == TruthLifecycleStage.Published)
           (rebuildIndex, true, None)
+        case FieldNameUpdated(secondaryColInfo) =>
+          FieldNameUpdatedHandler(pgu, truthCopyInfo, secondaryColInfo)
+          (rebuildIndex, false,  None)
         case RowIdentifierSet(info) =>  // no-op
           (rebuildIndex, true, dataLoader)
         case RowIdentifierCleared(info) =>  // no-op
@@ -347,7 +350,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
              schema: ColumnIdMap[SecondaryColumnInfo[SoQLType]],
              cookie: Secondary.Cookie,
              rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
-             rollups: Seq[RollupInfo]): Secondary.Cookie = {
+             rollups: Seq[RollupInfo],
+             isLatestCopy: Boolean): Secondary.Cookie = {
     // should tell us the new copy number
     // We need to perform some accounting here to make sure readers know a resync is in process
     logger.info("resync (datasetInfo: {}, secondaryCopyInfo: {}, schema: {}, cookie: {})",
