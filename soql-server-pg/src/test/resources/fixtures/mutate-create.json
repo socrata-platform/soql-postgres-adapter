@@ -24,6 +24,7 @@
 { c: "add column", id: "line", type: "line" },
 { c: "add column", id: "polygon", type: "polygon" },
 { c: "add column", id: "blob", type: "blob" },
+{ c: "add column", id: "phone", type: "phone" },
 { c: "add column", id: "location", type: "location" },
 { c: "row data" },
 {"code":"14200","make":"APCO","name":"Karma","class":"DHV-1","v_min":20,"v_trim":36,"v_max":45,"aspect_ratio":4.9,"aspect_ratio_project":3.5,"line_length":412,"price":2500,"three_liner":false,"size":"Small","available":"2008-08-01T15:12:34","certified":"2008-03-01T12:11:22-05","point":"POINT(34.89265 32.505781)","multipolygon":"MULTIPOLYGON(((0 0,1 0,1 1,0 1,0 0)))","country":"Israel", "color": ["Red", "Yellow", "Royal Blue", "Purple", "Turquoise"],"spec": {"root_chord": 2.84, "tip_chord": 0.48,  "weight" : 6.0 }},
@@ -41,8 +42,14 @@
 {"code":"BAR","make":"HOTEL","name":"Hotel","class":"EN-B","multipoint":"MULTIPOINT(0.123456 0.123456, 0.123456 10.123456)"},
 {"code":"BAZ","make":"FOXTROT","name":"Foxtrot","class":"EN-B","polygon":"POLYGON((0.123456 0.123456, 0.123456 10.123456, 10.123456 10.123456, 0.123456 0.123456))"},
 {"code":"GNU","make":"ATHING","name":"Richard M. Stallman","blob":"some-blob-identifier"},
-{"code":"LOCATION","make":"zNA","name":"zLocation","location":{ "latitude": 1.1, "longitude": 2.2, "human_address": "{\"address\":\"101 Main St\", \"city\": \"Seattle\", \"state\": \"WA\", \"zip\": \"98104\"}"}},
-{"code":"LOCATION_ADDRESS","make":"zNA","name":"zLocationAddress","location":{ "human_address": "{\"address\":\"101 Main St\", \"city\": \"Seattle\", \"state\": \"WA\", \"zip\": \"98104\"}"}},
-{"code":"LOCATION_LATLNG","make":"zNA","name":"zLocationLatLng","location":{ "latitude": 1.1, "longitude": 2.2 }}
+{"code":"LOCATION","make":"zNA","name":"zLocation",
+  "location":{ "latitude": 1.1, "longitude": 2.2, "human_address": "{\"address\":\"101 Main St\", \"city\": \"Seattle\", \"state\": \"WA\", \"zip\": \"98104\"}"},
+  "phone": { "phone_number": "4251234567", "phone_type": "Home" }},
+{"code":"LOCATION_ADDRESS","make":"zNA","name":"zLocationAddress",
+  "location":{ "human_address": "{\"address\":\"101 Main St\", \"city\": \"Seattle\", \"state\": \"WA\", \"zip\": \"98104\"}"},
+  "phone": { "phone_number": "4251234567" }},
+{"code":"LOCATION_LATLNG","make":"zNA","name":"zLocationLatLng",
+  "location":{ "latitude": 1.1, "longitude": 2.2 },
+  "phone": { "phone_type": "Home" }}
 ]
 

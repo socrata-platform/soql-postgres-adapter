@@ -14,7 +14,7 @@ import Sqlizer._
 import SoQLFunctions._
 
 // scalastyle:off magic.number multiple.string.literals
-object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry {
+object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with SqlFunctionsComplexType {
   type FunCall = FunctionCall[UserColumnId, SoQLType]
 
   type FunCallToSql =
@@ -121,6 +121,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry {
   ) ++
     funGeometryMap ++
     funLocationMap ++
+    funComplexTypeMap ++
     castIdentities.map(castIdentity => Tuple2(castIdentity, passthrough))
 
   private val wildcard = StringLiteral("%", SoQLText)(NoPosition)
