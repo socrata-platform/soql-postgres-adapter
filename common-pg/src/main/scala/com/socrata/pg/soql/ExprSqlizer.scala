@@ -141,7 +141,7 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           case None =>
             val schema = reps.map { case (columnId, rep) => (columnId.underlying -> rep.representedType) }
             val soql = ctx.get(SoqlSelect).getOrElse("no select info")
-            throw new Exception(s"cannot find rep for ${expr.column.underlying}\n$soql\n${schema.toString}")
+            throw new Exception(s"cannot find rep for ${expr.column.underlying} ${expr.typ}\n$soql\n${schema.toString}")
         }
     }
   }
