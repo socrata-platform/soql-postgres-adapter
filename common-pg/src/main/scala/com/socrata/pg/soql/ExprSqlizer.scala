@@ -106,6 +106,8 @@ object FunctionCallSqlizer extends Sqlizer[FunctionCall[UserColumnId, SoQLType]]
 }
 
 object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
+
+  // scalastyle:off cyclomatic.complexity
   def sql(expr: ColumnRef[UserColumnId, SoQLType])
          (reps: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
@@ -113,12 +115,20 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           escape: Escape): ParametricSql = {
     reps.get(expr.column) match {
       case Some(rep) if ctx(InnermostSoql) == true => // scalastyle:off simplify.boolean.expression
-        if (expr.typ == SoQLLocation &&
+        if (complexTypes.contains(expr.typ) &&
             ctx.get(SoqlPart).exists(_ == SoqlSelect) &&
             ctx.get(RootExpr).exists(_ == expr)) {
           val maybeUpperPhysColumns =
-            rep.physColumns.take(1).map(col => "ST_AsBinary(" + (toUpper(expr)(col, ctx)) + ")") ++
-              rep.physColumns.drop(1).map(toUpper(expr)(_, ctx))
+            expr.typ match {
+              case SoQLLocation =>
+                rep.physColumns.take(1).map(col =>
+                  "ST_AsBinary(" + (toUpper(expr, rep.sqlTypes(0))(col, ctx)) + ")") ++
+                  rep.physColumns.drop(1).map(toUpper(expr, rep.sqlTypes(1))(_, ctx))
+              case _ =>
+                rep.physColumns.zip(rep.sqlTypes).map { case (physCol, sqlType) =>
+                  toUpper(expr, sqlType)(physCol, ctx)
+                }
+            }
           val subColumns = rep.physColumns.map(pc => pc.replace(rep.base, ""))
           val physColumnsWithSubColumns = maybeUpperPhysColumns.zip(subColumns)
           val columnsWithAlias = physColumnsWithSubColumns.map { case (physCol, subCol) =>
@@ -148,4 +158,12 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
 
   private def toUpper(expr: ColumnRef[UserColumnId, SoQLType])(phyColumn: String, ctx: Context): String =
     if (expr.typ == SoQLText && useUpper(expr)(ctx)) s"upper($phyColumn)" else phyColumn
+
+  private def toUpper(expr: ColumnRef[UserColumnId, SoQLType], sqlType: String)(phyColumn: String, ctx: Context)
+    : String = {
+    if (sqlType == "TEXT" && useUpper(expr)(ctx)) s"upper($phyColumn)" else phyColumn
+  }
+
+  // SoQLTypes represented by more than one physical columns
+  private val complexTypes: Set[SoQLType] = Set(SoQLLocation, SoQLPhone)
 }

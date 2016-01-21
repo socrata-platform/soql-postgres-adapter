@@ -58,7 +58,8 @@ object SqlizerTest {
     ColumnName("polygon") -> ((16, SoQLPolygon)),
     ColumnName("line") -> ((17, SoQLLine)),
     ColumnName("multipoint") -> ((18, SoQLMultiPoint)),
-    ColumnName("location") -> ((19, SoQLLocation))
+    ColumnName("location") -> ((19, SoQLLocation)),
+    ColumnName("phone") -> ((20, SoQLPhone))
   )
 
   private val columnInfos = columnMap.foldLeft(Seq.empty[ColumnInfo[SoQLType]]) { (acc, colNameAndType) => colNameAndType match {
