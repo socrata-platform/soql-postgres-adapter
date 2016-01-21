@@ -139,7 +139,9 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
             }
             ParametricSql(sqls, setParams)
           case None =>
-            throw new Exception("cannot find reps for ${expr.column.underlying}")
+            val schema = reps.map { case (columnId, rep) => (columnId.underlying -> rep.representedType) }
+            val soql = ctx.get(SoqlSelect).getOrElse("no select info")
+            throw new Exception(s"cannot find rep for ${expr.column.underlying}\n$soql\n${schema.toString}")
         }
     }
   }
