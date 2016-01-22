@@ -232,16 +232,26 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
         val qrySchema = querySchema(pgu, analyses.last, latestCopy)
         val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor)
+
         val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
         val sqlReps = querier.getSqlReps(systemToUserColumnMap)
+        val typeReps = analyses.flatMap { analysis =>
+          val qrySchema = querySchema(pgu, analysis, latestCopy)
+          qrySchema.map { case (columnId, columnInfo) =>
+            pgu.commonSupport.repFor(columnInfo)
+          }
+        }
+
+        // TODO: rethink how reps should be constructed and passed into each chained soql.
+        val allReps = typeReps ++ sqlReps.values
 
         val results = querier.query(
           analyses,
           (as: Seq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) => {
-            Sqlizer.sql((as, tableName, sqlReps.values.toSeq))(sqlReps, Seq.empty, sqlCtx, escape)
+            Sqlizer.sql((as, tableName, allReps))(sqlReps, Seq.empty, sqlCtx, escape)
           },
           (as: Seq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) =>
-            SoQLAnalysisSqlizer.rowCountSql((as, tableName, sqlReps.values.toSeq))(sqlReps, Seq.empty, sqlCtx, escape),
+            SoQLAnalysisSqlizer.rowCountSql((as, tableName, allReps))(sqlReps, Seq.empty, sqlCtx, escape),
           rowCount,
           qryReps)
         (qrySchema, latestCopy.dataVersion, results)

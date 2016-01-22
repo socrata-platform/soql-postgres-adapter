@@ -157,7 +157,7 @@ object SoQLIndexableRep {
         base) with NumberLikeIndexable[SoQLType]),
     SoQLMoney -> (base =>
       new NumberLikeRep(
-        SoQLNumber,
+        SoQLMoney,
         _.asInstanceOf[SoQLMoney].value,
         SoQLMoney(_),
         base) with NumberLikeIndexable[SoQLType]),
