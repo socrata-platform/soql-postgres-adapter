@@ -201,7 +201,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     }
   }
 
-  def execQuery( // scalastyle:ignore method.length parameter.number
+  def execQuery( // scalastyle:ignore method.length parameter.number cyclomatic.complexity
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     datasetInternalName: String,
     datasetInfo: DatasetInfo,
@@ -235,13 +235,24 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
         val sqlReps = querier.getSqlReps(systemToUserColumnMap)
 
+        // Merge all type reps to ones by column ids.  They are mutually exclusive by the special prefix of type reps.
+        // The prefix value isn't important as long as it does not collide with column ids.
+        // TODO: rethink how reps should be constructed and passed into each chained soql.
+        val typeReps = analyses.flatMap { analysis =>
+          val qrySchema = querySchema(pgu, analysis, latestCopy)
+          qrySchema.map { case (columnId, columnInfo) =>
+            (new UserColumnId("__type_" +  columnInfo.typeName)) -> pgu.commonSupport.repFor(columnInfo)
+          }
+        }.toMap
+        val allReps = sqlReps ++ typeReps
+
         val results = querier.query(
           analyses,
           (as: Seq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) => {
-            Sqlizer.sql((as, tableName, sqlReps.values.toSeq))(sqlReps, Seq.empty, sqlCtx, escape)
+            Sqlizer.sql((as, tableName, sqlReps.values.toSeq))(allReps, Seq.empty, sqlCtx, escape)
           },
           (as: Seq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) =>
-            SoQLAnalysisSqlizer.rowCountSql((as, tableName, sqlReps.values.toSeq))(sqlReps, Seq.empty, sqlCtx, escape),
+            SoQLAnalysisSqlizer.rowCountSql((as, tableName, sqlReps.values.toSeq))(allReps, Seq.empty, sqlCtx, escape),
           rowCount,
           qryReps)
         (qrySchema, latestCopy.dataVersion, results)
