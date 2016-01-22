@@ -45,12 +45,20 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
                   escape: Escape): ParametricSql = {
     val (analyses, tableName, allColumnReps) = analysisTarget
     val ctx = context + (Analysis -> analyses)
+
+    // Merge all type reps to ones by column ids.  They are mutually exclusive by the special prefix of type reps.
+    // The prefix value isn't important as long as it does not collide with column ids.
+    val repsByType: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]] = allColumnReps.map { sqlColumnRep =>
+      (new UserColumnId("__type_" +  sqlColumnRep.representedType.name.name)) -> sqlColumnRep
+    }(collection.breakOut)
+    val allReps = rep ++ repsByType
+
     val firstAna = analyses.head
     val lastAna = analyses.last
     val rowCountForFirstAna = reqRowCount && (firstAna == lastAna)
     val firstCtx = ctx + (OutermostSoql -> outermostSoql(firstAna, analyses)) +
                          (InnermostSoql -> innermostSoql(firstAna, analyses))
-    val firstSql = sql(firstAna, tableName, allColumnReps, rowCountForFirstAna, rep, setParams, firstCtx, escape)
+    val firstSql = sql(firstAna, tableName, allColumnReps, rowCountForFirstAna, allReps, setParams, firstCtx, escape)
     var subTableIdx = 0
     val (result, _) = analyses.drop(1).foldLeft((firstSql, analyses.head)) { (acc, ana) =>
       subTableIdx += 1
@@ -59,7 +67,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       val subCtx = ctx + (OutermostSoql -> outermostSoql(ana, analyses)) +
                          (InnermostSoql -> innermostSoql(ana, analyses))
       val sqls = sql(ana, subTableName, allColumnReps, reqRowCount &&  ana == lastAna,
-          rep, subParametricSql.setParams, subCtx, escape)
+          allReps, subParametricSql.setParams, subCtx, escape)
       (sqls, ana)
     }
     result
