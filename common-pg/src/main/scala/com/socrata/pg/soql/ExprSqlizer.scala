@@ -11,6 +11,7 @@ import SqlizerContext._
 object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
   def sql(lit: StringLiteral[SoQLType])
          (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+          typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
           escape: Escape): ParametricSql = {
@@ -42,6 +43,7 @@ object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
 object NumberLiteralSqlizer extends Sqlizer[NumberLiteral[SoQLType]] {
   def sql(lit: NumberLiteral[SoQLType])
          (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+          typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
           escape: Escape): ParametricSql = {
@@ -62,8 +64,8 @@ object NumberLiteralSqlizer extends Sqlizer[NumberLiteral[SoQLType]] {
 
 object BooleanLiteralSqlizer extends Sqlizer[BooleanLiteral[SoQLType]] {
   def sql(lit: BooleanLiteral[SoQLType])
-         (rep: Map[UserColumnId,
-          SqlColumnRep[SoQLType, SoQLValue]],
+         (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+          typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
           escape: Escape): ParametricSql = {
@@ -85,6 +87,7 @@ object BooleanLiteralSqlizer extends Sqlizer[BooleanLiteral[SoQLType]] {
 object NullLiteralSqlizer extends Sqlizer[NullLiteral[SoQLType]] {
   def sql(lit: NullLiteral[SoQLType])
          (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+          typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
           escape: Escape): ParametricSql =
@@ -94,11 +97,12 @@ object NullLiteralSqlizer extends Sqlizer[NullLiteral[SoQLType]] {
 object FunctionCallSqlizer extends Sqlizer[FunctionCall[UserColumnId, SoQLType]] {
   def sql(expr: FunctionCall[UserColumnId, SoQLType])
          (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+          typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
           escape: Escape): ParametricSql = {
     val fn = SqlFunctions(expr.function.function)
-    val ParametricSql(sqls, fnSetParams) = fn(expr, rep, setParams, ctx, escape)
+    val ParametricSql(sqls, fnSetParams) = fn(expr, rep, typeRep, setParams, ctx, escape)
     // SoQL parsing bakes parenthesis into the ast tree without explicitly spitting out parenthesis.
     // We add parenthesis to every function call to preserve semantics.
     ParametricSql(sqls.map(s => s"($s)" + selectAlias(expr)(ctx)), fnSetParams)
@@ -110,6 +114,7 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
   // scalastyle:off cyclomatic.complexity
   def sql(expr: ColumnRef[UserColumnId, SoQLType])
          (reps: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+          typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
           escape: Escape): ParametricSql = {
@@ -140,7 +145,8 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           ParametricSql(maybeUpperPhysColumns.map(c => c + selectAlias(expr)(ctx)), setParams)
         }
       case _ => // Outer soqls do not get rep by column id.  They get rep by datatype.
-        val typeReps = reps.values.map((rep: SqlColumnRep[SoQLType, SoQLValue]) => (rep.representedType -> rep)).toMap
+        val typeReps = typeRep ++
+                       reps.values.map((rep: SqlColumnRep[SoQLType, SoQLValue]) => (rep.representedType -> rep)).toMap
         typeReps.get(expr.typ) match {
           case Some(rep) =>
             val subColumns = rep.physColumns.map(pc => pc.replace(rep.base, ""))

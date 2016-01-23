@@ -47,11 +47,12 @@ trait SqlFunctionsGeometry {
   private def formatSimplify(template: String, paramPosition: Option[Seq[Int]] = None)
                             (fn: FunCall,
                              rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                              setParams: Seq[SetParam],
                              ctx: Sqlizer.Context,
                              escape: Escape): ParametricSql = {
     val result@ParametricSql(Seq(sql), params) =
-      formatCall(template, paramPosition = paramPosition)(fn, rep, setParams, ctx, escape)
+      formatCall(template, paramPosition = paramPosition)(fn, rep, typeRep, setParams, ctx, escape)
     fn.parameters.head.typ match {
       case SoQLMultiPolygon | SoQLMultiLine =>
         // Simplify can change multipolygon to polygon.  Add ST_Multi to retain its multi nature.

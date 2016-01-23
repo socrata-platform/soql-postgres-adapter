@@ -217,6 +217,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
       val selectParamSql = Sqlizer.sql(Tuple3(soqlAnalysis, copyInfo.dataTableName, rollupReps))(
         rep = dsRepMap,
+        Map.empty,
         setParams = Seq(),
         ctx = sqlCtx,
         stringLit => SqlUtils.escapeString(pgu.conn, stringLit))
