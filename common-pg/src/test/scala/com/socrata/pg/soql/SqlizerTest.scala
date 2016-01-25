@@ -3,7 +3,7 @@ package com.socrata.pg.soql
 import org.scalatest.{Matchers, FunSuite}
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import com.socrata.datacoordinator.common.soql.SoQLTypeContext
+import com.socrata.datacoordinator.common.soql.{SoQLRep, SoQLTypeContext}
 import com.socrata.datacoordinator.truth.metadata.ColumnInfo
 import com.socrata.pg.soql.SqlizerContext._
 import com.socrata.pg.store.index.SoQLIndexableRep
@@ -27,9 +27,15 @@ object SqlizerTest {
 
   def sqlize(soql: String, caseSensitivity: CaseSensitivity): ParametricSql = {
     val allColumnReps = columnInfos.map(PostgresUniverseCommon.repForIndex(_))
-    val analysis = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
-    SoQLAnalysisSqlizer.sql((analysis, "t1", allColumnReps))(
+    val analyses = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
+    val typeReps: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]] =
+      columnInfos.map { colInfo  =>
+        (colInfo.typ -> SoQLRep.sqlRep(colInfo))
+      }(collection.breakOut)
+
+    SoQLAnalysisSqlizer.sql((analyses, "t1", allColumnReps))(
       columnReps,
+      typeReps,
       Seq.empty,
       sqlCtx + (SqlizerContext.CaseSensitivity -> caseSensitivity),
       passThrough)

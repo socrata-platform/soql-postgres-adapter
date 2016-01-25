@@ -29,10 +29,11 @@ trait SqlFunctionsLocation {
   )
 
   private def textToLocation(fn: FunCall,
-                               rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
-                               setParams: Seq[SetParam],
-                               ctx: Sqlizer.Context,
-                               escape: Escape): ParametricSql = {
+                             rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                             setParams: Seq[SetParam],
+                             ctx: Sqlizer.Context,
+                             escape: Escape): ParametricSql = {
     fn.parameters match {
       case Seq(strLit@StringLiteral(value: String, _)) =>
         val location = JsonUtil.parseJson[SoQLLocation](value).right.get
@@ -56,28 +57,30 @@ trait SqlFunctionsLocation {
 
   private def locationAddress(fn: FunCall,
                               rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                              typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                               setParams: Seq[SetParam],
                               ctx: Sqlizer.Context,
                               escape: Escape): ParametricSql = {
     fn.parameters match {
       case Seq(col) =>
-        val ParametricSql(sqls, params) = Sqlizer.sql(col)(rep, setParams, ctx, escape)
+        val ParametricSql(sqls, params) = Sqlizer.sql(col)(rep, typeRep, setParams, ctx, escape)
         ParametricSql(sqls.drop(1), params) // Drop geom and keep only address
       case _ => throw new Exception("should never get here")
     }
   }
 
   private def locationLatLng(prop: String)(fn: FunCall,
-                                             rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
-                                             setParams: Seq[SetParam],
-                                             ctx: Sqlizer.Context,
-                                             escape: Escape): ParametricSql = {
+                                           rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                                           typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                                           setParams: Seq[SetParam],
+                                           ctx: Sqlizer.Context,
+                                           escape: Escape): ParametricSql = {
     val propFn = Map("latitude" -> "ST_Y(%s)::numeric", "longitude" -> "ST_X(%s)::numeric")
     fn.parameters match {
       case  Seq(col) =>
         propFn.get(prop) match {
           case Some(template) =>
-            val ParametricSql(sqls, newSetParams) = Sqlizer.sql(col)(rep, setParams, ctx, escape)
+            val ParametricSql(sqls, newSetParams) = Sqlizer.sql(col)(rep, typeRep, setParams, ctx, escape)
             // Take only geom and extract latitude or longitude
             ParametricSql(sqls.take(1).map(template.format(_)), newSetParams)
           case _ =>
@@ -89,12 +92,13 @@ trait SqlFunctionsLocation {
 
   private def locationToPoint(fn: FunCall,
                               rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                              typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                               setParams: Seq[SetParam],
                               ctx: Sqlizer.Context,
                               escape: Escape): ParametricSql = {
     fn.parameters match {
       case Seq(col) =>
-        val ParametricSql(sqls, params) = Sqlizer.sql(col)(rep, setParams, ctx, escape)
+        val ParametricSql(sqls, params) = Sqlizer.sql(col)(rep, typeRep, setParams, ctx, escape)
         ParametricSql(sqls.take(1), params) // Take only geom and drop address
       case _ => throw new Exception("should never get here")
     }
@@ -103,16 +107,17 @@ trait SqlFunctionsLocation {
   private def geometryFunctionWithLocation(geomFunction: com.socrata.soql.functions.Function[SoQLType])
                                             (fn: FunCall,
                                              rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                                             typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                                              setParams: Seq[SetParam],
                                              ctx: Sqlizer.Context,
                                              escape: Escape): ParametricSql = {
         val toPointFn = MonomorphicFunction(SoQLFunctions.LocationToPoint, Map.empty)
         val toPointCall = FunctionCall(toPointFn, fn.parameters.take(1))(NoPosition, NoPosition)
-        val ParametricSql(sqls, params) = Sqlizer.sql(toPointCall)(rep, setParams, ctx, escape)
+        val ParametricSql(sqls, params) = Sqlizer.sql(toPointCall)(rep, typeRep, setParams, ctx, escape)
         val (bindName, bindType) = fn.function.bindings.head
         val geomFn = MonomorphicFunction(geomFunction, Map(bindName -> SoQLPoint, "b" -> bindType))
         val geomParams = toPointCall +: fn.parameters.drop(1)
         val geomCall = FunctionCall(geomFn, geomParams)(NoPosition, NoPosition)
-        Sqlizer.sql(geomCall)(rep, setParams, ctx, escape)
+        Sqlizer.sql(geomCall)(rep, typeRep, setParams, ctx, escape)
   }
 }

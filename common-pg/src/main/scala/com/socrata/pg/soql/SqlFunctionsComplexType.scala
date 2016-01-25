@@ -22,6 +22,7 @@ trait SqlFunctionsComplexType {
 
   private def textToPhone(fn: FunCall,
                              rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                              setParams: Seq[SetParam],
                              ctx: Sqlizer.Context,
                              escape: Escape): ParametricSql = {
@@ -55,12 +56,13 @@ trait SqlFunctionsComplexType {
   private def phoneSubColumn(subColumnIndex: Int)
                             (fn: FunCall,
                              rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                              setParams: Seq[SetParam],
                              ctx: Sqlizer.Context,
                              escape: Escape): ParametricSql = {
     fn.parameters match {
       case Seq(col) =>
-        val ParametricSql(sqls, params) = Sqlizer.sql(col)(rep, setParams, ctx, escape)
+        val ParametricSql(sqls, params) = Sqlizer.sql(col)(rep, typeRep, setParams, ctx, escape)
         ParametricSql(Seq(sqls(subColumnIndex)), params) // Drop geom and keep only address
       case _ => throw new Exception("should never get here")
     }

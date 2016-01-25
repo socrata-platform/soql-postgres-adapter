@@ -19,7 +19,9 @@ trait Sqlizer[T] {
   import Sqlizer._
   import SqlizerContext._
 
-  def sql(e: T)(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+  def sql(e: T)
+         (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+          typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam], ctx: Context, escape: Escape): ParametricSql
 
   protected def useUpper(e: T)(ctx: Context): Boolean = {
@@ -80,10 +82,11 @@ object Sqlizer {
   type SetParam = (Option[PreparedStatement], Int) => Option[Any]
 
   def sql[T](e: T)(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                   typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                    setParams: Seq[SetParam],
                    ctx: Context,
                    escape: Escape)(implicit ev: Sqlizer[T]): ParametricSql = {
-    ev.sql(e)(rep, setParams, ctx, escape)
+    ev.sql(e)(rep, typeRep, setParams, ctx, escape)
   }
 
   implicit val stringLiteralSqlizer = StringLiteralSqlizer
@@ -96,24 +99,30 @@ object Sqlizer {
 
   implicit object CoreExprSqlizer extends Sqlizer[CoreExpr[UserColumnId, SoQLType]] {
     def sql(expr: CoreExpr[UserColumnId, SoQLType])(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                                                    typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                                                     setParams: Seq[SetParam],
                                                     ctx: Context,
                                                     escape: Escape): ParametricSql = {
       expr match {
-        case fc: FunctionCall[UserColumnId, SoQLType] => FunctionCallSqlizer.sql(fc)(rep, setParams, ctx, escape)
-        case cr: ColumnRef[UserColumnId, SoQLType] => ColumnRefSqlizer.sql(cr)(rep, setParams, ctx, escape)
-        case lit: StringLiteral[SoQLType] => StringLiteralSqlizer.sql(lit)(rep, setParams, ctx, escape)
-        case lit: NumberLiteral[SoQLType] => NumberLiteralSqlizer.sql(lit)(rep, setParams, ctx, escape)
-        case lit: BooleanLiteral[SoQLType] => BooleanLiteralSqlizer.sql(lit)(rep, setParams, ctx, escape)
-        case lit: NullLiteral[SoQLType] => NullLiteralSqlizer.sql(lit)(rep, setParams, ctx, escape)
+        case fc: FunctionCall[UserColumnId, SoQLType] =>
+          FunctionCallSqlizer.sql(fc)(rep, typeRep, setParams, ctx, escape)
+        case cr: ColumnRef[UserColumnId, SoQLType] => ColumnRefSqlizer.sql(cr)(rep, typeRep, setParams, ctx, escape)
+        case lit: StringLiteral[SoQLType] => StringLiteralSqlizer.sql(lit)(rep, typeRep, setParams, ctx, escape)
+        case lit: NumberLiteral[SoQLType] => NumberLiteralSqlizer.sql(lit)(rep, typeRep, setParams, ctx, escape)
+        case lit: BooleanLiteral[SoQLType] => BooleanLiteralSqlizer.sql(lit)(rep, typeRep, setParams, ctx, escape)
+        case lit: NullLiteral[SoQLType] => NullLiteralSqlizer.sql(lit)(rep, typeRep, setParams, ctx, escape)
       }
     }
   }
 
   implicit object OrderBySqlizer extends Sqlizer[OrderBy[UserColumnId, SoQLType]] {
-    def sql(orderBy: OrderBy[UserColumnId, SoQLType])(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
-            setParams: Seq[SetParam], ctx: Context, escape: Escape): ParametricSql = {
-      val ParametricSql(ss, setParamsOrderBy) = Sqlizer.sql(orderBy.expression)(rep, setParams, ctx, escape)
+    def sql(orderBy: OrderBy[UserColumnId, SoQLType])
+           (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+            typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+            setParams: Seq[SetParam],
+            ctx: Context,
+            escape: Escape): ParametricSql = {
+      val ParametricSql(ss, setParamsOrderBy) = Sqlizer.sql(orderBy.expression)(rep, typeRep, setParams, ctx, escape)
       val se = ss.map { s =>
         s + (if (orderBy.ascending) "" else " desc") + (if (orderBy.nullLast) " nulls last" else "") }
       ParametricSql(se, setParamsOrderBy)
