@@ -117,10 +117,13 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
           createRollupTable(rollupReps, newTableName, rollupInfo)
           populateRollupTable(newTableName, rollupInfo, rollupAnalyses, rollupReps)
           createIndexes(newTableName, rollupInfo, rollupReps)
-        case e@(Failure(_: SoQLException) | Failure(_: StandaloneLexerException)) =>
-          logger.warn(s"Error updating $copyInfo, $rollupInfo, skipping building rollup", e)
         case Failure(e) =>
-          throw e
+          e match {
+            case e @ (_:SoQLException | _:StandaloneLexerException) =>
+              logger.warn(s"Error updating ${copyInfo}, ${rollupInfo}, skipping building rollup", e)
+            case _ =>
+              throw e
+          }
       }
 
       // drop the old rollup regardless so it doesn't leak, because we have no way to use or track old rollups at
