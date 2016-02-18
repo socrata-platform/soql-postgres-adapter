@@ -6,8 +6,8 @@ import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo}
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, DatasetCopyContext}
 
 case class FieldNameUpdatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                                             truthCopyInfo: TruthCopyInfo,
-                                             secColInfo: SecondaryColumnInfo[SoQLType]) {
+                                   truthCopyInfo: TruthCopyInfo,
+                                   secColInfo: SecondaryColumnInfo[SoQLType]) {
   val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
 
   val truthCopyContext = new DatasetCopyContext[SoQLType](truthCopyInfo, pgu.datasetMapReader.schema(truthCopyInfo))
