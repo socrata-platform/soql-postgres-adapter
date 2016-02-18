@@ -8,7 +8,7 @@
             ALTER TABLE column_map
             ADD COLUMN field_name TEXT NULL,
             ADD COLUMN field_name_casefolded TEXT NULL,
-            ADD UNIQUE (copy_system_id, field_name);
+            ADD UNIQUE (copy_system_id, field_name_casefolded);
         </sql>
         <rollback>
             ALTER TABLE column_map
