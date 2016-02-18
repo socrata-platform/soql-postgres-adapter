@@ -283,8 +283,24 @@ class SqlizerBasicTest extends SqlizerTest {
         |SELECT aa || 'b' as bb WHERE aa !='11' |>
         |SELECT bb || 'c' as cc WHERE bb !='22'""".stripMargin
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (bb || ?) FROM (SELECT (aa || ?) as \"bb\" FROM (SELECT ? as \"aa\" FROM t1 WHERE (primary_type != ?)) AS x1 WHERE (aa != ?)) AS x2 WHERE (bb != ?)")
+    sql should be ("SELECT (\"bb\" || ?) FROM (SELECT (\"aa\" || ?) as \"bb\" FROM (SELECT ? as \"aa\" FROM t1 WHERE (primary_type != ?)) AS x1 WHERE (\"aa\" != ?)) AS x2 WHERE (\"bb\" != ?)")
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be(Seq("c", "b", "aa", "00", "11", "22"))
+  }
+
+  test("chained soql only adds ST_AsBinary in the outermost sql") {
+    val soql = "select point, object |> select point where within_box(point, 1, 2, 3, 4)"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT ST_AsBinary(\"point\") AS point FROM (SELECT point as \"point\",object as \"object\" FROM t1) AS x1 WHERE (ST_MakeEnvelope(?, ?, ?, ?, 4326) ~ \"point\")")
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be(Seq(2, 3, 4, 1).map(BigDecimal(_)))
+  }
+
+  test("chained soql only adds ST_AsBinary - location in the outermost sql") {
+    val soql = "select location, object |> select location::point where within_box(location::point, 1, 2, 3, 4)"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT ST_AsBinary((\"location_geom\")) AS location_point FROM (SELECT ST_AsBinary(location_geom) as \"location_geom\",location_address as \"location_address\",object as \"object\" FROM t1) AS x1 WHERE (ST_MakeEnvelope(?, ?, ?, ?, 4326) ~ (\"location_geom\"))")
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be(Seq(2, 3, 4, 1).map(BigDecimal(_)))
   }
 }

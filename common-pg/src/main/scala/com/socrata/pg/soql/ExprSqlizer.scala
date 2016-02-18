@@ -111,6 +111,8 @@ object FunctionCallSqlizer extends Sqlizer[FunctionCall[UserColumnId, SoQLType]]
 
 object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
 
+  private def idQuote(s: String) = s""""$s"""" //   "\"" + s + "\""
+
   // scalastyle:off cyclomatic.complexity
   def sql(expr: ColumnRef[UserColumnId, SoQLType])
          (reps: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
@@ -151,7 +153,7 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           case Some(rep) =>
             val subColumns = rep.physColumns.map(pc => pc.replace(rep.base, ""))
             val sqls = subColumns.map { subCol =>
-              toUpper(expr)(expr.column.underlying + subCol, ctx) + selectAlias(expr, Some(subCol))(ctx)
+              toUpper(expr)(idQuote(expr.column.underlying + subCol), ctx) + selectAlias(expr, Some(subCol))(ctx)
             }
             ParametricSql(sqls, setParams)
           case None =>
