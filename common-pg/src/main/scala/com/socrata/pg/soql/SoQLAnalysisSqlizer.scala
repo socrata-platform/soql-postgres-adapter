@@ -165,7 +165,10 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
    * in particular if we are doing aggregations on geo types in the SQL query, so we do so against the top
    * level types of the final select list.
    */
-  private def toGeoText(sql: String, typ: SoQLType): String = if (GeoTypes.contains(typ)) s"ST_AsBinary($sql)" else sql
+  private def toGeoText(sql: String, typ: SoQLType, columnName: Option[ColumnName]): String = {
+    if (GeoTypes.contains(typ)) { s"ST_AsBinary($sql)" + columnName.map(x => s" AS ${x.name}").getOrElse("") }
+    else { sql }
+  }
 
   private def select(analysis: SoQLAnalysis[UserColumnId, SoQLType])
                     (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
@@ -173,20 +176,25 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
                      setParams: Seq[SetParam],
                      ctx: Context,
                      escape: Escape) = {
+    val strictInnermostSoql = isStrictInnermostSoql(ctx)
+    val strictOutermostSoql = isStrictOutermostSoql(ctx)
     val (sqls, setParamsInSelect) =
       // Chain select handles setParams differently than others.  The current setParams are prepended
       // to existing setParams.  Others are appended.
       // That is why setParams starts with empty in foldLeft.
       analysis.selection.foldLeft(Tuple2(Seq.empty[String], Seq.empty[SetParam])) { (acc, columnNameAndcoreExpr) =>
-      val (columnName, coreExpr) = columnNameAndcoreExpr
-      val ctxSelect = ctx + (RootExpr -> coreExpr) + (SqlizerContext.ColumnName -> columnName.name)
-      val (_, selectSetParams) = acc
-      val ParametricSql(sqls, newSetParams) = Sqlizer.sql(coreExpr)(rep, typeRep, selectSetParams, ctxSelect, escape)
-      val sqlGeomConverted =
-        if (ctx.contains(LeaveGeomAsIs)) { sqls }
-        else { sqls.map(toGeoText(_, coreExpr.typ)) }
-      (acc._1 ++ sqlGeomConverted, newSetParams)
-    }
+        val (columnName, coreExpr) = columnNameAndcoreExpr
+        val ctxSelect = ctx + (RootExpr -> coreExpr) + (SqlizerContext.ColumnName -> columnName.name)
+        val (_, selectSetParams) = acc
+        val ParametricSql(sqls, newSetParams) = Sqlizer.sql(coreExpr)(rep, typeRep, selectSetParams, ctxSelect, escape)
+        val sqlGeomConverted =
+          if (ctx.contains(LeaveGeomAsIs) || strictInnermostSoql) { sqls }
+          else {
+            val cn = if (strictOutermostSoql) Some(columnName) else None
+            sqls.map(toGeoText(_, coreExpr.typ, cn))
+          }
+        (acc._1 ++ sqlGeomConverted, newSetParams)
+      }
     (sqls, setParamsInSelect ++ setParams)
   }
 
@@ -206,5 +214,13 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
 
   private def outermostSoql(a: SoQLAnalysis[_, _], as: Seq[SoQLAnalysis[_, _]] ): Boolean = {
     a.eq(as.last)
+  }
+
+  private def isStrictOutermostSoql(ctx: Context): Boolean = {
+    ctx(OutermostSoql) == true && ctx(InnermostSoql) == false
+  }
+
+  private def isStrictInnermostSoql(ctx: Context): Boolean = {
+    ctx(InnermostSoql) == true && ctx(OutermostSoql) == false
   }
 }
