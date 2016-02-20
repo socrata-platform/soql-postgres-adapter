@@ -6,6 +6,7 @@ import com.socrata.datacoordinator.secondary.{DatasetInfo => SecondaryDatasetInf
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo}
 import com.socrata.datacoordinator.truth.metadata.{DatasetInfo => TruthDatasetInfo}
 import com.socrata.pg.store.PGSecondaryUtil._
+import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.types._
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import org.apache.log4j.PropertyConfigurator
@@ -44,10 +45,10 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
     val pgs = new PGSecondary(config)
     val events = Seq(
       WorkingCopyCreated(copyInfo),
-      ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, false, false, false)),
-      ColumnCreated(ColumnInfo(new ColumnId(9125), new UserColumnId(":version"), SoQLVersion, false, false, true)),
-      ColumnCreated(ColumnInfo(new ColumnId(9126), new UserColumnId("mycolumn"), SoQLText, false, false, false)),
-      SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, true, false, false))
+      ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, false, false, false, None)),
+      ColumnCreated(ColumnInfo(new ColumnId(9125), new UserColumnId(":version"), Some(ColumnName(":version")), SoQLVersion, false, false, true, None)),
+      ColumnCreated(ColumnInfo(new ColumnId(9126), new UserColumnId("mycolumn"), Some(ColumnName("my_column")), SoQLText, false, false, false, None)),
+      SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, true, false, false, None))
     )
   }
 
@@ -56,14 +57,30 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
     val dataVersion = 0L
     val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
     val pgs = new PGSecondary(config)
-    val testColInfo = ColumnInfo(new ColumnId(9126), new UserColumnId("mycolumn"), SoQLText, false, false, false)
+    val testColInfo = ColumnInfo(new ColumnId(9126), new UserColumnId("mycolumn"), Some(ColumnName("my_column")), SoQLText, false, false, false, None)
     val events = Seq(
       WorkingCopyCreated(copyInfo),
-      ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, false, false, false)),
-      ColumnCreated(ColumnInfo(new ColumnId(9125), new UserColumnId(":version"), SoQLVersion, false, false, true)),
+      ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, false, false, false, None)),
+      ColumnCreated(ColumnInfo(new ColumnId(9125), new UserColumnId(":version"), Some(ColumnName(":version")), SoQLVersion, false, false, true, None)),
       ColumnCreated(testColInfo),
       ColumnRemoved(testColInfo),
-      SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, true, false, false))
+      SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, true, false, false, None))
+    )
+  }
+
+  def fieldNameUpdatedFixture = new { // scalastyle:ignore
+  val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
+    val dataVersion = 0L
+    val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
+    val pgs = new PGSecondary(config)
+    val testColInfo = ColumnInfo(new ColumnId(9126), new UserColumnId("mycolumn"), Some(ColumnName("my_column")), SoQLText, false, false, false, None)
+    val events = Seq(
+      WorkingCopyCreated(copyInfo),
+      ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, false, false, false, None)),
+      ColumnCreated(ColumnInfo(new ColumnId(9125), new UserColumnId(":version"), Some(ColumnName(":version")), SoQLVersion, false, false, true, None)),
+      ColumnCreated(testColInfo),
+      FieldNameUpdated(testColInfo.copy(fieldName = Some(ColumnName("my_column_2")))),
+      SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, true, false, false, None))
     )
   }
 

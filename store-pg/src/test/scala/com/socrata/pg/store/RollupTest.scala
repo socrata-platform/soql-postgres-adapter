@@ -8,6 +8,7 @@ import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, Li
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.store.PGSecondaryUtil._
 import com.socrata.pg.store.events.{RollupCreatedOrUpdatedHandler, WorkingCopyCreatedHandler, WorkingCopyPublishedHandler}
+import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.types._
 import org.joda.time.DateTime
 
@@ -174,9 +175,9 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val cookie = Option("monkey")
 
       val newSchema = ColumnIdMap[ColumnInfo[SoQLType]](
-        new ColumnId(10) -> ColumnInfo[SoQLType](new ColumnId(10), new UserColumnId(":id"), SoQLID, true, false, false),
-        new ColumnId(11) -> ColumnInfo[SoQLType](new ColumnId(11), new UserColumnId(":version"), SoQLVersion, false, false, true),
-        new ColumnId(12) -> ColumnInfo[SoQLType](new ColumnId(12), new UserColumnId("col"), SoQLText, false, false, false)
+        new ColumnId(10) -> ColumnInfo[SoQLType](new ColumnId(10), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, true, false, false, None),
+        new ColumnId(11) -> ColumnInfo[SoQLType](new ColumnId(11), new UserColumnId(":version"), Some(ColumnName(":version")), SoQLVersion, false, false, true, None),
+        new ColumnId(12) -> ColumnInfo[SoQLType](new ColumnId(12), new UserColumnId("col"), Some(ColumnName("col")), SoQLText, false, false, false, None)
       )
 
       val rows = Seq(

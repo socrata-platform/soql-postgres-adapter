@@ -19,8 +19,10 @@ case class ColumnCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     secColInfo.systemId,
     truthCopyInfo,
     secColInfo.id, // user column id
+    secColInfo.fieldName,
     secColInfo.typ,
-    physicalColumnBaseBase(secColInfo.id.underlying, isSystemColumnId(secColInfo.id)) // system column id
+    physicalColumnBaseBase(secColInfo.id.underlying, isSystemColumnId(secColInfo.id)), // system column id
+    None // not going to store computation strategies
   )
 
   if (secColInfo.isSystemPrimaryKey) pgu.datasetMapWriter.setSystemPrimaryKey(truthColInfo)

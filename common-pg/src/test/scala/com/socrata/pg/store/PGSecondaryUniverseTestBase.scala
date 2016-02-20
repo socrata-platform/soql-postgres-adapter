@@ -12,7 +12,7 @@ import com.socrata.datacoordinator.truth.loader.SchemaLoader
 import com.socrata.datacoordinator.truth.loader.sql.InspectedRow
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, DatasetCopyContext}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.soql.environment.TypeName
+import com.socrata.soql.environment.{ColumnName, TypeName}
 import com.socrata.soql.types._
 import com.typesafe.config.Config
 import org.joda.time.{DateTime, LocalDate, LocalDateTime, LocalTime}
@@ -58,14 +58,14 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
                             sLoader:SchemaLoader[SoQLType]): ColumnIdMap[ColumnInfo[SoQLType]] = {
     // Setup the data columns
     val cols = SoQLType.typesByName filterKeys (!UnsupportedTypes.contains(_)) map {
-      case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(n + "_USERNAME"), t, n + "_PHYSNAME")
+      case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(n + "_USERNAME"), Some(ColumnName(n + "_FIELD")), t, n + "_PHYSNAME", None)
     }
 
     // Set up the required columns
     val systemPrimaryKey:ColumnInfo[SoQLType] =
-      pgu.datasetMapWriter.setSystemPrimaryKey(pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(":id"), SoQLID, "system_id"))
+      pgu.datasetMapWriter.setSystemPrimaryKey(pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, "system_id", None))
     val versionColumn:ColumnInfo[SoQLType] =
-      pgu.datasetMapWriter.setVersion(pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(":version"), SoQLVersion, "version_id"))
+      pgu.datasetMapWriter.setVersion(pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(":version"), Some(ColumnName(":version")), SoQLVersion, "version_id", None))
 
     // Add all columns
     sLoader.addColumns(cols ++ Seq(systemPrimaryKey, versionColumn))
@@ -87,12 +87,12 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
   def validateSchema(expect:Iterable[ColumnInfo[SoQLType]],
                      schema:ColumnIdMap[ColumnInfo[SoQLType]]): Unit = {
     val existing = (schema.values map {
-      colInfo => (colInfo.systemId, colInfo.typ)
+      colInfo => (colInfo.systemId, (colInfo.fieldName, colInfo.typ))
     }).toMap
 
     expect foreach {
       colInfo =>  {
-        existing should contain ((colInfo.systemId, colInfo.typ))
+        existing should contain ((colInfo.systemId, (colInfo.fieldName, colInfo.typ)))
       }
     }
   }

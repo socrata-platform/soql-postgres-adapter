@@ -327,11 +327,13 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
             latest,
             cid,
             new UserColumnId(columnName.name),
+            None, // field name
             coreExpr.typ,
             columnName.name,
             coreExpr.typ == SoQLID,
             false, // isUserKey
-            coreExpr.typ == SoQLVersion
+            coreExpr.typ == SoQLVersion,
+            None // computation strategy we aren't actually storing...
           )(SoQLTypeContext.typeNamespace, null) // scalastyle:ignore null
           map + (cid -> cinfo)
       }

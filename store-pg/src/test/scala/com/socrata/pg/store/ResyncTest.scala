@@ -1,12 +1,12 @@
 package com.socrata.pg.store
 
 import scala.language.reflectiveCalls
-import com.socrata.datacoordinator.secondary.{ColumnInfo, LifecycleStage, CopyInfo, DatasetInfo}
+import com.socrata.datacoordinator.secondary.LifecycleStage
 import com.socrata.datacoordinator.id.{UserColumnId, ColumnId, CopyId}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
+import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.types._
 import com.rojoma.simplearm.util._
-import com.rojoma.simplearm.SimpleArm
 import com.socrata.datacoordinator.secondary.ColumnInfo
 import com.socrata.datacoordinator.secondary.CopyInfo
 import com.socrata.datacoordinator.secondary.DatasetInfo
@@ -23,9 +23,9 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
       val cookie = Option("monkey")
 
       val newSchema = ColumnIdMap[ColumnInfo[SoQLType]](
-        new ColumnId(10) -> ColumnInfo[SoQLType](new ColumnId(10), new UserColumnId(":id"), SoQLID, true, false, false),
-        new ColumnId(11) -> ColumnInfo[SoQLType](new ColumnId(11), new UserColumnId(":version"), SoQLVersion, false, false, true),
-        new ColumnId(12) -> ColumnInfo[SoQLType](new ColumnId(12), new UserColumnId("my column 11"), SoQLText, false, false, false)
+        new ColumnId(10) -> ColumnInfo[SoQLType](new ColumnId(10), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, true, false, false, None),
+        new ColumnId(11) -> ColumnInfo[SoQLType](new ColumnId(11), new UserColumnId(":version"), Some(ColumnName(":version")), SoQLVersion, false, false, true, None),
+        new ColumnId(12) -> ColumnInfo[SoQLType](new ColumnId(12), new UserColumnId("my column 11"), Some(ColumnName("my_column_11")), SoQLText, false, false, false, None)
       )
 
       val rows = Seq(

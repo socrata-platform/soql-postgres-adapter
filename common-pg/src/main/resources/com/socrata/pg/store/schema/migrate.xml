@@ -9,5 +9,7 @@
     <include file="com/socrata/pg/store/schema/20140703-create-postgis-extension.xml"/>
     <include file="com/socrata/pg/store/schema/20140629-create-rollup-map.xml"/>
     <include file="com/socrata/pg/store/schema/20150501-add-missing-timezone.xml"/>
+    <include file="com/socrata/pg/store/schema/20160107-create-computation-strategy-map.xml"/>
+    <include file="com/socrata/pg/store/schema/20160111-add-field-name-columns.xml"/>
 
 </databaseChangeLog>

@@ -1,5 +1,7 @@
 package com.socrata.pg.store.events
 
+import com.socrata.soql.environment.ColumnName
+
 import scala.language.reflectiveCalls
 
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
@@ -13,8 +15,8 @@ class VersionColumnChangedHandlerTest extends PGSecondaryTestBase with PGSeconda
     withPgu() { pgu =>
       val f = workingCopyCreatedFixture
       val events = f.events ++ Seq(
-        ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":version"), SoQLID, false, false, false)),
-        VersionColumnChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":version"), SoQLID, false, false, false))
+        ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":version"), Some(ColumnName(":version")), SoQLID, false, false, false, None)),
+        VersionColumnChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":version"), Some(ColumnName(":version")), SoQLID, false, false, false, None))
       )
       f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
 
@@ -29,9 +31,9 @@ class VersionColumnChangedHandlerTest extends PGSecondaryTestBase with PGSeconda
     withPgu() { pgu =>
       val f = workingCopyCreatedFixture
       val events = f.events ++ Seq(
-        ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, false, false, false)),
-        VersionColumnChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, false, false, false)),
-        VersionColumnChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), SoQLID, false, false, false))
+        ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":version")), SoQLID, false, false, false, None)),
+        VersionColumnChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":version")), SoQLID, false, false, false, None)),
+        VersionColumnChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":version")), SoQLID, false, false, false, None))
       )
       intercept[UnsupportedOperationException] {
         f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)

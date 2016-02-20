@@ -18,6 +18,10 @@ class PGSecondaryLogger[CT, CV] extends Logger[CT, CV] with Logging {
 
   def columnRemoved(info: ColumnInfo[CT]): Unit = logger.debug("column removed")
 
+  def computationStrategyRemoved(info: ColumnInfo[CT]): Unit = logger.debug("computation strategy removed: " + info)
+
+  def fieldNameUpdated(info: ColumnInfo[CT]): Unit = logger.debug("field name updated: " + info)
+
   def rowIdentifierSet(newIdentifier: ColumnInfo[CT]): Unit = logger.debug("rowIdentifierSet: " + newIdentifier)
 
   def rowIdentifierCleared(oldIdentifier: ColumnInfo[CT]): Unit = logger.debug("rowIdentifierCleared: " + oldIdentifier)
