@@ -128,11 +128,11 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     funComplexTypeMap ++
     castIdentities.map(castIdentity => Tuple2(castIdentity, passthrough))
 
-  private val wildcard = StringLiteral("%", SoQLText)(NoPosition)
+  private val wildcard = StringLiteral("%", SoQLText.t)(NoPosition)
 
   private val suffixWildcard = {
     val bindings = SoQLFunctions.Concat.parameters.map {
-      case VariableType(name) => name -> SoQLText
+      case VariableType(name) => name -> SoQLText.t
       case _ => throw new Exception("Unexpected concat function signature")
     }.toMap
     MonomorphicFunction(SoQLFunctions.Concat, bindings)

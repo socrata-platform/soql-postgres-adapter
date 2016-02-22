@@ -18,7 +18,7 @@ object Dependencies {
     val socrataCuratorUtils = "1.0.1"
     val socrataThirdPartyUtils = "4.0.1"
     val socrataHttpCuratorBroker = "3.3.0"
-    val soqlStdlib = "1.0.8"
+    val soqlStdlib = "2.0.0-SNAPSHOT"
     val typesafeConfig = "1.0.0"
     val dataCoordinator = "2.1.5-SNAPSHOT"
     val typesafeScalaLogging = "1.1.0"

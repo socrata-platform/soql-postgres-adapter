@@ -24,7 +24,7 @@ import com.socrata.soql.environment.{ColumnName, DatasetContext}
 import com.socrata.soql.exceptions.SoQLException
 import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLTypeInfo}
 import com.socrata.soql.parsing.standalone_exceptions.StandaloneLexerException
-import com.socrata.soql.types.{SoQLAnalysisType, SoQLType, SoQLValue}
+import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.scalalogging.slf4j.Logging
 
 import RollupManager._
@@ -38,11 +38,11 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     readCtx <- pgu.datasetReader.openDataset(copyInfo)
   } yield readCtx.schema
 
-  private val dsContext = new DatasetContext[SoQLAnalysisType] {
+  private val dsContext = new DatasetContext[SoQLType] {
     // we are sorting by the column name for consistency with query coordinator and how we build
     // schema hashes, it may not matter here though.  Column id to name mapping is 1:1 in our case
     // since our rollup query is pre-mapped.
-    val schema: OrderedMap[ColumnName, SoQLAnalysisType] =
+    val schema: OrderedMap[ColumnName, SoQLType] =
       OrderedMap(dsSchema.values.map(x => (ColumnName(x.userColumnId.underlying), x.typ)).toSeq.sortBy(_._1): _*)
   }
 
@@ -89,8 +89,8 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
       val analyzer = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
 
-      val prefixedDsContext = new DatasetContext[SoQLAnalysisType] {
-        val schema: OrderedMap[ColumnName, SoQLAnalysisType] =
+      val prefixedDsContext = new DatasetContext[SoQLType] {
+        val schema: OrderedMap[ColumnName, SoQLType] =
           OrderedMap(dsSchema.values.map(x => (columnIdToPrefixNameMap(x.userColumnId), x.typ)).toSeq.sortBy(_._1): _*)
       }
 
@@ -101,7 +101,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       // We don't want to disable the rollup entirely since it could become valid again, eg. if they then add
       // the column back.  It would be ideal if we had a better way to communicate this failure upwards through
       // the stack.
-      val prefixedRollupAnalyses: Try[Seq[SoQLAnalysis[ColumnName, SoQLAnalysisType]]] =
+      val prefixedRollupAnalyses: Try[Seq[SoQLAnalysis[ColumnName, SoQLType]]] =
         Try { analyzer.analyzeFullQuery(rollupInfo.soql)(prefixedDsContext) }
 
 
@@ -111,7 +111,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
           // We are naming columns simply c1 .. c<n> based on the order they are in to avoid having
           // to maintain a mapping or deal with edge cases such as length and :system columns.
           val rollupReps = rollupAnalyses.last.selection.values.zipWithIndex.map { case (colRep, idx) =>
-            SoQLIndexableRep.sqlRep(colRep.typ.canonical, "c" + (idx + 1))
+            SoQLIndexableRep.sqlRep(colRep.typ, "c" + (idx + 1))
           }.toSeq
 
           createRollupTable(rollupReps, newTableName, rollupInfo)
@@ -203,7 +203,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
   private def populateRollupTable(tableName: String,
       rollupInfo: RollupInfo,
-      rollupAnalyses: Seq[SoQLAnalysis[ColumnName, SoQLAnalysisType]],
+      rollupAnalyses: Seq[SoQLAnalysis[ColumnName, SoQLType]],
       rollupReps: Seq[SqlColumnRep[SoQLType, SoQLValue]]): Unit = {
     time("populate-rollup-table",
       "dataset_id" -> copyInfo.datasetInfo.systemId.underlying,

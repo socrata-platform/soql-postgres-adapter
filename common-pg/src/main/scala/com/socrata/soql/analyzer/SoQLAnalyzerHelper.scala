@@ -4,7 +4,7 @@ import com.socrata.pg.soql._
 import com.socrata.soql.{SoQLAnalysis, SoQLAnalyzer, AnalysisDeserializer, AnalysisSerializer}
 import com.socrata.soql.functions.{SoQLFunctions, SoQLFunctionInfo, SoQLTypeInfo}
 import com.socrata.soql.environment.{ColumnName, TypeName, DatasetContext}
-import com.socrata.soql.types.{SoQLAnalysisType, SoQLType}
+import com.socrata.soql.types.SoQLType
 import java.io.{OutputStream, InputStream, ByteArrayInputStream, ByteArrayOutputStream}
 import com.socrata.datacoordinator.id.UserColumnId
 
@@ -15,7 +15,7 @@ object SoQLAnalyzerHelper {
                                                       deserializeType,
                                                       SoQLFunctions.functionsByIdentity)
 
-  def serialize(outputStream: OutputStream, analyses: Seq[SoQLAnalysis[UserColumnId, SoQLAnalysisType]]): Unit =
+  def serialize(outputStream: OutputStream, analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]]): Unit =
     serializer(outputStream, analyses)
 
   def deserialize(inputStream: InputStream): Seq[SoQLAnalysis[UserColumnId, SoQLType]] = deserializer(inputStream)
@@ -25,18 +25,18 @@ object SoQLAnalyzerHelper {
   def analyzeSoQL(soql: String,
                   datasetCtx: DatasetContext[SoQLType],
                   idMap: ColumnName => UserColumnId): Seq[SoQLAnalysis[UserColumnId, SoQLType]] = {
-    implicit val ctx: DatasetContext[SoQLAnalysisType] = toAnalysisType(datasetCtx)
+    implicit def ctx = datasetCtx
 
-    val analyses: Seq[SoQLAnalysis[ColumnName, SoQLAnalysisType]] = analyzer.analyzeFullQuery(soql)
+    val analyses: Seq[SoQLAnalysis[ColumnName, SoQLType]] = analyzer.analyzeFullQuery(soql)
     analyses.map(_.mapColumnIds(idMap)).asInstanceOf[Seq[SoQLAnalysis[UserColumnId, SoQLType]]]
   }
 
   def analyzeSoQL(soql: String,
                   datasetCtx: DatasetContext[SoQLType],
                   columnIdMapping: Map[ColumnName, UserColumnId]): Seq[SoQLAnalysis[UserColumnId, SoQLType]] = {
-    implicit val ctx: DatasetContext[SoQLAnalysisType] = toAnalysisType(datasetCtx)
+    implicit def ctx = datasetCtx
 
-    val analyses: Seq[SoQLAnalysis[ColumnName, SoQLAnalysisType]] = analyzer.analyzeFullQuery(soql)
+    val analyses: Seq[SoQLAnalysis[ColumnName, SoQLType]] = analyzer.analyzeFullQuery(soql)
     val remappedAnalyses = remapAnalyses(columnIdMapping, analyses)
 
     val baos = new ByteArrayOutputStream
@@ -50,9 +50,9 @@ object SoQLAnalyzerHelper {
    * in the "Query Coordinator" project QueryParser class.
    */
   private def remapAnalyses(columnIdMapping: Map[ColumnName, UserColumnId],
-                            analyses: Seq[SoQLAnalysis[ColumnName, SoQLAnalysisType]])
-    : Seq[SoQLAnalysis[UserColumnId, SoQLAnalysisType]] = {
-    val initialAcc = (columnIdMapping, Seq.empty[SoQLAnalysis[UserColumnId, SoQLAnalysisType]])
+                            analyses: Seq[SoQLAnalysis[ColumnName, SoQLType]])
+    : Seq[SoQLAnalysis[UserColumnId, SoQLType]] = {
+    val initialAcc = (columnIdMapping, Seq.empty[SoQLAnalysis[UserColumnId, SoQLType]])
     val (_, analysesInColIds) = analyses.foldLeft(initialAcc) { (acc, analysis) =>
       val (mapping, convertedAnalyses) = acc
       // Newly introduced columns will be used as column id as is.
@@ -74,7 +74,7 @@ object SoQLAnalyzerHelper {
           mappingWithNewColumns
         }
 
-      val a: SoQLAnalysis[UserColumnId, SoQLAnalysisType] = analysis.mapColumnIds(newMapping)
+      val a: SoQLAnalysis[UserColumnId, SoQLType] = analysis.mapColumnIds(newMapping)
       (mappingWithNewColumns, convertedAnalyses :+ a)
     }
     analysesInColIds
@@ -83,16 +83,6 @@ object SoQLAnalyzerHelper {
   private def serializeColumn(c: UserColumnId) = c.underlying
   private def deserializeColumn(s: String) = new UserColumnId(s)
 
-  private def serializeAnalysisType(t: SoQLAnalysisType) = t.name.name
+  private def serializeAnalysisType(t: SoQLType) = t.name.name
   private def deserializeType(s: String): SoQLType = SoQLType.typesByName(TypeName(s))
-
-  private def toAnalysisType(datasetCtx: DatasetContext[SoQLType]): DatasetContext[SoQLAnalysisType] = {
-    val soqlAnalysisTypeSchema = datasetCtx.schema.map { case (columnName, soqlType) =>
-      (columnName, soqlType.asInstanceOf[SoQLAnalysisType])
-    }
-    val analysisContext = new DatasetContext[SoQLAnalysisType] {
-      val schema = soqlAnalysisTypeSchema
-    }
-    analysisContext
-  }
 }
