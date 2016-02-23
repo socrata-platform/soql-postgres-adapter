@@ -11,6 +11,6 @@ class SqlizerPhoneTest extends SqlizerTest {
     val ex = intercept[TypecheckException] {
       sqlize(soql, CaseSensitive)
     }
-    ex.getMessage should be("Cannot pass a value of type `*text' to function `op$=':\nselect * where phone = 'NonexistingType: 4251234567'\n                       ^")
+    ex.getMessage should be("Cannot pass a value of type `text' to function `op$=':\nselect * where phone = 'NonexistingType: 4251234567'\n                       ^")
   }
 }

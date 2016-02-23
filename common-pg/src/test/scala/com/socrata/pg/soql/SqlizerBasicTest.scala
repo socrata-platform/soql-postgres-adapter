@@ -222,7 +222,7 @@ class SqlizerBasicTest extends SqlizerTest {
     val ex = intercept[TypecheckException] {
       sqlize(soql, CaseSensitive)
     }
-    ex.getMessage should be("Cannot pass a value of type `*number' to function `coalesce':\nselect coalesce(primary_type, 123)\n                              ^")
+    ex.getMessage should be("Cannot pass a value of type `number' to function `coalesce':\nselect coalesce(primary_type, 123)\n                              ^")
   }
 
   test("simplify multigeometry") {
