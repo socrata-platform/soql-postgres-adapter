@@ -244,7 +244,10 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(dsId).get
     val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
 
-    val dvExpect = truthCopyInfo.dataVersion + 1
+    // If there's more than one version's difference between the last known copy in truth
+    // and the last known copy in the secondary, force a resync.
+    val allCopiesInOrder = pgu.datasetMapReader.allCopies(truthDatasetInfo)
+    val dvExpect = allCopiesInOrder.last.dataVersion + 1
     if (newDataVersion != dvExpect) {
       throw new ResyncSecondaryException(
         s"Current version ${truthCopyInfo.dataVersion}, next version ${newDataVersion} but should be ${dvExpect}")
