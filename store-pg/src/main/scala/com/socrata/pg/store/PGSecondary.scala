@@ -246,6 +246,11 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
     // If there's more than one version's difference between the last known copy in truth
     // and the last known copy in the secondary, force a resync.
+    // TODO : It seems weird to resync just because there's a version gap,
+    // but the PG secondary code has always worked this way, and we've never
+    // verified that playing back multiple versions in one go actually works in
+    // every case. At some point, we should take the time to verify this and
+    // revisit whether we actually want this resync logic to exist.
     val allCopiesInOrder = pgu.datasetMapReader.allCopies(truthDatasetInfo)
     val dvExpect = allCopiesInOrder.last.dataVersion + 1
     if (newDataVersion != dvExpect) {
