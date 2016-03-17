@@ -84,6 +84,13 @@ class SqlizerBasicTest extends SqlizerTest {
     params should be (Seq("POINT(0 0)"))
   }
 
+  test("number of points") {
+    val soql = "select num_points(multipolygon)"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT (ST_NPoints(multipolygon)) FROM t1")
+    setParams.length should be (0)
+  }
+
   test("is empty") {
     val soql = "select is_empty(multipolygon)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)

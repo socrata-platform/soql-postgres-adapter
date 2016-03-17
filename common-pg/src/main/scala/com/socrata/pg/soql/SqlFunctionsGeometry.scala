@@ -37,6 +37,7 @@ trait SqlFunctionsGeometry {
     ConvexHull -> formatCall("ST_Multi(ST_ConvexHull(ST_Union(%s)))"),
     Intersects -> formatCall("ST_Intersects(%s, %s)") _,
     DistanceInMeters -> formatCall("ST_Distance(%s::geography, %s::geography)") _,
+    NumberOfPoints -> formatCall("ST_NPoints(%s)") _,
     Simplify -> formatSimplify("ST_Simplify(%s, %s)") _,
     SimplifyPreserveTopology -> formatSimplify("ST_SimplifyPreserveTopology(%s, %s)") _,
     SnapToGrid -> formatSimplify("ST_SnapToGrid(%s, %s)") _,
