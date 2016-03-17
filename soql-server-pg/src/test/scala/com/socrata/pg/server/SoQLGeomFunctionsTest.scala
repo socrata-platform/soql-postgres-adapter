@@ -93,6 +93,18 @@ class SoQLGeomFunctionsTest extends SoQLTest {
     compareSoqlResult("select distance_in_meters(point, multipolygon) as distance_in_meters where code = 'SPRINT-EVO'", "select-distance-columns.json")
   }
 
+  test("numpoints with columns") {
+    compareSoqlResult("select num_points(multipolygon) as num_points where code = 'SPRINT-EVO'", "select-num-points.json")
+  }
+
+  test("numpoints with literals") {
+    compareSoqlResult(
+      "select num_points('MULTIPOLYGON(((11.578791 48.144026,11.582921 48.143088,11.582181 48.141649,11.578136 48.142515,11.578791 48.144026)))') " +
+        "as num_points " +
+        "where code = 'SPRINT-EVO'",
+      "select-num-points.json")
+  }
+
   test("simplify geometry") {
     compareSoqlResult(
       """select name,
