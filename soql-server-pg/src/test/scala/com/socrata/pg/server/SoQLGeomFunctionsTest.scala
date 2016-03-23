@@ -205,4 +205,10 @@ class SoQLGeomFunctionsTest extends SoQLTest {
   test("curated region test contains null") {
     compareSoqlResult("select name, curated_region_test(multipolygon, 1) as test_result where code = 'FOO'", "select-curated-region-test-contains-null.json")
   }
+
+  test("point.latitude") {
+    compareSoqlResult(
+      "select code, name, point.latitude, point.longitude where code = '14200' and point.latitude > 1 and point.longitude > 1",
+      "select-point-lat-lng.json")
+  }
 }
