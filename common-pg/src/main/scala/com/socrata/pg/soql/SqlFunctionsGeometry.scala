@@ -37,7 +37,8 @@ trait SqlFunctionsGeometry {
     ConvexHull -> formatCall("ST_Multi(ST_ConvexHull(ST_Union(%s)))"),
     Intersects -> formatCall("ST_Intersects(%s, %s)") _,
     DistanceInMeters -> formatCall("ST_Distance(%s::geography, %s::geography)") _,
-    ValidMultiPolygon -> formatValidate("ST_MakeValid(%s)") _,
+    GeoMakeValid -> formatCall("ST_MakeValid(%s)") _,
+    GeoMulti -> formatCall("ST_Multi(%s)") _,
     CuratedRegionTest -> formatCall("ST_isValid(%s)")_,
     NumberOfPoints -> formatCall("ST_NPoints(%s)") _,
     Simplify -> formatSimplify("ST_Simplify(%s, %s)") _,
@@ -66,24 +67,6 @@ trait SqlFunctionsGeometry {
         result
     }
   }
-
-  private def formatValidate(template: String , paramPosition: Option[Seq[Int]] = None)
-                            (fn: FunCall,
-                             rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
-                             typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
-                             setParams: Seq[SetParam],
-                             ctx: Sqlizer.Context,
-                             escape: Escape): ParametricSql = {
-    val result@ParametricSql(Seq(sql), params) =
-      formatCall(template, paramPosition = paramPosition)(fn, rep, typeRep, setParams, ctx, escape)
-    fn.parameters.head.typ match {
-      case SoQLPolygon =>
-        ParametricSql(Seq("ST_Multi(%s)".format(sql)), params)
-      case _ =>
-        result
-    }
-  }
-
 
   private def isEmpty =
     formatCall("ST_IsEmpty(%s) or %s is null", paramPosition = Some(Seq(0, 0))) _
