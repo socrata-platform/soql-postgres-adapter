@@ -39,7 +39,7 @@ trait SqlFunctionsGeometry {
     DistanceInMeters -> formatCall("ST_Distance(%s::geography, %s::geography)") _,
     GeoMakeValid -> formatValidate("ST_MakeValid(%s)") _,
     GeoMulti -> formatCall("ST_Multi(%s)") _,
-    CuratedRegionTest -> formatCall("ST_isValid(%s)")_,
+    CuratedRegionTest -> formatCall("ST_isValid(%s, %s)")_,
     NumberOfPoints -> formatCall("ST_NPoints(%s)") _,
     Simplify -> formatSimplify("ST_Simplify(%s, %s)") _,
     SimplifyPreserveTopology -> formatSimplify("ST_SimplifyPreserveTopology(%s, %s)") _,
