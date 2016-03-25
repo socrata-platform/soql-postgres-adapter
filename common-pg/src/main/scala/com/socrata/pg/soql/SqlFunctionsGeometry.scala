@@ -79,14 +79,13 @@ trait SqlFunctionsGeometry {
     val result@ParametricSql(Seq(sql), params) =
       formatCall(template, paramPosition = paramPosition)(fn, rep, typeRep, setParams, ctx, escape)
     fn.parameters.head.typ match {
-      case SoQLPolygon =>
-        // Simplify can change multipolygon to polygon.  Add ST_Multi to retain its multi nature.
+      case SoQLMultiPolygon | SoQLPolygon =>
+        // Validate can change a polygon to multipolygon.  Add ST_Multi to make everything multi
         ParametricSql(Seq("ST_Multi(%s)".format(sql)), params)
       case _ =>
         result
     }
   }
-
 
   private def isEmpty =
     formatCall("ST_IsEmpty(%s) or %s is null", paramPosition = Some(Seq(0, 0))) _
