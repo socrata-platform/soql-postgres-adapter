@@ -6,7 +6,7 @@ import com.socrata.pg.soql.SqlFunctions._
 import com.socrata.pg.soql.Sqlizer._
 import com.socrata.soql.functions.Function
 import com.socrata.soql.functions.SoQLFunctions._
-import com.socrata.soql.types.{SoQLMultiLine, SoQLMultiPolygon, SoQLValue, SoQLType}
+import com.socrata.soql.types.{SoQLPolygon, SoQLMultiLine, SoQLMultiPolygon, SoQLValue, SoQLType}
 
 // scalastyle:off magic.number multiple.string.literals
 trait SqlFunctionsGeometry {
@@ -37,6 +37,9 @@ trait SqlFunctionsGeometry {
     ConvexHull -> formatCall("ST_Multi(ST_ConvexHull(ST_Union(%s)))"),
     Intersects -> formatCall("ST_Intersects(%s, %s)") _,
     DistanceInMeters -> formatCall("ST_Distance(%s::geography, %s::geography)") _,
+    GeoMakeValid -> formatValidate("ST_MakeValid(%s)") _,
+    GeoMulti -> formatCall("ST_Multi(%s)") _,
+    CuratedRegionTest -> formatCall("ST_isValid(%s)")_,
     NumberOfPoints -> formatCall("ST_NPoints(%s)") _,
     Simplify -> formatSimplify("ST_Simplify(%s, %s)") _,
     SimplifyPreserveTopology -> formatSimplify("ST_SimplifyPreserveTopology(%s, %s)") _,
@@ -46,6 +49,7 @@ trait SqlFunctionsGeometry {
     VisibleAt -> visibleAt,
     IsEmpty -> isEmpty
   )
+
 
   private def formatSimplify(template: String, paramPosition: Option[Seq[Int]] = None)
                             (fn: FunCall,
@@ -59,6 +63,24 @@ trait SqlFunctionsGeometry {
     fn.parameters.head.typ match {
       case SoQLMultiPolygon | SoQLMultiLine =>
         // Simplify can change multipolygon to polygon.  Add ST_Multi to retain its multi nature.
+        ParametricSql(Seq("ST_Multi(%s)".format(sql)), params)
+      case _ =>
+        result
+    }
+  }
+
+  private def formatValidate(template: String, paramPosition: Option[Seq[Int]] = None)
+                            (fn: FunCall,
+                             rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                             setParams: Seq[SetParam],
+                             ctx: Sqlizer.Context,
+                             escape: Escape): ParametricSql = {
+    val result@ParametricSql(Seq(sql), params) =
+      formatCall(template, paramPosition = paramPosition)(fn, rep, typeRep, setParams, ctx, escape)
+    fn.parameters.head.typ match {
+      case SoQLMultiPolygon | SoQLPolygon =>
+        // Validate can change a polygon to multipolygon.  Add ST_Multi to make everything multi
         ParametricSql(Seq("ST_Multi(%s)".format(sql)), params)
       case _ =>
         result
