@@ -186,23 +186,23 @@ class SoQLGeomFunctionsTest extends SoQLTest {
       "select-visible-at.json")
   }
 
-  ignore("curated region test") {
+  test("curated region test") {
     compareSoqlResult("select name, curated_region_test(multipolygon, 10) as test_result where name = 'Chili'", "select-curated-region-test.json")
   }
 
-  ignore("curated region test too complex") {
+  test("curated region test too complex") {
     compareSoqlResult("select name, curated_region_test(multipolygon, 1) as test_result where name = 'Chili'", "select-curated-region-test-too-complex.json")
   }
 
-  ignore("curated region test invalid geometry") {
+  test("curated region test invalid geometry") {
     compareSoqlResult(
       """select name, curated_region_test('multipolygon(((1 1, 2 1, 2 2, 1 2, 1 1),
-        |                                                (1 1, 2 1, 2 2, 1 2, 1 1)))'::multipolygon, 50::integer) as test_result
+        |                                                (1 1, 2 1, 2 2, 1 2, 1 1)))'::multipolygon, 50) as test_result
         | where name = 'Chili'""".stripMargin,
       "select-curated-region-test-invalid-geometry.json")
   }
 
-  ignore("curated region test contains null") {
+  test("curated region test contains null") {
     compareSoqlResult("select name, curated_region_test(multipolygon, 1) as test_result where code = 'FOO'", "select-curated-region-test-contains-null.json")
   }
 

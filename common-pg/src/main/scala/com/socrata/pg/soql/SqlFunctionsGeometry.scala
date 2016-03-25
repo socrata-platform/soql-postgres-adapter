@@ -39,7 +39,7 @@ trait SqlFunctionsGeometry {
     DistanceInMeters -> formatCall("ST_Distance(%s::geography, %s::geography)") _,
     GeoMakeValid -> formatValidate("ST_MakeValid(%s)") _,
     GeoMulti -> formatCall("ST_Multi(%s)") _,
-    CuratedRegionTest -> formatCall("ST_isValid(%s, %s)")_,
+    CuratedRegionTest -> curatedRegionTest,
     NumberOfPoints -> formatCall("ST_NPoints(%s)") _,
     Simplify -> formatSimplify("ST_Simplify(%s, %s)") _,
     SimplifyPreserveTopology -> formatSimplify("ST_SimplifyPreserveTopology(%s, %s)") _,
@@ -96,4 +96,17 @@ trait SqlFunctionsGeometry {
          (ST_XMax(%s) - ST_XMin(%s)) >= %s OR (ST_YMax(%s) - ST_YMin(%s)) >= %s)
       """.stripMargin,
       paramPosition = Some(Seq(0, 0, 0, 0, 0, 1, 0, 0, 1))) _
+
+
+  private def curatedRegionTest = {
+    formatCall(
+      """case when st_npoints(%s) > %s then 'too complex'
+              when st_xmin(%s) < -180 or st_xmax(%s) > 180 or st_ymin(%s) < -90 or st_ymax(%s) > 90 then 'out of bounds'
+              when not st_isvalid(%s) then st_isvalidreason(%s)::text
+              when (%s) is null then 'empty'
+         end
+      """.stripMargin,
+      paramPosition = Some(Seq(0, 1, 0, 0, 0, 0, 0, 0, 0))) _
+  }
+
 }

@@ -109,8 +109,6 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     TextToBool -> formatCall("%s::boolean") _,
     BoolToText -> formatCall("%s::varchar") _,
 
-    CuratedRegionTest -> curatedRegionTest,
-
     Case -> caseCall _,
     Coalesce -> coalesceCall _,
 
@@ -323,14 +321,5 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     ParametricSql(Seq(foldedSql), setParamsLR)
   }
 
-  private def curatedRegionTest = {
-    formatCall(
-      """case when st_npoints(%s) > %s then 'too complex'
-              when st_xmin(%s) < -180 or st_xmax(%s) > 180 or st_ymin(%s) < -90 or st_ymax(%s) > 90 then 'out of bounds'
-              when not st_isvalid(%s) then st_isvalidreason(%s)::text
-              when (%s) is null then 'empty'
-         end
-      """.stripMargin,
-      paramPosition = Some(Seq(0, 1, 0, 0, 0, 0, 0, 0, 0))) _
-  }
+
 }
