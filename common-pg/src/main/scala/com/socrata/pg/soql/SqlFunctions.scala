@@ -262,7 +262,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
       case Some(op) =>
         foldSegments(sqlFragsAndParams._1.map(s => template.format(s)), op)
     }
-    ParametricSql(Seq(foldedSql), sqlFragsAndParams._2)
+    ParametricSql(foldedSql.split(SqlFragments.SeparatorRx).toSeq, sqlFragsAndParams._2)
   }
 
   private def decryptToNumLit(typ: SoQLType)(idRep: SoQLIDRep,
@@ -320,6 +320,9 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     val foldedSql = foldSegments(lrs, foldOp)
     ParametricSql(Seq(foldedSql), setParamsLR)
   }
+}
 
-
+object SqlFragments {
+  val Separator = "\n\n"
+  val SeparatorRx = "\\n\\n"
 }

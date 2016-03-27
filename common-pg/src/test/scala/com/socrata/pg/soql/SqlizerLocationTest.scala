@@ -62,4 +62,12 @@ class SqlizerLocationTest extends SqlizerTest {
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq(BigDecimal.valueOf(1.1)))
   }
+
+  test("location ctor") {
+    val soql = """SELECT location('point (2.2 1.1)'::point, '101 Main St', 'Seattle', 'WA', '98104')"""
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("""SELECT (ST_AsBinary((ST_GeomFromText(?, 4326)))),('{"address": ' || to_json(?::text)::text || ', "city": ' || to_json(?::text)::text || ', "state": ' || to_json(?::text)::text || ', "zip": ' || to_json(?::text)::text || '}') FROM t1""")
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq("point (2.2 1.1)", "101 Main St", "Seattle", "WA", "98104"))
+  }
 }

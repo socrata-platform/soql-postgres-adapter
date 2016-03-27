@@ -17,7 +17,8 @@ trait SqlFunctionsComplexType {
   protected val funComplexTypeMap = Map[Function[SoQLType], FunCallToSql](
     TextToPhone -> textToPhone _,
     PhoneToPhoneNumber -> phoneSubColumn(0),
-    PhoneToPhoneType -> phoneSubColumn(1)
+    PhoneToPhoneType -> phoneSubColumn(1),
+    Phone -> formatCall("%s" + SqlFragments.Separator + "%s")
   )
 
   private def textToPhone(fn: FunCall,

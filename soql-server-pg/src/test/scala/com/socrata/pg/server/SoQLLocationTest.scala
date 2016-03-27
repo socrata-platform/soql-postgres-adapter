@@ -109,4 +109,16 @@ class SoQLLocationTest extends SoQLTest {
         |'{"address":"101 Main St", "city": "Seattle", "state": "WA", "zip": "98104"}'""".stripMargin,
       "select-location-with-address.json")
   }
+
+  test("location constructor") {
+    compareSoqlResult(
+      "SELECT code, location('point (2.2 1.1)'::point, '101 Main St', 'Seattle', 'WA', '98104') as location WHERE code = 'LOCATION'",
+      "select-location-ctor.json")
+  }
+
+  test("location constructor from columns") {
+    compareSoqlResult(
+      "SELECT code, location('point (2.2 1.1)'::point, phone.phone_type, code, 'WA', '98104') as location WHERE code = 'LOCATION'",
+      "select-location-ctor-columns.json")
+  }
 }
