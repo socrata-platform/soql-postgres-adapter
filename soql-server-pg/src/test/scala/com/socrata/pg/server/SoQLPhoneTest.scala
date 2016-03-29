@@ -62,4 +62,10 @@ class SoQLPhoneTest extends SoQLTest {
       "select code, phone where phone.phone_number = '4251234567' and code='LOCATION'",
       "select-phone.json")
   }
+
+  test("phone constructor") {
+    compareSoqlResult(
+      "SELECT code, phone('4251234567', 'Home') as phone WHERE code = 'LOCATION'",
+      "select-phone.json")
+  }
 }
