@@ -16,13 +16,14 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
   this: AbstractRepBasedDataSqlizer[CT, CV] => ()
   private val sqlFetchSize = 1000
 
+
   def query(conn: Connection, analyses: Seq[SoQLAnalysis[UserColumnId, CT]],
             toSql: (Seq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
             toRowCountSql: (Seq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
             reqRowCount: Boolean,
             querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]]):
     CloseableIterator[Row[CV]] with RowCount = {
-
+    logger.info(s"DataSqlizerQuerier is being run")
     // get row count
     val rowCount: Option[Long] =
       if (reqRowCount) {
@@ -50,6 +51,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     // get rows
     if (analyses.exists(_.selection.size > 0)) {
       val rs = executeSql(conn, toSql(analyses, dataTableName))
+
+      logger.info(s"DataSqlizerQuerier: analysis is ${analyses}")
       // Statement and resultset are closed by the iterator.
       new ResultSetIt(rowCount, rs, decodeRow(decoders))
     } else {
