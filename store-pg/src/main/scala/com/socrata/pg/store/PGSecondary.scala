@@ -340,7 +340,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     // Rollups do not materialize if stage is unpublished.
     if (refreshRollup) {
       val postUpdateTruthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
-      updateRollups(pgu, postUpdateTruthCopyInfo, dropFirst = true)
+      updateRollups(pgu, postUpdateTruthCopyInfo)
     }
 
     cookie
@@ -475,7 +475,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     // re-create rollup metadata
     for { rollup <- rollups } RollupCreatedOrUpdatedHandler(pgu, postUpdateTruthCopyInfo, rollup)
     // re-create rollup tables
-    updateRollups(pgu, postUpdateTruthCopyInfo, dropFirst = true)
+    updateRollups(pgu, postUpdateTruthCopyInfo)
 
     cookie
   }
@@ -491,10 +491,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   }
 
   private def updateRollups(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                            copyInfo: TruthCopyInfo,
-                            dropFirst: Boolean) = {
+                            copyInfo: TruthCopyInfo) = {
     val rm = new RollupManager(pgu, copyInfo)
-    if (dropFirst) rm.dropRollups(immediate = true)
+    rm.dropRollups(immediate = true)
     pgu.datasetMapReader.rollups(copyInfo).foreach { ri =>
       rm.updateRollup(ri, copyInfo.dataVersion)
     }
