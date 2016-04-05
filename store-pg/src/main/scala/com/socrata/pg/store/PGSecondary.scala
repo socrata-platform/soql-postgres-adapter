@@ -475,7 +475,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     // re-create rollup metadata
     for { rollup <- rollups } RollupCreatedOrUpdatedHandler(pgu, postUpdateTruthCopyInfo, rollup)
     // re-create rollup tables
-    updateRollups(pgu, postUpdateTruthCopyInfo, dropFirst = false)
+    updateRollups(pgu, postUpdateTruthCopyInfo, dropFirst = true)
 
     cookie
   }
