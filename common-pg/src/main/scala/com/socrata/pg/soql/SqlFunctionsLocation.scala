@@ -24,24 +24,24 @@ trait SqlFunctionsLocation {
     LocationToLatitude -> locationLatLng("latitude"),
     LocationToLongitude -> locationLatLng("longitude"),
     LocationToAddress -> locationAddress _,
-    // TODO: human_address will be null if any address field is null.  But we cannot do a simple coalesce
-    // TODO: without handling the edge case to keep human_address as null when all address fields are indeed null.
     // The line break in the verbatium string is significant which keep the two sub-fields as
     // two separate fields like (f1), (f2) instead of (f1, f2)
     // TODO: May be we should not wrap expression in () to begin with.
-    Location -> formatCall(
-      "ST_AsBinary(%s)" +
-      SqlFragments.Separator +
-      // scalastyle:off line.size.limit
-      // mkString produces something like this:
-      // """'{"address": ' || to_json(%s::text)::text ||  ', "city": ' || to_json(%s::text)::text || ', "state": ' || to_json(%s::text)::text || ', "zip": ' || to_json(%s::text)::text || '}'"""
-      Seq("address", "city", "state", "zip")
-        .map(f => s""""$f": ' || to_json(%s::text)::text || '""") // to_json::text encodes special chars in json string.
-        .mkString("'{", ", ", "}'")) _,
-      // scalastyle:on line.size.limit
+    Location -> formatCall("ST_AsBinary(%s)" + SqlFragments.Separator + humanAddress) _,
+    HumanAddress -> formatCall(humanAddress) _,
     LocationWithinCircle -> geometryFunctionWithLocation(SoQLFunctions.WithinCircle),
     LocationWithinBox -> geometryFunctionWithLocation(SoQLFunctions.WithinBox)
   )
+
+  /**
+   * TODO: human_address will be null if any address field is null.  But we cannot do a simple coalesce
+   * TODO: without handling the edge case to keep human_address as null when all address fields are indeed null.
+   */
+  private def humanAddress: String = {
+    Seq("address", "city", "state", "zip")
+      .map(f => s""""$f": ' || to_json(%s::text)::text || '""") // to_json::text encodes special chars in json string.
+      .mkString("'{", ", ", "}'")
+  }
 
   private def textToLocation(fn: FunCall,
                              rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
