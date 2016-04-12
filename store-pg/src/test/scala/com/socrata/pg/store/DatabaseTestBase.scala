@@ -123,7 +123,7 @@ trait DatabaseTestBase extends Logging {
     val file = fixtureFile(name)
     val inputStream = new FileInputStream(file)
     val jsonEventIter = new JsonEventIterator(new InputStreamReader(inputStream, Codec.UTF8.charSet))
-    JsonArrayIterator[JValue](jsonEventIter)
+    JsonArrayIterator.fromEvents[JValue](jsonEventIter)
   }
 
   def processMutationCreate(common: SoQLCommon, script: File): ProcessCreationReturns = {
