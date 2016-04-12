@@ -22,7 +22,7 @@ object Dependencies {
     val typesafeConfig = "1.0.0"
     val dataCoordinator = "2.1.11"
     val typesafeScalaLogging = "1.1.0"
-    val rojomaJson = "3.2.0"
+    val rojomaJson = "3.5.0"
     val metricsJetty = "3.1.0"
     val metricsGraphite = "3.0.2"
     val metricsScala = "3.3.0"
