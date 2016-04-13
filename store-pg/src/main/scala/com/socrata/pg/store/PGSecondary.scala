@@ -146,10 +146,11 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     val truthCopyInfo = pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetInfo.internalName) match {
       case None =>
         // Don't bother dropping a copy
-        if (isLatestCopy)
+        if (isLatestCopy) {
           // Well this is weird, but only going to log for now...
           logger.error("No dataset found for {} when dropping the latest copy {} for data version {}?",
             datasetInfo.internalName, secondaryCopyInfo.copyNumber.toString, secondaryCopyInfo.dataVersion.toString)
+        }
       case Some(dsId) =>
         pgu.datasetMapReader.datasetInfo(dsId).map { truthDatasetInfo =>
           pgu.datasetMapWriter.copyNumber(truthDatasetInfo, secondaryCopyInfo.copyNumber) match {
@@ -163,11 +164,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
               val rm = new RollupManager(pgu, copyInfo)
               rm.dropRollups(immediate = true) // drop all rollup tables
               pgu.secondaryDatasetMapWriter.deleteCopy(copyInfo)
-              if (isLatestCopy)
+              if (isLatestCopy) {
                 // create the `copy_map` entry
                 pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, copyInfo.systemId, copyInfo.copyNumber,
                   TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
                   secondaryCopyInfo.dataVersion)
+              }
             case None =>
               // no copy to drop
               if (isLatestCopy) {
