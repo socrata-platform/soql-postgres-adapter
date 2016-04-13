@@ -49,14 +49,6 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     logger.info("shut down {} {}", dsConfig.host, dsConfig.database)
   }
 
-  // Return true to get all the events from the stream of updates from the data-coordinator
-  // Returning false here means that instead of a stream of updates from the DC, we will receive
-  // the resync event instead.
-  def wantsWorkingCopies: Boolean = {
-    logger.debug("wantsWorkingCopies returning true")
-    true
-  }
-
   // This is the last event we will every receive for a given dataset. Receiving this event means
   // that all data related to that dataset can/should be destroyed
   def dropDataset(datasetInternalName: String, cookie: Secondary.Cookie): Unit = {
@@ -133,21 +125,62 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
   }
 
-  // Currently there are zero-or-more snapshots, which are what you get when you publish a working copy when there is
-  // an existing published working copy of that same dataset.
-  // To NO-OP this API, return an empty set.
-  @deprecated("Not supporting snapshots beyond bare minimum required to function", since = "forever")
-  def snapshots(datasetInternalName: String, cookie: Secondary.Cookie): Set[Long] = {
-    // if we a publish through version(); a snapshot "could" be created
-    logger.debug(s"snapshots '${datasetInternalName}' (cookie: ${cookie}})")
-    Set()
+  // Is only ever called as part of a resync.
+  def dropCopy(datasetInfo: DatasetInfo,
+               secondaryCopyInfo: SecondaryCopyInfo,
+               cookie: Secondary.Cookie, isLatestCopy: Boolean): Secondary.Cookie = {
+    withPgu(dsInfo, None) { pgu =>
+      doDropCopy(pgu, datasetInfo, secondaryCopyInfo, isLatestCopy)
+    }
+    cookie
   }
 
-  // Is only ever called as part of a resync.
-  def dropCopy(datasetInternalName: String, copyNumber: Long, cookie: Secondary.Cookie): Secondary.Cookie = {
-    // TODO: dropCopy
-    logger.warn(s"TODO: dropCopy '${datasetInternalName}' (cookie: ${cookie}})")
-    cookie
+  def doDropCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInfo: DatasetInfo,
+                 secondaryCopyInfo: SecondaryCopyInfo, isLatestCopy: Boolean): Unit = {
+    // If this is the latest copy we want make sure this copy is in the `copy_map`.
+    // (Because secondary-watcher will write back to the secondary manifest that we
+    // are up to this copy's data-version.)
+    // If this is the case, resync(.) will have already been called on a (un)published
+    // copy and appropriate metadata should exist for this dataset.
+    // Otherwise, we want to drop this copy entirely.
+    val truthCopyInfo = pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetInfo.internalName) match {
+      case None =>
+        // Don't bother dropping a copy
+        if (isLatestCopy)
+          // Well this is weird, but only going to log for now...
+          logger.error("No dataset found for {} when dropping the latest copy {} for data version {}?",
+            datasetInfo.internalName, secondaryCopyInfo.copyNumber.toString, secondaryCopyInfo.dataVersion.toString)
+      case Some(dsId) =>
+        pgu.datasetMapReader.datasetInfo(dsId).map { truthDatasetInfo =>
+          pgu.datasetMapWriter.copyNumber(truthDatasetInfo, secondaryCopyInfo.copyNumber) match {
+            case Some(copyInfo) =>
+              // drop the copy
+              logger.info(
+                "dropping copy {} {}",
+                truthDatasetInfo.systemId.toString(),
+                secondaryCopyInfo.copyNumber.toString
+              )
+              val rm = new RollupManager(pgu, copyInfo)
+              rm.dropRollups(immediate = true) // drop all rollup tables
+              pgu.secondaryDatasetMapWriter.deleteCopy(copyInfo)
+              if (isLatestCopy)
+                // create the `copy_map` entry
+                pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, copyInfo.systemId, copyInfo.copyNumber,
+                  TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
+                  secondaryCopyInfo.dataVersion)
+            case None =>
+              // no copy to drop
+              if (isLatestCopy) {
+                // create the `copy_map` entry
+                val secCopyId = pgu.secondaryDatasetMapWriter.allocateCopyId()
+                pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, secCopyId,
+                  secondaryCopyInfo.copyNumber,
+                  TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
+                  secondaryCopyInfo.dataVersion)
+              }
+          }
+        }
+    }
   }
 
   def version(datasetInfo: DatasetInfo,
@@ -359,7 +392,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
              cookie: Secondary.Cookie,
              rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
              rollups: Seq[RollupInfo],
-             isLatestCopy: Boolean): Secondary.Cookie = {
+             isLatestLivingCopy: Boolean): Secondary.Cookie = {
     // should tell us the new copy number
     // We need to perform some accounting here to make sure readers know a resync is in process
     logger.info("resync (datasetInfo: {}, secondaryCopyInfo: {}, schema: {}, cookie: {})",
@@ -471,6 +504,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
     pgu.datasetMapWriter.updateLastModified(truthCopyInfo, secondaryCopyInfo.lastModified)
 
+    // TODO: this seems like potentially wrong the wrong version?
     val postUpdateTruthCopyInfo = pgu.datasetMapReader.latest(truthCopyInfo.datasetInfo)
     // re-create rollup metadata
     for { rollup <- rollups } RollupCreatedOrUpdatedHandler(pgu, postUpdateTruthCopyInfo, rollup)
