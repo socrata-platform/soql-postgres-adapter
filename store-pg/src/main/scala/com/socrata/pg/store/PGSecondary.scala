@@ -323,6 +323,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         case RollupDropped(rollupInfo) =>
           RollupDroppedHandler(pgu, truthCopyInfo, rollupInfo)
           (rebuildIndex, true, dataLoader)
+        case RowsChangedPreview(inserted, updated, deleted) =>
+          // for now, just ignore it
+          (rebuildIndex, refreshRollup, dataLoader)
         case otherOps: Event[SoQLType,SoQLValue] =>
           throw new UnsupportedOperationException(s"Unexpected operation $otherOps")
       }
