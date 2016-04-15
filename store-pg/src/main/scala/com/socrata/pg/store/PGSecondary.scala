@@ -143,7 +143,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     // If this is the case, resync(.) will have already been called on a (un)published
     // copy and appropriate metadata should exist for this dataset.
     // Otherwise, we want to drop this copy entirely.
-    val truthCopyInfo = pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetInfo.internalName) match {
+    pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetInfo.internalName) match {
       case None =>
         // Don't bother dropping a copy
         if (isLatestCopy) {
@@ -158,7 +158,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
               // drop the copy
               logger.info(
                 "dropping copy {} {}",
-                truthDatasetInfo.systemId.toString(),
+                truthDatasetInfo.systemId.toString,
                 secondaryCopyInfo.copyNumber.toString
               )
               val rm = new RollupManager(pgu, copyInfo)
@@ -506,7 +506,6 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
     pgu.datasetMapWriter.updateLastModified(truthCopyInfo, secondaryCopyInfo.lastModified)
 
-    // TODO: this seems like potentially wrong the wrong version?
     val postUpdateTruthCopyInfo = pgu.datasetMapReader.latest(truthCopyInfo.datasetInfo)
     // re-create rollup metadata
     for { rollup <- rollups } RollupCreatedOrUpdatedHandler(pgu, postUpdateTruthCopyInfo, rollup)
