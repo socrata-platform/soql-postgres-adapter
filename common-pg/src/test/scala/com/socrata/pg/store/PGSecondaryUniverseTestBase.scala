@@ -215,6 +215,7 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
             Some(java.math.BigDecimal.valueOf(2.2)),
             Some("""{ "address": "101 Main St", "city": "Seattle", "state": "WA", "zip": "98104" }"""))
           case SoQLPhone => SoQLPhone(Some("4251234567"), Some("Home"))
+          case SoQLUrl => SoQLUrl(Some("http://www.socrata.com"), Some("Home Site"))
           case SoQLNull => SoQLNull
         }
         (name, dummyVal)
