@@ -1,1 +1,1 @@
-start_pg_adapter.sh
+start_soql_server_pg.sh
