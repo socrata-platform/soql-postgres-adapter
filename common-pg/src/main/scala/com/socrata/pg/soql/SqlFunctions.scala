@@ -304,6 +304,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     ParametricSql(Seq(sqlFragsAndParams._1.mkString(",")), sqlFragsAndParams._2)
   }
 
+  // scalastyle:off parameter.number
   private def infixSuffixWildcard(fnName: String, prefix: Boolean, foldOp: String = " and ")
                                  (fn: FunCall,
                                   rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
@@ -311,18 +312,18 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                                   setParams: Seq[SetParam],
                                   ctx: Sqlizer.Context,
                                   escape: Escape): ParametricSql = {
-
     val ParametricSql(ls, setParamsL) = Sqlizer.sql(fn.parameters(0))(rep, typeRep, setParams, ctx, escape)
     val params = Seq(fn.parameters(1), wildcard)
     val suffix = FunctionCall(suffixWildcard, params)(fn.position, fn.functionNamePosition)
     val wildcardCall =
-      if (prefix) FunctionCall(suffixWildcard, Seq(wildcard, suffix))(fn.position, fn.functionNamePosition)
-      else suffix
+      if (prefix) { FunctionCall(suffixWildcard, Seq(wildcard, suffix))(fn.position, fn.functionNamePosition) }
+      else { suffix }
     val ParametricSql(rs, setParamsLR) = Sqlizer.sql(wildcardCall)(rep, typeRep, setParamsL, ctx, escape)
     val lrs = ls.zip(rs).map { case (l, r) => s"$l $fnName $r" }
     val foldedSql = foldSegments(lrs, foldOp)
     ParametricSql(Seq(foldedSql), setParamsLR)
   }
+  // scalastyle:on parameter.number
 }
 
 object SqlFragments {
