@@ -44,7 +44,6 @@ class SoQLStringFunctionsTest extends SoQLTest {
   }
 
   test("contains(c, x)") {
-    // ...What even is this for?
-    println("Search should be used instead of contains.") // scalastyle:ignore
+    compareSoqlResult("select make, name where contains(name, 'arm') order by name", "where-str-contains.json")
   }
 }
