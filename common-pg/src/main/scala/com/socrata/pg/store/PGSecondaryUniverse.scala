@@ -127,6 +127,9 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
       }
     }
 
+  lazy val tableDropper =
+    new SqlTableDropper(conn)
+
   lazy val tableCleanup: TableCleanup =
     new SqlTableCleanup(conn, 0)
 }
