@@ -130,7 +130,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
                secondaryCopyInfo: SecondaryCopyInfo,
                cookie: Secondary.Cookie, isLatestCopy: Boolean): Secondary.Cookie = {
     logger.info("droping copy (datasetInfo: {}, secondaryCopyInfo: {}, cookie: {})",
-      datasetInfo, secondaryCopyInfo, cookie)
+                datasetInfo, secondaryCopyInfo, cookie)
     withPgu(dsInfo, Some(datasetInfo)) { pgu =>
       doDropCopy(pgu, datasetInfo, secondaryCopyInfo, isLatestCopy)
       pgu.commit()
