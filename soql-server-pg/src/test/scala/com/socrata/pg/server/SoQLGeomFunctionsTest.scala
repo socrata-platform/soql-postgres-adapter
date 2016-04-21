@@ -211,4 +211,31 @@ class SoQLGeomFunctionsTest extends SoQLTest {
       "select code, name, point.latitude, point.longitude where code = '14200' and point.latitude > 1 and point.longitude > 1",
       "select-point-lat-lng.json")
   }
+
+  test("point to multipoint test") {
+    compareSoqlResult("select name, geo_multi('point(1 1)'::point) as the_geom where name = 'Chili'" , "point-to-multipoint.json")
+  }
+
+  test("line to multiline test") {
+    compareSoqlResult("select name, geo_multi('linestring(1 2, 3 4)'::line) as the_geom where name = 'Chili'", "line-to-multiline.json")
+  }
+
+  test("polygon to multipolygon test") {
+    compareSoqlResult("select name, geo_multi('polygon((1 1, 2 1, 2 2, 1 2, 1 1))'::polygon) as the_geom where name = 'Chili'", "polygon-to-multipolygon.json")
+  }
+
+  test("multipoint to multipoint test") {
+    compareSoqlResult("select name, geo_multi('multipoint(1 1, 2 2)'::multipoint) as the_geom where name = 'Chili'", "multipoint-to-multipoint.json")
+  }
+
+  test("multiline to multiline test") {
+    compareSoqlResult("select name, geo_multi('multilinestring((1 2,3 4))'::multiline) as the_geom where name = 'Chili'", "multiline-to-multiline.json")
+  }
+
+  test("multipolygon to multipolygon test") {
+    compareSoqlResult("""select name, geo_multi('multipolygon(((1 1, 2 1, 2 2, 1 2, 1 1),
+       | (1 1, 2 1, 2 2, 1 2, 1 1)))'::multipolygon) as the_geom where name = 'Chili'""".stripMargin, "multipolygon-to-multipolygon.json")
+  }
+
+
 }
