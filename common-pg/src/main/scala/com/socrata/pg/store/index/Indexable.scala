@@ -171,6 +171,7 @@ object SoQLIndexableRep {
     SoQLBlob -> (base => new BlobRep(base) with BlobIndexable[SoQLType]), // TODO: Revisit index need
     SoQLPhone -> (base => new PhoneRep(base) with TextIndexable[SoQLType]),
     SoQLLocation -> (base => new LocationRep(base) with LocationIndexable[SoQLType]),
+    SoQLUrl -> (base => new UrlRep(base) with TextIndexable[SoQLType]),
     SoQLPoint -> (base =>
       new GeometryLikeRep[Point](
         SoQLPoint,
