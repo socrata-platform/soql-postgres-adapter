@@ -7,7 +7,7 @@ import com.socrata.datacoordinator.truth.metadata
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, LifecycleStage => TruthLifecycleStage}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.store.PGSecondaryUtil._
-import com.socrata.pg.store.events.{RollupCreatedOrUpdatedHandler, WorkingCopyCreatedHandler, WorkingCopyPublishedHandler}
+import com.socrata.pg.store.events.{ResyncHandler, RollupCreatedOrUpdatedHandler, WorkingCopyCreatedHandler, WorkingCopyPublishedHandler}
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.types._
 import org.joda.time.DateTime
@@ -169,6 +169,16 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
 
   test("rollup survives resync") {
     withPgu() { pgu =>
+
+      // TODO: we should share this code
+      def updateRollups(copyInfo: TruthCopyInfo): Unit = {
+        val rm = new RollupManager(pgu, copyInfo)
+        rm.dropRollups(immediate = true)
+        pgu.datasetMapReader.rollups(copyInfo).foreach { ri =>
+          rm.updateRollup(ri, copyInfo.dataVersion)
+        }
+      }
+
       val pgs = new PGSecondary(config)
       val secondaryDatasetInfo = DatasetInfo("monkey", "locale", "obfuscate".getBytes)
       val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55, new DateTime())
@@ -192,7 +202,8 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       )
 
       // First resync a dataset that doesn't exist
-      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows.iterator), Seq.empty)
+      ResyncHandler(pgu, secondaryDatasetInfo, secondaryCopyInfo).doResync(newSchema, unmanaged(rows.iterator),
+        Seq.empty, 10, updateRollups)
 
       // there are 2 rows
       val truthCopyInfo = getTruthCopyInfo(pgu, secondaryDatasetInfo)
@@ -216,7 +227,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
           new ColumnId(12) -> new SoQLText("taz"))
 
       // resync again with an extra row plus rollup
-      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows2.iterator), Seq(rollup))
+      ResyncHandler(pgu, secondaryDatasetInfo, secondaryCopyInfo).doResync(newSchema, unmanaged(rows2.iterator), Seq(rollup), 10, updateRollups)
 
       // there is rollup
       val truthCopyInfoAfterResync = getTruthCopyInfo(pgu, secondaryDatasetInfo)
