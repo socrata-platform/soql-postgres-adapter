@@ -290,7 +290,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     // every case. At some point, we should take the time to verify this and
     // revisit whether we actually want this resync logic to exist.
     val allCopiesInOrder = pgu.datasetMapReader.allCopies(truthDatasetInfo)
-    val dvExpect = allCopiesInOrder.last.dataVersion + 1
+    val dvExpect = allCopiesInOrder.maxBy(_.dataVersion).dataVersion + 1
     if (newDataVersion != dvExpect) {
       throw new ResyncSecondaryException(
         s"Current version ${truthCopyInfo.dataVersion}, next version ${newDataVersion} but should be ${dvExpect}")
