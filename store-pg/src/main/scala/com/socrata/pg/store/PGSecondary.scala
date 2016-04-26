@@ -325,17 +325,19 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         case RollupDropped(rollupInfo) =>
           RollupDroppedHandler(pgu, truthCopyInfo, rollupInfo)
           (rebuildIndex, true, truthCopyInfo, dataLoader)
-        case RowsChangedPreview(inserted, updated, deleted) =>
-          if(sufficientlyLarge(inserted + updated + deleted)) {
+        case RowsChangedPreview(inserted, updated, deleted, truncated) =>
+          if(truncated || sufficientlyLarge(inserted + updated + deleted)) {
             val newTruthCopyInfo = pgu.datasetMapWriter.newTableModifier(truthCopyInfo)
 
             val logger = pgu.logger(truthDatasetInfo, "_no_user")
             pgu.schemaLoader(logger).create(newTruthCopyInfo)
 
-            val copier = pgu.datasetContentsCopier(logger)
-            val schema = pgu.datasetMapReader.schema(newTruthCopyInfo)
-            val copyCtx = new DatasetCopyContext[SoQLType](newTruthCopyInfo, schema)
-            copier.copy(truthCopyInfo, copyCtx)
+            if(!truncated) {
+              val copier = pgu.datasetContentsCopier(logger)
+              val schema = pgu.datasetMapReader.schema(newTruthCopyInfo)
+              val copyCtx = new DatasetCopyContext[SoQLType](newTruthCopyInfo, schema)
+              copier.copy(truthCopyInfo, copyCtx)
+            }
 
             pgu.tableDropper.scheduleForDropping(truthCopyInfo.dataTableName)
             (newTruthCopyInfo.lifecycleStage == TruthLifecycleStage.Published, true, newTruthCopyInfo, None)
