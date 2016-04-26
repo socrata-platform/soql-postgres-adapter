@@ -369,8 +369,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
             val logger = pgu.logger(truthDatasetInfo, "_no_user")
             val schemaLoader = pgu.schemaLoader(logger)
+            val schema = pgu.datasetMapReader.schema(newTruthCopyInfo)
             schemaLoader.create(newTruthCopyInfo)
-            schemaLoader.addColumns(pgu.datasetMapReader.schema(newTruthCopyInfo).values)
+            schemaLoader.addColumns(schema.values)
 
             if(!truncated) {
               val copier = pgu.datasetContentsCopier(logger)
@@ -378,6 +379,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
               val copyCtx = new DatasetCopyContext[SoQLType](newTruthCopyInfo, schema)
               copier.copy(truthCopyInfo, copyCtx)
             }
+
+            schema.values.find(_.isSystemPrimaryKey).foreach(schemaLoader.makeSystemPrimaryKey)
 
             pgu.tableDropper.scheduleForDropping(truthCopyInfo.dataTableName)
             pgu.tableDropper.go()
