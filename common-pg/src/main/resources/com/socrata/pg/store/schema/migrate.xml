@@ -11,5 +11,6 @@
     <include file="com/socrata/pg/store/schema/20150501-add-missing-timezone.xml"/>
     <include file="com/socrata/pg/store/schema/20160107-create-computation-strategy-map.xml"/>
     <include file="com/socrata/pg/store/schema/20160111-add-field-name-columns.xml"/>
+    <include file="com/socrata/pg/store/schema/20160420-add-copy-map-table-modifiers.xml"/>
 
 </databaseChangeLog>

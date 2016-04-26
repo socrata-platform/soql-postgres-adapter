@@ -199,7 +199,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
   }
 
-  def sufficientlyLarge(totalRowsChanged: Long): Boolean = false
+  def sufficientlyLarge(totalRowsChanged: Long): Boolean = totalRowsChanged > 20
 
   // The main method by which data will be sent to this API.
   // workingCopyCreated event is the (first) event by which this method will be called
@@ -295,7 +295,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     val dvExpect = allCopiesInOrder.maxBy(_.dataVersion).dataVersion + 1
     if (newDataVersion != dvExpect) {
       throw new ResyncSecondaryException(
-        s"Current version ${initialTruthCopyInfo.dataVersion}, next version ${newDataVersion} but should be ${dvExpect}")
+       s"Current version ${initialTruthCopyInfo.dataVersion}, next version ${newDataVersion} but should be ${dvExpect}")
     }
 
     // no rebuild index, no refresh rollup and no rows loader.
@@ -368,7 +368,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
             val newTruthCopyInfo = pgu.datasetMapWriter.newTableModifier(truthCopyInfo)
 
             val logger = pgu.logger(truthDatasetInfo, "_no_user")
-            pgu.schemaLoader(logger).create(newTruthCopyInfo)
+            val schemaLoader = pgu.schemaLoader(logger)
+            schemaLoader.create(newTruthCopyInfo)
+            schemaLoader.addColumns(pgu.datasetMapReader.schema(newTruthCopyInfo).values)
 
             if(!truncated) {
               val copier = pgu.datasetContentsCopier(logger)
@@ -378,7 +380,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
             }
 
             pgu.tableDropper.scheduleForDropping(truthCopyInfo.dataTableName)
-            (newTruthCopyInfo.lifecycleStage == TruthLifecycleStage.Published, true, newTruthCopyInfo, None)
+            pgu.tableDropper.go()
+            val isPublished = newTruthCopyInfo.lifecycleStage == TruthLifecycleStage.Published
+            (isPublished, isPublished, newTruthCopyInfo, None)
           } else {
             // ok, we won't be affecting enough rows to justify making a copy
             (rebuildIndex, refreshRollup, truthCopyInfo, dataLoader)
