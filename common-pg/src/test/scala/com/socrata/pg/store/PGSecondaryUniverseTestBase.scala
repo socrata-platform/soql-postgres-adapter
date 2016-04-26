@@ -57,8 +57,16 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
                             copyInfo:CopyInfo,
                             sLoader:SchemaLoader[SoQLType]): ColumnIdMap[ColumnInfo[SoQLType]] = {
     // Setup the data columns
-    val cols = SoQLType.typesByName filterKeys (!UnsupportedTypes.contains(_)) map {
-      case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo, new UserColumnId(n + "_USERNAME"), Some(ColumnName(n + "_FIELD")), t, n + "_PHYSNAME", None)
+    val cols = SoQLType.typesByName.filterKeys(t => !UnsupportedTypes.contains(t) &&
+                                                    t != SoQLID.name && // These types are specially added.
+                                                    t != SoQLVersion.name)
+                                   .map {
+      case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo,
+                                                    new UserColumnId(n + "_USERNAME"),
+                                                    Some(ColumnName(n + "_FIELD")),
+                                                    t,
+                                                    n + "_PHYSNAME",
+                                                    None)
     }
 
     // Set up the required columns
@@ -142,12 +150,12 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
   }
 
   def getSpecialColumnIds(schema:ColumnIdMap[ColumnInfo[SoQLType]]): (ColumnId, ColumnId) = {
-    val versionColId = schema.filterNot {
-      (colId, colInfo) => colInfo.typ != SoQLVersion
+    val versionColId = schema.filter {
+      (colId, colInfo) => colInfo.typ == SoQLVersion
     }.iterator.next()._1
 
-    val systemColId = schema.filterNot {
-      (colId, colInfo) => colInfo.typ != SoQLID
+    val systemColId = schema.filter {
+      (colId, colInfo) => colInfo.typ == SoQLID
     }.iterator.next()._1
 
     (systemColId, versionColId)
@@ -207,6 +215,7 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
             Some(java.math.BigDecimal.valueOf(2.2)),
             Some("""{ "address": "101 Main St", "city": "Seattle", "state": "WA", "zip": "98104" }"""))
           case SoQLPhone => SoQLPhone(Some("4251234567"), Some("Home"))
+          case SoQLUrl => SoQLUrl(Some("http://www.socrata.com"), Some("Home Site"))
           case SoQLNull => SoQLNull
         }
         (name, dummyVal)

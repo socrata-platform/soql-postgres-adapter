@@ -290,5 +290,5 @@ object RollupManager {
   def makeSecondaryRollupInfo(rollupInfo: RollupInfo): SecondaryRollupInfo =
      SecondaryRollupInfo(rollupInfo.name.underlying, rollupInfo.soql)
 
-  def shouldMaterializeRollups(stage: LifecycleStage): Boolean = stage != LifecycleStage.Unpublished
+  def shouldMaterializeRollups(stage: LifecycleStage): Boolean = stage == LifecycleStage.Published
 }

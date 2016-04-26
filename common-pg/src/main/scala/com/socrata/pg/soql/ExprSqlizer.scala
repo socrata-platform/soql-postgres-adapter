@@ -173,5 +173,5 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
   }
 
   // SoQLTypes represented by more than one physical columns
-  private val complexTypes: Set[SoQLType] = Set(SoQLLocation, SoQLPhone)
+  private val complexTypes: Set[SoQLType] = Set(SoQLLocation, SoQLPhone, SoQLUrl)
 }
