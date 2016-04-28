@@ -199,8 +199,6 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
   }
 
-  def sufficientlyLarge(totalRowsChanged: Long): Boolean = totalRowsChanged > 20
-
   // The main method by which data will be sent to this API.
   // workingCopyCreated event is the (first) event by which this method will be called
   // "You always update the latest copy through the version method"
@@ -364,31 +362,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           RollupDroppedHandler(pgu, truthCopyInfo, rollupInfo)
           (rebuildIndex, true, truthCopyInfo, dataLoader)
         case RowsChangedPreview(inserted, updated, deleted, truncated) =>
-          if(truncated || sufficientlyLarge(inserted + updated + deleted)) {
-            val newTruthCopyInfo = pgu.datasetMapWriter.newTableModifier(truthCopyInfo)
-
-            val logger = pgu.logger(truthDatasetInfo, "_no_user")
-            val schemaLoader = pgu.schemaLoader(logger)
-            val schema = pgu.datasetMapReader.schema(newTruthCopyInfo)
-            schemaLoader.create(newTruthCopyInfo)
-            schemaLoader.addColumns(schema.values)
-
-            if(!truncated) {
-              val copier = pgu.datasetContentsCopier(logger)
-              val schema = pgu.datasetMapReader.schema(newTruthCopyInfo)
-              val copyCtx = new DatasetCopyContext[SoQLType](newTruthCopyInfo, schema)
-              copier.copy(truthCopyInfo, copyCtx)
-            }
-
-            schema.values.find(_.isSystemPrimaryKey).foreach(schemaLoader.makeSystemPrimaryKey)
-
-            pgu.tableDropper.scheduleForDropping(truthCopyInfo.dataTableName)
-            pgu.tableDropper.go()
-            val isPublished = newTruthCopyInfo.lifecycleStage == TruthLifecycleStage.Published
-            (isPublished, isPublished, newTruthCopyInfo, None)
-          } else {
-            // ok, we won't be affecting enough rows to justify making a copy
-            (rebuildIndex, refreshRollup, truthCopyInfo, dataLoader)
+          RowsChangedPreviewHandler(pgu, truthDatasetInfo, truthCopyInfo, truncated, inserted, updated, deleted) match {
+            case Some(nci) =>
+              val isPublished = nci.lifecycleStage == TruthLifecycleStage.Published
+              (isPublished, isPublished, nci, None)
+            case None =>
+              (rebuildIndex, refreshRollup, truthCopyInfo, dataLoader)
           }
         case otherOps: Event[SoQLType,SoQLValue] =>
           throw new UnsupportedOperationException(s"Unexpected operation $otherOps")
