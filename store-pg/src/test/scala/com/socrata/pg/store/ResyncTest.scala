@@ -17,10 +17,10 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
 
   test("handle resync") {
     withPgu() { pgu =>
-      val pgs = new PGSecondary(config)
+      val secondary = new PGSecondary(config)
       val secondaryDatasetInfo = DatasetInfo("monkey", "locale", "obfuscate".getBytes)
       val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55, new DateTime())
-      val cookie = Option("monkey")
+      val cookie = Some("monkey")
 
       val newSchema = ColumnIdMap[ColumnInfo[SoQLType]](
         new ColumnId(10) -> ColumnInfo[SoQLType](new ColumnId(10), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, true, false, false, None),
@@ -40,7 +40,7 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
         )
 
       // first we resync a datset that doesn't exist
-      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows.iterator), Seq.empty)
+      secondary.resync(secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows.iterator), Seq.empty, isLatestLivingCopy = true)
 
       // most basic validation... we have 2 rows
       for {
@@ -57,7 +57,7 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
           new ColumnId(12) -> new SoQLText("taz"))
 
       // now we resync again with an extra row
-      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows2.iterator), Seq.empty)
+      secondary.resync(secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows2.iterator), Seq.empty, isLatestLivingCopy = true)
 
       // most basic validation... we have 3 rows
       for {
@@ -66,20 +66,20 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
         rows <- reader.rows()
       } rows.size shouldEqual 3
 
+      secondary.shutdown()
     }
   }
 
   test("handle drop copy") {
     withPgu() { pgu =>
-      val pgs = new PGSecondary(config)
+      val secondary = new PGSecondary(config)
       val secondaryDatasetInfo = DatasetInfo("monkey", "locale", "obfuscate".getBytes)
+      val cookie = Some("monkey")
 
       val snapshottedCopy = CopyInfo(new CopyId(123), 1, LifecycleStage.Snapshotted, 24, new DateTime())
       val publishedCopy = CopyInfo(new CopyId(123), 2, LifecycleStage.Published, 55, new DateTime())
       val unpublishedCopy = CopyInfo(new CopyId(123), 3, LifecycleStage.Unpublished, 57, new DateTime())
       val discardedCopy = CopyInfo(new CopyId(123), 3, LifecycleStage.Discarded, 58, new DateTime())
-
-      val cookie = Option("monkey")
 
       val newSchema = ColumnIdMap[ColumnInfo[SoQLType]](
         new ColumnId(10) -> ColumnInfo[SoQLType](new ColumnId(10), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, true, false, false, None),
@@ -105,9 +105,9 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
           new ColumnId(12) -> new SoQLText("taz"))
 
       // resync with the unpublished copy
-      pgs.doDropCopy(pgu, secondaryDatasetInfo, snapshottedCopy, isLatestCopy = false)
-      pgs.doResync(pgu, secondaryDatasetInfo, publishedCopy, newSchema, cookie, unmanaged(rows.iterator), Seq.empty)
-      pgs.doResync(pgu, secondaryDatasetInfo, unpublishedCopy, newSchema, cookie, unmanaged(rows2.iterator), Seq.empty)
+      secondary.dropCopy(secondaryDatasetInfo, snapshottedCopy, cookie, isLatestCopy = false)
+      secondary.resync(secondaryDatasetInfo, publishedCopy, newSchema, cookie, unmanaged(rows.iterator), Seq.empty, isLatestLivingCopy = false)
+      secondary.resync(secondaryDatasetInfo, unpublishedCopy, newSchema, cookie, unmanaged(rows2.iterator), Seq.empty, isLatestLivingCopy = true)
 
       // unpublished copy should be the "latest"
       for {
@@ -121,7 +121,7 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
 
         // published copy
         val published = copiesArray(0)
-        published.copyNumber shouldEqual 1 // Note: this is 1 instead of 2 because how resync works on a uncreated dataset
+        published.copyNumber shouldEqual 2 // Note: this is 1 instead of 2 because how resync works on a uncreated dataset
         published.dataVersion shouldEqual 55
         for {
           reader <- pgu.datasetReader.openDataset(published)
@@ -135,9 +135,9 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
       }
 
       // now lets go through the resync process again, but this time the latest copy is discarded
-      pgs.doDropCopy(pgu, secondaryDatasetInfo, snapshottedCopy, isLatestCopy = false)
-      pgs.doResync(pgu, secondaryDatasetInfo, publishedCopy, newSchema, cookie, unmanaged(rows.iterator), Seq.empty)
-      pgs.doDropCopy(pgu, secondaryDatasetInfo, discardedCopy, isLatestCopy = true)
+      secondary.dropCopy(secondaryDatasetInfo, snapshottedCopy, cookie, isLatestCopy = false)
+      secondary.resync(secondaryDatasetInfo, publishedCopy, newSchema, cookie, unmanaged(rows.iterator), Seq.empty, isLatestLivingCopy = true)
+      secondary.dropCopy(secondaryDatasetInfo, discardedCopy, cookie, isLatestCopy = true)
 
       // "latest" copy should be the published one
       for {
@@ -163,6 +163,8 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
         discarded.copyNumber shouldEqual 3
         discarded.dataVersion shouldEqual 58
       }
+
+      secondary.shutdown()
     }
   }
 
