@@ -251,8 +251,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       e match {
         case WorkingCopyCreated(copyInfo) =>
           val theCopy = existingDataset.flatMap { dsInfo =>
-              val allCopies = pgu.datasetMapReader.allCopies(dsInfo)
-              allCopies.find(existingCopyInfo => existingCopyInfo.copyNumber == copyInfo.copyNumber)
+            val allCopies = pgu.datasetMapReader.allCopies(dsInfo)
+            // Either this copy or some newer copy
+            allCopies.find(existingCopyInfo => existingCopyInfo.copyNumber >= copyInfo.copyNumber)
           }
           if (theCopy.isDefined) {
             logger.info("dataset {} working copy {} already existed, resync",
