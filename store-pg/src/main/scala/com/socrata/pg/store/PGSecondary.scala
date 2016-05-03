@@ -381,6 +381,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
       sLoader.createIndexes(schema.values)
       sLoader.createFullTextSearchIndex(schema.values)
+      pgu.analyzer.analyze(finalTruthCopyInfo)
     }
 
     // Rollups do not materialize if stage is unpublished.

@@ -76,6 +76,7 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
   }
 
   val deleteCopyQueryColumnMap = "DELETE FROM column_map WHERE copy_system_id = ?"
+  val deleteCopyQueryCopyMapTableModifiers = "DELETE FROM copy_map_table_modifiers WHERE copy_system_id = ?"
   val deleteCopyQueryCopyMap = "DELETE FROM copy_map WHERE system_id = ?"
 
   /**
@@ -86,6 +87,11 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
     dropRollup(copyInfo, None) // drop all related rollups metadata
 
     using(conn.prepareStatement(deleteCopyQueryColumnMap)) { stmt =>
+      stmt.setLong(1, copyInfo.systemId.underlying)
+      stmt.executeUpdate()
+    }
+
+    using(conn.prepareStatement(deleteCopyQueryCopyMapTableModifiers)) { stmt =>
       stmt.setLong(1, copyInfo.systemId.underlying)
       stmt.executeUpdate()
     }
