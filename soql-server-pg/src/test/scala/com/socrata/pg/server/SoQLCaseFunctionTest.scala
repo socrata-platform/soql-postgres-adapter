@@ -37,7 +37,8 @@ class SoQLCaseFunctionsTest extends SoQLTest {
                     class = 'EN-B', 'Intermediate',
                     class = 'EN-C', 'Advanced') as category,
                count(:id) as count
-         GROUP By category""",
+         GROUP By category
+         ORDER BY category""",
       "group-case.json")
   }
 }
