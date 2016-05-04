@@ -41,6 +41,7 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
   with TruncatorProvider
   with DatasetDropperProvider
   with TableCleanupProvider
+  with TableAnalyzerProvider
 {
   import commonSupport._ // scalastyle:ignore import.grouping
   private val txnStart = DateTime.now()
@@ -127,6 +128,12 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
       }
     }
 
+  lazy val tableDropper =
+    new SqlTableDropper(conn)
+
   lazy val tableCleanup: TableCleanup =
     new SqlTableCleanup(conn, 0)
+
+  lazy val analyzer =
+    new SqlTableAnalyzer(conn)
 }
