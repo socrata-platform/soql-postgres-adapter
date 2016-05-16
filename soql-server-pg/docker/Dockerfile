@@ -1,4 +1,4 @@
-FROM socrata/java
+FROM socrata/java8
 
 # TODO expose JMX
 EXPOSE 6090 6091
