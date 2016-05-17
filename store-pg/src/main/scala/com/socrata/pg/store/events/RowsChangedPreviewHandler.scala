@@ -2,7 +2,7 @@ package com.socrata.pg.store.events
 
 import com.rojoma.json.v3.ast.JString
 import com.socrata.datacoordinator.truth.metadata.{DatasetInfo, DatasetCopyContext, CopyInfo}
-import com.socrata.pg.store.PGSecondaryUniverse
+import com.socrata.pg.store.{RollupManager, PGSecondaryUniverse}
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.rojoma.simplearm.v2._
 import org.slf4j.LoggerFactory
@@ -60,6 +60,9 @@ object RowsChangedPreviewHandler {
       }
 
       schema.values.find(_.isSystemPrimaryKey).foreach(schemaLoader.makeSystemPrimaryKey)
+
+      val rm = new RollupManager(pgu, truthCopyInfo)
+      rm.dropRollups(immediate = false)
 
       pgu.tableDropper.scheduleForDropping(truthCopyInfo.dataTableName)
       pgu.tableDropper.go()
