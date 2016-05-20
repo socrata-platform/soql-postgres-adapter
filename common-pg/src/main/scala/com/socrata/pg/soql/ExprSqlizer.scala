@@ -126,15 +126,8 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
             ctx.get(SoqlPart).exists(_ == SoqlSelect) &&
             ctx.get(RootExpr).exists(_ == expr)) {
           val maybeUpperPhysColumns =
-            expr.typ match {
-              case SoQLLocation =>
-                rep.physColumns.take(1).map(col =>
-                  "ST_AsBinary(" + (toUpper(expr, rep.sqlTypes(0))(col, ctx)) + ")") ++
-                  rep.physColumns.drop(1).map(toUpper(expr, rep.sqlTypes(1))(_, ctx))
-              case _ =>
-                rep.physColumns.zip(rep.sqlTypes).map { case (physCol, sqlType) =>
-                  toUpper(expr, sqlType)(physCol, ctx)
-                }
+            rep.physColumns.zip(rep.sqlTypes).map { case (physCol, sqlType) =>
+              toUpper(expr, sqlType)(physCol, ctx)
             }
           val subColumns = rep.physColumns.map(pc => pc.replace(rep.base, ""))
           val physColumnsWithSubColumns = maybeUpperPhysColumns.zip(subColumns)

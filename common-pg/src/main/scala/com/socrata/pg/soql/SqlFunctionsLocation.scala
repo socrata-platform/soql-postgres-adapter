@@ -27,7 +27,7 @@ trait SqlFunctionsLocation {
     // The line break in the verbatium string is significant which keep the two sub-fields as
     // two separate fields like (f1), (f2) instead of (f1, f2)
     // TODO: May be we should not wrap expression in () to begin with.
-    Location -> formatCall("ST_AsBinary(%s)" + SqlFragments.Separator + humanAddress) _,
+    Location -> formatCall("%s" + SqlFragments.Separator + humanAddress) _,
     HumanAddress -> formatCall(humanAddress) _,
     LocationWithinCircle -> geometryFunctionWithLocation(SoQLFunctions.WithinCircle),
     LocationWithinBox -> geometryFunctionWithLocation(SoQLFunctions.WithinBox)

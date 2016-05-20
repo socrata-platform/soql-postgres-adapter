@@ -306,7 +306,7 @@ class SqlizerBasicTest extends SqlizerTest {
   test("chained soql only adds ST_AsBinary - location in the outermost sql") {
     val soql = "select location, object |> select location::point where within_box(location::point, 1, 2, 3, 4)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT ST_AsBinary((\"location_geom\")) AS location_point FROM (SELECT ST_AsBinary(location_geom) as \"location_geom\",location_address as \"location_address\",object as \"object\" FROM t1) AS x1 WHERE (ST_MakeEnvelope(?, ?, ?, ?, 4326) ~ (\"location_geom\"))")
+    sql should be ("SELECT ST_AsBinary((\"location_geom\")) AS location_point FROM (SELECT location_geom as \"location_geom\",location_address as \"location_address\",object as \"object\" FROM t1) AS x1 WHERE (ST_MakeEnvelope(?, ?, ?, ?, 4326) ~ (\"location_geom\"))")
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be(Seq(2, 3, 4, 1).map(BigDecimal(_)))
   }
