@@ -158,7 +158,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
    * SoQLLocation is handled in Sqlizer.
    */
   private val GeoTypes: Set[SoQLType] =
-    Set(SoQLPoint, SoQLMultiPoint, SoQLLine, SoQLMultiLine, SoQLPolygon, SoQLMultiPolygon)
+    Set(SoQLPoint, SoQLMultiPoint, SoQLLine, SoQLMultiLine, SoQLPolygon, SoQLMultiPolygon, SoQLLocation)
 
   /**
    * When we pull data out of pg we only want to translate it when we pull it out for performance reasons,
@@ -191,7 +191,10 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
           if (ctx.contains(LeaveGeomAsIs) || strictInnermostSoql) { sqls }
           else {
             val cn = if (strictOutermostSoql) Some(columnName) else None
-            sqls.map(toGeoText(_, coreExpr.typ, cn))
+            // compound type with a geometry and something else like "Location" type
+            // must place the geometry in the first part.
+            if (false == ctx(OutermostSoql) || sqls.isEmpty) { sqls }
+            else { sqls.updated(0, toGeoText(sqls.head, coreExpr.typ, cn)) }
           }
         (acc._1 ++ sqlGeomConverted, newSetParams)
       }
