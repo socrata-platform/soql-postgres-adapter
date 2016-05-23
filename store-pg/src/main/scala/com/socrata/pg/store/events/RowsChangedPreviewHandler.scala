@@ -16,8 +16,12 @@ object RowsChangedPreviewHandler {
   // larger than a third of the dataset size.
   def sufficientlyLarge(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                         truthCopyInfo: CopyInfo,
+                        truncated: Boolean,
                         totalRowsChanged: Long): Boolean = {
-    if(totalRowsChanged < 100000) {
+    if(truncated) {
+      log.info("Dataset truncated; creating an indexless copy")
+      true
+    } else if(totalRowsChanged < 100000) {
       false
     } else {
       for {
@@ -30,7 +34,11 @@ object RowsChangedPreviewHandler {
           false
         } else {
           val count = rs.getLong(1)
-          totalRowsChanged > 0.3333 * count
+          val wantToCopy = totalRowsChanged > 0.3333 * count
+          if(wantToCopy) {
+            log.info("{} total rows changed; PG estimates existing data is {} rows; creating an indexless copy", totalRowsChanged, count)
+          }
+          wantToCopy
         }
       }
     }
@@ -43,8 +51,10 @@ object RowsChangedPreviewHandler {
             inserted: Long,
             updated: Long,
             deleted: Long): Option[CopyInfo] = {
-    if(truncated || sufficientlyLarge(pgu, truthCopyInfo ,inserted + updated + deleted)) {
+    if(sufficientlyLarge(pgu, truthCopyInfo, truncated, inserted + updated + deleted)) {
       val newTruthCopyInfo = pgu.datasetMapWriter.newTableModifier(truthCopyInfo)
+
+      val start = System.nanoTime()
 
       val logger = pgu.logger(truthDatasetInfo, "_no_user")
       val schemaLoader = pgu.schemaLoader(logger)
@@ -60,6 +70,9 @@ object RowsChangedPreviewHandler {
       }
 
       schema.values.find(_.isSystemPrimaryKey).foreach(schemaLoader.makeSystemPrimaryKey)
+
+      val durationMS = (System.nanoTime() - start) / 1000000
+      log.info("Copying the data took {}s", durationMS / 1000.0)
 
       val rm = new RollupManager(pgu, truthCopyInfo)
       rm.dropRollups(immediate = false)

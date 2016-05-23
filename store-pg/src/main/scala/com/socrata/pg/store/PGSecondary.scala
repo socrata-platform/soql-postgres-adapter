@@ -377,18 +377,37 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
     pgu.datasetMapWriter.updateDataVersion(finalTruthCopyInfo, newDataVersion)
 
+    def maybeLogTime[T](label: String)(f: => T): T = {
+      val startedAt =
+        if(finalTruthCopyInfo.tableModifier != initialTruthCopyInfo.tableModifier) {
+          Some(System.nanoTime())
+        } else {
+          None
+        }
+      val result = f
+      startedAt.foreach { start =>
+        val durationMS = (System.nanoTime() - start)/1000000
+        logger.info(s"$label after making a copy took ${durationMS / 1000.0}s")
+      }
+      result
+    }
+
     if (rebuildIndex) {
-      val schema = pgu.datasetMapReader.schema(finalTruthCopyInfo)
-      val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
-      sLoader.createIndexes(schema.values)
-      sLoader.createFullTextSearchIndex(schema.values)
-      pgu.analyzer.analyze(finalTruthCopyInfo)
+      maybeLogTime("Rebuilding indexes") {
+        val schema = pgu.datasetMapReader.schema(finalTruthCopyInfo)
+        val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
+        sLoader.createIndexes(schema.values)
+        sLoader.createFullTextSearchIndex(schema.values)
+        pgu.analyzer.analyze(finalTruthCopyInfo)
+      }
     }
 
     // Rollups do not materialize if stage is unpublished.
     if (refreshRollup) {
-      val postUpdateTruthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
-      updateRollups(pgu, postUpdateTruthCopyInfo)
+      maybeLogTime("Refreshing rollups") {
+        val postUpdateTruthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
+        updateRollups(pgu, postUpdateTruthCopyInfo)
+      }
     }
 
     cookie
