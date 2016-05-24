@@ -117,9 +117,10 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     // GROUP BY
     val groupBy = ana.groupBy.map { (groupBys: Seq[CoreExpr[UserColumnId, SoQLType]]) =>
       groupBys.foldLeft(Tuple2(Seq.empty[String], setParamsSearch)) { (t2, gb: CoreExpr[UserColumnId, SoQLType]) =>
-        val ParametricSql(Seq(sql), newSetParams) =
+        val ParametricSql(sqls, newSetParams) =
           Sqlizer.sql(gb)(rep, typeRep, t2._2, ctx + (SoqlPart -> SoqlGroup), escape)
-        (t2._1 :+ sql, newSetParams)
+        (t2._1 ++ sqls, newSetParams)
+
       }}
     val setParamsGroupBy = groupBy.map(_._2).getOrElse(setParamsSearch)
 
@@ -130,9 +131,9 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     // ORDER BY
     val orderBy = ana.orderBy.map { (orderBys: Seq[OrderBy[UserColumnId, SoQLType]]) =>
       orderBys.foldLeft(Tuple2(Seq.empty[String], setParamsHaving)) { (t2, ob: OrderBy[UserColumnId, SoQLType]) =>
-        val ParametricSql(Seq(sql), newSetParams) =
+        val ParametricSql(sqls, newSetParams) =
           Sqlizer.sql(ob)(rep, typeRep, t2._2, ctx + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression), escape)
-        (t2._1 :+ sql, newSetParams)
+        (t2._1 ++ sqls, newSetParams)
       }}
     val setParamsOrderBy = orderBy.map(_._2).getOrElse(setParamsHaving)
 
