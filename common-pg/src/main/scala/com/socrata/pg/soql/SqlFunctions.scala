@@ -147,11 +147,25 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                     escape: Escape): ParametricSql = {
     val ParametricSql(ls, setParamsL) = Sqlizer.sql(fn.parameters(0))(rep, typeRep, setParams, ctx, escape)
     val ParametricSql(rs, setParamsLR) = Sqlizer.sql(fn.parameters(1))(rep, typeRep, setParamsL, ctx, escape)
-    val lrs = ls.zip(rs).map { case (l, r) =>
-      if (fnName == SqlEq && r == SqlNullInParen) { s"$l is null" }
-      else if (fnName == SqlNeq && r == SqlNullInParen) { s"$l is not null" }
-      else { s"$l $fnName $r" }
+
+    val moreThanOneExpression = ls.tail.nonEmpty
+    val lrs = ls.zip(rs).foldLeft(Seq.empty[String]) { (acc, lr) =>
+      lr match {
+        case (_, r) if moreThanOneExpression && r == SqlNullInParen =>
+          // Choose to not compare null to make it easy to work with obe.
+          // May be consider skipping nulls only by flag in the future.
+          // select phone, phone_type where phone = '4251234567' is rewritten by fuse column to
+          // select phone(phone, phone_type) where phone(phone, phone_type) = '4251234567'
+          // ignore the null field in compound type.
+          acc
+        case (l, r) =>
+          val s = if (fnName == SqlEq && r == SqlNullInParen) { s"$l is null" }
+                  else if (fnName == SqlNeq && r == SqlNullInParen) { s"$l is not null" }
+                  else { s"$l $fnName $r" }
+          acc :+ s
+      }
     }
+
     val s = foldSegments(lrs, foldOp)
     ParametricSql(Seq(s), setParamsLR)
   }
