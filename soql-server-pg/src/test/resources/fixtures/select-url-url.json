@@ -1,2 +1,3 @@
-[{"code":"LOCATION_ADDRESS","url": { "url": "http://www.socrata.com" }}
+[ {"code":"LOCATION", "url": { "url": "http://www.socrata.com", "description": "Home Site" }},
+  {"code":"LOCATION_ADDRESS","url": { "url": "http://www.socrata.com" }}
 ]
