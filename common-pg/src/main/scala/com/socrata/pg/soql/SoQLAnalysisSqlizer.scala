@@ -53,7 +53,11 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     val rowCountForFirstAna = reqRowCount && (firstAna == lastAna)
     val firstCtx = ctx + (OutermostSoql -> outermostSoql(firstAna, analyses)) +
                          (InnermostSoql -> innermostSoql(firstAna, analyses))
-    val firstSql = sql(firstAna, tableName, allColumnReps,
+
+    // Squeeze all searches to the first chained soql.
+    val allSearches = analyses.flatMap(_.search.toSeq)
+    val firstSearch = if (allSearches.isEmpty) None else Some(allSearches.mkString(" "))
+    val firstSql = sql(firstAna.copy(search = firstSearch), tableName, allColumnReps,
                        rowCountForFirstAna, rep, typeRep, setParams, firstCtx, escape)
     var subTableIdx = 0
     val (result, _) = analyses.drop(1).foldLeft((firstSql, analyses.head)) { (acc, ana) =>
@@ -62,8 +66,15 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       val subTableName = "(%s) AS x%d".format(subParametricSql.sql.head, subTableIdx)
       val subCtx = ctx + (OutermostSoql -> outermostSoql(ana, analyses)) +
                          (InnermostSoql -> innermostSoql(ana, analyses))
-      val sqls = sql(ana, subTableName, allColumnReps, reqRowCount &&  ana == lastAna,
-          rep, typeRep, subParametricSql.setParams, subCtx, escape)
+      val sqls = sql(ana.copy(search = None), // all searches are squeezed to the first soql
+                     subTableName,
+                     allColumnReps,
+                     reqRowCount && ana == lastAna,
+                     rep,
+                     typeRep,
+                     subParametricSql.setParams,
+                     subCtx,
+                     escape)
       (sqls, ana)
     }
     result
