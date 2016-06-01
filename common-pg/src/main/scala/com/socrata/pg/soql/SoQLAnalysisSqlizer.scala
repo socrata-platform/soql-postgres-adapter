@@ -53,7 +53,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     val rowCountForFirstAna = reqRowCount && (firstAna == lastAna)
     val firstCtx = ctx + (OutermostSoql -> outermostSoql(firstAna, analyses)) +
                          (InnermostSoql -> innermostSoql(firstAna, analyses))
-    val firstSql = sql(firstAna, tableName, allColumnReps,
+    val firstSql = sql(firstAna, None, tableName, allColumnReps,
                        rowCountForFirstAna, rep, typeRep, setParams, firstCtx, escape)
     var subTableIdx = 0
     val (result, _) = analyses.drop(1).foldLeft((firstSql, analyses.head)) { (acc, ana) =>
@@ -62,7 +62,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       val subTableName = "(%s) AS x%d".format(subParametricSql.sql.head, subTableIdx)
       val subCtx = ctx + (OutermostSoql -> outermostSoql(ana, analyses)) +
                          (InnermostSoql -> innermostSoql(ana, analyses))
-      val sqls = sql(ana, subTableName, allColumnReps, reqRowCount &&  ana == lastAna,
+      val sqls = sql(ana, Some(prevAna), subTableName, allColumnReps, reqRowCount &&  ana == lastAna,
           rep, typeRep, subParametricSql.setParams, subCtx, escape)
       (sqls, ana)
     }
@@ -73,6 +73,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
    * Convert one analysis to parameteric sql.
    */
   private def sql(analysis: SoQLAnalysis[UserColumnId, SoQLType], // scalastyle:ignore method.length parameter.number
+                  prevAna: Option[SoQLAnalysis[UserColumnId, SoQLType]],
                   tableName: String,
                   allColumnReps: Seq[SqlColumnRep[SoQLType, SoQLValue]],
                   reqRowCount: Boolean,
@@ -103,13 +104,18 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       val ParametricSql(Seq(searchSql), searchSetParams) =
         Sqlizer.sql(searchLit)(rep, typeRep, setParamsWhere, ctx + (SoqlPart -> SoqlSearch), escape)
 
-      PostgresUniverseCommon.searchVector(allColumnReps) match {
+      val searchVector = prevAna match {
+        case Some(a) => PostgresUniverseCommon.searchVector(a.selection)
+        case None => PostgresUniverseCommon.searchVector(allColumnReps)
+      }
+
+      val andOrWhere = if (where.isDefined) " AND" else " WHERE"
+      searchVector match {
         case Some(sv) =>
-          val andOrWhere = if (where.isDefined) " AND" else " WHERE"
           val fts = s"$andOrWhere $sv @@ plainto_tsquery('english', $searchSql)"
           ParametricSql(Seq(fts), searchSetParams)
         case None =>
-          ParametricSql(Seq(""), setParamsWhere)
+          ParametricSql(Seq(s"$andOrWhere false"), setParamsWhere)
       }
     }
     val setParamsSearch = search.map(_.setParams).getOrElse(setParamsWhere)
