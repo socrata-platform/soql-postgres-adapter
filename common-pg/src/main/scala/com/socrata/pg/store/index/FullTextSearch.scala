@@ -17,15 +17,19 @@ trait FullTextSearch[CT] {
    */
   def searchVector(reps: Seq[SqlColumnCommonRep[CT]]): Option[String] = {
     val repsSearchableTypes = reps.filter(r => SearchableTypes.contains(r.representedType))
-    val phyCols = repsSearchableTypes.flatMap(rep => rep.physColumns.map(phyCol => s"coalesce($phyCol,'')"))
+    val phyCols = repsSearchableTypes.flatMap(rep => rep.physColumns.map(phyCol => coalesce(phyCol)))
     toTsVector(phyCols)
   }
 
   def searchVector(selection: OrderedMap[ColumnName, CoreExpr[_, CT]]): Option[String] = {
     val cols = selection.view.filter(x => SearchableTypes.contains(x._2.typ)).map { case (columnName, expr) =>
-      columnName.name
+      coalesce(columnName.name)
     }
     toTsVector(cols.toSeq)
+  }
+
+  private def coalesce(col: String): String = {
+    s"coalesce($col,'')"
   }
 
   private def toTsVector(cols: Seq[String]): Option[String] = {
