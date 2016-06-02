@@ -310,4 +310,20 @@ class SqlizerBasicTest extends SqlizerTest {
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be(Seq(2, 3, 4, 1).map(BigDecimal(_)))
   }
+
+  test("chained search scope is limited to the previous result") {
+    val soql = "select case_number, primary_type search 'oNe' |> select * search 'tWo'"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT \"case_number\",\"primary_type\" FROM (SELECT case_number as \"case_number\",primary_type as \"primary_type\" FROM t1 WHERE to_tsvector('english', coalesce(array_12,'') || ' ' || coalesce(case_number_6,'') || ' ' || coalesce(object_11,'') || ' ' || coalesce(primary_type_7,'')) @@ plainto_tsquery('english', ?)) AS x1 WHERE to_tsvector('english', coalesce(case_number,'') || ' ' || coalesce(primary_type,'')) @@ plainto_tsquery('english', ?)")
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be(Seq("oNe", "tWo"))
+  }
+
+  test("chained search scope is limited to the previous result and no searchable types is converted to false") {
+    val soql = "select id search 'oNe' |> select * search 'tWo'"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT \"id\" FROM (SELECT id as \"id\" FROM t1 WHERE to_tsvector('english', coalesce(array_12,'') || ' ' || coalesce(case_number_6,'') || ' ' || coalesce(object_11,'') || ' ' || coalesce(primary_type_7,'')) @@ plainto_tsquery('english', ?)) AS x1 WHERE false")
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be(Seq("oNe"))
+  }
 }
