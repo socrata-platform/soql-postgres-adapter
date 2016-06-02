@@ -22,8 +22,9 @@ object Migration {
                 operation: MigrationOperation = MigrationOperation.Migrate,
                 changeLogPath: String = MigrationScriptPath): Unit = {
 
+    val jdbc = new NonCommmittingJdbcConnenction(conn)
     LogFactory.getLogger().setLogLevel("warning")
-    val liquibase = new Liquibase(changeLogPath, new ClassLoaderResourceAccessor, new JdbcConnection(conn))
+    val liquibase = new Liquibase(changeLogPath, new ClassLoaderResourceAccessor, jdbc)
     val database = conn.getCatalog
 
     operation match {
@@ -31,6 +32,7 @@ object Migration {
       case Undo => liquibase.rollback(1, database)
       case Redo => { liquibase.rollback(1, database); liquibase.update(database) }
     }
+    jdbc.realCommit()
   }
 
   private val MigrationScriptPath = "com/socrata/pg/store/schema/migrate.xml"
