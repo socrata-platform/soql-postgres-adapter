@@ -9,9 +9,9 @@ import com.socrata.soql.typed._
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
 import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
 import com.socrata.soql.types._
-
 import Sqlizer._
 import SoQLFunctions._
+import org.joda.time.{DateTime, LocalDateTime}
 
 // scalastyle:off magic.number multiple.string.literals
 object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with SqlFunctionsComplexType {
@@ -101,8 +101,15 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     NumberToDouble -> formatCall("%s::float") _,
 
     TextToNumber -> formatCall("%s::numeric") _,
-    TextToFixedTimestamp -> formatCall("%s::timestamp with time zone") _,
-    TextToFloatingTimestamp -> formatCall("%s::timestamp") _, // without time zone
+    TextToFixedTimestamp -> textToType("%s::timestamp with time zone",
+                                       ((SoQLFixedTimestamp.StringRep.unapply _): String => Option[DateTime]) andThen
+                                       ((x: Option[DateTime]) => x.get) andThen
+                                       SoQLFixedTimestamp.StringRep.apply) _,
+    TextToFloatingTimestamp ->
+      textToType("%s::timestamp", // without time zone
+                 ((SoQLFloatingTimestamp.StringRep.unapply _): String => Option[LocalDateTime]) andThen
+                 ((x: Option[LocalDateTime]) => x.get) andThen
+                 SoQLFloatingTimestamp.StringRep.apply) _,
     TextToMoney -> formatCall("%s::numeric") _,
     TextToBlob -> passthrough,
 
@@ -316,6 +323,23 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
       }
     }
     ParametricSql(Seq(sqlFragsAndParams._1.mkString(",")), sqlFragsAndParams._2)
+  }
+
+  private def textToType(template: String, conversion: String => String)
+                        (fn: FunCall,
+                         rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                         typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                         setParams: Seq[SetParam],
+                         ctx: Sqlizer.Context,
+                         escape: Escape): ParametricSql = {
+    val convertedParams = fn.parameters.map {
+      case strLit@StringLiteral(value: String, _) =>
+        StringLiteral(conversion(value), strLit.typ)(strLit.position)
+      case x => x
+    }
+
+    val fnWithConvertedParams = fn.copy(parameters = convertedParams)(fn.functionNamePosition, fn.position)
+    formatCall(template, None, None)(fnWithConvertedParams, rep, typeRep, setParams, ctx, escape)
   }
 
   // scalastyle:off parameter.number
