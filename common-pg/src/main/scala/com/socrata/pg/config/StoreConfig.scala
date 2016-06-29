@@ -1,5 +1,6 @@
 package com.socrata.pg.config
 
+import com.socrata.curator.CuratorConfig
 import com.typesafe.config.{ConfigUtil, Config}
 import com.socrata.thirdparty.typesafeconfig.ConfigClass
 import com.socrata.datacoordinator.common.DataSourceConfig
@@ -19,4 +20,8 @@ class StoreConfig(config: Config, root: String) extends ConfigClass(config, root
   val tablespace = optionally(getString("tablespace"))
 
   val resyncBatchSize = optionally(getInt("resyncBatchSize")).getOrElse(defaultResyncBatchSize)
+
+  val curatorConfig = optionally(getRawConfig("curator")).map { _ =>
+    getConfig("curator", new CuratorConfig(_, _))
+  }
 }
