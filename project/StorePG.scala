@@ -8,7 +8,8 @@ object StorePG {
   )
 
   def libraries(implicit scalaVersion: String) = Seq(
-    secondarylib
+    secondarylib,
+    clojure
   )
 }
 
