@@ -37,6 +37,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   private val tableDropper = startTableDropper()
   private val resyncBatchSize = storeConfig.resyncBatchSize
   private val tableDropTimeoutSeconds: Long = 60
+  private val  rowsChangedPreviewHandler = new RowsChangedPreviewHandler(RowsChangedPreviewConfig.Default)
 
   val postgresUniverseCommon = new PostgresUniverseCommon(TablespaceFunction(storeConfig.tablespace), dsInfo.copyIn)
 
@@ -363,7 +364,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           RollupDroppedHandler(pgu, truthCopyInfo, rollupInfo)
           (rebuildIndex, true, truthCopyInfo, dataLoader)
         case RowsChangedPreview(inserted, updated, deleted, truncated) =>
-          RowsChangedPreviewHandler(pgu, truthDatasetInfo, truthCopyInfo, truncated, inserted, updated, deleted) match {
+          rowsChangedPreviewHandler(pgu, truthDatasetInfo, truthCopyInfo, truncated, inserted, updated, deleted) match {
             case Some(nci) =>
               val isPublished = nci.lifecycleStage == TruthLifecycleStage.Published
               (isPublished, isPublished, nci, None)

@@ -7,9 +7,7 @@ import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.rojoma.simplearm.v2._
 import org.slf4j.LoggerFactory
 
-final abstract class RowsChangedPreviewHandler
-
-object RowsChangedPreviewHandler {
+class RowsChangedPreviewHandler(config: RowsChangedPreviewConfig) {
   val log = LoggerFactory.getLogger(classOf[RowsChangedPreviewHandler])
 
   // A change is "sufficiently large" to swap out a copy if it is at least 100k rows and
@@ -18,10 +16,11 @@ object RowsChangedPreviewHandler {
                         truthCopyInfo: CopyInfo,
                         truncated: Boolean,
                         totalRowsChanged: Long): Boolean = {
+    val columnCount =  pgu.datasetMapReader.schema(truthCopyInfo).size
     if(truncated) {
       log.info("Dataset truncated; creating an indexless copy")
       true
-    } else if(totalRowsChanged < 100000) {
+    } else if(totalRowsChanged < config.minRows(columnCount)) {
       false
     } else {
       for {
@@ -34,9 +33,12 @@ object RowsChangedPreviewHandler {
           false
         } else {
           val count = rs.getLong(1)
-          val wantToCopy = totalRowsChanged > 0.3333 * count
+          val wantToCopy = totalRowsChanged > config.fractionOf(columnCount) * count
           if(wantToCopy) {
-            log.info("{} total rows changed; PG estimates existing data is {} rows; creating an indexless copy", totalRowsChanged, count)
+            log.info("{} total rows changed in {} columns; PG estimates existing data is {} rows; creating an indexless copy",
+              totalRowsChanged.asInstanceOf[AnyRef],
+              columnCount.asInstanceOf[AnyRef],
+              count.asInstanceOf[AnyRef])
           }
           wantToCopy
         }
