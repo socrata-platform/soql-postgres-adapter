@@ -124,6 +124,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     Min -> nary("min") _,
     Max -> nary("max") _,
     Sum -> nary("sum") _,
+    StddevPop -> nary("stddev_pop") _,
+    StddevSamp -> nary("stddev_samp") _,
     Count -> nary("count") _,
     CountStar -> formatCall("count(*)") _
     // TODO: Complete the function list.
