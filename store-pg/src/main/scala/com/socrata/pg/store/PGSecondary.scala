@@ -3,6 +3,7 @@ package com.socrata.pg.store
 import java.io.Closeable
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
+import com.socrata.curator.CuratorFromConfig
 import com.socrata.pg.BuildInfo
 import com.mchange.v2.c3p0.DataSources
 import com.rojoma.simplearm.Managed
@@ -37,6 +38,13 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   private val tableDropper = startTableDropper()
   private val resyncBatchSize = storeConfig.resyncBatchSize
   private val tableDropTimeoutSeconds: Long = 60
+  private val curator = storeConfig.curatorConfig.map { cc =>
+    CuratorFromConfig.unmanaged(cc)
+  }
+
+  val rowsChangedPreviewConfig =
+    curator.fold[RowsChangedPreviewConfig](RowsChangedPreviewConfig.Default)(new RowsChangedPreviewConfig.ZKClojure(_, "/soql-postgres-secondary"))
+  private val rowsChangedPreviewHandler = new RowsChangedPreviewHandler(rowsChangedPreviewConfig)
 
   val postgresUniverseCommon = new PostgresUniverseCommon(TablespaceFunction(storeConfig.tablespace), dsInfo.copyIn)
 
@@ -46,6 +54,11 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     finished.countDown()
     tableDropper.join()
     dsInfo.close()
+    rowsChangedPreviewConfig match {
+      case closable: Closeable => closable.close()
+      case _ => // ok
+    }
+    curator.foreach(_.close())
     logger.info("shut down {} {}", dsConfig.host, dsConfig.database)
   }
 
@@ -363,7 +376,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           RollupDroppedHandler(pgu, truthCopyInfo, rollupInfo)
           (rebuildIndex, true, truthCopyInfo, dataLoader)
         case RowsChangedPreview(inserted, updated, deleted, truncated) =>
-          RowsChangedPreviewHandler(pgu, truthDatasetInfo, truthCopyInfo, truncated, inserted, updated, deleted) match {
+          rowsChangedPreviewHandler(pgu, truthDatasetInfo, truthCopyInfo, truncated, inserted, updated, deleted) match {
             case Some(nci) =>
               val isPublished = nci.lifecycleStage == TruthLifecycleStage.Published
               (isPublished, isPublished, nci, None)

@@ -26,6 +26,7 @@ object Dependencies {
     val metricsJetty = "3.1.0"
     val metricsGraphite = "3.0.2"
     val metricsScala = "3.3.0"
+    val clojure = "1.5.1"
   }
 
   val c3p0 = "com.mchange" % "c3p0" % versions.c3p0
@@ -75,4 +76,6 @@ object Dependencies {
   val metricsGraphite = "com.codahale.metrics" % "metrics-graphite" % versions.metricsGraphite exclude(
                            "com.codahale.metrics", "metrics-core")
   val metricsScala = "nl.grons" %% "metrics-scala" % versions.metricsScala
+
+  val clojure = "org.clojure" % "clojure" % versions.clojure
 }
