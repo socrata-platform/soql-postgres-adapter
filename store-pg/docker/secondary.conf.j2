@@ -47,7 +47,7 @@ pg-secondary-config {
 
   tablespace = "{{ PG_SECONDARY_TABLESPACE_FN }}"
 
-  {% if ZOOKEEPER_ENSEMBLE is defined %}
+  {% if ZOOKEEPER_ENSEMBLE is defined -%}
   curator = {
     ensemble = {{ ZOOKEEPER_ENSEMBLE }}
     session-timeout = 40s
@@ -56,5 +56,5 @@ pg-secondary-config {
     max-retry-wait = 10s
     max-retries = 29
   }
-  {% endif %)
+  {%- endif %}
 }
