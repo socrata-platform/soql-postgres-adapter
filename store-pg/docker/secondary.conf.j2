@@ -50,6 +50,7 @@ pg-secondary-config {
   {% if ZOOKEEPER_ENSEMBLE is defined -%}
   curator = {
     ensemble = {{ ZOOKEEPER_ENSEMBLE }}
+    namespace = "com.socrata/soda"
     session-timeout = 40s
     connect-timeout = 5s
     base-retry-wait = 100ms
