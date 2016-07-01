@@ -39,7 +39,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   private val resyncBatchSize = storeConfig.resyncBatchSize
   private val tableDropTimeoutSeconds: Long = 60
   private val curator = storeConfig.curatorConfig.map { cc =>
-    CuratorFromConfig.unmanaged(cc)
+    val client = CuratorFromConfig.unmanaged(cc)
+    client.start()
+    client
   }
 
   val rowsChangedPreviewConfig = curator match {
