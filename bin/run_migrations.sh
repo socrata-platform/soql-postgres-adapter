@@ -13,4 +13,4 @@ if [ ! -e "$JARFILE" ]; then
     JARFILE=$(ls -t "${JARS[@]}" | head -n 1)
 fi
 ARGS=(Migrate)
-java -Dconfig.file="$CONFIG" -cp "$JARFILE" com.socrata.pg.store.MigrateSchema "${ARGS[@]}"
+java -Dconfig.file="$CONFIG" -cp "$JARFILE" com.socrata.pg.store.Main --migrate "${ARGS[@]}"
