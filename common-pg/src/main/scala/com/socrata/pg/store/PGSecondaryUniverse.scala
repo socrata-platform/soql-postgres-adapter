@@ -117,7 +117,7 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
 
   def schemaFinder: SchemaFinder[PGSecondaryUniverse[SoQLType, SoQLValue]#CT] =
     // Skip schema cache for query coordinator already provides caching.
-    new com.socrata.datacoordinator.service.SchemaFinder(typeContext.typeNamespace.userTypeForType, NullCache)
+    new com.socrata.datacoordinator.common.SchemaFinder(typeContext.typeNamespace.userTypeForType, NullCache)
 
   lazy val truncator = new SqlTruncator(conn)
 
