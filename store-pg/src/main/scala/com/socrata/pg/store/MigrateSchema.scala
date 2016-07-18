@@ -9,13 +9,13 @@ import com.socrata.datacoordinator.truth.migration.Migration.MigrationOperation
 /**
  * This object takes Liquibase operations and performs according migrations to the pg-secondary schemas.
  */
-object MigrateSchema extends App {
+object MigrateSchema {
   /**
    * Performs a Liquibase schema migration.
    * @param args(0) Migration operation to perform.
    *        args(1) Optional dotted path reference the database config tree to migrate
    * */
-  override def main(args: Array[String]): Unit = {
+  def apply(args: Array[String]): Unit = {
     // Verify that two arguments were passed
     if (args.length < 1 || args.length > 2) {
       throw new IllegalArgumentException(

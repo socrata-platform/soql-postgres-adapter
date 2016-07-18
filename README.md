@@ -32,7 +32,7 @@ be better to build the assembly and run it to save on memory:
 
 To run the migrations:
 ```sh
-sbt -Dconfig.file=/etc/soda2.conf "run-main com.socrata.pg.store.MigrateSchema migrate"
+sbt -Dconfig.file=/etc/soda2.conf "run-main com.socrata.pg.store.Main --migrate migrate"
 ```
 
 Alternatively, if you have an assembly jar you can use:
