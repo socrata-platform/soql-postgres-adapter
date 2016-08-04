@@ -13,7 +13,7 @@ import com.socrata.datacoordinator.truth.metadata.{AbstractColumnInfoLike, Colum
 import com.socrata.datacoordinator.truth.sql.DatasetMapLimits
 import com.socrata.datacoordinator.truth.universe.sql.{PostgresCommonSupport, PostgresCopyIn}
 import com.socrata.datacoordinator.util.collection.{ColumnIdSet, MutableColumnIdSet, UserColumnIdMap}
-import com.socrata.datacoordinator.util.{LoggedTimingReport, StackedTimingReport}
+import com.socrata.datacoordinator.util.{DebugLoggedTimingReport, StackedTimingReport}
 import com.socrata.datacoordinator.{MutableRow, Row}
 import com.socrata.pg.soql.SqlColIdx
 import com.socrata.pg.store.index.{FullTextSearch, IndexSupport, SoQLIndexableRep}
@@ -163,7 +163,7 @@ class PostgresUniverseCommon(val tablespace: String => Option[String],
   val executor: ExecutorService = Executors.newCachedThreadPool()
   val obfuscationKeyGenerator: () => Array[Byte] = generateObfuscationKey
   val initialCounterValue: Long = 0L
-  val timingReport = new LoggedTimingReport(org.slf4j.LoggerFactory.getLogger("timing-report")) with StackedTimingReport
+  val timingReport = new DebugLoggedTimingReport(org.slf4j.LoggerFactory.getLogger("timing-report")) with StackedTimingReport
 }
 
 /**
