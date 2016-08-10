@@ -152,7 +152,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
     val obfuscateId = !Option(servReq.getParameter("obfuscateId")).exists(_ == "false")
 
-    logger.info("Performing query on dataset " + datasetId)
     streamQueryResults(analyses, datasetId, reqRowCount, copy, rollupName, obfuscateId,
       req.precondition, req.dateTimeHeader("If-Modified-Since"))
   }
@@ -174,10 +173,14 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   ) (resp:HttpServletResponse): Unit = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetId) match {
-        case None => NotFound(resp)
+        case None =>
+          logger.info(s"Tried to perform query on dataset $datasetId")
+          NotFound(resp)
         case Some(dsId) =>
           pgu.datasetMapReader.datasetInfo(dsId) match {
-            case None => NotFound(resp)
+            case None =>
+              logger.info(s"Tried to perform query on dataset $datasetId")
+              NotFound(resp)
             case Some(datasetInfo) =>
               def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
               execQuery(pgu, datasetId, datasetInfo, analyses, reqRowCount, copy,
