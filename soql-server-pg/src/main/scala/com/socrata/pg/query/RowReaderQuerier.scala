@@ -10,6 +10,7 @@ import com.socrata.pg.soql.ParametricSql
 import com.socrata.pg.store.PGSecondaryRowReader
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
+import scala.concurrent.duration.Duration
 
 trait RowReaderQuerier[CT, CV] {
   this: PGSecondaryRowReader[CT, CV] => ()
@@ -18,10 +19,11 @@ trait RowReaderQuerier[CT, CV] {
             toSql: (Seq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql,
             toRowCountSql: (Seq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
             reqRowCount: Boolean,
-            querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]]):
+            querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
+            queryTimeout: Option[Duration]):
             Managed[CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount] = {
     val sqlizerq = sqlizer.asInstanceOf[DataSqlizer[CT, CV] with DataSqlizerQuerier[CT, CV]]
-    val resultIter = sqlizerq.query(connection, analyses, toSql, toRowCountSql, reqRowCount, querySchema)
+    val resultIter = sqlizerq.query(connection, analyses, toSql, toRowCountSql, reqRowCount, querySchema, queryTimeout)
     managed(resultIter)
   }
 

@@ -9,6 +9,7 @@ import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.pg.soql.ParametricSql
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
+import scala.concurrent.duration.Duration
 import com.typesafe.scalalogging.slf4j.Logging
 import java.sql.{Connection, ResultSet, SQLException}
 
@@ -20,14 +21,15 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
             toSql: (Seq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
             toRowCountSql: (Seq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
             reqRowCount: Boolean,
-            querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]]):
+            querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
+            queryTimeout: Option[Duration]):
     CloseableIterator[Row[CV]] with RowCount = {
 
     // get row count
     val rowCount: Option[Long] =
       if (reqRowCount) {
         val rowCountSql = toRowCountSql(analyses, dataTableName)
-        using(executeSql(conn, rowCountSql)) { rs =>
+        using(executeSql(conn, rowCountSql, queryTimeout)) { rs =>
           try {
             rs.next()
             Some(rs.getLong(1))
@@ -49,7 +51,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 
     // get rows
     if (analyses.exists(_.selection.size > 0)) {
-      val rs = executeSql(conn, toSql(analyses, dataTableName))
+      val rs = executeSql(conn, toSql(analyses, dataTableName), queryTimeout)
       // Statement and resultset are closed by the iterator.
       new ResultSetIt(rowCount, rs, decodeRow(decoders))
     } else {
@@ -69,8 +71,23 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     row.freeze()
   }
 
-  private def executeSql(conn: Connection, pSql: ParametricSql): ResultSet = {
+  def execute(conn: Connection, s: String) {
+    using(conn.createStatement()) { stmt =>
+      logger.trace("Executing simple SQL {}", s)
+      stmt.execute(s)
+    }
+  }
+
+  def setTimeout(timeoutMs: String) = s"SET LOCAL statement_timeout TO $timeoutMs"
+  def resetTimeout = "SET LOCAL statement_timeout TO DEFAULT"
+
+  private def executeSql(conn: Connection, pSql: ParametricSql, timeout: Option[Duration]): ResultSet = {
     try {
+      if (timeout.isDefined && timeout.get.isFinite()) {
+        val ms = timeout.get.toMillis.min(Int.MaxValue).max(1).toInt.toString
+        logger.trace(s"Setting statement timeout to ${ms}ms")
+        execute(conn, setTimeout(ms))
+      }
       logger.debug("sql: {}", pSql.sql)
       // Statement to be closed by caller
       val stmt = conn.prepareStatement(pSql.sql.head)
@@ -82,7 +99,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
       stmt.executeQuery()
     } catch {
       case ex: SQLException =>
-        logger.error(s"SQL Exception on ${pSql}")
+        logger.error(s"SQL Exception (${ex.getSQLState}) with timeout=$timeout on $pSql")
         throw ex
     }
   }
