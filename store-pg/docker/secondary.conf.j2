@@ -14,7 +14,7 @@ instances {
         {{ PG_SECONDARY_DB_PASSWORD_LINE }}
 
         c3p0 {
-          maxPoolSize = {{ PG_SECONDARY_NUM_WORKERS + 1 }} # one connection per worker plus one for the table dropper
+          maxPoolSize = {{ int(PG_SECONDARY_NUM_WORKERS) + 1 }} # one connection per worker plus one for the table dropper
           idleConnectionTestPeriod = 60
           testConnectionOnCheckin = true
           preferredTestQuery = "SELECT 1"
