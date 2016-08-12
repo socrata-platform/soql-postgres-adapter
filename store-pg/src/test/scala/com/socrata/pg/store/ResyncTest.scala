@@ -121,7 +121,7 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
 
         // published copy
         val published = copiesArray(0)
-        published.copyNumber shouldEqual 1 // Note: this is 1 instead of 2 because how resync works on a uncreated dataset
+        published.copyNumber shouldEqual 2
         published.dataVersion shouldEqual 55
         for {
           reader <- pgu.datasetReader.openDataset(published)
