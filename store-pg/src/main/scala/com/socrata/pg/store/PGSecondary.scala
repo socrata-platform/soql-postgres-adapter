@@ -480,11 +480,15 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         //   DELETE from falth.dataset_internal_name_map
         //    WHERE dataset_internal_name = ? -- 'alpha.20'
         logger.info("re-creating secondary dataset with new id")
-        val newCopyInfo = pgu.datasetMapWriter.create(secondaryDatasetInfo.localeName)
-        val newDatasetId = newCopyInfo.datasetInfo.systemId
+        val newDatasetInfo = pgu.datasetMapWriter.unsafeCreateDatasetAllocatingSystemId(secondaryDatasetInfo.localeName, secondaryDatasetInfo.obfuscationKey)
+        val newDatasetId = newDatasetInfo.systemId
         logger.info("new secondary dataset {} {}", secondaryDatasetInfo.internalName, newDatasetId.toString())
         pgu.secondaryDatasetMapWriter.createInternalNameMapping(secondaryDatasetInfo.internalName, newDatasetId)
-        newCopyInfo
+        val secCopyId = pgu.secondaryDatasetMapWriter.allocateCopyId()
+        pgu.datasetMapWriter.unsafeCreateCopy(newDatasetInfo, secCopyId,
+          secondaryCopyInfo.copyNumber,
+          TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
+          secondaryCopyInfo.dataVersion)
       case Some(dsId) =>
         // Find the very top record - dataset_internal_name_map.
         // Delete and recreate the copy with the same dataset id.
