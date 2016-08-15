@@ -30,7 +30,9 @@ trait SqlFunctionsLocation {
     Location -> formatCall("%s" + SqlFragments.Separator + humanAddress) _,
     HumanAddress -> formatCall(humanAddress) _,
     LocationWithinCircle -> geometryFunctionWithLocation(SoQLFunctions.WithinCircle),
-    LocationWithinBox -> geometryFunctionWithLocation(SoQLFunctions.WithinBox)
+    LocationWithinBox -> geometryFunctionWithLocation(SoQLFunctions.WithinBox),
+    LocationWithinPolygon -> geometryFunctionWithLocation(SoQLFunctions.WithinPolygon),
+    LocationDistanceInMeters -> geometryFunctionWithLocation(SoQLFunctions.DistanceInMeters)
   )
 
   /**
@@ -120,12 +122,12 @@ trait SqlFunctionsLocation {
   }
 
   private def geometryFunctionWithLocation(geomFunction: com.socrata.soql.functions.Function[SoQLType])
-                                            (fn: FunCall,
-                                             rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
-                                             typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
-                                             setParams: Seq[SetParam],
-                                             ctx: Sqlizer.Context,
-                                             escape: Escape): ParametricSql = {
+                                          (fn: FunCall,
+                                           rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                                           typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                                           setParams: Seq[SetParam],
+                                           ctx: Sqlizer.Context,
+                                           escape: Escape): ParametricSql = {
         val toPointFn = MonomorphicFunction(SoQLFunctions.LocationToPoint, Map.empty)
         val toPointCall = FunctionCall(toPointFn, fn.parameters.take(1))(NoPosition, NoPosition)
         val ParametricSql(sqls, params) = Sqlizer.sql(toPointCall)(rep, typeRep, setParams, ctx, escape)
