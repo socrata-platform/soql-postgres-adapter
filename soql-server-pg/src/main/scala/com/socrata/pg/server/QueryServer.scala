@@ -153,7 +153,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val copy = Option(servReq.getParameter("copy"))
     val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
     val obfuscateId = !Option(servReq.getParameter("obfuscateId")).exists(_ == "false")
-    val timeoutMs = Option(servReq.getParameter("queryTimeoutMs")).map(_.toLong)
+    val timeoutMs = Option(servReq.getParameter("queryTimeoutSeconds")).map(_.toDouble * 1000).map(_.toLong)
     val queryTimeout = timeoutMs.map(new FiniteDuration(_, TimeUnit.MILLISECONDS))
 
     streamQueryResults(analyses, datasetId, reqRowCount, copy, rollupName, obfuscateId,
