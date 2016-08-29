@@ -3,7 +3,7 @@ package com.socrata.pg.server
 import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
 import java.sql.Connection
-import java.util.concurrent.{ExecutorService, Executors}
+import java.util.concurrent.{TimeUnit, ExecutorService, Executors}
 import javax.servlet.http.HttpServletResponse
 
 import com.socrata.pg.BuildInfo
@@ -56,6 +56,8 @@ import com.typesafe.scalalogging.slf4j.Logging
 import org.apache.curator.x.discovery.ServiceInstanceBuilder
 import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
+import org.postgresql.util.PSQLException
+import scala.concurrent.duration.{FiniteDuration, Duration}
 
 import scala.language.existentials
 
@@ -151,9 +153,11 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val copy = Option(servReq.getParameter("copy"))
     val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
     val obfuscateId = !Option(servReq.getParameter("obfuscateId")).exists(_ == "false")
+    val timeoutMs = Option(servReq.getParameter("queryTimeoutSeconds")).map(_.toDouble * 1000).map(_.toLong)
+    val queryTimeout = timeoutMs.map(new FiniteDuration(_, TimeUnit.MILLISECONDS))
 
     streamQueryResults(analyses, datasetId, reqRowCount, copy, rollupName, obfuscateId,
-      req.precondition, req.dateTimeHeader("If-Modified-Since"))
+      req.precondition, req.dateTimeHeader("If-Modified-Since"), queryTimeout)
   }
 
   /**
@@ -169,7 +173,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     rollupName: Option[RollupName],
     obfuscateId: Boolean,
     precondition: Precondition,
-    ifModifiedSince: Option[DateTime]
+    ifModifiedSince: Option[DateTime],
+    queryTimeout: Option[Duration]
   ) (resp:HttpServletResponse): Unit = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetId) match {
@@ -183,10 +188,12 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
               NotFound(resp)
             case Some(datasetInfo) =>
               def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
+              def requestTimeout(timeout: Option[Duration]) = responses.RequestTimeout ~> Json(Map("timeout" -> timeout.toString))
               execQuery(pgu, datasetId, datasetInfo, analyses, reqRowCount, copy,
-                rollupName, obfuscateId, precondition, ifModifiedSince) match {
+                rollupName, obfuscateId, precondition, ifModifiedSince, queryTimeout) match {
                 case NotModified(etags) => notModified(etags)(resp)
                 case PreconditionFailed => responses.PreconditionFailed(resp)
+                case RequestTimedOut(timeout) => requestTimeout(timeout)(resp)
                 case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
                   // Very weird separation of concerns between execQuery and streaming. Most likely we will
                   // want yet-another-refactoring where much of execQuery is lifted out into this function.
@@ -214,13 +221,15 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     rollupName: Option[RollupName],
     obfuscateId: Boolean,
     precondition: Precondition,
-    ifModifiedSince: Option[DateTime]
+    ifModifiedSince: Option[DateTime],
+    queryTimeout: Option[Duration]
   ): QueryResult = {
 
     def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                  latestCopy: CopyInfo,
                  analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]],
-                 rowCount: Boolean) = {
+                 rowCount: Boolean,
+                 queryTimeout: Option[Duration]) = {
       val cryptProvider = new CryptProvider(latestCopy.datasetInfo.obfuscationKey)
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.IdRep -> (if (obfuscateId) { new SoQLID.StringRep(cryptProvider) }
@@ -255,7 +264,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
             SoQLAnalysisSqlizer.rowCountSql((as, tableName, sqlReps.values.toSeq))
                                            (sqlReps, typeReps, Seq.empty, sqlCtx, escape),
           rowCount,
-          qryReps)
+          qryReps,
+          queryTimeout)
         (qrySchema, latestCopy.dataVersion, results)
       }
     }
@@ -272,8 +282,15 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
                             && precondition == NoPrecondition =>
             NotModified(Seq(etag))
           case Some(_) | None =>
-            val (qrySchema, version, results) = runQuery(pgu, copy, analysis, rowCount)
-            Success(qrySchema, copy.copyNumber, version, results, etag, lastModified)
+            try {
+              val (qrySchema, version, results) = runQuery(pgu, copy, analysis, rowCount, queryTimeout)
+              Success(qrySchema, copy.copyNumber, version, results, etag, lastModified)
+            } catch {
+              // ick, but user-canceled requests also fall under this code and those are fine
+              case ex: PSQLException if "57014".equals(ex.getSQLState) &&
+                  "ERROR: canceling statement due to statement timeout".equals(ex.getMessage) =>
+                RequestTimedOut(queryTimeout)
+            }
         }
       case FailedBecauseMatch(etags) =>
         NotModified(etags)
@@ -421,6 +438,7 @@ object QueryServer extends DynamicPortMap with Logging {
   sealed abstract class QueryResult
   case class NotModified(etags: Seq[EntityTag]) extends QueryResult
   case object PreconditionFailed extends QueryResult
+  case class RequestTimedOut(timeout: Option[Duration]) extends QueryResult
   case class Success(
     qrySchema: OrderedMap[ColumnId, ColumnInfo[SoQLType]],
     copyNumber: Long,
