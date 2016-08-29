@@ -29,7 +29,7 @@ trait FullTextSearch[CT] {
   }
 
   private def coalesce(col: String): String = {
-    s"coalesce($col,'')"
+    s"""coalesce("$col",'')"""
   }
 
   private def toTsVector(cols: Seq[String]): Option[String] = {
