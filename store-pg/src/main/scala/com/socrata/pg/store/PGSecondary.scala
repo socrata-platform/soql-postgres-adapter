@@ -551,6 +551,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         loader.flush()
       }
     }
+    truthSchema.values.find(_.isSystemPrimaryKey).foreach { pkCol =>
+      sLoader.makeSystemPrimaryKey(pkCol)
+    }
     sLoader.optimize(truthSchema.values)
 
     if (truthCopyInfo.lifecycleStage == TruthLifecycleStage.Unpublished &&
