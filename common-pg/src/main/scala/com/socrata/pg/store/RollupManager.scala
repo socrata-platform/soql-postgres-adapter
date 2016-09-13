@@ -21,12 +21,11 @@ import com.socrata.soql.{SoQLAnalysis, SoQLAnalyzer}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, DatasetContext}
-import com.socrata.soql.exceptions.SoQLException
+import com.socrata.soql.exceptions.{NoSuchColumn, SoQLException}
 import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLTypeInfo}
 import com.socrata.soql.parsing.standalone_exceptions.StandaloneLexerException
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.scalalogging.slf4j.Logging
-
 import RollupManager._
 
 // scalastyle:off multiple.string.literals
@@ -119,6 +118,9 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
           createIndexes(newTableName, rollupInfo, rollupReps)
         case Failure(e) =>
           e match {
+            case e: NoSuchColumn =>
+              logger.info(s"drop rollup ${rollupInfo.name.underlying} on ${copyInfo} because ${e.getMessage}")
+              dropRollupInfo(rollupInfo)
             case e @ (_:SoQLException | _:StandaloneLexerException) =>
               logger.warn(s"Error updating ${copyInfo}, ${rollupInfo}, skipping building rollup", e)
             case _ =>
@@ -129,6 +131,13 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       // drop the old rollup regardless so it doesn't leak, because we have no way to use or track old rollups at
       // this point.
       scheduleRollupTablesForDropping(oldTableName)
+    }
+  }
+
+  private def dropRollupInfo(rollupInfo: RollupInfo) {
+    for { ri <- pgu.datasetMapReader.rollup(copyInfo, rollupInfo.name) } {
+      dropRollup(ri, immediate = true)
+      pgu.datasetMapWriter.dropRollup(copyInfo, Some(rollupInfo.name))
     }
   }
 
