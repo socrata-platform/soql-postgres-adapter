@@ -136,9 +136,12 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     override val post = query _
   }
 
-  def etagFromCopy(datasetInternalName: String, copy: CopyInfo): EntityTag = {
+  def etagFromCopy(datasetInternalName: String, copy: CopyInfo, etagInfo: Option[String]): EntityTag = {
     // ETag is a hash based on datasetInternalName_copyNumber_version
-    val etagContents = s"${datasetInternalName}_${copy.copyNumber}_${copy.dataVersion}"
+    // Upstream components may pass through etag headers to and from query server but generate different queries.
+    // For example, "select *" may become "select `a`" or "select `a`, `newly_unhidden_colujmn`"
+    // Including query string using etagInfo in hash generation makes etags more robust.
+    val etagContents = s"${datasetInternalName}_${copy.copyNumber}_${copy.dataVersion}_${etagInfo.getOrElse("")}"
     StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
   }
 
@@ -157,7 +160,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val queryTimeout = timeoutMs.map(new FiniteDuration(_, TimeUnit.MILLISECONDS))
 
     streamQueryResults(analyses, datasetId, reqRowCount, copy, rollupName, obfuscateId,
-      req.precondition, req.dateTimeHeader("If-Modified-Since"), queryTimeout)
+      req.precondition, req.dateTimeHeader("If-Modified-Since"), Option(analysisParam), queryTimeout)
   }
 
   /**
@@ -174,6 +177,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     obfuscateId: Boolean,
     precondition: Precondition,
     ifModifiedSince: Option[DateTime],
+    etagInfo: Option[String],
     queryTimeout: Option[Duration]
   ) (resp:HttpServletResponse): Unit = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
@@ -190,7 +194,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
               def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
               def requestTimeout(timeout: Option[Duration]) = responses.RequestTimeout ~> Json(Map("timeout" -> timeout.toString))
               execQuery(pgu, datasetId, datasetInfo, analyses, reqRowCount, copy,
-                rollupName, obfuscateId, precondition, ifModifiedSince, queryTimeout) match {
+                rollupName, obfuscateId, precondition, ifModifiedSince, etagInfo, queryTimeout) match {
                 case NotModified(etags) => notModified(etags)(resp)
                 case PreconditionFailed => responses.PreconditionFailed(resp)
                 case RequestTimedOut(timeout) => requestTimeout(timeout)(resp)
@@ -222,6 +226,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     obfuscateId: Boolean,
     precondition: Precondition,
     ifModifiedSince: Option[DateTime],
+    etagInfo: Option[String],
     queryTimeout: Option[Duration]
   ): QueryResult = {
 
@@ -271,7 +276,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     }
 
     val copy = getCopy(pgu, datasetInfo, reqCopy)
-    val etag = etagFromCopy(datasetInternalName, copy)
+    val etag = etagFromCopy(datasetInternalName, copy, etagInfo)
     val lastModified = copy.lastModified
 
     // Conditional GET handling
