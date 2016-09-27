@@ -438,8 +438,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
 
   private def copyInfoHeaderForRows(copyNumber: Long, dataVersion: Long, lastModified: DateTime) = {
     // TODO: Keeping "Last-Modified" just to make roll out easy.  It will be removed in the next cycle.
-    copyInfoHeader("Last-Modified")(copyNumber, dataVersion, lastModified)
-    copyInfoHeader("X-SODA2-Secondary-Last-Modified")(copyNumber, dataVersion, lastModified)
+    copyInfoHeader("Last-Modified")(copyNumber, dataVersion, lastModified) ~>
+      copyInfoHeader("X-SODA2-Secondary-Last-Modified")(copyNumber, dataVersion, lastModified)
   }
 
   private def copyInfoHeader(lastModifiedHeader: String)(copyNumber: Long, dataVersion: Long, lastModified: DateTime) = {
