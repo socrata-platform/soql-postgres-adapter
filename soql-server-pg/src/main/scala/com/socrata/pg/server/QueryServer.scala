@@ -107,7 +107,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         case Some(copyInfo) =>
           val schema = getSchema(pgu, copyInfo)
           OK ~>
-            copyInfoHeader(copyInfo.copyNumber, copyInfo.dataVersion, copyInfo.lastModified) ~>
+            copyInfoHeaderForSchema(copyInfo.copyNumber, copyInfo.dataVersion, copyInfo.lastModified) ~>
             Write(JsonContentType)(JsonUtil.writeJson(_, schema, buffer = true))
         case None => NotFound
       }
@@ -203,7 +203,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
                   // want yet-another-refactoring where much of execQuery is lifted out into this function.
                   // This will significantly change the tests; however.
                   ETag(etag)(resp)
-                  copyInfoHeader(copyNumber, dataVersion, lastModified)(resp)
+                  copyInfoHeaderForRows(copyNumber, dataVersion, lastModified)(resp)
                   rollupName.foreach(r => Header("X-SODA2-Rollup", r.underlying)(resp))
                   for { r <- results } yield {
                     CJSONWriter.writeCJson(datasetInfo, qrySchema,
@@ -431,8 +431,19 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     }
   }
 
-  private def copyInfoHeader(copyNumber: Long, dataVersion: Long, lastModified: DateTime) = {
-    Header("Last-Modified", lastModified.toHttpDate) ~>
+
+  private def copyInfoHeaderForSchema(copyNumber: Long, dataVersion: Long, lastModified: DateTime) = {
+    copyInfoHeader("Last-Modified")(copyNumber, dataVersion, lastModified)
+  }
+
+  private def copyInfoHeaderForRows(copyNumber: Long, dataVersion: Long, lastModified: DateTime) = {
+    // TODO: Keeping "Last-Modified" just to make roll out easy.  It will be removed in the next cycle.
+    copyInfoHeader("Last-Modified")(copyNumber, dataVersion, lastModified)
+    copyInfoHeader("X-SODA2-Secondary-Last-Modified")(copyNumber, dataVersion, lastModified)
+  }
+
+  private def copyInfoHeader(lastModifiedHeader: String)(copyNumber: Long, dataVersion: Long, lastModified: DateTime) = {
+    Header(lastModifiedHeader, lastModified.toHttpDate) ~>
       Header("X-SODA2-CopyNumber", copyNumber.toString) ~>
       Header("X-SODA2-DataVersion", dataVersion.toString)
   }
