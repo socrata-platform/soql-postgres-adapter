@@ -2,6 +2,7 @@ package com.socrata.pg.server
 
 import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.sql.Connection
 import java.util.concurrent.{TimeUnit, ExecutorService, Executors}
 import javax.servlet.http.HttpServletResponse
@@ -53,6 +54,7 @@ import com.socrata.thirdparty.metrics.{SocrataHttpSupport, MetricsReporter}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.slf4j.Logging
+import org.apache.commons.codec.binary.Base64
 import org.apache.curator.x.discovery.ServiceInstanceBuilder
 import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
@@ -141,7 +143,12 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     // Upstream components may pass through etag headers to and from query server but generate different queries.
     // For example, "select *" may become "select `a`" or "select `a`, `newly_unhidden_colujmn`"
     // Including query string using etagInfo in hash generation makes etags more robust.
-    val etagContents = s"${datasetInternalName}_${copy.copyNumber}_${copy.dataVersion}_${etagInfo.getOrElse("")}"
+    val etagInfoDigest = etagInfo.map { x =>
+      val md = MessageDigest.getInstance("SHA1")
+      md.update(x.getBytes(StandardCharsets.UTF_8))
+      Base64.encodeBase64URLSafeString(md.digest())
+    }.getOrElse("")
+    val etagContents = s"${datasetInternalName}_${copy.copyNumber}_${copy.dataVersion}$etagInfoDigest"
     StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
   }
 
