@@ -54,6 +54,7 @@ import com.socrata.thirdparty.metrics.{SocrataHttpSupport, MetricsReporter}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.slf4j.Logging
+import org.apache.commons.codec.binary.Base64
 import org.apache.curator.x.discovery.ServiceInstanceBuilder
 import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
@@ -145,8 +146,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val etagInfoDigest = etagInfo.map { x =>
       val md = MessageDigest.getInstance("SHA1")
       md.update(x.getBytes(StandardCharsets.UTF_8))
-      md.digest()
-      md.toString
+      Base64.encodeBase64URLSafeString(md.digest())
     }.getOrElse("")
     val etagContents = s"${datasetInternalName}_${copy.copyNumber}_${copy.dataVersion}$etagInfoDigest"
     StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
