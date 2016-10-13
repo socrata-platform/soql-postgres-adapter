@@ -2,6 +2,7 @@ package com.socrata.pg.server
 
 import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.sql.Connection
 import java.util.concurrent.{TimeUnit, ExecutorService, Executors}
 import javax.servlet.http.HttpServletResponse
@@ -141,7 +142,12 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     // Upstream components may pass through etag headers to and from query server but generate different queries.
     // For example, "select *" may become "select `a`" or "select `a`, `newly_unhidden_colujmn`"
     // Including query string using etagInfo in hash generation makes etags more robust.
-    val etagContents = s"${datasetInternalName}_${copy.copyNumber}_${copy.dataVersion}_${etagInfo.getOrElse("")}"
+    val etagInfoDigest = etagInfo.map { x =>
+      val md = MessageDigest.getInstance("SHA1")
+      md.update(x.getBytes(StandardCharsets.UTF_8))
+      md.digest().toString
+    }.getOrElse("")
+    val etagContents = s"${datasetInternalName}_${copy.copyNumber}_${copy.dataVersion}$etagInfoDigest"
     StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
   }
 
