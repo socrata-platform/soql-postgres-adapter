@@ -145,7 +145,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val etagInfoDigest = etagInfo.map { x =>
       val md = MessageDigest.getInstance("SHA1")
       md.update(x.getBytes(StandardCharsets.UTF_8))
-      md.digest().toString
+      md.digest()
+      md.toString
     }.getOrElse("")
     val etagContents = s"${datasetInternalName}_${copy.copyNumber}_${copy.dataVersion}$etagInfoDigest"
     StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
