@@ -17,6 +17,8 @@ import com.socrata.datacoordinator.util.{DebugLoggedTimingReport, StackedTimingR
 import com.socrata.datacoordinator.{MutableRow, Row}
 import com.socrata.pg.soql.SqlColIdx
 import com.socrata.pg.store.index.{FullTextSearch, IndexSupport, SoQLIndexableRep}
+import com.socrata.soql.SoQLAnalyzer
+import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLTypeInfo}
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
 import org.joda.time.DateTime
@@ -159,6 +161,7 @@ class PostgresUniverseCommon(val tablespace: String => Option[String],
 
   def generateObfuscationKey(): Array[Byte] = CryptProvider.generateKey()
 
+  def soqlAnalyzer: SoQLAnalyzer[SoQLType] = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
 
   val executor: ExecutorService = Executors.newCachedThreadPool()
   val obfuscationKeyGenerator: () => Array[Byte] = generateObfuscationKey
