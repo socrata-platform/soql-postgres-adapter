@@ -43,4 +43,16 @@ com.socrata.coordinator.secondary-watcher {
     graphite-port = "{{ GRAPHITE_PORT }}"
     log-metrics = {{ LOG_METRICS }}
   }
+
+  producer {
+    queues = "{{ PRODUCER_QUEUES }}"
+    eurybates {
+      producers = "{{ EURYBATES_PRODUCERS }}"
+      activemq.connection-string = "{{ AMQ_URL }}"
+    }
+    zookeeper {
+      conn-spec = "{{ ZOOKEEPER_ENSEMBLE }}"
+      session-timeout = "{{ ZOOKEEPER_SESSION_TIMEOUT }}"
+    }
+  }
 }
