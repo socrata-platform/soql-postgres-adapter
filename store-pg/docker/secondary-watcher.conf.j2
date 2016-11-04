@@ -45,7 +45,7 @@ com.socrata.coordinator.secondary-watcher {
   }
 
   producer {
-    queues = "{{ PRODUCER_QUEUES }}"
+    queues = {{ PRODUCER_QUEUES }}
     eurybates {
       producers = "{{ EURYBATES_PRODUCERS }}"
       activemq.connection-string = "{{ AMQ_URL }}"
