@@ -5,7 +5,6 @@ import java.security.MessageDigest
 import java.sql.{Connection, SQLException}
 
 import scala.util.{Failure, Success, Try}
-
 import com.rojoma.simplearm.util.using
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.secondary.{RollupInfo => SecondaryRollupInfo}
@@ -16,7 +15,7 @@ import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
 import com.socrata.pg.soql._
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
-import com.socrata.pg.store.index.{Indexable, SoQLIndexableRep}
+import com.socrata.pg.store.index.SoQLIndexableRep
 import com.socrata.soql.{SoQLAnalysis, SoQLAnalyzer}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
@@ -27,6 +26,7 @@ import com.socrata.soql.parsing.standalone_exceptions.StandaloneLexerException
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.scalalogging.slf4j.Logging
 import RollupManager._
+import com.socrata.datacoordinator.util.{LoggedTimingReport, StackedTimingReport}
 
 // scalastyle:off multiple.string.literals
 class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) extends Logging {
@@ -45,7 +45,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       OrderedMap(dsSchema.values.map(x => (ColumnName(x.userColumnId.underlying), x.typ)).toSeq.sortBy(_._1): _*)
   }
 
-  private val time = pgu.commonSupport.timingReport
+  private val time = new LoggedTimingReport(org.slf4j.LoggerFactory.getLogger("rollup-timing")) with StackedTimingReport
 
   /**
    * For analyzing the rollup query, we need to map the dataset schema column ids to the "_" prefixed
