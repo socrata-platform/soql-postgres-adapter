@@ -188,7 +188,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     queryTimeout: Option[Duration]
   ) (resp:HttpServletResponse): Unit = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
-      pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetId) match {
+      pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetId, checkDisabled = true) match {
         case None =>
           logger.info(s"Tried to perform query on dataset $datasetId")
           NotFound(resp)
@@ -392,7 +392,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   def getRollups(ds: String, reqCopy: Option[String], includeUnmaterialized: Boolean): Option[Iterable[RollupInfo]] = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       for {
-        datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds)
+        datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds, checkDisabled = true)
         datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
       } yield {
         val copy = getCopy(pgu, datasetInfo, reqCopy)
@@ -412,7 +412,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], ds: String, reqCopy: Option[String])
                       : Option[CopyInfo] = {
     for {
-      datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds)
+      datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds, checkDisabled = true)
       datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
     } yield {
       getCopy(pgu, datasetInfo, reqCopy)
