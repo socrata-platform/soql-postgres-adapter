@@ -101,6 +101,26 @@ trait BaseIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
   }
 }
 
+trait RowIdentifierIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
+
+  override def createIndex(tableName: String, tablespace: String): Option[String] = {
+    val sql = this.physColumns.map { phyCol =>
+      // This is temporary remedy to make up for missing primary key.  Primary key must not have more than one column.
+      // index name should allow matching Data Coordinator primary key name and yet allow us to detect where it is created.
+      val indexName = "uniq_" + tableName + "_" + phyCol
+      s"""
+      DO $$$$ BEGIN
+        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname like '${indexName}%') THEN
+          CREATE UNIQUE INDEX ${indexName}_s on $tableName USING BTREE ($phyCol)$tablespace;
+        END IF;
+      END; $$$$;"""
+    }.mkString(";")
+    Some(sql)
+  }
+
+  override def dropIndex(tableName: String): Option[String] = None
+}
+
 trait NumberLikeIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] => }
 
 trait TimestampLikeIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] => }
@@ -145,7 +165,8 @@ trait LocationIndexable[T] extends GeoIndexable[T] { this: SqlColumnCommonRep[T]
 
 object SoQLIndexableRep {
   private val sqlRepFactories = Map[SoQLType, String => SqlColIdx] (
-    SoQLID -> (base => new IDRep(base)  with NoIndex[SoQLType]), // Already indexed
+    // TODO: Change SoQLID back to NoIndex when the missing primary key problem is fixed
+    SoQLID -> (base => new IDRep(base) with RowIdentifierIndexable[SoQLType]), // Already indexed
     SoQLVersion -> (base => new VersionRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
     SoQLText -> (base => new TextRep(base) with TextIndexable[SoQLType]),
     SoQLBoolean -> (base => new BooleanRep(base) with BooleanIndexable[SoQLType]),

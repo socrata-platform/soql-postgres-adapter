@@ -597,6 +597,11 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   private def prevettedLoader(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], truthCopyInfo: TruthCopyInfo) = {
       val truthSchema = pgu.datasetMapReader.schema(truthCopyInfo)
       val copyCtx = new DatasetCopyContext[SoQLType](truthCopyInfo, truthSchema)
+      // TODO: remove create index on system primary key once the root cause of missing primary key is fixed.
+      truthSchema.values.find(_.isSystemPrimaryKey).map { systemPrimaryKey =>
+        val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
+        sLoader.createIndexes(Seq(systemPrimaryKey))
+      }
       pgu.prevettedLoader(copyCtx, pgu.logger(truthCopyInfo.datasetInfo, "user"))
   }
 
