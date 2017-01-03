@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+    <changeSet author="chi" id="20161231-add-disabled">
+        <preConditions onFail="MARK_RAN">
+            <not><columnExists tableName="dataset_internal_name_map" columnName="disabled"/></not>
+        </preConditions>
+        <addColumn tableName="dataset_internal_name_map">
+            <column name="disabled" type="timestamp with timezone"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>
