@@ -257,6 +257,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       case _ => false
     }
 
+    val hasWccEvents = wccEvents.hasNext
+
     if (wccEvents.hasNext) {
       val e = wccEvents.next()
       logger.debug("got working copy event: {}", e)
@@ -316,6 +318,13 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     if (newDataVersion != dvExpect) {
       throw new ResyncSecondaryException(
        s"Current version ${initialTruthCopyInfo.dataVersion}, next version ${newDataVersion} but should be ${dvExpect}")
+    }
+
+    if (!hasWccEvents) {
+      // If there are no writes that have happened here yet,
+      // commit to release unnecessary locks on system tables like dataset_internal_name_map, dataset_map.
+      // rows updates still cause locks on copy_map, column_map though.
+      pgu.commit()
     }
 
     // no rebuild index, no refresh rollup and no rows loader.
