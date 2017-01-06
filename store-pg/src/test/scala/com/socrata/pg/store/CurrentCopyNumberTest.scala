@@ -11,7 +11,7 @@ class CurrentCopyNumberTest extends PGSecondaryTestBase with PGSecondaryUniverse
 
       f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, f.events.iterator)
 
-      val actualCopyNum = f.pgs.doCurrentCopyNumber(pgu, testInternalName, None)
+      val actualCopyNum = f.pgs.doCurrentCopyNumber(pgu, f.datasetInfo.internalName, None)
 
       // right now we only support a single copy of the dataset ... so this is a silly test!
       actualCopyNum shouldEqual 1
