@@ -42,7 +42,7 @@ class WorkingCopyCreatedHandlerTest extends PGSecondaryTestBase with PGSecondary
       firstCopy.lifecycleStage should be (metadata.LifecycleStage.Unpublished)
       firstCopy.copyNumber should be (1L)
 
-      val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(testInternalName)
+      val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetInfo.internalName)
       datasetId.isDefined should be (true)
       WorkingCopyPublishedHandler(pgu, firstCopy)
       val firstCopyPublished = getTruthCopyInfo(pgu, datasetInfo)

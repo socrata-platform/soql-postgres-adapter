@@ -16,7 +16,7 @@ class CurrentVersionTest extends PGSecondaryTestBase with PGSecondaryUniverseTes
         f.pgs.doVersion(pgu, f.datasetInfo, version, None, Iterator(e))
       }
 
-      f.pgs.doCurrentVersion(pgu, testInternalName, None) shouldEqual version
+      f.pgs.doCurrentVersion(pgu, f.datasetInfo.internalName, None) shouldEqual version
     }
   }
 
