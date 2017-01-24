@@ -4,11 +4,12 @@ import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.id.{CopyId, DatasetId}
 import com.socrata.datacoordinator.id.sql._
 import com.socrata.datacoordinator.truth.DatabaseInReadOnlyMode
-import com.socrata.datacoordinator.truth.metadata.{DatasetInfo, TypeNamespace, CopyInfo}
+import com.socrata.datacoordinator.truth.metadata.{CopyInfo, DatasetInfo, TypeNamespace}
 import com.socrata.datacoordinator.truth.metadata.sql.PostgresDatasetMapWriter
 import com.socrata.datacoordinator.util.TimingReport
 import com.typesafe.scalalogging.slf4j.Logging
-import java.sql.Connection
+import java.sql.{Connection, Timestamp}
+
 import org.postgresql.util.PSQLException
 
 
@@ -25,6 +26,7 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
       |VALUES (?, ?)
     """.stripMargin
   private val deleteQueryInternalNameMap = "DELETE FROM dataset_internal_name_map where dataset_system_id = ?"
+  private val enableQueryInternalNameMap = "UPDATE dataset_internal_name_map SET disabled = ? WHERE dataset_system_id = ?"
 
   override def delete(tableInfo: DatasetInfo): Unit = {
     deleteInternalNameMapping(tableInfo.systemId)
@@ -42,6 +44,19 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
   def deleteInternalNameMapping(datasetSystemId: DatasetId): Unit = {
     using(conn.prepareStatement(deleteQueryInternalNameMap)) { stmt =>
       stmt.setLong(1, datasetSystemId.underlying)
+      stmt.execute()
+    }
+  }
+
+  def disableDataset(datasetSystemId: DatasetId): Unit = {
+    enableDataset(datasetSystemId, false)
+  }
+
+  def enableDataset(datasetSystemId: DatasetId, enabled: Boolean = true): Unit = {
+    using(conn.prepareStatement(enableQueryInternalNameMap)) { stmt =>
+      val timestamp = if (enabled) null else new Timestamp(System.currentTimeMillis)
+      stmt.setTimestamp(1, timestamp)
+      stmt.setLong(2, datasetSystemId.underlying)
       stmt.execute()
     }
   }

@@ -507,6 +507,10 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         //          latest_secondary_data_version = 0,
         //          latest_secondary_lifecycle_stage = 'Unpublished'
         //    WHERE dataset_system_id = ? -- 20
+        // Disable dataset for soql reads during resync to avoid lock issue which
+        // leads to backing up of connections waiting for lock.
+        pgu.datasetMapWriter.disableDataset(dsId)
+        pgu.commit()
         pgu.datasetMapReader.datasetInfo(dsId).map { truthDatasetInfo =>
           pgu.datasetMapWriter.copyNumber(truthDatasetInfo, secondaryCopyInfo.copyNumber) match {
             case Some(copyInfo) =>
@@ -580,7 +584,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     for { rollup <- rollups } RollupCreatedOrUpdatedHandler(pgu, postUpdateTruthCopyInfo, rollup)
     // re-create rollup tables
     updateRollups(pgu, postUpdateTruthCopyInfo)
-
+    pgu.datasetMapWriter.enableDataset(truthCopyInfo.datasetInfo.systemId) // re-enable soql reads
     cookie
   }
 
