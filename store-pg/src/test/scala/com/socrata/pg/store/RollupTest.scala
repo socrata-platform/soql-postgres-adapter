@@ -170,7 +170,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
   test("rollup survives resync") {
     withPgu() { pgu =>
       val pgs = new PGSecondary(config)
-      val secondaryDatasetInfo = DatasetInfo("monkey", "locale", "obfuscate".getBytes)
+      val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes)
       val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55, new DateTime())
       val cookie = Option("monkey")
 
