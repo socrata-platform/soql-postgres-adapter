@@ -158,7 +158,7 @@ trait DatabaseTestBase extends Logging {
       if (isNew) secondaryMfst.addDataset(storeId, datasetId)
       secondaryMfst.claimDatasetNeedingReplication(storeId, claimantId, claimTimeout).foreach { job =>
         try {
-          pb(NamedSecondary(storeId, secondary), job)
+          pb(NamedSecondary(storeId, secondary, ""), job)
         } finally {
           secondaryMfst.releaseClaimedDataset(job)
         }
