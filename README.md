@@ -26,7 +26,7 @@ For active development, when you always want the latest up to date code in your 
 For running the soql-postgres-adapter as one of several microservices, it might
 be better to build the assembly and run it to save on memory:
 
-    bin/start_pg_adapter.sh
+    bin/start_soql_server_pg.sh
 
 ## Run the Database migrations
 
@@ -43,4 +43,3 @@ bin/run_migrations.sh
 Running from sbt is recommended in a development environment because
 it ensures you are running the latest migrations without having to build a
 new assembly.
-
