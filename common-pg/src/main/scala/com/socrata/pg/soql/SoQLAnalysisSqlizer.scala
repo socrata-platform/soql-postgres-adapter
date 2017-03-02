@@ -6,7 +6,8 @@ import com.socrata.pg.store.PostgresUniverseCommon
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.types._
-import com.socrata.soql.typed.{StringLiteral, OrderBy, CoreExpr}
+import com.socrata.soql.typed.{CoreExpr, OrderBy, StringLiteral, TypedLiteral}
+
 import scala.util.parsing.input.NoPosition
 
 // scalastyle:off import.grouping
@@ -124,7 +125,15 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     val groupBy = ana.groupBy.map { (groupBys: Seq[CoreExpr[UserColumnId, SoQLType]]) =>
       groupBys.foldLeft(Tuple2(Seq.empty[String], setParamsSearch)) { (t2, gb: CoreExpr[UserColumnId, SoQLType]) =>
         val ParametricSql(sqls, newSetParams) =
-          Sqlizer.sql(gb)(rep, typeRep, t2._2, ctx + (SoqlPart -> SoqlGroup), escape)
+          if (Sqlizer.isLiteral(gb)) {
+            // SELECT 'literal' as alias GROUP BY 'literal' does not work in SQL
+            // But that's how the analysis come back from GROUP BY alias
+            // Use group by position
+            val groupByColumnPosition = analysis.selection.values.toSeq.indexWhere(_ == gb) + 1
+            ParametricSql(Seq(groupByColumnPosition.toString), t2._2)
+          } else {
+            Sqlizer.sql(gb)(rep, typeRep, t2._2, ctx + (SoqlPart -> SoqlGroup), escape)
+          }
         (t2._1 ++ sqls, newSetParams)
 
       }}
