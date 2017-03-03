@@ -128,6 +128,14 @@ object Sqlizer {
       ParametricSql(se, setParamsOrderBy)
     }
   }
+
+  def isLiteral(expr: CoreExpr[UserColumnId, SoQLType]): Boolean = {
+    expr match {
+      case cr: ColumnRef[UserColumnId, SoQLType] => false
+      case lit: TypedLiteral[SoQLType] => true
+      case fc: FunctionCall[UserColumnId, SoQLType] => fc.parameters.forall(x => isLiteral(x))
+    }
+  }
 }
 
 object SqlizerContext extends Enumeration {
