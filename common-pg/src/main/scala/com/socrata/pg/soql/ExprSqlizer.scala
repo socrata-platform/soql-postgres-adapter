@@ -50,7 +50,9 @@ object NumberLiteralSqlizer extends Sqlizer[NumberLiteral[SoQLType]] {
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
         ParametricSql(Seq(lit.value.bigDecimal.toPlainString), setParams)
-      case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(lit)(ctx) =>
+      case Some(SoqlSelect) if usedInGroupBy(lit)(ctx) =>
+        ParametricSql(Seq(lit.value.bigDecimal.toPlainString), setParams)
+      case Some(SoqlOrder) =>
         ParametricSql(Seq(lit.value.bigDecimal.toPlainString), setParams)
       case _ =>
         val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
