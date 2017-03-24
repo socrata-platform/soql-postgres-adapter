@@ -333,4 +333,12 @@ class SqlizerBasicTest extends SqlizerTest {
     sql should be ("SELECT id,e'stRing',5,(2 * 3) FROM t1 GROUP BY id,2,3,4")
     setParams.length should be (0)
   }
+
+  test("distinct") {
+    val soql = "select distinct case_number, primary_type"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT DISTINCT case_number,primary_type FROM t1")
+    setParams.length should be (0)
+  }
+
 }
