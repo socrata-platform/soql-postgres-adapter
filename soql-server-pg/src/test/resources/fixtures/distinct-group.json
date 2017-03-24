@@ -1,0 +1,10 @@
+[ { "make": "APCO", "count_name": 4 },
+  { "make": "ATHING", "count_name": 1 },
+  { "make": "FOXTROT", "count_name": 1 },
+  { "make": "GIN", "count_name": 2 },
+  { "make": "HOTEL", "count_name": 1 },
+  { "make": "OZONE", "count_name": 2 },
+  { "make": "Skywalk", "count_name": 3 },
+  { "make": "YANKEE", "count_name": 1 },
+  { "make": "zNA", "count_name": 3 }
+]

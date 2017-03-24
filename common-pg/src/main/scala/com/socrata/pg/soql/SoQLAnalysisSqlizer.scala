@@ -153,7 +153,8 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     val setParamsOrderBy = orderBy.map(_._2).getOrElse(setParamsHaving)
 
     // COMPLETE SQL
-    val completeSql = selectPhrase.mkString("SELECT ", ",", "") +
+    val selectOptionalDistinct = "SELECT " + (if (analysis.distinct) "DISTINCT " else "")
+    val completeSql = selectPhrase.mkString(selectOptionalDistinct, ",", "") +
       s" FROM $tableName" +
       where.flatMap(_.sql.headOption.map(" WHERE " +  _)).getOrElse("") +
       search.flatMap(_.sql.headOption).getOrElse("") +
