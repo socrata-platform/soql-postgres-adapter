@@ -112,8 +112,15 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
 
 object SecondarySchemaLoader {
   val fullTextIndexCreateSqlErrorHandler = new SqlErrorHandler {
-    // Example: ERROR: row is too big: size 17880, maximum size 8160
-    private val rowIsTooBig = new SqlErrorHelper(SqlErrorPattern("54000", "^row is too big".r))
+    // Class 54 — Program Limit Exceeded
+    //   54000 	program_limit_exceeded
+    //   54001 	statement_too_complex
+    //   54011 	too_many_columns
+    //   54023 	too_many_arguments
+    // Example:
+    // PSQLException: SQLState = 54000, detailMessage = ERROR: row is too big: size 17880, maximum size 8160
+    // PSQLException: SQLState = 54000, detailMessage = ERROR: string is too long for tsvector (1099438 bytes, max 1048575 bytes)
+    private val rowIsTooBig = new SqlErrorHelper(SqlErrorPattern("54000", " is too (big|long)".r))
     def guard(conn: Connection)(f: => Unit): Unit = rowIsTooBig.guard(conn, None)(f)
   }
 }
