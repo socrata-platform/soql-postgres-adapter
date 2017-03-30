@@ -11,7 +11,7 @@ object Dependencies {
     val jodaTime = "2.1"
     val liquibaseCore = "2.0.0"
     val liquibasePlugin = "1.9.5.0"
-    val postgresql = "9.3-1102-jdbc41"
+    val postgresql = "9.4.1212"
     val simpleArm = "1.1.10"
     val slf4j = "1.7.5"
     val socrataUtils = "0.8.0"
