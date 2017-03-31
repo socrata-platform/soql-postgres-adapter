@@ -20,6 +20,9 @@ com.socrata.soql-server-pg {
     database = "{{ PG_SECONDARY_DB_NAME }}"
     username = "{{ PG_SECONDARY_DB_USER }}"
     {{ PG_SECONDARY_DB_PASSWORD_LINE }}
+    login-timeout = 10
+    connect-timeout = 10
+    cancel-signal-timeout = 10
     connectionCustomizerClassName = com.socrata.thirdparty.c3p0.ConnectionCustomizer
     c3p0 {
       extensions {

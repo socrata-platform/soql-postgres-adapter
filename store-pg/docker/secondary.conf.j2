@@ -12,6 +12,9 @@ instances {
         database = "{{ PG_SECONDARY_DB_NAME }}"
         username = "{{ PG_SECONDARY_DB_USER }}"
         {{ PG_SECONDARY_DB_PASSWORD_LINE }}
+        login-timeout = 10
+        connect-timeout = 10
+        cancel-signal-timeout = 10
 
         c3p0 {
           maxPoolSize = {{ PG_SECONDARY_NUM_WORKERS|int + 1 }} # one connection per worker plus one for the table dropper
