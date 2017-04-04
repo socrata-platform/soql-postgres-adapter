@@ -24,9 +24,9 @@ com.socrata.coordinator.secondary-watcher {
     database = "{{ DATA_COORDINATOR_DB_NAME }}"
     username = "{{ DATA_COORDINATOR_DB_USER }}"
     {{ DATA_COORDINATOR_DB_PASSWORD_LINE }}
-    login-timeout = 10
-    connect-timeout = 10
-    cancel-signal-timeout = 10
+    login-timeout = 10s
+    connect-timeout = 10s
+    cancel-signal-timeout = 10s
   }
 
   secondary {
