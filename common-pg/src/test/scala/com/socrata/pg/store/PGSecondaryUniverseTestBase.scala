@@ -47,7 +47,7 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
 
   def createTable(conn:Connection, datasetInfo:Option[DatasetInfo] = None): (PGSecondaryUniverse[SoQLType, SoQLValue], CopyInfo, SchemaLoader[SoQLType]) = {
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon, datasetInfo)
-    val copyInfo = pgu.datasetMapWriter.create("us") // locale
+    val copyInfo = pgu.datasetMapWriter.create("us", datasetInfo.map(_.resourceName).flatten) // locale, resource_name
     val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
     sLoader.create(copyInfo)
     (pgu, copyInfo, sLoader)

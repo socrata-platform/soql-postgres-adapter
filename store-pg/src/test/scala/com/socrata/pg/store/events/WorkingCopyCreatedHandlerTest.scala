@@ -11,13 +11,13 @@ class WorkingCopyCreatedHandlerTest extends PGSecondaryTestBase with PGSecondary
 
   import com.socrata.pg.store.PGSecondaryUtil._
 
-  val datasetInfo = SecondaryDatasetInfo(testInternalName, localeName, obfuscationKey)
+  val datasetInfo = SecondaryDatasetInfo(testInternalName, localeName, obfuscationKey, None)
   val dataVersion = 0L
   val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
 
   test("can handle working copy event") {
     withPgu() { pgu =>
-      val datasetInfo = SecondaryDatasetInfo(testInternalName, localeName, obfuscationKey)
+      val datasetInfo = SecondaryDatasetInfo(testInternalName, localeName, obfuscationKey, None)
       val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(testInternalName)
       val dataVersion = 0L
       val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
@@ -30,7 +30,7 @@ class WorkingCopyCreatedHandlerTest extends PGSecondaryTestBase with PGSecondary
 
   test("publish and create another working copy") {
     withPgu() { pgu =>
-      val datasetInfo = SecondaryDatasetInfo(testInternalName, localeName, obfuscationKey)
+      val datasetInfo = SecondaryDatasetInfo(testInternalName, localeName, obfuscationKey, None)
 
       val dataVersion = 0L
       val copyId = new CopyId(100)

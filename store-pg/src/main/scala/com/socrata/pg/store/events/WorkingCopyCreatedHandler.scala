@@ -16,8 +16,8 @@ case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
                                      copyInfo: SecondaryCopyInfo) extends Logging {
   copyInfo.copyNumber match {
     case 1 =>
-      logger.info("create first copy {}", datasetInfo.internalName)
-      val (copyInfoSecondary: TruthCopyInfo, sLoader) = createDataset(pgu, datasetInfo.localeName)
+      logger.info(s"create first copy {}", datasetInfo.internalName)
+      val (copyInfoSecondary: TruthCopyInfo, sLoader) = createDataset(pgu, datasetInfo.localeName, datasetInfo.resourceName)
       pgu.secondaryDatasetMapWriter.createInternalNameMapping(
         datasetInfo.internalName,
         copyInfoSecondary.datasetInfo.systemId
@@ -51,8 +51,8 @@ case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
   }
 
   private def createDataset(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                            locale:String): (TruthCopyInfo, SchemaLoader[SoQLType]) = {
-    val copyInfo = pgu.datasetMapWriter.create(locale)
+                            locale: String, resourceName: Option[String]): (TruthCopyInfo, SchemaLoader[SoQLType]) = {
+    val copyInfo = pgu.datasetMapWriter.create(locale, resourceName)
     val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
     sLoader.create(copyInfo)
     (copyInfo, sLoader)
