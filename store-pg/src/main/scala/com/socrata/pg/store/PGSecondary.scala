@@ -489,7 +489,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         //   DELETE from falth.dataset_internal_name_map
         //    WHERE dataset_internal_name = ? -- 'alpha.20'
         logger.info("re-creating secondary dataset with new id")
-        val newDatasetInfo = pgu.datasetMapWriter.unsafeCreateDatasetAllocatingSystemId(secondaryDatasetInfo.localeName, secondaryDatasetInfo.obfuscationKey)
+        val newDatasetInfo = pgu.datasetMapWriter.unsafeCreateDatasetAllocatingSystemId(secondaryDatasetInfo.localeName, secondaryDatasetInfo.obfuscationKey, secondaryDatasetInfo.resourceName)
         val newDatasetId = newDatasetInfo.systemId
         logger.info("new secondary dataset {} {}", secondaryDatasetInfo.internalName, newDatasetId.toString())
         pgu.secondaryDatasetMapWriter.createInternalNameMapping(secondaryDatasetInfo.internalName, newDatasetId)

@@ -105,7 +105,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
   test("rollup is copied from first to second copy") {
     withPgu() { pgu =>
 
-      val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
+      val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, None)
       val dataVersion = 0L
       val copyId = new CopyId(100)
 
@@ -170,7 +170,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
   test("rollup survives resync") {
     withPgu() { pgu =>
       val pgs = new PGSecondary(config)
-      val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes)
+      val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, None)
       val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55, new DateTime())
       val cookie = Option("monkey")
 
@@ -239,7 +239,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
   test("rollup of previous published copy is still good after a working copy is dropped") {
     withPgu() { pgu =>
 
-      val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey)
+      val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, None)
       val dataVersion = 0L
       val copyId = new CopyId(100)
 

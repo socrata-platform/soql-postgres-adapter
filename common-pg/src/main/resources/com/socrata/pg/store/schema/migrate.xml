@@ -13,5 +13,6 @@
     <include file="com/socrata/pg/store/schema/20160111-add-field-name-columns.xml"/>
     <include file="com/socrata/pg/store/schema/20160420-add-copy-map-table-modifiers.xml"/>
     <include file="com/socrata/pg/store/schema/20161231-add-disabled.xml"/>
+    <include file="com/socrata/pg/store/schema/20170402-add-column-resource-name.xml"/>
 
 </databaseChangeLog>
