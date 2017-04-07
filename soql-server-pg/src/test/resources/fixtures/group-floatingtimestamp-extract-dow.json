@@ -1,0 +1,7 @@
+[ { "date_extract_dow_available" : 0, "count" : 2 },
+  { "date_extract_dow_available" : 1, "count" : 2 },
+  { "date_extract_dow_available" : 3, "count" : 2 },
+  { "date_extract_dow_available" : 4, "count" : 1 },
+  { "date_extract_dow_available" : 5, "count" : 2 },
+  { "date_extract_dow_available" : null, "count" : 9 }
+]
