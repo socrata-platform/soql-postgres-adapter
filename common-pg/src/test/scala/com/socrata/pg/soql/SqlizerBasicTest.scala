@@ -208,6 +208,20 @@ class SqlizerBasicTest extends SqlizerTest {
     params should be(Seq(42,42))
   }
 
+  test("date_extract_hh") {
+    val soql = "select date_extract_hh(updated_on)"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT (extract(hour from updated_on)) FROM t1")
+    setParams.length should be (0)
+  }
+
+  test("date_extract_dow - day of week") {
+    val soql = "select date_extract_dow(updated_on)"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT (extract(dow from updated_on)) FROM t1")
+    setParams.length should be (0)
+  }
+
   test("case fn") {
     val soql = "select case(primary_type = 'A', 'X', primary_type = 'B', 'Y')"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)

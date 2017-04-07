@@ -94,6 +94,9 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     FloatingTimeStampTruncYm -> formatCall("date_trunc('month', %s)") _,
     FloatingTimeStampTruncY -> formatCall("date_trunc('year', %s)") _,
 
+    FloatingTimeStampExtractHh -> formatCall("extract(hour from %s)") _,
+    FloatingTimeStampExtractDow -> formatCall("extract(dow from %s)") _,
+
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
     NumberToText -> formatCall("%s::varchar") _,
