@@ -28,6 +28,21 @@ be better to build the assembly and run it to save on memory:
 
     bin/start_soql_server_pg.sh
 
+If configured, secondary-watcher-pg can send messages to Eurybates when replication for its group (`"read"`) has completed. To configure this locally add to your secondary-watcher config:
+
+```
+message-producer {
+    eurybates {
+      producers = "activemq"
+      activemq.connection-string = "tcp://localhost:61616"
+    }
+    zookeeper {
+      conn-spec = "localhost:2181"
+      session-timeout = 4s
+    }
+  }
+```
+
 ## Run the Database migrations
 
 To run the migrations:

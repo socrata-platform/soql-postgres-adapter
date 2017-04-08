@@ -46,4 +46,21 @@ com.socrata.coordinator.secondary-watcher {
     graphite-port = "{{ GRAPHITE_PORT }}"
     log-metrics = {{ LOG_METRICS }}
   }
+
+  # When the secondary-watcher is configured with a message producer
+  # it will send messages when secondary replication completes
+  {% if AMQ_URL is defined and ZOOKEEPER_ENSEMBLE is defined -%}
+  message-producer {
+    eurybates {
+      # has a default in Dockerfile
+      producers = "{{ EURYBATES_PRODUCERS }}"
+      activemq.connection-string = "{{ AMQ_URL }}"
+    }
+    zookeeper {
+      conn-spec = "{{ ZOOKEEPER_ENSEMBLE }}"
+      # has a default in Dockerfile
+      session-timeout = "{{ ZOOKEEPER_SESSION_TIMEOUT }}"
+    }
+  }
+  {%- endif %}
 }
