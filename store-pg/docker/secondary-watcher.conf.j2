@@ -49,7 +49,7 @@ com.socrata.coordinator.secondary-watcher {
 
   # When the secondary-watcher is configured with a message producer
   # it will send messages when secondary replication completes
-  {% if AMQ_URL is defined and ZOOKEEPER_ENSEMBLE is defined -%}
+  {% if AMQ_URL is defined and ZOOKEEPER_ENSEMBLE_STRING is defined -%}
   message-producer {
     eurybates {
       # has a default in Dockerfile
@@ -57,7 +57,9 @@ com.socrata.coordinator.secondary-watcher {
       activemq.connection-string = "{{ AMQ_URL }}"
     }
     zookeeper {
-      conn-spec = "{{ ZOOKEEPER_ENSEMBLE }}"
+      # must be a string instead of an array
+      # TODO: update secondary-watcher library so this can use ZOOKEEPER_ENSEMBLE used in secondary.conf
+      conn-spec = "{{ ZOOKEEPER_ENSEMBLE_STRING }}"
       # has a default in Dockerfile
       session-timeout = "{{ ZOOKEEPER_SESSION_TIMEOUT }}"
     }
