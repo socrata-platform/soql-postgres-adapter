@@ -41,6 +41,10 @@ instances {
             }
           }
         }
+        # make it possible to optionally configure a higher log level for com.socrata components for debugging
+        {% if SOCRATA_LOG_LEVEL is defined -%}
+        logger.com.socrata = {{ SOCRATA_LOG_LEVEL }}
+        {%- endif %}
       }
 
       tablespace = "{{ PG_SECONDARY_TABLESPACE_FN }}"
