@@ -4,7 +4,7 @@ import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.sql.Connection
-import java.util.concurrent.{TimeUnit, ExecutorService, Executors}
+import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import javax.servlet.http.HttpServletResponse
 
 import com.socrata.pg.BuildInfo
@@ -16,7 +16,7 @@ import com.socrata.datacoordinator.Row
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
-import com.socrata.datacoordinator.id.{ColumnId, RollupName, UserColumnId}
+import com.socrata.datacoordinator.id._
 import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
 import com.socrata.datacoordinator.truth.metadata._
 import com.socrata.datacoordinator.util.CloseableIterator
@@ -44,13 +44,14 @@ import com.socrata.pg.store._
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.ColumnName
+import com.socrata.soql.environment.{ColumnName, ResourceName, TableName}
 import com.socrata.soql.typed.CoreExpr
 import com.socrata.soql.types.SoQLID.ClearNumberRep
-import com.socrata.soql.types.{SoQLVersion, SoQLID, SoQLValue, SoQLType}
+import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.curator.{CuratorFromConfig, DiscoveryFromConfig}
-import com.socrata.thirdparty.metrics.{SocrataHttpSupport, MetricsReporter}
+import com.socrata.datacoordinator.truth.sql.SqlColumnRep
+import com.socrata.thirdparty.metrics.{MetricsReporter, SocrataHttpSupport}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.slf4j.Logging
@@ -59,8 +60,8 @@ import org.apache.curator.x.discovery.ServiceInstanceBuilder
 import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
 import org.postgresql.util.PSQLException
-import scala.concurrent.duration.{FiniteDuration, Duration}
 
+import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.language.existentials
 
 class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase with Logging {
@@ -102,15 +103,37 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
 
   def schema(req: HttpRequest): HttpResponse = {
     val servReq = req.servletRequest
-    val ds = servReq.getParameter("ds")
     val copy = Option(servReq.getParameter("copy"))
+    val withFieldName = Option(servReq.getParameter("fieldName")).map(java.lang.Boolean.parseBoolean(_)).getOrElse(false)
+
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
-      getCopy(pgu, ds, copy) match {
+      // get schema by dataset id or resource name
+      val copyInfoOpt = Option(servReq.getParameter("ds")) match {
+        case Some(ds) =>
+          getCopy(pgu, ds, copy)
+        case None => Option(servReq.getParameter("rn")) match {
+          case Some(rn) =>
+            getCopy(pgu, new ResourceName(rn), copy)
+          case None =>
+            None
+        }
+      }
+
+      copyInfoOpt match {
         case Some(copyInfo) =>
-          val schema = getSchema(pgu, copyInfo)
-          OK ~>
-            copyInfoHeaderForSchema(copyInfo.copyNumber, copyInfo.dataVersion, copyInfo.lastModified) ~>
-            Write(JsonContentType)(JsonUtil.writeJson(_, schema, buffer = true))
+          if (withFieldName) {
+            import com.socrata.pg.ExtendedSchema._
+            val schema =  getSchemaWithFieldName(pgu, copyInfo)
+            OK ~>
+              copyInfoHeaderForSchema(copyInfo.copyNumber, copyInfo.dataVersion, copyInfo.lastModified) ~>
+              Write(JsonContentType)(JsonUtil.writeJson(_, schema, buffer = true))
+          } else {
+            import com.socrata.pg.Schema._
+            val schema =  getSchema(pgu, copyInfo)
+            OK ~>
+              copyInfoHeaderForSchema(copyInfo.copyNumber, copyInfo.dataVersion, copyInfo.lastModified) ~>
+              Write(JsonContentType)(JsonUtil.writeJson(_, schema, buffer = true))
+          }
         case None => NotFound
       }
     }
@@ -266,15 +289,23 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
             columnInfo.typ -> pgu.commonSupport.repFor(columnInfo)
           }
         }.toMap
+        val joinCopiesMap = getJoinCopies(pgu, analysis, reqCopy)
+        val joinCopies = joinCopiesMap.values.toSeq
+        val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> readCtx.copyInfo.dataTableName)
+
+        val sqlRepsWithJoin = joinCopiesMap.foldLeft(sqlReps) { (acc, joinCopy) =>
+          val (tableName, copyInfo) = joinCopy
+          acc ++ getJoinReps(pgu, copyInfo, tableName)
+        }
 
         val results = querier.query(
           analyses,
           (as: Seq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) => {
-            Sqlizer.sql((as, tableName, sqlReps.values.toSeq))(sqlReps, typeReps, Seq.empty, sqlCtx, escape)
+            Sqlizer.sql((as, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
           },
           (as: Seq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) =>
-            SoQLAnalysisSqlizer.rowCountSql((as, tableName, sqlReps.values.toSeq))
-                                           (sqlReps, typeReps, Seq.empty, sqlCtx, escape),
+            SoQLAnalysisSqlizer.rowCountSql((as, tableNameMap, sqlReps.values.toSeq))
+                                           (sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape),
           rowCount,
           qryReps,
           queryTimeout)
@@ -389,6 +420,28 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     }
   }
 
+  def getSchema(id: ResourceName, reqCopy: Option[String]): Option[Schema] = {
+    withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
+      for {
+        datasetInfo <- pgu.datasetMapReader.datasetInfoByResourceName(ResourceName(id.name))
+      } yield {
+        val copy = getCopy(pgu, datasetInfo, reqCopy)
+        pgu.datasetReader.openDataset(copy).map(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
+      }
+    }
+  }
+
+  def getSchemaWithFieldName(id: ResourceName, reqCopy: Option[String]): Option[SchemaWithFieldName] = {
+    withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
+      for {
+        datasetInfo <- pgu.datasetMapReader.datasetInfoByResourceName(ResourceName(id.name))
+      } yield {
+        val copy = getCopy(pgu, datasetInfo, reqCopy)
+        pgu.datasetReader.openDataset(copy).map(readCtx => pgu.schemaFinder.getSchemaWithFieldName(readCtx.copyCtx))
+      }
+    }
+  }
+
   def getRollups(ds: String, reqCopy: Option[String], includeUnmaterialized: Boolean): Option[Iterable[RollupInfo]] = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       for {
@@ -407,6 +460,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
 
   private def getSchema(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copy: CopyInfo): Schema = {
     pgu.datasetReader.openDataset(copy).map(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
+  }
+
+  private def getSchemaWithFieldName(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copy: CopyInfo): SchemaWithFieldName = {
+    pgu.datasetReader.openDataset(copy).map(readCtx => pgu.schemaFinder.getSchemaWithFieldName(readCtx.copyCtx))
   }
 
   private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], ds: String, reqCopy: Option[String])
@@ -438,6 +495,13 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     }
   }
 
+  private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], resourceName: ResourceName, reqCopy: Option[String]): Option[CopyInfo] = {
+    for {
+      datasetInfo <- pgu.datasetMapReader.datasetInfoByResourceName(resourceName)
+    } yield {
+      getCopy(pgu, datasetInfo, reqCopy)
+    }
+  }
 
   private def copyInfoHeaderForSchema(copyNumber: Long, dataVersion: Long, lastModified: DateTime) = {
     copyInfoHeader("Last-Modified")(copyNumber, dataVersion, lastModified)
@@ -453,6 +517,38 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     Header(lastModifiedHeader, lastModified.toHttpDate) ~>
       Header("X-SODA2-CopyNumber", copyNumber.toString) ~>
       Header("X-SODA2-DataVersion", dataVersion.toString)
+  }
+
+  private def getJoinCopies(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                            analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]],
+                            reqCopy: Option[String]): Map[TableName, CopyInfo] = {
+    val joinTables = analyses.map(_.join.toSeq.flatten).flatten.map(_._1)
+    joinTables.flatMap { resourceName =>
+      getCopy(pgu, new ResourceName(resourceName.name), reqCopy).map(copy => (resourceName, copy))
+    }.toMap
+  }
+
+  private def getDatasetTablenameMap(copies: Map[TableName, CopyInfo]): Map[TableName, String] = {
+    copies.mapValues { copy =>
+       copy.dataTableName
+    }
+  }
+
+  private def getJoinReps(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                          copy: CopyInfo, tableName: TableName)
+    : Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]] = {
+    val reps = for { readCtx <- pgu.datasetReader.openDataset(copy) } yield {
+      val schema = readCtx.schema
+      val columnIdUserColumnIdMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
+      val columnIdReps = schema.mapValuesStrict(pgu.commonSupport.repFor)
+      columnIdReps.keys.map { columnId =>
+        val userColumnId: UserColumnId = columnIdUserColumnIdMap(columnId)
+        val qualifier = tableName.alias.orElse(copy.datasetInfo.resourceName)
+        val qualifiedUserColumnId = new QualifiedUserColumnId(qualifier, userColumnId)
+        qualifiedUserColumnId -> columnIdReps(columnId)
+      }
+    }
+    reps.toMap
   }
 }
 

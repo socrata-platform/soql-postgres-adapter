@@ -2,8 +2,8 @@ package com.socrata.pg.server
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 
-import com.rojoma.json.v3.ast.{JArray, JNumber, JValue, JObject}
-import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
+import com.rojoma.json.v3.ast.{JArray, JNumber, JObject, JValue}
+import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
@@ -13,9 +13,9 @@ import com.socrata.pg.store._
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{DatasetContext, ColumnName}
-import com.socrata.soql.types.{SoQLAnalysisType, SoQLValue, SoQLType}
-import org.scalatest.matchers.{MatchResult, BeMatcher}
+import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
+import com.socrata.soql.types.{SoQLAnalysisType, SoQLType, SoQLValue}
+import org.scalatest.matchers.{BeMatcher, MatchResult}
 
 import scala.language.existentials
 
@@ -47,7 +47,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
         }
 
         val analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]] =
-          SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, columnNameIdMap)
+          SoQLAnalyzerHelper.analyzeSoQL(soql, Map(TableName.PrimaryTable.qualifier -> datasetCtx), columnNameIdMap)
 
         val (qrySchema, dataVersion, mresult) =
           ds.map { dsInfo =>

@@ -19,7 +19,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
   type FunCallToSql =
     (FunCall,
-     Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+     Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
      Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
      Seq[SetParam],
      Sqlizer.Context,
@@ -152,7 +152,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
   private def infix(fnName: String, foldOp: String = " and ")
                    (fn: FunCall,
-                    rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                    rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                     typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                     setParams: Seq[SetParam],
                     ctx: Sqlizer.Context,
@@ -184,7 +184,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
   private def nary(fnName: String)
                   (fn: FunCall,
-                   rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                   rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                    typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                    setParams: Seq[SetParam],
                    ctx: Sqlizer.Context,
@@ -200,7 +200,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
   private def naryish(fnName: String)
                      (fn: FunCall,
-                      rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                      rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                       typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                       setParams: Seq[SetParam],
                       ctx: Sqlizer.Context,
@@ -217,7 +217,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
   }
 
   private def caseCall(fn: FunCall,
-                       rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                       rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                        typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                        setParams: Seq[SetParam],
                        ctx: Sqlizer.Context,
@@ -238,7 +238,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
   }
 
   private def coalesceCall(fn: FunCall,
-                           rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                           rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                            typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                            setParams: Seq[SetParam],
                            ctx: Sqlizer.Context,
@@ -264,7 +264,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                  foldOp: Option[String] = None,
                  paramPosition: Option[Seq[Int]] = None)
                 (fn: FunCall,
-                 rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                 rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                  typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                  setParams: Seq[SetParam],
                  ctx: Sqlizer.Context,
@@ -311,7 +311,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
   private def decryptString(typ: SoQLType)
                            (fn: FunCall,
-                            rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                            rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                             typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                             setParams: Seq[SetParam],
                             ctx: Sqlizer.Context,
@@ -332,7 +332,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
   private def textToType(template: String, conversion: String => String)
                         (fn: FunCall,
-                         rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                         rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                          typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                          setParams: Seq[SetParam],
                          ctx: Sqlizer.Context,
@@ -350,7 +350,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
   // scalastyle:off parameter.number
   private def infixSuffixWildcard(fnName: String, prefix: Boolean, foldOp: String = " and ")
                                  (fn: FunCall,
-                                  rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                                  rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                                   typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                                   setParams: Seq[SetParam],
                                   ctx: Sqlizer.Context,

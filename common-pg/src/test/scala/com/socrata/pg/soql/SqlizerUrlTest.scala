@@ -8,7 +8,7 @@ class SqlizerUrlTest extends SqlizerTest {
   test("url subcolumn") {
     val soql = "SELECT url.url as url_url WHERE url.description = 'Home Site' order by url_url"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (url_url) FROM t1 WHERE ((url_description) = ?) ORDER BY (url_url) nulls last")
+    sql should be ("SELECT (t1.url_url) FROM t1 WHERE ((t1.url_description) = ?) ORDER BY (t1.url_url) nulls last")
     println(sql)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq("Home Site"))
@@ -25,14 +25,14 @@ class SqlizerUrlTest extends SqlizerTest {
   test("url group") {
     val soql = "SELECT url, count(*) GROUP BY url"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT url_url,url_description,(count(*)) FROM t1 GROUP BY url_url,url_description")
+    sql should be ("SELECT t1.url_url,t1.url_description,(count(*)) FROM t1 GROUP BY t1.url_url,t1.url_description")
     setParams should be (Seq.empty)
   }
 
   test("url order") {
     val soql = "SELECT url ORDER BY url"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT url_url,url_description FROM t1 ORDER BY url_url nulls last,url_description nulls last")
+    sql should be ("SELECT t1.url_url,t1.url_description FROM t1 ORDER BY t1.url_url nulls last,t1.url_description nulls last")
     setParams should be (Seq.empty)
   }
 }

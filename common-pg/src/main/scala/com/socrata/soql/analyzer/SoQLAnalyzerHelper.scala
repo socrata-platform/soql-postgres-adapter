@@ -3,7 +3,7 @@ package com.socrata.soql.analyzer
 import com.socrata.pg.soql._
 import com.socrata.soql.{AnalysisDeserializer, AnalysisSerializer, SoQLAnalysis, SoQLAnalyzer}
 import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLFunctions, SoQLTypeInfo}
-import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName, TypeName}
+import com.socrata.soql.environment._
 import com.socrata.soql.types.SoQLType
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, InputStream, OutputStream}
 
@@ -25,20 +25,16 @@ object SoQLAnalyzerHelper {
   private val analyzer = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
 
   def analyzeSoQL(soql: String,
-                  datasetCtx: DatasetContext[SoQLType],
+                  datasetCtx: Map[String, DatasetContext[SoQLType]],
                   idMap: ColumnName => UserColumnId): Seq[SoQLAnalysis[UserColumnId, SoQLType]] = {
-    implicit def ctx = Map(TableName.PrimaryTable.qualifier -> datasetCtx)
-
-    val analyses: Seq[SoQLAnalysis[ColumnName, SoQLType]] = analyzer.analyzeFullQuery(soql)
+    val analyses: Seq[SoQLAnalysis[ColumnName, SoQLType]] = analyzer.analyzeFullQuery(soql)(datasetCtx)
     analyses.map(_.mapColumnIds(mapIgnoringQualifier(idMap))).asInstanceOf[Seq[SoQLAnalysis[UserColumnId, SoQLType]]]
   }
 
   def analyzeSoQL(soql: String,
-                  datasetCtx: DatasetContext[SoQLType],
+                  datasetCtx: Map[String, DatasetContext[SoQLType]],
                   columnIdMapping: Map[ColumnName, UserColumnId]): Seq[SoQLAnalysis[UserColumnId, SoQLType]] = {
-    implicit def ctx = Map(TableName.PrimaryTable.qualifier -> datasetCtx)
-
-    val analyses: Seq[SoQLAnalysis[ColumnName, SoQLType]] = analyzer.analyzeFullQuery(soql)
+    val analyses: Seq[SoQLAnalysis[ColumnName, SoQLType]] = analyzer.analyzeFullQuery(soql)(datasetCtx)
     val remappedAnalyses = remapAnalyses(columnIdMapping, analyses)
 
     val baos = new ByteArrayOutputStream

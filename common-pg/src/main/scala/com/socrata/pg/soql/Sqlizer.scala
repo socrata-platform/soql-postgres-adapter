@@ -20,7 +20,7 @@ trait Sqlizer[T] {
   import SqlizerContext._
 
   def sql(e: T)
-         (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+         (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
           typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam], ctx: Context, escape: Escape): ParametricSql
 
@@ -81,7 +81,7 @@ object Sqlizer {
 
   type SetParam = (Option[PreparedStatement], Int) => Option[Any]
 
-  def sql[T](e: T)(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+  def sql[T](e: T)(rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                    typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                    setParams: Seq[SetParam],
                    ctx: Context,
@@ -98,7 +98,7 @@ object Sqlizer {
   implicit val soqlAnalysisSqlizer = SoQLAnalysisSqlizer
 
   implicit object CoreExprSqlizer extends Sqlizer[CoreExpr[UserColumnId, SoQLType]] {
-    def sql(expr: CoreExpr[UserColumnId, SoQLType])(rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+    def sql(expr: CoreExpr[UserColumnId, SoQLType])(rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                                                     typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                                                     setParams: Seq[SetParam],
                                                     ctx: Context,
@@ -117,7 +117,7 @@ object Sqlizer {
 
   implicit object OrderBySqlizer extends Sqlizer[OrderBy[UserColumnId, SoQLType]] {
     def sql(orderBy: OrderBy[UserColumnId, SoQLType])
-           (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+           (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
             typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
             setParams: Seq[SetParam],
             ctx: Context,
@@ -144,6 +144,7 @@ object SqlizerContext extends Enumeration {
   val SoqlPart = Value("soql-part")
   val SoqlSelect = Value("select")
   val SoqlWhere = Value("where")
+  val SoqlJoin = SoqlWhere // join is like where
   val SoqlGroup = Value("group")
   val SoqlHaving = Value("having")
   val SoqlOrder = Value("order")
@@ -158,6 +159,9 @@ object SqlizerContext extends Enumeration {
   val CaseSensitivity = Value("case-sensitivity")
   val InnermostSoql = Value("innermost-soql")
   val OutermostSoql = Value("outermost-soql")
+
+  val TableMap = Value("tables") // resource name to table name map
+  val TableAliasMap = Value("table-aliases") // resource alias name to table name map
 }
 
 sealed trait CaseSensitivity
