@@ -1,10 +1,9 @@
 package com.socrata.pg.error
 
 import java.lang.reflect.InvocationTargetException
-import java.sql.Connection
+import java.sql.{BatchUpdateException, Connection}
 
 import scala.util.{Failure, Success, Try}
-
 import com.socrata.datacoordinator.secondary.ResyncSecondaryException
 import com.typesafe.scalalogging.slf4j.Logging
 import org.postgresql.util.PSQLException
@@ -48,8 +47,9 @@ object RowSizeBufferSqlErrorHandler extends Logging {
       f
     } catch {
       case ex: PSQLException => resyncIfIndexRowSizeError(ex)
-      case itex: InvocationTargetException => // sql exceptions wrapped in invocation target exception
-        itex.getCause match {
+       // sql exceptions wrapped in invocation target exception or from a batch update
+      case e @ (_ : InvocationTargetException | _ : BatchUpdateException) =>
+        e.getCause match {
           case ex: PSQLException => resyncIfIndexRowSizeError(ex)
           case ex: Throwable => throw ex
         }
