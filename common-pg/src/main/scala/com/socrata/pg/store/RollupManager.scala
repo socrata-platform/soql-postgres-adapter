@@ -19,7 +19,7 @@ import com.socrata.pg.store.index.SoQLIndexableRep
 import com.socrata.soql.{SoQLAnalysis, SoQLAnalyzer}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName, DatasetContext}
+import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
 import com.socrata.soql.exceptions.{NoSuchColumn, SoQLException}
 import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLTypeInfo}
 import com.socrata.soql.parsing.standalone_exceptions.StandaloneLexerException
@@ -27,6 +27,7 @@ import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.scalalogging.slf4j.Logging
 import RollupManager._
 import com.socrata.datacoordinator.util.{LoggedTimingReport, StackedTimingReport}
+import com.socrata.soql.typed.Qualifier
 
 // scalastyle:off multiple.string.literals
 class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) extends Logging {
@@ -60,8 +61,9 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
   /**
    * Once we have the analyzed rollup query with column names, we need to remove the leading "_" on non-system
    * columns to make the names match up with the underlying dataset schema.
+   * TODO: Join - handle qualifier
    */
-  private def columnNameRemovePrefixMap(cn: ColumnName): ColumnName = {
+  private def columnNameRemovePrefixMap(cn: ColumnName, qualifier: Qualifier): ColumnName = {
     cn.name(0) match {
       case ':' => cn
       case _ => new ColumnName(cn.name.drop(1))
@@ -88,10 +90,10 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
       val analyzer = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
 
-      val prefixedDsContext = new DatasetContext[SoQLType] {
+      val prefixedDsContext = Map(TableName.PrimaryTable.qualifier -> new DatasetContext[SoQLType] {
         val schema: OrderedMap[ColumnName, SoQLType] =
           OrderedMap(dsSchema.values.map(x => (columnIdToPrefixNameMap(x.userColumnId), x.typ)).toSeq.sortBy(_._1): _*)
-      }
+      })
 
       // In most of the secondary update code, if something unexpectedly blows up we just blow up, roll back
       // the whole transaction, and mark the dataset as broken so we can investigate.  For doing the soql
@@ -279,7 +281,8 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
   private def analysesToSoQLType(analyses: ASysCol): AUserCol = {
     val baos = new ByteArrayOutputStream
-    val analysesColumnId = analyses.map(_.mapColumnIds(name => new UserColumnId(name.name)))
+    // TODO: Join handle qualifier
+    val analysesColumnId = analyses.map(_.mapColumnIds((name, qualifier) => new UserColumnId(name.name)))
     SoQLAnalyzerHelper.serialize(baos, analysesColumnId)
     SoQLAnalyzerHelper.deserialize(new ByteArrayInputStream(baos.toByteArray))
   }

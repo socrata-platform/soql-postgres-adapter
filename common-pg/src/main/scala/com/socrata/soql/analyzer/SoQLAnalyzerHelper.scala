@@ -1,12 +1,14 @@
 package com.socrata.soql.analyzer
 
 import com.socrata.pg.soql._
-import com.socrata.soql.{SoQLAnalysis, SoQLAnalyzer, AnalysisDeserializer, AnalysisSerializer}
-import com.socrata.soql.functions.{SoQLFunctions, SoQLFunctionInfo, SoQLTypeInfo}
-import com.socrata.soql.environment.{ColumnName, TypeName, DatasetContext}
+import com.socrata.soql.{AnalysisDeserializer, AnalysisSerializer, SoQLAnalysis, SoQLAnalyzer}
+import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLFunctions, SoQLTypeInfo}
+import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName, TypeName}
 import com.socrata.soql.types.SoQLType
-import java.io.{OutputStream, InputStream, ByteArrayInputStream, ByteArrayOutputStream}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, InputStream, OutputStream}
+
 import com.socrata.datacoordinator.id.UserColumnId
+import com.socrata.soql.typed.Qualifier
 
 object SoQLAnalyzerHelper {
   private val serializer = new AnalysisSerializer(serializeColumn, serializeAnalysisType)
@@ -25,16 +27,16 @@ object SoQLAnalyzerHelper {
   def analyzeSoQL(soql: String,
                   datasetCtx: DatasetContext[SoQLType],
                   idMap: ColumnName => UserColumnId): Seq[SoQLAnalysis[UserColumnId, SoQLType]] = {
-    implicit def ctx = datasetCtx
+    implicit def ctx = Map(TableName.PrimaryTable.qualifier -> datasetCtx)
 
     val analyses: Seq[SoQLAnalysis[ColumnName, SoQLType]] = analyzer.analyzeFullQuery(soql)
-    analyses.map(_.mapColumnIds(idMap)).asInstanceOf[Seq[SoQLAnalysis[UserColumnId, SoQLType]]]
+    analyses.map(_.mapColumnIds(mapIgnoringQualifier(idMap))).asInstanceOf[Seq[SoQLAnalysis[UserColumnId, SoQLType]]]
   }
 
   def analyzeSoQL(soql: String,
                   datasetCtx: DatasetContext[SoQLType],
                   columnIdMapping: Map[ColumnName, UserColumnId]): Seq[SoQLAnalysis[UserColumnId, SoQLType]] = {
-    implicit def ctx = datasetCtx
+    implicit def ctx = Map(TableName.PrimaryTable.qualifier -> datasetCtx)
 
     val analyses: Seq[SoQLAnalysis[ColumnName, SoQLType]] = analyzer.analyzeFullQuery(soql)
     val remappedAnalyses = remapAnalyses(columnIdMapping, analyses)
@@ -74,10 +76,16 @@ object SoQLAnalyzerHelper {
           mappingWithNewColumns
         }
 
-      val a: SoQLAnalysis[UserColumnId, SoQLType] = analysis.mapColumnIds(newMapping)
+      val a: SoQLAnalysis[UserColumnId, SoQLType] = analysis.mapColumnIds(mapIgnoringQualifier(newMapping))
       (mappingWithNewColumns, convertedAnalyses :+ a)
     }
     analysesInColIds
+  }
+
+  // TODO: Join
+  private def mapIgnoringQualifier(map: ColumnName => UserColumnId)(columnName: ColumnName, qualifier: Qualifier)
+    : UserColumnId = {
+    map(columnName)
   }
 
   private def serializeColumn(c: UserColumnId) = c.underlying
