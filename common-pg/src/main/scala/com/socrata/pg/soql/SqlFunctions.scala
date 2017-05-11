@@ -71,8 +71,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
       paramPosition = Some(Seq(0,0))),
     SignedMagnitudeLinear ->
       formatCall(
-        "case when %s = 1 then floor(%s) else floor(%s/%s) end",
-        paramPosition = Some(Seq(1,0,0,1))),
+        "case when %s = 1 then floor(%s) else sign(%s) * floor(abs(%s)/%s + 1) end",
+        paramPosition = Some(Seq(1,0,0,0,1))),
     BinaryPlus -> infix("+") _,
     BinaryMinus -> infix("-") _,
     TimesNumNum -> infix("*") _,
