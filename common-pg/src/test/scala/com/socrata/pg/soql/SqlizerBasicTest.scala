@@ -202,7 +202,7 @@ class SqlizerBasicTest extends SqlizerTest {
   test("signed magnitude linear") {
     val soql = "select signed_magnitude_linear(year, 42)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be("SELECT (case when ? = 1 then floor(year) else floor(year/?) end) FROM t1")
+    sql should be("SELECT (case when ? = 1 then floor(year) else sign(year) * floor(abs(year)/? + 1) end) FROM t1")
     setParams.length should be(2)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be(Seq(42,42))
