@@ -1,0 +1,12 @@
+[  {"make":"APCO","name":"Zefira","timezone":3}
+  ,{"make":"APCO","name":"Karma","timezone":3}
+  ,{"make":"APCO","name":"Karma SP","timezone":3}
+  ,{"make":"APCO","name":"Vista II SP","timezone":3}
+  ,{"make":"GIN","name":"Atlas","timezone":9}
+  ,{"make":"GIN","name":"Sprint Evo","timezone":9}
+  ,{"make":"OZONE","name":"Buzz","timezone":2}
+  ,{"make":"OZONE","name":"Rush","timezone":2}
+  ,{"make":"Skywalk","name":"Chili","timezone":2}
+  ,{"make":"Skywalk","name":"Mescal","timezone":2}
+  ,{"make":"Skywalk","name":"Tequila","timezone":2}
+]

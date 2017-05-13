@@ -1,0 +1,12 @@
+[
+  { c: "create", user: "test", resource: "_manufacturer" },
+  { c: "add column", id: "make", type: "text" },
+  { c: "add column", id: "country", type: "text" },
+  { c: "add column", id: "timezone", type: "number" },
+  { c: "row data" },
+  {"make":"APCO", "country":"Israel", "timezone": 3},
+  {"make":"Skywalk", "country":"Germany", "timezone": 2},
+  {"make":"OZONE", "country":"France", "timezone": 2},
+  {"make":"GIN", "country":"Korea", "timezone": 9},
+  {"make":"WILLSWING", "country":"USA", "timezone": -8}
+]

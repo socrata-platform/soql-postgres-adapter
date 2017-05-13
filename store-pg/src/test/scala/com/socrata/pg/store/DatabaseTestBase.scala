@@ -95,9 +95,9 @@ trait DatabaseTestBase extends Logging {
    * @param conn
    * @return truth dataset id and secondary dataset id pair.
    */
-  def importDataset(conn: Connection): Tuple2[DatasetId, DatasetId] = {
+  def importDataset(conn: Connection, mutationScript: String = "mutate-create.json"): Tuple2[DatasetId, DatasetId] = {
     withSoQLCommon(truthDataSourceConfig) { common =>
-      val ProcessCreationReturns(datasetId, _, _, _) = processMutationCreate(common, fixtureFile("mutate-create.json"))
+      val ProcessCreationReturns(datasetId, _, _, _) = processMutationCreate(common, fixtureFile(mutationScript))
       processMutation(common, fixtureFile("mutate-publish.json"), datasetId)
       pushToSecondary(common, datasetId)
       truthDatasetId = datasetId

@@ -28,7 +28,8 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
   def compareSoqlResult(soql: String,
                         expectedFixture: String,
                         expectedRowCount: Option[Long] = None,
-                        caseSensitivity: CaseSensitivity = CaseSensitive): Unit = {
+                        caseSensitivity: CaseSensitivity = CaseSensitive,
+                        joinDatasetCtx: Map[String, DatasetContext[SoQLType]] = Map.empty): Unit = {
     withDb() { conn =>
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon)
       val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secDatasetId).get)
@@ -46,8 +47,9 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
           columnName -> idMap(columnName)
         }
 
+        val allDatasetCtx = joinDatasetCtx + (TableName.PrimaryTable.qualifier -> datasetCtx)
         val analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]] =
-          SoQLAnalyzerHelper.analyzeSoQL(soql, Map(TableName.PrimaryTable.qualifier -> datasetCtx), columnNameIdMap)
+          SoQLAnalyzerHelper.analyzeSoQL(soql, allDatasetCtx, columnNameIdMap)
 
         val (qrySchema, dataVersion, mresult) =
           ds.map { dsInfo =>
