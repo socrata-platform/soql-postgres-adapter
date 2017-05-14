@@ -33,7 +33,8 @@ abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTe
   }
 
   lazy val plainCtx = Map(TableName("_manufacturer").qualifier -> joinCtx)
-  lazy val aliasCtx = Map(TableName("_manufacturer", Some("_m")).qualifier -> joinCtx)
+  lazy val aliasCtx = Map(TableName("_manufacturer", Some("_m")).qualifier -> joinCtx,
+                          TableName("_manufacturer", Some("_m2")).qualifier -> joinCtx)
 
   override def beforeAll: Unit = {
     createDatabases()

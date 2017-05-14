@@ -1,10 +1,11 @@
 package com.socrata.pg.soql
 
 import java.sql.PreparedStatement
+
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.soql.SoQLAnalysis
-import com.socrata.soql.environment.ColumnName
+import com.socrata.soql.environment.{ResourceName, TableName}
 import com.socrata.soql.typed._
 import com.socrata.soql.types._
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
@@ -73,6 +74,13 @@ trait Sqlizer[T] {
 
   private def caseInsensitive(ctx: Context): Boolean =
     ctx.contains(CaseSensitivity) && ctx(CaseSensitivity) == CaseInsensitive
+
+  protected def realAlias(tableName: TableName, realTableName: String): String = {
+    tableName.alias match {
+      case Some(x) => ResourceName(x).caseFolded
+      case None => realTableName
+    }
+  }
 }
 
 object Sqlizer {

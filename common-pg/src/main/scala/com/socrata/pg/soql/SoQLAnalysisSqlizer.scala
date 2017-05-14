@@ -87,7 +87,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     val ana = if (reqRowCount) rowCountAnalysis(analysis) else analysis
     val ctx = context + (Analysis -> analysis) +
                         (TableMap -> tableNames) +
-                        (TableAliasMap -> tableNames.map { case (k, v) => (k.alias.getOrElse(k.name), v) })
+                        (TableAliasMap -> tableNames.map { case (k, v) => (k.alias.getOrElse(k.name), realAlias(k, v)) })
 
     // SELECT
     val ctxSelect = ctx + (SoqlPart -> SoqlSelect)
@@ -104,7 +104,8 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       val (sqls, setParams) = acc
       val (resource, expr) = join
       val joinParamSql  = Sqlizer.sql(expr)(rep, typeRep, setParams, ctx + (SoqlPart -> SoqlJoin), escape)
-      val tableName = tableNames(resource)
+      val tableName = if (resource.alias.isEmpty) tableNames(resource)
+                      else tableNames(resource) + " as " + realAlias(resource, tableNames(resource))
       val joinCondition = joinParamSql.sql.mkString(" ")
       (sqls :+ s" JOIN $tableName ON $joinCondition", joinParamSql.setParams)
     }
