@@ -58,7 +58,7 @@ trait SqlFunctionsGeometry {
 
   private def formatSimplify(template: String, paramPosition: Option[Seq[Int]] = None)
                             (fn: FunCall,
-                             rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                              typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                              setParams: Seq[SetParam],
                              ctx: Sqlizer.Context,
@@ -76,7 +76,7 @@ trait SqlFunctionsGeometry {
 
   private def formatValidate(template: String, paramPosition: Option[Seq[Int]] = None)
                             (fn: FunCall,
-                             rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                              typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                              setParams: Seq[SetParam],
                              ctx: Sqlizer.Context,

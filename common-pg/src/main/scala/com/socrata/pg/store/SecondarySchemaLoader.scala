@@ -45,7 +45,7 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
       val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
         throw new Exception(table + " does not exist when creating search index.")))
       logger.info("creating fts index")
-      fullTextSearch.searchVector(columnInfos.map(repFor).toSeq) match {
+      fullTextSearch.searchVector(columnInfos.map(repFor).toSeq, None) match {
         case None => // nothing to do
         case Some(allColumnsVector) =>
           using(conn.createStatement()) { (stmt: Statement) =>

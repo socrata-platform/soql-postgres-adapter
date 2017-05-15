@@ -46,7 +46,7 @@ trait SqlFunctionsLocation {
   }
 
   private def textToLocation(fn: FunCall,
-                             rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                              typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                              setParams: Seq[SetParam],
                              ctx: Sqlizer.Context,
@@ -73,7 +73,7 @@ trait SqlFunctionsLocation {
   }
 
   private def locationAddress(fn: FunCall,
-                              rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                              rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                               typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                               setParams: Seq[SetParam],
                               ctx: Sqlizer.Context,
@@ -87,7 +87,7 @@ trait SqlFunctionsLocation {
   }
 
   private def locationLatLng(prop: String)(fn: FunCall,
-                                           rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                                           rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                                            typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                                            setParams: Seq[SetParam],
                                            ctx: Sqlizer.Context,
@@ -108,7 +108,7 @@ trait SqlFunctionsLocation {
   }
 
   private def locationToPoint(fn: FunCall,
-                              rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                              rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                               typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                               setParams: Seq[SetParam],
                               ctx: Sqlizer.Context,
@@ -123,7 +123,7 @@ trait SqlFunctionsLocation {
 
   private def geometryFunctionWithLocation(geomFunction: com.socrata.soql.functions.Function[SoQLType])
                                           (fn: FunCall,
-                                           rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                                           rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                                            typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                                            setParams: Seq[SetParam],
                                            ctx: Sqlizer.Context,

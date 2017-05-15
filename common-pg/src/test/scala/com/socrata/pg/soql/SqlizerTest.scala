@@ -1,6 +1,6 @@
 package com.socrata.pg.soql
 
-import org.scalatest.{Matchers, FunSuite}
+import org.scalatest.{FunSuite, Matchers}
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.common.soql.{SoQLRep, SoQLTypeContext}
@@ -10,7 +10,7 @@ import com.socrata.pg.store.index.SoQLIndexableRep
 import com.socrata.pg.store.PostgresUniverseCommon
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName, DatasetContext}
+import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
 import com.socrata.soql.SoQLAnalysis
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
@@ -25,16 +25,33 @@ object SqlizerTest {
     SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider)
   )
 
-  def sqlize(soql: String, caseSensitivity: CaseSensitivity): ParametricSql = {
+  val typeTable = TableName("_type", None)
+  val yearTable = TableName("_year", Some("_y"))
+
+  def sqlize(soql: String, caseSensitivity: CaseSensitivity, useRepsWithId: Boolean = false): ParametricSql = {
     val allColumnReps = columnInfos.map(PostgresUniverseCommon.repForIndex(_))
-    val analyses = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
+    val allDatasetCtx = Map(TableName.PrimaryTable.qualifier -> datasetCtx,
+                            typeTable.qualifier -> typeDatasetCtx,
+                            yearTable.qualifier -> yearDatasetCtx)
+
+    val qualifiedUserIdColumnInfoMap: Map[QualifiedUserColumnId, ColumnInfo[SoQLType]] = qualifiedColumnIdToColumnInfos(TableName.PrimaryTable, columnMap) ++
+      qualifiedColumnIdToColumnInfos(typeTable, typeTableColumnMap) ++
+      qualifiedColumnIdToColumnInfos(yearTable, yearTableColumnMap)
+
+    val columnRepsWithId = qualifiedUserIdColumnInfoMap.mapValues { ci =>
+      PostgresUniverseCommon.repForIndex(ci)
+    }
+
+    val analyses = SoQLAnalyzerHelper.analyzeSoQL(soql, allDatasetCtx, idMap)
     val typeReps: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]] =
       columnInfos.map { colInfo  =>
         (colInfo.typ -> SoQLRep.sqlRep(colInfo))
       }(collection.breakOut)
 
-    SoQLAnalysisSqlizer.sql((analyses, "t1", allColumnReps))(
-      columnReps,
+
+    val tableMap = Map(TableName.PrimaryTable -> "t1", typeTable -> "t2", yearTable -> "t3")
+    SoQLAnalysisSqlizer.sql((analyses, tableMap, allColumnReps))(
+      if (useRepsWithId) columnRepsWithId else columnReps,
       typeReps,
       Seq.empty,
       sqlCtx + (SqlizerContext.CaseSensitivity -> caseSensitivity),
@@ -69,30 +86,87 @@ object SqlizerTest {
     ColumnName("url") -> ((21, SoQLUrl))
   )
 
-  private val columnInfos = columnMap.foldLeft(Seq.empty[ColumnInfo[SoQLType]]) { (acc, colNameAndType) => colNameAndType match {
-    case (columnName: ColumnName, (id, typ)) =>
-      val cinfo = new com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType](
-        null,
-        new ColumnId(id),
-        new UserColumnId(columnName.caseFolded),
-        None,
-        typ,
-        columnName.caseFolded,
-        typ == SoQLID,
-        false, // isUserKey
-        typ == SoQLVersion,
-        None
-      )(SoQLTypeContext.typeNamespace, null)
-      acc :+ cinfo
-  }}
+  private val typeTableColumnMap = Map(
+    ColumnName(":id") -> ((21, SoQLID)),
+    ColumnName(":version") -> ((22, SoQLVersion)),
+    ColumnName(":created_at") -> ((23, SoQLFixedTimestamp)),
+    ColumnName(":updated_at") -> ((24, SoQLFixedTimestamp)),
+    ColumnName("primary_type") -> ((25, SoQLText)),
+    ColumnName("description") -> ((26, SoQLText))
+  )
+
+  private val yearTableColumnMap = Map(
+    ColumnName(":id") -> ((31, SoQLID)),
+    ColumnName(":version") -> ((32, SoQLVersion)),
+    ColumnName(":created_at") -> ((33, SoQLFixedTimestamp)),
+    ColumnName(":updated_at") -> ((34, SoQLFixedTimestamp)),
+    ColumnName("year") -> ((35, SoQLNumber)),
+    ColumnName("avg_temperature") -> ((36, SoQLNumber))
+  )
+
+  private val allColumnMap = columnMap ++ typeTableColumnMap ++ yearTableColumnMap
+
+  private val columnInfos = allColumnMap.foldLeft(Seq.empty[ColumnInfo[SoQLType]]) { (acc, colNameAndType) =>
+    colNameAndType match {
+      case (columnName: ColumnName, (id, typ)) =>
+        val cinfo = new com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType](
+          null,
+          new ColumnId(id),
+          new UserColumnId(columnName.caseFolded),
+          None,
+          typ,
+          columnName.caseFolded,
+          typ == SoQLID,
+          false, // isUserKey
+          typ == SoQLVersion,
+          None
+        )(SoQLTypeContext.typeNamespace, null)
+        acc :+ cinfo
+    }
+  }
+
+  private def qualifiedColumnIdToColumnInfos(tableName: TableName, columns: Map[ColumnName, (Int, SoQLType)]) =
+    columns.foldLeft(Map.empty[QualifiedUserColumnId, ColumnInfo[SoQLType]]) { (acc, colNameAndType) =>
+      colNameAndType match {
+        case (columnName: ColumnName, (id, typ)) =>
+          val cinfo = new com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType](
+            null,
+            new ColumnId(id),
+            new UserColumnId(columnName.caseFolded),
+            None,
+            typ,
+            columnName.caseFolded,
+            typ == SoQLID,
+            false, // isUserKey
+            typ == SoQLVersion,
+            None
+          )(SoQLTypeContext.typeNamespace, null)
+          val qualifier = if (tableName == TableName.PrimaryTable) None else Some(tableName.qualifier)
+          acc + (QualifiedUserColumnId(qualifier, idMap(columnName)) -> cinfo)
+      }
+  }
 
   private val datasetCtx: DatasetContext[SoQLType] = new DatasetContext[SoQLType] {
     val schema = new OrderedMap[ColumnName, SoQLType](columnMap,  columnMap.keys.toVector)
   }
 
+  private val typeDatasetCtx: DatasetContext[SoQLType] = new DatasetContext[SoQLType] {
+    val schema = new OrderedMap[ColumnName, SoQLType](typeTableColumnMap,  columnMap.keys.toVector)
+  }
+
+  private val yearDatasetCtx: DatasetContext[SoQLType] = new DatasetContext[SoQLType] {
+    val schema = new OrderedMap[ColumnName, SoQLType](yearTableColumnMap,  columnMap.keys.toVector)
+  }
+
   private val columnReps = {
     columnMap.map { case (colName, (_, typ)) =>
-      idMap(colName) -> SoQLIndexableRep.sqlRep(typ, colName.name)
-    }
+      QualifiedUserColumnId(None, idMap(colName)) -> SoQLIndexableRep.sqlRep(typ, colName.name)
+    } ++
+      typeTableColumnMap.map { case (colName, (_, typ)) =>
+        QualifiedUserColumnId(Some(typeTable.qualifier), idMap(colName)) -> SoQLIndexableRep.sqlRep(typ, colName.name)
+      } ++
+      yearTableColumnMap.map { case (colName, (_, typ)) =>
+        QualifiedUserColumnId(Some(yearTable.qualifier), idMap(colName)) -> SoQLIndexableRep.sqlRep(typ, colName.name)
+      }
   }
 }

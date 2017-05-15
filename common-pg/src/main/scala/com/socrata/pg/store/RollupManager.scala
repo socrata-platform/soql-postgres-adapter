@@ -225,11 +225,12 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
         SqlizerContext.LeaveGeomAsIs -> true
       )
 
-      val dsRepMap: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]] =
-        dsSchema.values.map(ci => ci.userColumnId -> SoQLIndexableRep.sqlRep(ci)).toMap
+      val dsRepMap: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]] =
+        dsSchema.values.map(ci => QualifiedUserColumnId(None, ci.userColumnId) -> SoQLIndexableRep.sqlRep(ci)).toMap
 
 
-      val selectParamSql = Sqlizer.sql(Tuple3(soqlAnalysis, copyInfo.dataTableName, rollupReps))(
+      val tableMap = Map(TableName.PrimaryTable -> copyInfo.dataTableName) // TODO: FIX ME
+      val selectParamSql = Sqlizer.sql(Tuple3(soqlAnalysis, tableMap, rollupReps))(
         rep = dsRepMap,
         Map.empty,
         setParams = Seq(),

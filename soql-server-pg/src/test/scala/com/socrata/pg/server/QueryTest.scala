@@ -4,15 +4,15 @@ import com.socrata.datacoordinator.id.{RowId, UserColumnId}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.store._
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
-import com.socrata.soql.environment.ColumnName
-import com.socrata.soql.environment.DatasetContext
-import com.socrata.soql.environment.TypeName
+import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName, TypeName}
 import com.socrata.soql.types.{SoQLID, SoQLType}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.socrata.soql.SoQLAnalysis
 import java.sql.Connection
+
 import org.apache.log4j.PropertyConfigurator
+
 import scala.language.existentials
 import com.socrata.pg.soql.CaseSensitive
 import com.socrata.http.server.util.NoPrecondition
@@ -55,7 +55,7 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase w
         val datasetCtx = new DatasetContext[SoQLType] {
           val schema = columnNameTypeMap
         }
-        val analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]] = SoQLAnalyzerHelper.analyzeSoQL(soql, datasetCtx, idMap)
+        val analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]] = SoQLAnalyzerHelper.analyzeSoQL(soql, Map(TableName.PrimaryTable.qualifier -> datasetCtx), idMap)
         val (requestColumns, version, mresult) =
           ds.map { dsInfo =>
             val qs = new QueryServer(dsInfo, CaseSensitive)

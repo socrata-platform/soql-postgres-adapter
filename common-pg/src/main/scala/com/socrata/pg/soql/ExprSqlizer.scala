@@ -1,16 +1,19 @@
 package com.socrata.pg.soql
 
-import com.socrata.soql.typed._
-import com.socrata.soql.types._
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
+import com.socrata.soql.typed._
+import com.socrata.soql.types._
+import com.socrata.soql.environment.TableName
+
 import java.sql.PreparedStatement
+
 import Sqlizer._
 import SqlizerContext._
 
 object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
   def sql(lit: StringLiteral[SoQLType])
-         (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+         (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
           typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
@@ -42,7 +45,7 @@ object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
 
 object NumberLiteralSqlizer extends Sqlizer[NumberLiteral[SoQLType]] {
   def sql(lit: NumberLiteral[SoQLType])
-         (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+         (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
           typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
@@ -64,7 +67,7 @@ object NumberLiteralSqlizer extends Sqlizer[NumberLiteral[SoQLType]] {
 
 object BooleanLiteralSqlizer extends Sqlizer[BooleanLiteral[SoQLType]] {
   def sql(lit: BooleanLiteral[SoQLType])
-         (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+         (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
           typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
@@ -86,7 +89,7 @@ object BooleanLiteralSqlizer extends Sqlizer[BooleanLiteral[SoQLType]] {
 
 object NullLiteralSqlizer extends Sqlizer[NullLiteral[SoQLType]] {
   def sql(lit: NullLiteral[SoQLType])
-         (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+         (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
           typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
@@ -96,7 +99,7 @@ object NullLiteralSqlizer extends Sqlizer[NullLiteral[SoQLType]] {
 
 object FunctionCallSqlizer extends Sqlizer[FunctionCall[UserColumnId, SoQLType]] {
   def sql(expr: FunctionCall[UserColumnId, SoQLType])
-         (rep: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+         (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
           typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
@@ -115,19 +118,21 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
 
   // scalastyle:off cyclomatic.complexity
   def sql(expr: ColumnRef[UserColumnId, SoQLType])
-         (reps: Map[UserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+         (reps: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
           typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
           escape: Escape): ParametricSql = {
-    reps.get(expr.column) match {
+    val tableMap = ctx(TableAliasMap).asInstanceOf[Map[String, String]]
+    reps.get(QualifiedUserColumnId(expr.qualifier, expr.column)) match {
       case Some(rep) if ctx(InnermostSoql) == true => // scalastyle:off simplify.boolean.expression
         if (complexTypes.contains(expr.typ) &&
             ctx.get(SoqlPart).exists(_ == SoqlSelect) &&
             ctx.get(RootExpr).exists(_ == expr)) {
+          val qualifer = tableMap.get(expr.qualifier.getOrElse(TableName.PrimaryTable.qualifier))
           val maybeUpperPhysColumns =
             rep.physColumns.zip(rep.sqlTypes).map { case (physCol, sqlType) =>
-              toUpper(expr, sqlType)(physCol, ctx)
+              toUpper(expr, sqlType)(qualifer.map(q => s"$q.$physCol").getOrElse(physCol), ctx)
             }
           val subColumns = rep.physColumns.map(pc => pc.replace(rep.base, ""))
           val physColumnsWithSubColumns = maybeUpperPhysColumns.zip(subColumns)
@@ -136,7 +141,8 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           }
           ParametricSql(columnsWithAlias, setParams)
         } else {
-          val maybeUpperPhysColumns = rep.physColumns.map(toUpper(expr)(_, ctx))
+          val qualifer = tableMap.get(expr.qualifier.getOrElse(TableName.PrimaryTable.qualifier))
+          val maybeUpperPhysColumns = rep.physColumns.map(c => toUpper(expr)(qualifer.map(q => s"$q.$c").getOrElse(c), ctx))
           ParametricSql(maybeUpperPhysColumns.map(c => c + selectAlias(expr)(ctx)), setParams)
         }
       case _ => // Outer soqls do not get rep by column id.  They get rep by datatype.
@@ -144,13 +150,13 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
                        reps.values.map((rep: SqlColumnRep[SoQLType, SoQLValue]) => (rep.representedType -> rep)).toMap
         typeReps.get(expr.typ) match {
           case Some(rep) =>
-            val subColumns = rep.physColumns.map(pc => pc.replace(rep.base, ""))
+            val subColumns = rep.physColumns.map { pc => pc.replace(rep.base, "") }
             val sqls = subColumns.map { subCol =>
               toUpper(expr)(idQuote(expr.column.underlying + subCol), ctx) + selectAlias(expr, Some(subCol))(ctx)
             }
             ParametricSql(sqls, setParams)
           case None =>
-            val schema = reps.map { case (columnId, rep) => (columnId.underlying -> rep.representedType) }
+            val schema = reps.map { case (columnId, rep) => (columnId.userColumnId.underlying -> rep.representedType) }
             val soql = ctx.get(SoqlSelect).getOrElse("no select info")
             throw new Exception(s"cannot find rep for ${expr.column.underlying} ${expr.typ}\n$soql\n${schema.toString}")
         }
