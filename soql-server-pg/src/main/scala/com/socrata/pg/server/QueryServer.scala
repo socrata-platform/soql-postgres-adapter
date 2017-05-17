@@ -291,7 +291,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         }.toMap
         val joinCopiesMap = getJoinCopies(pgu, analysis, reqCopy)
         val joinCopies = joinCopiesMap.values.toSeq
-        val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> readCtx.copyInfo.dataTableName)
 
         val sqlRepsWithJoin = joinCopiesMap.foldLeft(sqlReps) { (acc, joinCopy) =>
           val (tableName, copyInfo) = joinCopy
@@ -301,11 +300,14 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         val results = querier.query(
           analyses,
           (as: Seq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) => {
+            val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> tableName)
             Sqlizer.sql((as, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
           },
-          (as: Seq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) =>
-            SoQLAnalysisSqlizer.rowCountSql((as, tableNameMap, sqlReps.values.toSeq))
-                                           (sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape),
+          (as: Seq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) => {
+            val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> tableName)
+            SoQLAnalysisSqlizer.rowCountSql((as, tableNameMap, sqlReps.values.toSeq))(
+              sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
+          },
           rowCount,
           qryReps,
           queryTimeout)
