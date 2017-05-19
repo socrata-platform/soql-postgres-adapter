@@ -12,7 +12,7 @@ import com.socrata.soql.environment.{ColumnName, TypeName}
 object ExtendedSchema {
   implicit object SchemaCodec extends JsonDecode[TruthSchema] with JsonEncode[TruthSchema] {
 
-    private implicit val schemaProperCodec = new JsonDecode[UserColumnIdMap[(TypeName, Option[ColumnName])]]
+    private implicit val schemaCodec = new JsonDecode[UserColumnIdMap[(TypeName, Option[ColumnName])]]
       with JsonEncode[UserColumnIdMap[(TypeName, Option[ColumnName])]] {
       def encode(schema: UserColumnIdMap[(TypeName, Option[ColumnName])]): JValue = {
         val map = schema.foldLeft(Map.empty[String, JValue]) { (acc, item) =>
