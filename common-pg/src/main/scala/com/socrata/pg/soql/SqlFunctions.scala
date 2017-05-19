@@ -96,6 +96,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
     FloatingTimeStampExtractHh -> formatCall("extract(hour from %s)") _,
     FloatingTimeStampExtractDow -> formatCall("extract(dow from %s)") _,
+    FloatingTimeStampExtractWoy -> formatCall("extract(week from %s)") _,
 
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
