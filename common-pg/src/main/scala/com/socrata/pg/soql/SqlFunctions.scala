@@ -89,6 +89,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     ModDoubleDouble -> infix("%") _,
     ModMoneyNum -> infix("%") _,
     ModMoneyMoney -> infix("%") _,
+    Ceiling -> nary("ceil") _,
+    Floor -> nary("floor") _,
 
     FloatingTimeStampTruncYmd -> formatCall("date_trunc('day', %s)") _,
     FloatingTimeStampTruncYm -> formatCall("date_trunc('month', %s)") _,
