@@ -125,7 +125,8 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           escape: Escape): ParametricSql = {
     val tableMap = ctx(TableAliasMap).asInstanceOf[Map[String, String]]
     reps.get(QualifiedUserColumnId(expr.qualifier, expr.column)) match {
-      case Some(rep) if ctx(InnermostSoql) == true => // scalastyle:off simplify.boolean.expression
+      case Some(rep) if ctx(InnermostSoql) == true || expr.qualifier.nonEmpty => // scalastyle:off simplify.boolean.expression
+        // fields from the innermost soql and fields from joins in following chained soqls interact with physical tables.
         if (complexTypes.contains(expr.typ) &&
             ctx.get(SoqlPart).exists(_ == SoqlSelect) &&
             ctx.get(RootExpr).exists(_ == expr)) {
