@@ -33,4 +33,10 @@ class SoQLJoinTest extends SoQLTest {
                       "join-chain-count.json",
                       joinDatasetCtx = aliasCtx)
   }
+
+  test("group and then join") {
+    compareSoqlResult("select make, count(name) as ct group by make |> select make, ct, @m.timezone join @manufacturer as m on make=@m.make where @m.make='OZONE'",
+                      "group-join.json",
+                      joinDatasetCtx = aliasCtx)
+  }
 }
