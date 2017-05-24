@@ -11,7 +11,7 @@ import com.socrata.http.server.util.NoPrecondition
 import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity}
 import com.socrata.pg.store._
 import com.socrata.soql.SoQLAnalysis
-import com.socrata.soql.analyzer.SoQLAnalyzerHelper
+import com.socrata.soql.analyzer.{QualifiedColumnName, SoQLAnalyzerHelper}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
 import com.socrata.soql.types.{SoQLAnalysisType, SoQLType, SoQLValue}
@@ -47,9 +47,13 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
           columnName -> idMap(columnName)
         }
 
+        val primaryTableColumnNameIdMap = columnNameIdMap.map { case (k, v) =>
+            QualifiedColumnName(None, k) -> v
+        }
+
         val allDatasetCtx = joinDatasetCtx + (TableName.PrimaryTable.qualifier -> datasetCtx)
         val analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]] =
-          SoQLAnalyzerHelper.analyzeSoQL(soql, allDatasetCtx, columnNameIdMap)
+          SoQLAnalyzerHelper.analyzeSoQL(soql, allDatasetCtx, primaryTableColumnNameIdMap)
 
         val (qrySchema, dataVersion, mresult) =
           ds.map { dsInfo =>

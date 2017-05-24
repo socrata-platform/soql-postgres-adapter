@@ -55,7 +55,8 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase w
         val datasetCtx = new DatasetContext[SoQLType] {
           val schema = columnNameTypeMap
         }
-        val analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]] = SoQLAnalyzerHelper.analyzeSoQL(soql, Map(TableName.PrimaryTable.qualifier -> datasetCtx), idMap)
+        val analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]] =
+          SoQLAnalyzerHelper.analyzeSoQL(soql, Map(TableName.PrimaryTable.qualifier -> datasetCtx), Map.empty)
         val (requestColumns, version, mresult) =
           ds.map { dsInfo =>
             val qs = new QueryServer(dsInfo, CaseSensitive)

@@ -8,7 +8,7 @@ import com.socrata.datacoordinator.truth.metadata.ColumnInfo
 import com.socrata.pg.soql.SqlizerContext._
 import com.socrata.pg.store.index.SoQLIndexableRep
 import com.socrata.pg.store.PostgresUniverseCommon
-import com.socrata.soql.analyzer.SoQLAnalyzerHelper
+import com.socrata.soql.analyzer.{QualifiedColumnName, SoQLAnalyzerHelper}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
 import com.socrata.soql.SoQLAnalysis
@@ -42,7 +42,7 @@ object SqlizerTest {
       PostgresUniverseCommon.repForIndex(ci)
     }
 
-    val analyses = SoQLAnalyzerHelper.analyzeSoQL(soql, allDatasetCtx, idMap)
+    val analyses = SoQLAnalyzerHelper.analyzeSoQL(soql, allDatasetCtx, allColumnIdMap)
     val typeReps: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]] =
       columnInfos.map { colInfo  =>
         (colInfo.typ -> SoQLRep.sqlRep(colInfo))
@@ -58,7 +58,7 @@ object SqlizerTest {
       passThrough)
   }
 
-  private val idMap =  (cn: ColumnName) => new UserColumnId(cn.caseFolded)
+  private val idMap = (cn: ColumnName) => new UserColumnId(cn.caseFolded)
 
   private val passThrough = (s: String) => s
 
@@ -105,6 +105,17 @@ object SqlizerTest {
   )
 
   private val allColumnMap = columnMap ++ typeTableColumnMap ++ yearTableColumnMap
+
+  private val allColumnIdMap =
+    columnMap.map { case (k, v) =>
+      QualifiedColumnName(None, k) -> new UserColumnId(k.caseFolded)
+    } ++
+    typeTableColumnMap.map { case (k, v) =>
+      QualifiedColumnName(Some(typeTable.qualifier), k) -> new UserColumnId(k.caseFolded)
+    } ++
+    yearTableColumnMap.map { case (k, v) =>
+      QualifiedColumnName(Some(yearTable.qualifier), k) -> new UserColumnId(k.caseFolded)
+    }
 
   private val columnInfos = allColumnMap.foldLeft(Seq.empty[ColumnInfo[SoQLType]]) { (acc, colNameAndType) =>
     colNameAndType match {
