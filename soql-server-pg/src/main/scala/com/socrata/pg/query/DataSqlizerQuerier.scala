@@ -29,7 +29,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     val rowCount: Option[Long] =
       if (reqRowCount) {
         val rowCountSql = toRowCountSql(analyses, dataTableName)
-        using(executeSql(conn, rowCountSql, queryTimeout)) { rs =>
+        // We know this will only return one row, so fetchsize of 0 is ok
+        using(executeSql(conn, rowCountSql, queryTimeout, 0)) { rs =>
           try {
             rs.next()
             Some(rs.getLong(1))
@@ -49,9 +50,21 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
       (cid, rep.fromResultSet _, rep.physColumns.length)
     }.toArray
 
+    /*
+     * We need to set a fetchSize on the statement to limit the amount of data we are buffering in memory at
+     * once.  Unfortunately, this currently prevents parallel query execution in postgres because it uses cursors.
+     * Since the major benefit of parallel queries is for queries that take a lot of rows and reduce them to a small number,
+     * if we can tell from the query that it can't return more than sqlFetchSize rows, we can safely set the fetchsize
+     * to 0 and get the benefits of parallel queries.
+     */
+    val fetchSize = analyses.last.limit match {
+      case Some(n) if (n <= sqlFetchSize) => 0
+      case _ => sqlFetchSize
+    }
+
     // get rows
     if (analyses.exists(_.selection.size > 0)) {
-      val rs = executeSql(conn, toSql(analyses, dataTableName), queryTimeout)
+      val rs = executeSql(conn, toSql(analyses, dataTableName), queryTimeout, fetchSize)
       // Statement and resultset are closed by the iterator.
       new ResultSetIt(rowCount, rs, decodeRow(decoders))
     } else {
@@ -81,7 +94,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
   def setTimeout(timeoutMs: String) = s"SET LOCAL statement_timeout TO $timeoutMs"
   def resetTimeout = "SET LOCAL statement_timeout TO DEFAULT"
 
-  private def executeSql(conn: Connection, pSql: ParametricSql, timeout: Option[Duration]): ResultSet = {
+  private def executeSql(conn: Connection, pSql: ParametricSql, timeout: Option[Duration], fetchSize: Integer): ResultSet = {
     try {
       if (timeout.isDefined && timeout.get.isFinite()) {
         val ms = timeout.get.toMillis.min(Int.MaxValue).max(1).toInt.toString
@@ -92,7 +105,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
       // Statement to be closed by caller
       val stmt = conn.prepareStatement(pSql.sql.head)
       // need to explicitly set a fetch size to stream results
-      stmt.setFetchSize(sqlFetchSize)
+      stmt.setFetchSize(fetchSize)
       pSql.setParams.zipWithIndex.foreach { case (setParamFn, idx) =>
         setParamFn(Some(stmt), idx + 1)
       }
