@@ -102,6 +102,16 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
         execute(conn, setTimeout(ms))
       }
       logger.debug("sql: {}", pSql.sql)
+      if (pSql.sql.head.contains("percentile")) {
+        logger.info("sql: {}", pSql.sql.head)
+        val stmt2 = conn.prepareStatement("select version()")
+        val result = stmt2.executeQuery()
+        result.next()
+        logger.info("pg version: " + result.getString(1))
+        result.close()
+        stmt2.close()
+      }
+
       // Statement to be closed by caller
       val stmt = conn.prepareStatement(pSql.sql.head)
       // need to explicitly set a fetch size to stream results
