@@ -27,7 +27,7 @@ class SoQLMathFunctionsTest extends SoQLTest {
     "select-signed_magnitude_linear.json")
   }
 
-  test("median") {
+  ignore("median - requires a minimum of pg 9.4 for function percentile_disc") {
     compareSoqlResult(
       "select median(v_max) as m1, median(make) as m2",
       "median.json")
