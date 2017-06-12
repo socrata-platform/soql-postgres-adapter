@@ -26,4 +26,10 @@ class SoQLMathFunctionsTest extends SoQLTest {
       """.stripMargin,
     "select-signed_magnitude_linear.json")
   }
+
+  test("median") {
+    compareSoqlResult(
+      "select median(v_max) as m1, median(make) as m2",
+      "median.json")
+  }
 }
