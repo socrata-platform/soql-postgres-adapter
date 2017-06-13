@@ -15,7 +15,17 @@ import java.sql.{Connection, ResultSet, SQLException}
 
 trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
   this: AbstractRepBasedDataSqlizer[CT, CV] => ()
-  private val sqlFetchSize = 1000
+
+  /**
+    * The maximum number of rows we want to have to keep in memory at once.  The JDBC driver
+    * uses it to determine how many results to fetch from the cursor at once.  If we know the
+    * number of results is less than this (eg. LIMIT) then we omit setting the fetch size
+    * so we can skip using a cursor and enable parallel query support in pg9.6.
+    * The particular value comes from starting at 1000, our default limit and previous fixed
+    * fetch size, and rounding to 1024 in case anyone is using powers of two then adding one
+    * for possible off by one errors or attempts to see if there is another page of results.
+    */
+  private val sqlFetchSize = 1025
 
   def query(conn: Connection, analyses: Seq[SoQLAnalysis[UserColumnId, CT]],
             toSql: (Seq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
