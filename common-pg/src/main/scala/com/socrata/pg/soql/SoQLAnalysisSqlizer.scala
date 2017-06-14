@@ -100,14 +100,15 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
 
     // JOIN
     val joins = analysis.join.toSeq.flatten
+
     val (joinPhrase, setParamsJoin) = joins.foldLeft((Seq.empty[String], setParamsSelect)) { (acc, join) =>
       val (sqls, setParams) = acc
-      val (resource, expr) = join
-      val joinParamSql  = Sqlizer.sql(expr)(rep, typeRep, setParams, ctx + (SoqlPart -> SoqlJoin), escape)
+      val resource = join.tableName
+      val joinParamSql  = Sqlizer.sql(join.expr)(rep, typeRep, setParams, ctx + (SoqlPart -> SoqlJoin), escape)
       val tableName = if (resource.alias.isEmpty) tableNames(resource)
                       else tableNames(resource) + " as " + realAlias(resource, tableNames(resource))
       val joinCondition = joinParamSql.sql.mkString(" ")
-      (sqls :+ s" JOIN $tableName ON $joinCondition", joinParamSql.setParams)
+      (sqls :+ s" ${join.typ.toString} $tableName ON $joinCondition", joinParamSql.setParams)
     }
 
     // WHERE

@@ -37,13 +37,10 @@ object SoQLAnalyzerHelper {
 
     val joinColumnIdMap =
       joins.foldLeft(idMap) { (acc, join) =>
-        join match {
-          case (joinResourceName, _) =>
-            val schema = datasetCtx(joinResourceName.qualifier)
-            acc ++ schema.columns.map { fieldName =>
-              QualifiedColumnName(Some(joinResourceName.qualifier), new ColumnName(fieldName.name)) ->
-                new UserColumnId(fieldName.caseFolded)
-            }
+        val schema = datasetCtx(join.tableName.qualifier)
+        acc ++ schema.columns.map { fieldName =>
+          QualifiedColumnName(Some(join.tableName.qualifier), new ColumnName(fieldName.name)) ->
+            new UserColumnId(fieldName.caseFolded)
         }
       }
 
