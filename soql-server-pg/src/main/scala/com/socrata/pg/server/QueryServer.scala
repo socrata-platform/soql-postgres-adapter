@@ -524,7 +524,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   private def getJoinCopies(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                             analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]],
                             reqCopy: Option[String]): Map[TableName, CopyInfo] = {
-    val joinTables = analyses.map(_.join.toSeq.flatten).flatten.map(_.tableName)
+    val joinTables = analyses.map(_.join.toSeq.flatten).flatten.map(x => TableName(x.tableLike.head.from.get, None))
     joinTables.flatMap { resourceName =>
       getCopy(pgu, new ResourceName(resourceName.name), reqCopy).map(copy => (resourceName, copy))
     }.toMap

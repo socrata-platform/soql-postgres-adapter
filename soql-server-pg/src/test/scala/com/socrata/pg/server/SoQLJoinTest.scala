@@ -1,42 +1,136 @@
 package com.socrata.pg.server
 
-import com.socrata.datacoordinator.truth.metadata.CopyInfo
-import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.pg.store.{PGSecondaryUniverse, PostgresUniverseCommon}
-import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
-import com.socrata.soql.types.{SoQLType, SoQLValue}
 
 class SoQLJoinTest extends SoQLTest {
 
   test("plain") {
-    compareSoqlResult("select make, name, @manufacturer.timezone join @manufacturer on make=@manufacturer.make order by make, code",
+    compareSoqlResult("""
+SELECT make, name, @manufacturer.timezone
+  JOIN @manufacturer on make=@manufacturer.make
+ ORDER by make, code
+                      """,
                       "join.json",
                       joinDatasetCtx = plainCtx)
 
   }
 
   test("alias") {
-    compareSoqlResult("select make, name, @m.timezone join @manufacturer as m on make=@m.make where @m.make='OZONE' order by @m.make, code",
+    compareSoqlResult("""
+SELECT make, name, @m.timezone
+  JOIN @manufacturer as m on make=@m.make
+ WHERE @m.make='OZONE'
+ ORDER by @m.make, code
+                      """,
                       "join-where.json",
                       joinDatasetCtx = aliasCtx)
   }
 
   test("join a table twice") {
-    compareSoqlResult("select make, name, @m2.timezone join @manufacturer as m on make=@m.make join @manufacturer as m2 on make=@m2.make where @m.make='OZONE' order by @m.make, code",
-      "join-where.json",
-      joinDatasetCtx = aliasCtx)
+    compareSoqlResult("""
+SELECT make, name, @m2.timezone
+  JOIN @manufacturer as m on make=@m.make
+  JOIN @manufacturer as m2 on make=@m2.make
+ WHERE @m.make='OZONE'
+ ORDER by @m.make, code
+                      """,
+                      "join-where.json",
+                      joinDatasetCtx = aliasCtx)
   }
 
   test("chain count") {
-    compareSoqlResult("select make, name, @m.timezone join @manufacturer as m on make=@m.make where @m.make='OZONE' |> select count(*)",
+    compareSoqlResult("""
+SELECT make, name, @m.timezone
+  JOIN @manufacturer as m on make=@m.make
+ WHERE @m.make='OZONE'
+    |>
+SELECT count(*)
+                      """,
                       "join-chain-count.json",
                       joinDatasetCtx = aliasCtx)
   }
 
   test("group and then join") {
-    compareSoqlResult("select make, count(name) as ct group by make |> select make, ct, @m.timezone join @manufacturer as m on make=@m.make where @m.make='OZONE'",
+    compareSoqlResult("""
+SELECT make, count(name) as ct
+ GROUP by make
+    |>
+SELECT make, ct, @m.timezone
+  JOIN @manufacturer as m on make=@m.make
+ WHERE @m.make='OZONE'
+                      """,
                       "group-join.json",
+                      joinDatasetCtx = aliasCtx)
+  }
+
+  test("join with sub-query") {
+    compareSoqlResult("""
+SELECT make, code, @m.timezone
+  JOIN (SELECT make, timezone FROM @manufacturer WHERE make='APCO') as m on make=@m.make
+ WHERE @m.make='APCO'
+ ORDER by @m.make, code
+                      """,
+                      "join-subquery.json",
+                      joinDatasetCtx = aliasCtx)
+  }
+
+  test("join with chained sub-query") {
+    compareSoqlResult("""
+SELECT make, code, @m.timezone
+ JOIN (SELECT * FROM @manufacturer WHERE make='APCO'
+           |>
+       SELECT make, timezone) as m on make=@m.make
+ WHERE @m.make='APCO'
+ ORDER by @m.make, code
+                      """,
+                      "join-subquery.json",
+                      joinDatasetCtx = aliasCtx)
+  }
+
+  test("join with grouping sub-query") {
+    compareSoqlResult("""
+SELECT make, code, @m.maxtimezone
+  JOIN (SELECT make, max(timezone) as maxtimezone FROM @manufacturer WHERE make='APCO' GROUP by make) as m on make=@m.make
+ WHERE @m.make='APCO'
+ ORDER by @m.make, code
+                      """,
+                      "join-group-subquery.json",
+                      joinDatasetCtx = aliasCtx)
+  }
+
+  test("join with chained grouping sub-query") {
+    compareSoqlResult("""
+SELECT make, code, @m.maxtimezone
+  JOIN (SELECT * FROM @manufacturer WHERE make='APCO'
+           |>
+        SELECT make, max(timezone) as maxtimezone GROUP by make) as m on make=@m.make
+ WHERE @m.make='APCO'
+ ORDER by @m.make, code
+                      """,
+                      "join-group-subquery.json",
+                      joinDatasetCtx = aliasCtx)
+  }
+
+  test("chain join with chained grouping sub-query") {
+    compareSoqlResult("""
+SELECT make, code, @m.maxtimezone
+  JOIN (SELECT * FROM @manufacturer WHERE make='APCO' |> SELECT make, max(timezone) as maxtimezone GROUP by make) as m on make=@m.make
+ WHERE @m.make='APCO' order by @m.make, code
+    |>
+SELECT make, count(maxtimezone) GROUP BY make
+                      """,
+                      "join-group-subquery-chain.json",
+                      joinDatasetCtx = aliasCtx)
+  }
+
+  test("join two tables") {
+    compareSoqlResult("""
+         SELECT make, code, @m.timezone, @c.description as classification
+           JOIN (SELECT * FROM @manufacturer WHERE make='APCO' |> SELECT make, timezone) as m on make=@m.make
+LEFT OUTER JOIN @classification as c on class=@c.id
+          WHERE @m.make='APCO'
+          ORDER by @m.make, code
+                      """,
+                      "join-2tables.json",
                       joinDatasetCtx = aliasCtx)
   }
 }

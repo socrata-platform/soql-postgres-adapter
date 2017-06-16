@@ -32,6 +32,7 @@ object SqlizerTest {
     val allColumnReps = columnInfos.map(PostgresUniverseCommon.repForIndex(_))
     val allDatasetCtx = Map(TableName.PrimaryTable.qualifier -> datasetCtx,
                             typeTable.qualifier -> typeDatasetCtx,
+                            yearTable.name -> yearDatasetCtx,
                             yearTable.qualifier -> yearDatasetCtx)
 
     val qualifiedUserIdColumnInfoMap: Map[QualifiedUserColumnId, ColumnInfo[SoQLType]] = qualifiedColumnIdToColumnInfos(TableName.PrimaryTable, columnMap) ++
@@ -49,7 +50,7 @@ object SqlizerTest {
       }(collection.breakOut)
 
 
-    val tableMap = Map(TableName.PrimaryTable -> "t1", typeTable -> "t2", yearTable -> "t3")
+    val tableMap = Map(TableName.PrimaryTable -> "t1", typeTable -> "t2", yearTable -> "t3", yearTable.copy(alias = None) -> "t3")
     SoQLAnalysisSqlizer.sql((analyses, tableMap, allColumnReps))(
       if (useRepsWithId) columnRepsWithId else columnReps,
       typeReps,
@@ -114,6 +115,9 @@ object SqlizerTest {
       QualifiedColumnName(Some(typeTable.qualifier), k) -> new UserColumnId(k.caseFolded)
     } ++
     yearTableColumnMap.map { case (k, v) =>
+      QualifiedColumnName(Some(yearTable.name), k) -> new UserColumnId(k.caseFolded)
+    } ++
+    yearTableColumnMap.map { case (k, v) =>
       QualifiedColumnName(Some(yearTable.qualifier), k) -> new UserColumnId(k.caseFolded)
     }
 
@@ -162,11 +166,11 @@ object SqlizerTest {
   }
 
   private val typeDatasetCtx: DatasetContext[SoQLType] = new DatasetContext[SoQLType] {
-    val schema = new OrderedMap[ColumnName, SoQLType](typeTableColumnMap,  columnMap.keys.toVector)
+    val schema = new OrderedMap[ColumnName, SoQLType](typeTableColumnMap,  yearTableColumnMap.keys.toVector)
   }
 
   private val yearDatasetCtx: DatasetContext[SoQLType] = new DatasetContext[SoQLType] {
-    val schema = new OrderedMap[ColumnName, SoQLType](yearTableColumnMap,  columnMap.keys.toVector)
+    val schema = new OrderedMap[ColumnName, SoQLType](yearTableColumnMap,  yearTableColumnMap.keys.toVector)
   }
 
   private val columnReps = {
@@ -175,6 +179,9 @@ object SqlizerTest {
     } ++
       typeTableColumnMap.map { case (colName, (_, typ)) =>
         QualifiedUserColumnId(Some(typeTable.qualifier), idMap(colName)) -> SoQLIndexableRep.sqlRep(typ, colName.name)
+      } ++
+      yearTableColumnMap.map { case (colName, (_, typ)) =>
+        QualifiedUserColumnId(Some(yearTable.name), idMap(colName)) -> SoQLIndexableRep.sqlRep(typ, colName.name)
       } ++
       yearTableColumnMap.map { case (colName, (_, typ)) =>
         QualifiedUserColumnId(Some(yearTable.qualifier), idMap(colName)) -> SoQLIndexableRep.sqlRep(typ, colName.name)

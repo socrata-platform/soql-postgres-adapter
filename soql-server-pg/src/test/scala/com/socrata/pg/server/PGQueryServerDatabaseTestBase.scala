@@ -52,8 +52,17 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
         }
 
         val allDatasetCtx = joinDatasetCtx + (TableName.PrimaryTable.qualifier -> datasetCtx)
+
+        val joinTableColumnNameIdMap = joinDatasetCtx.foldLeft(Map.empty[QualifiedColumnName, UserColumnId]) { (acc, jctx) =>
+          val (name, ctx) = jctx
+          val columnNameIdMap = ctx.columns.map { columnName =>
+            QualifiedColumnName(Some(name), columnName) -> new UserColumnId(columnName.name)
+          }
+          acc ++ columnNameIdMap
+        }
+
         val analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]] =
-          SoQLAnalyzerHelper.analyzeSoQL(soql, allDatasetCtx, primaryTableColumnNameIdMap)
+          SoQLAnalyzerHelper.analyzeSoQL(soql, allDatasetCtx, primaryTableColumnNameIdMap ++ joinTableColumnNameIdMap)
 
         val (qrySchema, dataVersion, mresult) =
           ds.map { dsInfo =>

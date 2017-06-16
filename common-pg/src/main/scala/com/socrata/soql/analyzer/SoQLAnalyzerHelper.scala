@@ -1,7 +1,7 @@
 package com.socrata.soql.analyzer
 
 import com.socrata.pg.soql._
-import com.socrata.soql.{AnalysisDeserializer, AnalysisSerializer, SoQLAnalysis, SoQLAnalyzer}
+import com.socrata.soql._
 import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLFunctions, SoQLTypeInfo}
 import com.socrata.soql.environment._
 import com.socrata.soql.types.SoQLType
@@ -9,6 +9,7 @@ import java.io.{InputStream, OutputStream}
 
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.soql.parsing.Parser
+import com.socrata.soql.typed._
 
 object SoQLAnalyzerHelper {
   private val serializer = new AnalysisSerializer(serializeColumn, serializeAnalysisType)
@@ -37,9 +38,11 @@ object SoQLAnalyzerHelper {
 
     val joinColumnIdMap =
       joins.foldLeft(idMap) { (acc, join) =>
-        val schema = datasetCtx(join.tableName.qualifier)
+        val joinTableName = join.tableLike.head.from.get
+        val joinAlias = join.alias.orElse(joinTableName.alias).getOrElse(joinTableName.name)
+        val schema = datasetCtx(joinTableName.qualifier)
         acc ++ schema.columns.map { fieldName =>
-          QualifiedColumnName(Some(join.tableName.qualifier), new ColumnName(fieldName.name)) ->
+          QualifiedColumnName(Some(joinAlias), new ColumnName(fieldName.name)) ->
             new UserColumnId(fieldName.caseFolded)
         }
       }
@@ -78,7 +81,26 @@ object SoQLAnalyzerHelper {
           mappingWithNewColumns
         }
 
-      val a: SoQLAnalysis[UserColumnId, SoQLType] = analysis.mapColumnIds(qualifiedColumnNameToColumnId(newMapping))
+      val newColumnsFromJoin = analysis.join.toSeq.flatten.flatMap { join =>
+        val simple = SimpleSoQLAnalysis.isSimple(join.tableLike)
+        if (simple) Seq.empty
+        else {
+          join.tableLike.last.selection.toSeq.map {
+            case (columnName, _) =>
+              QualifiedColumnName(join.alias, columnName) -> new UserColumnId(columnName.name)
+          }
+        }
+      }.toMap
+
+      val newMappingWithJoin: Map[(ColumnName, Qualifier), UserColumnId] =
+        (newMapping ++ newColumnsFromJoin).map { case (k, v) =>
+          (k.columnName, k.qualifier ) -> v
+        }
+
+      def toColumnNameJoinAlias(joinAlias: Option[String], columnName: ColumnName) = (columnName, joinAlias)
+      def toUserColumnId(columnName: ColumnName) = new UserColumnId(columnName.name)
+
+      val a: SoQLAnalysis[UserColumnId, SoQLType] = analysis.mapColumnIds(newMappingWithJoin, toColumnNameJoinAlias, toUserColumnId, toUserColumnId)
       (mappingWithNewColumns, convertedAnalyses :+ a)
     }
     analysesInColIds
