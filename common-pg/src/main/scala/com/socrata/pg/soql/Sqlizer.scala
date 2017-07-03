@@ -60,7 +60,7 @@ trait Sqlizer[T] {
    */
   protected def selectAlias(e: CoreExpr[_, _], subColumn: Option[String] = None)(ctx: Context): String = {
     ctx(SoqlPart) match {
-      case SoqlSelect if (true != ctx(OutermostSoql) && e == ctx(RootExpr)) =>
+      case SoqlSelect if ((true != ctx(OutermostSoql) || ctx.contains(IsSubQuery)) && e == ctx(RootExpr)) =>
         // Geometry types require ST_AsBinary and does not work well with aliases
         // Normally, aliases is not needed in the outermost soql.
         val alias = ctx(SqlizerContext.ColumnName).asInstanceOf[String] + subColumn.getOrElse("")
@@ -170,6 +170,9 @@ object SqlizerContext extends Enumeration {
 
   val TableMap = Value("tables") // resource name to table name map
   val TableAliasMap = Value("table-aliases") // resource alias name to table name map
+
+  val JoinPrimaryTable = Value("join-primary-table")
+  val IsSubQuery = Value("is-sub-query")
 }
 
 sealed trait CaseSensitivity

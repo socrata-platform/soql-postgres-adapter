@@ -1,0 +1,9 @@
+[
+  { c: "create", user: "test", resource: "_classification" },
+  { c: "add column", id: "id", type: "text" },
+  { c: "add column", id: "description", type: "text" },
+  { c: "row data" },
+  {"id":"EN-A", "description":"Beginner"},
+  {"id":"EN-B", "description":"Intermediate"},
+  {"id":"EN-C", "description":"Advanced"}
+]

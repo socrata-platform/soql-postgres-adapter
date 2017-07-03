@@ -1,0 +1,6 @@
+[
+  { "make" : "APCO", "code" : "00000", "maxtimezone" : 3 },
+  { "make" : "APCO", "code" : "14200", "maxtimezone" : 3 },
+  { "make" : "APCO", "code" : "14210", "maxtimezone" : 3 },
+  { "make" : "APCO", "code" : "18520", "maxtimezone" : 3 }
+]

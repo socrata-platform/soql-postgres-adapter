@@ -13,12 +13,18 @@ import com.socrata.soql.types.{SoQLType, SoQLValue}
 
 abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase with PGQueryTestBase {
 
-  var truthDatasetIdJoin = DatasetId.Invalid
-  var secDatasetIdJoin = DatasetId.Invalid
+  var truthDatasetIdJoin2 = DatasetId.Invalid
+  var secDatasetIdJoin2 = DatasetId.Invalid
+  var truthDatasetIdJoin3 = DatasetId.Invalid
+  var secDatasetIdJoin3 = DatasetId.Invalid
 
-  private lazy val joinCtx = withDb() { conn =>
+
+  private lazy val joinCtx2 = getContext(secDatasetIdJoin2)
+  private lazy val joinCtx3 = getContext(secDatasetIdJoin3)
+
+  private def getContext(secondaryDatasetId: DatasetId): DatasetContext[SoQLType] = withDb() { conn =>
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
-    val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secDatasetIdJoin).get)
+    val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secondaryDatasetId).get)
 
     pgu.datasetReader.openDataset(copyInfo).map { readCtx =>
       val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
@@ -32,16 +38,26 @@ abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTe
     }
   }
 
-  lazy val plainCtx = Map(TableName("_manufacturer").qualifier -> joinCtx)
-  lazy val aliasCtx = Map(TableName("_manufacturer", Some("_m")).qualifier -> joinCtx,
-                          TableName("_manufacturer", Some("_m2")).qualifier -> joinCtx)
+  lazy val plainCtx = Map(TableName("_manufacturer").qualifier -> joinCtx2,
+                          TableName("_classification").qualifier -> joinCtx3)
+  lazy val aliasCtx = plainCtx ++ Map(TableName("_manufacturer", Some("_m")).qualifier -> joinCtx2,
+                                      TableName("_manufacturer", Some("_m2")).qualifier -> joinCtx2,
+                                      TableName("_manufacturer", Some("_z$")).qualifier -> joinCtx2) ++
+                                  Map(TableName("_classification", Some("_c")).qualifier -> joinCtx3,
+                                      TableName("_classification", Some("_c2")).qualifier -> joinCtx3)
 
   override def beforeAll: Unit = {
     createDatabases()
     withDb() { conn =>
-      val (truthDsId, secDsId) = importDataset(conn, "mutate-create-2nd-dataset.json")
-      truthDatasetIdJoin = truthDsId
-      secDatasetIdJoin = secDsId
+      val (truthDsId2, secDsId2) = importDataset(conn, "mutate-create-2nd-dataset.json")
+      val (truthDsId3, secDsId3) = importDataset(conn, "mutate-create-3rd-dataset.json")
+
+      truthDatasetIdJoin2 = truthDsId2
+      secDatasetIdJoin2 = secDsId2
+
+      truthDatasetIdJoin3 = truthDsId3
+      secDatasetIdJoin3 = secDsId3
+
       importDataset(conn)
     }
   }
@@ -51,8 +67,10 @@ abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTe
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val tableName = pgu.datasetMapReader.latest(datasetInfo).dataTableName
       dropDataset(pgu, truthDatasetId)
-      if (truthDatasetIdJoin != DatasetId.Invalid) {
-        dropDataset(pgu, truthDatasetIdJoin)
+      Seq(truthDatasetIdJoin2, truthDatasetIdJoin3).foreach { dsId =>
+        if (dsId != DatasetId.Invalid) {
+          dropDataset(pgu, dsId)
+        }
       }
       cleanupDroppedTables(pgu)
       hasDataTables(pgu.conn, tableName, datasetInfo) should be (false)

@@ -1,0 +1,6 @@
+[
+  { "make" : "APCO", "code" : "00000", "timezone" : 3, "classification" : "Advanced" },
+  { "make" : "APCO", "code" : "14200", "timezone" : 3, "classification" : null },
+  { "make" : "APCO", "code" : "14210", "timezone" : 3, "classification" : "Beginner" },
+  { "make" : "APCO", "code" : "18520", "timezone" : 3, "classification" : "Intermediate" }
+]

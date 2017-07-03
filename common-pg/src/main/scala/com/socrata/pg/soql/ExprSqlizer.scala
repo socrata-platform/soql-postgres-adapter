@@ -5,11 +5,12 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.soql.typed._
 import com.socrata.soql.types._
 import com.socrata.soql.environment.TableName
-
+import com.socrata.soql.exceptions.BadParse
 import java.sql.PreparedStatement
 
 import Sqlizer._
 import SqlizerContext._
+
 
 object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
   def sql(lit: StringLiteral[SoQLType])
@@ -116,6 +117,19 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
 
   private def idQuote(s: String) = s""""$s"""" //   "\"" + s + "\""
 
+  private val qualifierRx = "^[_A-Za-z]+[_A-Za-z0-9]*$".r
+
+  private def qualifierFromAlias(expr: ColumnRef[UserColumnId, SoQLType], aliases: Map[String, String]): Qualifier = {
+    expr.qualifier.map(aliases.get(_)).getOrElse(expr.qualifier)
+  }
+
+  private def isTableAlias(q: Qualifier, aliases: Map[String, String]): Boolean = {
+    q match {
+      case Some(x) => aliases.get(x).map(aliases.contains(_)).getOrElse(false)
+      case None => false
+    }
+  }
+
   // scalastyle:off cyclomatic.complexity
   def sql(expr: ColumnRef[UserColumnId, SoQLType])
          (reps: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
@@ -124,7 +138,16 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           ctx: Context,
           escape: Escape): ParametricSql = {
     val tableMap = ctx(TableAliasMap).asInstanceOf[Map[String, String]]
-    reps.get(QualifiedUserColumnId(expr.qualifier, expr.column)) match {
+    val ista = isTableAlias(expr.qualifier, tableMap)
+    val repKeyQualifier =
+      ctx.get(JoinPrimaryTable) match {
+        case Some(Some(s: String)) =>
+          expr.qualifier.orElse(Some(s))
+        case _ =>
+          if (ista) qualifierFromAlias(expr, tableMap)
+          else expr.qualifier
+      }
+    reps.get(QualifiedUserColumnId(repKeyQualifier, expr.column)) match {
       case Some(rep) if ctx(InnermostSoql) == true || expr.qualifier.nonEmpty => // scalastyle:off simplify.boolean.expression
         // fields from the innermost soql and fields from joins in following chained soqls interact with physical tables.
         if (complexTypes.contains(expr.typ) &&
@@ -142,10 +165,20 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           }
           ParametricSql(columnsWithAlias, setParams)
         } else {
-          val qualifer = tableMap.get(expr.qualifier.getOrElse(TableName.PrimaryTable.qualifier))
-          val maybeUpperPhysColumns = rep.physColumns.map(c => toUpper(expr)(qualifer.map(q => s"$q.$c").getOrElse(c), ctx))
+          val qualifier = expr.qualifier match {
+            case Some(x) =>
+              if (ista) expr.qualifier
+              else Some(tableMap(x))
+            case None =>
+              tableMap.get(TableName.PrimaryTable.qualifier)
+          }
+          qualifier.foreach(qualifierRx.findFirstMatchIn(_).orElse(throw BadParse("Invalid table alias", expr.position)))
+          val maybeUpperPhysColumns = rep.physColumns.map(c => toUpper(expr)(qualifier.map(q => s"$q.$c").getOrElse(c), ctx))
           ParametricSql(maybeUpperPhysColumns.map(c => c + selectAlias(expr)(ctx)), setParams)
         }
+      case _ if ctx.contains(JoinPrimaryTable) =>
+        val exprRequalifiedForJoin = expr.copy(qualifier = ctx(JoinPrimaryTable).asInstanceOf[Qualifier])(expr.position)
+        sql(exprRequalifiedForJoin)(reps, typeRep, setParams, ctx, escape)
       case _ => // Outer soqls do not get rep by column id.  They get rep by datatype.
         val typeReps = typeRep ++
                        reps.values.map((rep: SqlColumnRep[SoQLType, SoQLValue]) => (rep.representedType -> rep)).toMap
@@ -153,7 +186,9 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           case Some(rep) =>
             val subColumns = rep.physColumns.map { pc => pc.replace(rep.base, "") }
             val sqls = subColumns.map { subCol =>
-              toUpper(expr)(idQuote(expr.column.underlying + subCol), ctx) + selectAlias(expr, Some(subCol))(ctx)
+              val c = idQuote(expr.column.underlying + subCol)
+              expr.qualifier.foreach(qualifierRx.findFirstMatchIn(_).orElse(throw BadParse("Invalid table alias", expr.position)))
+              toUpper(expr)(expr.qualifier.map(q => s"$q.$c").getOrElse(c), ctx) + selectAlias(expr, Some(subCol))(ctx)
             }
             ParametricSql(sqls, setParams)
           case None =>
