@@ -5,11 +5,12 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.soql.typed._
 import com.socrata.soql.types._
 import com.socrata.soql.environment.TableName
-
+import com.socrata.soql.exceptions.BadParse
 import java.sql.PreparedStatement
 
 import Sqlizer._
 import SqlizerContext._
+
 
 object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
   def sql(lit: StringLiteral[SoQLType])
@@ -116,6 +117,8 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
 
   private def idQuote(s: String) = s""""$s"""" //   "\"" + s + "\""
 
+  private val qualifierRx = "^[_A-Za-z]+[_A-Za-z0-9]*$".r
+
   private def qualifierFromAlias(expr: ColumnRef[UserColumnId, SoQLType], aliases: Map[String, String]): Qualifier = {
     expr.qualifier.map(aliases.get(_)).getOrElse(expr.qualifier)
   }
@@ -169,6 +172,7 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
             case None =>
               tableMap.get(TableName.PrimaryTable.qualifier)
           }
+          qualifier.foreach(qualifierRx.findFirstMatchIn(_).orElse(throw BadParse("Invalid table alias", expr.position)))
           val maybeUpperPhysColumns = rep.physColumns.map(c => toUpper(expr)(qualifier.map(q => s"$q.$c").getOrElse(c), ctx))
           ParametricSql(maybeUpperPhysColumns.map(c => c + selectAlias(expr)(ctx)), setParams)
         }
@@ -183,6 +187,7 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
             val subColumns = rep.physColumns.map { pc => pc.replace(rep.base, "") }
             val sqls = subColumns.map { subCol =>
               val c = idQuote(expr.column.underlying + subCol)
+              expr.qualifier.foreach(qualifierRx.findFirstMatchIn(_).orElse(throw BadParse("Invalid table alias", expr.position)))
               toUpper(expr)(expr.qualifier.map(q => s"$q.$c").getOrElse(c), ctx) + selectAlias(expr, Some(subCol))(ctx)
             }
             ParametricSql(sqls, setParams)

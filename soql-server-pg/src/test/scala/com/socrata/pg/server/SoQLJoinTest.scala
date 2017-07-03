@@ -1,5 +1,7 @@
 package com.socrata.pg.server
 
+import com.socrata.soql.exceptions.BadParse
+
 
 class SoQLJoinTest extends SoQLTest {
 
@@ -132,5 +134,19 @@ LEFT OUTER JOIN @classification as c on class=@c.id
                       """,
                       "join-2tables.json",
                       joinDatasetCtx = aliasCtx)
+  }
+
+  test("invalid table alias") {
+    intercept[BadParse] {
+      compareSoqlResult("""
+SELECT make, code, @z$.timezone
+  JOIN (SELECT make, timezone FROM @manufacturer WHERE make='APCO') as z$ on make=@z$.make
+ WHERE @z$.make='APCO'
+ ORDER by @z$.make, code
+                        """,
+                        "join-subquery.json",
+                        joinDatasetCtx =
+                        aliasCtx)
+      }
   }
 }

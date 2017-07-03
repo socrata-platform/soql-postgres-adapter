@@ -41,7 +41,8 @@ abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTe
   lazy val plainCtx = Map(TableName("_manufacturer").qualifier -> joinCtx2,
                           TableName("_classification").qualifier -> joinCtx3)
   lazy val aliasCtx = plainCtx ++ Map(TableName("_manufacturer", Some("_m")).qualifier -> joinCtx2,
-                                      TableName("_manufacturer", Some("_m2")).qualifier -> joinCtx2) ++
+                                      TableName("_manufacturer", Some("_m2")).qualifier -> joinCtx2,
+                                      TableName("_manufacturer", Some("_z$")).qualifier -> joinCtx2) ++
                                   Map(TableName("_classification", Some("_c")).qualifier -> joinCtx3,
                                       TableName("_classification", Some("_c2")).qualifier -> joinCtx3)
 
