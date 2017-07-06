@@ -1,7 +1,7 @@
 package com.socrata.pg.store
 
 import liquibase.Liquibase
-import liquibase.database.jvm.JdbcConnection
+import liquibase.lockservice.LockService
 import liquibase.logging.LogFactory
 import liquibase.resource.ClassLoaderResourceAccessor
 
@@ -25,6 +25,8 @@ object Migration {
     val jdbc = new NonCommmittingJdbcConnenction(conn)
     LogFactory.getLogger().setLogLevel("warning")
     val liquibase = new Liquibase(changeLogPath, new ClassLoaderResourceAccessor, jdbc)
+    val lockService = LockService.getInstance(liquibase.getDatabase)
+    lockService.setChangeLogLockWaitTime(1000 * 3) // 3s where value should be < SQL lock_timeout (30s)
     val database = conn.getCatalog
 
     operation match {
