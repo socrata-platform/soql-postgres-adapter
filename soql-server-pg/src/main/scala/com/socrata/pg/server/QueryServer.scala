@@ -42,7 +42,7 @@ import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.soql._
 import com.socrata.pg.store._
 import com.socrata.soql.SoQLAnalysis
-import com.socrata.soql.analyzer.SoQLAnalyzerHelper
+import com.socrata.soql.analyzer.{JoinHelper, SoQLAnalyzerHelper}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, ResourceName, TableName}
 import com.socrata.soql.typed.CoreExpr
@@ -524,7 +524,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   private def getJoinCopies(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                             analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]],
                             reqCopy: Option[String]): Map[TableName, CopyInfo] = {
-    val joinTables = analyses.map(_.join.toSeq.flatten).flatten.map(x => TableName(x.tableLike.head.from.get, None))
+    val joins = JoinHelper.expandJoins(analyses)
+    val joinTables = joins.map(x => TableName(x.tableLike.head.from.get, None))
     joinTables.flatMap { resourceName =>
       getCopy(pgu, new ResourceName(resourceName.name), reqCopy).map(copy => (resourceName, copy))
     }.toMap

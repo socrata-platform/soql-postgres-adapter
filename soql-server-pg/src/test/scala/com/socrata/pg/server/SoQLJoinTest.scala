@@ -149,4 +149,19 @@ SELECT make, code, @z$.timezone
                         aliasCtx)
       }
   }
+
+  test("nested join") {
+    compareSoqlResult("""
+         SELECT make, code, @m.timezone, @m.continent, @c.description as classification
+           JOIN (SELECT * FROM @manufacturer WHERE make='APCO'
+                     |> SELECT make, timezone, @co.continent
+                          JOIN @country as co on country=@co.country) as m on make=@m.make
+LEFT OUTER JOIN @classification as c on class=@c.id
+          WHERE @m.make='APCO'
+            and @co.continent = 'Asia'
+          ORDER by @m.make, code
+                      """,
+      "join-nested.json",
+      joinDatasetCtx = aliasCtx)
+  }
 }

@@ -3,6 +3,7 @@ package com.socrata.pg.soql
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.pg.store.PostgresUniverseCommon
+import com.socrata.soql.analyzer.JoinHelper
 import com.socrata.soql.{SimpleSoQLAnalysis, SoQLAnalysis}
 import com.socrata.soql.environment.{ColumnName, TableName}
 import com.socrata.soql.types._
@@ -90,7 +91,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
                         (TableMap -> tableNames) +
                         (TableAliasMap -> tableNames.map { case (k, v) => (k.alias.getOrElse(k.name), realAlias(k, v)) })
 
-    val joins = analysis.join.toSeq.flatten
+    val joins = JoinHelper.expandJoins(Seq(analysis))
 
     // SELECT
     val ctxSelect = ctx + (SoqlPart -> SoqlSelect)

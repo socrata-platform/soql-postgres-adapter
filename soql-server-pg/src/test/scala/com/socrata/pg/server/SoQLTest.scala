@@ -17,10 +17,13 @@ abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTe
   var secDatasetIdJoin2 = DatasetId.Invalid
   var truthDatasetIdJoin3 = DatasetId.Invalid
   var secDatasetIdJoin3 = DatasetId.Invalid
+  var truthDatasetIdJoin4 = DatasetId.Invalid
+  var secDatasetIdJoin4 = DatasetId.Invalid
 
 
   private lazy val joinCtx2 = getContext(secDatasetIdJoin2)
   private lazy val joinCtx3 = getContext(secDatasetIdJoin3)
+  private lazy val joinCtx4 = getContext(secDatasetIdJoin4)
 
   private def getContext(secondaryDatasetId: DatasetId): DatasetContext[SoQLType] = withDb() { conn =>
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
@@ -39,24 +42,30 @@ abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTe
   }
 
   lazy val plainCtx = Map(TableName("_manufacturer").qualifier -> joinCtx2,
-                          TableName("_classification").qualifier -> joinCtx3)
+                          TableName("_classification").qualifier -> joinCtx3,
+                          TableName("_country").qualifier -> joinCtx4)
   lazy val aliasCtx = plainCtx ++ Map(TableName("_manufacturer", Some("_m")).qualifier -> joinCtx2,
                                       TableName("_manufacturer", Some("_m2")).qualifier -> joinCtx2,
                                       TableName("_manufacturer", Some("_z$")).qualifier -> joinCtx2) ++
                                   Map(TableName("_classification", Some("_c")).qualifier -> joinCtx3,
-                                      TableName("_classification", Some("_c2")).qualifier -> joinCtx3)
+                                      TableName("_classification", Some("_c2")).qualifier -> joinCtx3) ++
+                                  Map(TableName("_country", Some("_co")).qualifier -> joinCtx4)
 
   override def beforeAll: Unit = {
     createDatabases()
     withDb() { conn =>
       val (truthDsId2, secDsId2) = importDataset(conn, "mutate-create-2nd-dataset.json")
       val (truthDsId3, secDsId3) = importDataset(conn, "mutate-create-3rd-dataset.json")
+      val (truthDsId4, secDsId4) = importDataset(conn, "mutate-create-4th-dataset.json")
 
       truthDatasetIdJoin2 = truthDsId2
       secDatasetIdJoin2 = secDsId2
 
       truthDatasetIdJoin3 = truthDsId3
       secDatasetIdJoin3 = secDsId3
+
+      truthDatasetIdJoin4 = truthDsId4
+      secDatasetIdJoin4 = secDsId4
 
       importDataset(conn)
     }
