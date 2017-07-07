@@ -1,0 +1,12 @@
+[
+  { c: "create", user: "test", resource: "_country" },
+  { c: "add column", id: "country", type: "text" },
+  { c: "add column", id: "continent", type: "text" },
+  { c: "add column", id: "size", type: "number" },
+  { c: "row data" },
+  {"country":"Israel", "size": 8019, "continent": "Asia"},
+  {"country":"Germany", "size": 137983, "continent": "Europe"},
+  {"country": "France", "size": 248573, "continent": "Europe"},
+  {"country":"Korea", "size": 38691, "continent": "Asia"},
+  {"country":"USA", "size": 3797000, "continent": "America"}
+]
