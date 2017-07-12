@@ -326,7 +326,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
           val idRep = ctx(SqlizerContext.IdRep).asInstanceOf[SoQLIDRep]
           val verRep = ctx(SqlizerContext.VerRep).asInstanceOf[SoQLVersionRep]
           val numLit = decryptToNumLit(typ)(idRep, verRep, strLit)
-          val ParametricSql(Seq(sql), newSetParams) = Sqlizer.sql(numLit)(rep, typeRep, acc._2, ctx, escape)
+          val ParametricSql(Seq(sql), newSetParams) = NumberLiteralSqlizer.sqlUsingLong(numLit)(rep, typeRep, acc._2, ctx, escape)
           (acc._1 :+ sql, newSetParams)
         case _ => throw new Exception("Row id is not string literal")
       }
