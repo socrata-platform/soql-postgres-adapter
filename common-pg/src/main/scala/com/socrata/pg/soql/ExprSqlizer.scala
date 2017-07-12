@@ -64,6 +64,29 @@ object NumberLiteralSqlizer extends Sqlizer[NumberLiteral[SoQLType]] {
         ParametricSql(Seq(ParamPlaceHolder + selectAlias(lit)(ctx)), setParams :+ setParam)
     }
   }
+
+  /**
+    * For row id/version where the underlying db type is long so that the proper index can be used.
+    */
+  def sqlUsingLong(lit: NumberLiteral[SoQLType])
+                  (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                   typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                   setParams: Seq[SetParam],
+                   ctx: Context,
+                   escape: Escape): ParametricSql = {
+    ctx.get(SoqlPart) match {
+      case Some(SoqlHaving) | Some(SoqlGroup) =>
+        ParametricSql(Seq(lit.value.bigDecimal.toPlainString), setParams)
+      case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(lit)(ctx) =>
+        ParametricSql(Seq(lit.value.bigDecimal.toPlainString), setParams)
+      case _ =>
+        val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
+          stmt.foreach(_.setLong(pos, lit.value.longValue))
+          Some(lit.value.longValue)
+        }
+        ParametricSql(Seq(ParamPlaceHolder + selectAlias(lit)(ctx)), setParams :+ setParam)
+    }
+  }
 }
 
 object BooleanLiteralSqlizer extends Sqlizer[BooleanLiteral[SoQLType]] {

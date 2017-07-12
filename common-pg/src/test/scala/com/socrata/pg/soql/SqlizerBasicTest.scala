@@ -2,6 +2,7 @@ package com.socrata.pg.soql
 
 import SqlizerTest._
 import com.socrata.soql.exceptions.TypecheckException
+import com.socrata.soql.types.SoQLID
 
 // scalastyle:off null
 class SqlizerBasicTest extends SqlizerTest {
@@ -360,5 +361,17 @@ class SqlizerBasicTest extends SqlizerTest {
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT DISTINCT t1.case_number,t1.primary_type FROM t1")
     setParams.length should be (0)
+  }
+
+  test("row id") {
+    val rep = sqlCtx(SqlizerContext.IdRep).asInstanceOf[SoQLID.StringRep]
+    val rowId = 2
+    val encodedRowId = rep.apply(SoQLID(rowId))
+    val soql = s"select id where :id = '$encodedRowId'"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    println(sql)
+    sql should be ("SELECT t1.id FROM t1 WHERE (t1.:id = (?))")
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq(rowId))
   }
 }
