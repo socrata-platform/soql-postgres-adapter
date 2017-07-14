@@ -271,7 +271,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
         val (_, selectSetParams) = acc
         val ParametricSql(sqls, newSetParams) = Sqlizer.sql(coreExpr)(rep, typeRep, selectSetParams, ctxSelect, escape)
         val sqlGeomConverted =
-          if (ctx.contains(LeaveGeomAsIs) || strictInnermostSoql) { sqls }
+          if (ctx.contains(LeaveGeomAsIs) || strictInnermostSoql || ctx.contains(IsSubQuery)) { sqls }
           else {
             val cn = if (strictOutermostSoql) Some(columnName) else None
             // compound type with a geometry and something else like "Location" type
