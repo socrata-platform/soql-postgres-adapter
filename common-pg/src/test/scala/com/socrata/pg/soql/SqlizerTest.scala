@@ -93,7 +93,8 @@ object SqlizerTest {
     ColumnName(":created_at") -> ((23, SoQLFixedTimestamp)),
     ColumnName(":updated_at") -> ((24, SoQLFixedTimestamp)),
     ColumnName("primary_type") -> ((25, SoQLText)),
-    ColumnName("description") -> ((26, SoQLText))
+    ColumnName("description") -> ((26, SoQLText)),
+    ColumnName("registered") -> ((26, SoQLFloatingTimestamp))
   )
 
   private val yearTableColumnMap = Map(
