@@ -56,7 +56,7 @@ class SqlizerJoinTest  extends SqlizerTest {
     params should be (Seq(30, 2000).map(BigDecimal(_)))
   }
 
-  test("join and dot notation") {
+  ignore("join and dot notation") {
     val soql = "select case_number, primary_type, @type.registered.week_of_year join @type on primary_type = @type.primary_type"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT t1.case_number,t1.primary_type,(extract(week from t2.registered)) FROM t1 JOIN t2 ON (t1.primary_type = t2.primary_type)")

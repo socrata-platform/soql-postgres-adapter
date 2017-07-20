@@ -11,6 +11,7 @@ import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
 import com.socrata.soql.types._
 import Sqlizer._
 import SoQLFunctions._
+import com.socrata.soql.exceptions.BadParse
 import org.joda.time.{DateTime, LocalDateTime}
 
 // scalastyle:off magic.number multiple.string.literals
@@ -100,14 +101,14 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     FloatingTimeStampExtractDow -> formatCall("extract(dow from %s)") _,
     FloatingTimeStampExtractWoy -> formatCall("extract(week from %s)") _,
 
-    FloatingTimeStampDotYear-> formatCall("extract(year from %s)") _,
-    FloatingTimeStampDotMonth-> formatCall("extract(month from %s)") _,
-    FloatingTimeStampDotDay -> formatCall("extract(day from %s)") _,
-    FloatingTimeStampDotHour -> formatCall("extract(hour from %s)") _,
-    FloatingTimeStampDotMinute -> formatCall("extract(minute from %s)") _,
-    FloatingTimeStampDotSecond -> formatCall("extract(second from %s)") _,
-    FloatingTimeStampDotWeekOfYear -> formatCall("extract(week from %s)") _,
-    FloatingTimeStampDotDayOfWeek -> formatCall("extract(dow from %s)") _,
+    FloatingTimeStampDotYear-> notAvailable _,
+    FloatingTimeStampDotMonth-> notAvailable _,
+    FloatingTimeStampDotDay -> notAvailable _,
+    FloatingTimeStampDotHour -> notAvailable _,
+    FloatingTimeStampDotMinute -> notAvailable _,
+    FloatingTimeStampDotSecond -> notAvailable _,
+    FloatingTimeStampDotWeekOfYear -> notAvailable _,
+    FloatingTimeStampDotDayOfWeek -> notAvailable _,
 
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
@@ -271,6 +272,15 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
    */
   private def foldSegments(sqls: Seq[String], foldOp: String): String = {
     sqls.mkString(foldOp)
+  }
+
+  def notAvailable(fn: FunCall,
+                   rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                   typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                   setParams: Seq[SetParam],
+                   ctx: Sqlizer.Context,
+                   escape: Escape): ParametricSql = {
+    throw BadParse(s"${fn.function.name.name} is not available", fn.functionNamePosition)
   }
 
   def formatCall(template: String, // scalastyle:ignore parameter.number
