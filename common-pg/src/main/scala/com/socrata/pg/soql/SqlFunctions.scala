@@ -100,6 +100,15 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     FloatingTimeStampExtractDow -> formatCall("extract(dow from %s)") _,
     FloatingTimeStampExtractWoy -> formatCall("extract(week from %s)") _,
 
+    FloatingTimeStampDotYear-> formatCall("extract(year from %s)") _,
+    FloatingTimeStampDotMonth-> formatCall("extract(month from %s)") _,
+    FloatingTimeStampDotDay -> formatCall("extract(day from %s)") _,
+    FloatingTimeStampDotHour -> formatCall("extract(hour from %s)") _,
+    FloatingTimeStampDotMinute -> formatCall("extract(minute from %s)") _,
+    FloatingTimeStampDotSecond -> formatCall("extract(second from %s)") _,
+    FloatingTimeStampDotWeekOfYear -> formatCall("extract(week from %s)") _,
+    FloatingTimeStampDotDayOfWeek -> formatCall("extract(dow from %s)") _,
+
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
     NumberToText -> formatCall("%s::varchar") _,
