@@ -230,22 +230,22 @@ class SqlizerBasicTest extends SqlizerTest {
     setParams.length should be (0)
   }
 
-  ignore("date.year") {
-    val soql = "select updated_on.year"
+  test("date_extract_y") {
+    val soql = "select date_extract_y(updated_on)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT (extract(year from t1.updated_on)) FROM t1")
     setParams.length should be (0)
   }
 
-  ignore("date.month") {
-    val soql = "select updated_on.month"
+  test("date_extract_m") {
+    val soql = "select date_extract_m(updated_on)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT (extract(month from t1.updated_on)) FROM t1")
     setParams.length should be (0)
   }
 
-  ignore("date.day") {
-    val soql = "select updated_on.day"
+  test("date_extract_d") {
+    val soql = "select date_extract_d(updated_on)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT (extract(day from t1.updated_on)) FROM t1")
     setParams.length should be (0)

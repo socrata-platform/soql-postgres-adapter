@@ -97,18 +97,14 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     FloatingTimeStampTruncYm -> formatCall("date_trunc('month', %s)") _,
     FloatingTimeStampTruncY -> formatCall("date_trunc('year', %s)") _,
 
+    FloatingTimeStampExtractY-> formatCall("extract(year from %s)") _,
+    FloatingTimeStampExtractM-> formatCall("extract(month from %s)") _,
+    FloatingTimeStampExtractD -> formatCall("extract(day from %s)") _,
     FloatingTimeStampExtractHh -> formatCall("extract(hour from %s)") _,
+    FloatingTimeStampExtractMm -> formatCall("extract(minute from %s)") _,
+    FloatingTimeStampExtractSs -> formatCall("extract(second from %s)") _,
     FloatingTimeStampExtractDow -> formatCall("extract(dow from %s)") _,
     FloatingTimeStampExtractWoy -> formatCall("extract(week from %s)") _,
-
-    FloatingTimeStampDotYear-> notAvailable _,
-    FloatingTimeStampDotMonth-> notAvailable _,
-    FloatingTimeStampDotDay -> notAvailable _,
-    FloatingTimeStampDotHour -> notAvailable _,
-    FloatingTimeStampDotMinute -> notAvailable _,
-    FloatingTimeStampDotSecond -> notAvailable _,
-    FloatingTimeStampDotWeekOfYear -> notAvailable _,
-    FloatingTimeStampDotDayOfWeek -> notAvailable _,
 
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
