@@ -13,9 +13,7 @@ import scala.concurrent.duration.Duration
 import com.typesafe.scalalogging.slf4j.Logging
 import java.sql.{Connection, ResultSet, SQLException}
 
-trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
-  this: AbstractRepBasedDataSqlizer[CT, CV] => ()
-
+object DataSqlizerQuerier {
   /**
     * The maximum number of rows we want to have to keep in memory at once.  The JDBC driver
     * uses it to determine how many results to fetch from the cursor at once.  If we know the
@@ -26,6 +24,13 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     * for possible off by one errors or attempts to see if there is another page of results.
     */
   private val sqlFetchSize = 1025
+  private val logger = org.slf4j.LoggerFactory.getLogger(classOf[DataSqlizerQuerier])
+}
+
+trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
+  this: AbstractRepBasedDataSqlizer[CT, CV] => ()
+
+  import DataSqlizerQuerier._
 
   def query(conn: Connection, analyses: Seq[SoQLAnalysis[UserColumnId, CT]],
             toSql: (Seq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
@@ -94,10 +99,25 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     row.freeze()
   }
 
+  def timed[Q](query: String)(queryThunk: => Q): Q = {
+    val before = System.nanoTime()
+
+    val result = queryThunk
+
+    val after = System.nanoTime()
+    val duration: java.lang.Long = (after - before) / 1000000
+    logger.trace("""Executing query "{}" took {}ms""", query, duration)
+
+    result
+  }
+
   def execute(conn: Connection, s: String) {
     using(conn.createStatement()) { stmt =>
       logger.trace("Executing simple SQL {}", s)
-      stmt.execute(s)
+
+      timed(s) {
+        stmt.execute(s)
+      }
     }
   }
 
@@ -119,7 +139,10 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
       pSql.setParams.zipWithIndex.foreach { case (setParamFn, idx) =>
         setParamFn(Some(stmt), idx + 1)
       }
-      stmt.executeQuery()
+
+      timed(pSql.sql.toString) {
+        stmt.executeQuery()
+      }
     } catch {
       case ex: SQLException =>
         logger.error(s"SQL Exception (${ex.getSQLState}) with timeout=$timeout on $pSql")
