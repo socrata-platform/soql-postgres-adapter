@@ -7,6 +7,8 @@ com.socrata.soql-server-pg {
   port = 6090
   liveness-check.port = 6091
 
+  log4j.logger.com.socrata.pg.query.DataSqlizerQuerier = TRACE
+
   metrics {
     enable-graphite = {{ ENABLE_GRAPHITE }}
     graphite-host = "{{ GRAPHITE_HOST }}"
@@ -42,7 +44,6 @@ com.socrata.soql-server-pg {
     }
     log4j = ${common-log4j}
     log4j.rootLogger = [ {{ LOG_LEVEL }}, console ]
-    log4j.logger.com.socrata.pg.query.DataSqlizerQuerier = TRACE
   }
 
   instance = {{ PG_SECONDARY_INSTANCE }}
