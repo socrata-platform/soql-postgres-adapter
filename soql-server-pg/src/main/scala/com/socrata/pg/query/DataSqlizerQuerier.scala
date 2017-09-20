@@ -24,7 +24,7 @@ object DataSqlizerQuerier {
     * for possible off by one errors or attempts to see if there is another page of results.
     */
   private val sqlFetchSize = 1025
-  private val logger = org.slf4j.LoggerFactory.getLogger(classOf[DataSqlizerQuerier])
+  private val logger = org.slf4j.LoggerFactory.getLogger(classOf[DataSqlizerQuerier[_,_]])
 }
 
 trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
@@ -105,8 +105,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
     val result = queryThunk
 
     val after = System.nanoTime()
-    val duration: java.lang.Long = (after - before) / 1000000
-    logger.trace("""Executing query "{}" took {}ms""", query, duration)
+    val duration = (after - before) / 1000000
+    logger.trace("""Executing query "{}" took {}ms""", query: Any, duration: Any)
 
     result
   }
