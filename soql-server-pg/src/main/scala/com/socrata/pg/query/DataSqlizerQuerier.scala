@@ -140,7 +140,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
         setParamFn(Some(stmt), idx + 1)
       }
 
-      timed(pSql.sql.toString) {
+      timed(pSql.toString) {
         stmt.executeQuery()
       }
     } catch {
