@@ -173,6 +173,7 @@ object SqlizerContext extends Enumeration {
 
   val JoinPrimaryTable = Value("join-primary-table")
   val IsSubQuery = Value("is-sub-query")
+  val NoWrappingParenInFunctionCall = Value("no-wrapping-paren-in-fc")
 }
 
 sealed trait CaseSensitivity

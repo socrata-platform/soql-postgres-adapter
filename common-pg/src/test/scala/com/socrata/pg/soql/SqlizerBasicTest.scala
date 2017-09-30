@@ -395,4 +395,20 @@ class SqlizerBasicTest extends SqlizerTest {
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq(rowId))
   }
+
+  test("window function") {
+    val soql = "select avg(year) over(partition by primary_type, year)"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    sql should be ("SELECT (avg(t1.year) over(partition by t1.primary_type,t1.year)) FROM t1")
+    setParams.length should be (0)
+  }
+
+  test("window function empty over") {
+    val soql = "select avg(year) over()"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    sql should be ("SELECT (avg(t1.year) over()) FROM t1")
+    setParams.length should be (0)
+  }
 }
