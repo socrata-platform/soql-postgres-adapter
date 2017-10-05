@@ -357,12 +357,11 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                          ctx: Sqlizer.Context,
                          escape: Escape): ParametricSql = {
     val convertedParams = fn.parameters.map {
-      case strLit@StringLiteral(value: String, _) =>
-        StringLiteral(conversion(value), strLit.typ)(strLit.position)
+      case strLit@StringLiteral(value: String, _) => strLit.copy(value = conversion(value))
       case x => x
     }
 
-    val fnWithConvertedParams = fn.copy(parameters = convertedParams)(fn.functionNamePosition, fn.position)
+    val fnWithConvertedParams = fn.copy(parameters = convertedParams)
     formatCall(template, None, None)(fnWithConvertedParams, rep, typeRep, setParams, ctx, escape)
   }
 
