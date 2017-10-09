@@ -266,11 +266,15 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
                  rowCount: Boolean,
                  queryTimeout: Option[Duration]) = {
       val cryptProvider = new CryptProvider(latestCopy.datasetInfo.obfuscationKey)
+
+      val preZoomedColumns = pgu.datasetMapReader.presimplifiedGeoColumns(latestCopy)
+
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.IdRep -> (if (obfuscateId) { new SoQLID.StringRep(cryptProvider) }
                                  else { new ClearNumberRep(cryptProvider) }),
         SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
-        SqlizerContext.CaseSensitivity -> caseSensitivity
+        SqlizerContext.CaseSensitivity -> caseSensitivity,
+        SqlizerContext.PreZoomedColumns -> preZoomedColumns
       )
       val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit)
 

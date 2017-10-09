@@ -15,5 +15,6 @@
     <include file="com/socrata/pg/store/schema/20161231-add-disabled.xml"/>
     <include file="com/socrata/pg/store/schema/20170402-add-column-resource-name.xml"/>
     <include file="com/socrata/pg/store/schema/20170615-add-dataset-map-resource-name-index.xml"/>
-
+    <include file="com/socrata/pg/store/schema/20171009-add-column-map-geo-modifiers.xml"/>
+    
 </databaseChangeLog>

@@ -171,6 +171,10 @@ object SqlizerContext extends Enumeration {
   val TableMap = Value("tables") // resource name to table name map
   val TableAliasMap = Value("table-aliases") // resource alias name to table name map
 
+  // `column_map_geo_modifiers`: Map[ColumnId, Seq[<Zoom Level>]]
+  // Only columns in the table will be loaded.
+  val PreZoomedColumns = Value("pre-zoomed-columns")
+
   val JoinPrimaryTable = Value("join-primary-table")
   val IsSubQuery = Value("is-sub-query")
 }
