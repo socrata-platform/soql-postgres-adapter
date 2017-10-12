@@ -4,7 +4,28 @@ set -e
 REALPATH=$(python -c "import os; print(os.path.realpath('$0'))")
 BASEDIR="$(dirname "${REALPATH}")/.."
 
-export SBT_OPTS="-Xmx2048M" # Assembling Di2 takes a lot of memory.
+PIDFILE="${BASEDIR}/.build.sh.pid"
+
+SBT_OPTS=(-Xmx1024M ${SBT_OPTS})
+
+if [ -f "${PIDFILE}" ] && ps "$(head -n 1 "${PIDFILE}")" >/dev/null 2>/dev/null; then
+    echo 'An artifact build appears to already be running.' >&2
+    echo >&2
+    echo -n 'Waiting for it to finish...' >&2
+
+
+    while [ -f "${PIDFILE}" ] && ps "$(head -n 1 "${PIDFILE}")" >/dev/null 2>/dev/null; do
+        echo -n '.' >&2
+        sleep 5
+    done
+
+    echo ' done.' >&2
+fi
+
+PID=$$
+echo "${PID}" > "${PIDFILE}"
+
+export SBT_OPTS="-Xmx2048M"
 
 cd "$BASEDIR"
 SERVER_JAR="$(ls -rt soql-server-pg/target/scala-*/soql-server-pg-assembly*.jar 2>/dev/null | tail -n 1)"
