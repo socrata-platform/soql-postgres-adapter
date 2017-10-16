@@ -2,6 +2,8 @@ package com.socrata.pg.soql
 
 import scala.math.{Pi, atan, exp}
 
+import com.vividsolutions.jts.geom.Geometry
+
 import com.socrata.datacoordinator.common.soql.sqlreps.GeometryLikeRep
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
@@ -60,10 +62,11 @@ trait SqlFunctionsGeometry {
     IsEmpty -> isEmpty
   )
 
-  private def resolutionForZoom(level: Int): BigDecimal = {
+  def resolutionForZoom(level: Int) = {
     val size = 256
-    val r2d = 180 / Pi
     val sizeZoomed: Int = size * (1 << level)
+    val r2d = 180 / Pi
+
 
     def lat(y: Int): Double = {
       val g = (Pi * (2 * -y + sizeZoomed)) / sizeZoomed
@@ -96,7 +99,17 @@ trait SqlFunctionsGeometry {
 
         val zoomedFn = fn.copy(parameters = Seq(id, zoom.copy(value=resolution)))
 
-        // TODO: Omit ST_SnapToGrid if we are already optimized for this zoom level.
+        // val geoReps: Iterable[GeometryLikeRep[_]] = rep.collect {
+        //   case (_, g: GeometryLikeRep[_]) => g
+        // }
+
+        // Don't snap if we're sure this is already simplified!
+        // if (geoReps.size == 1 && geoReps.head.presimplifiedZoomLevels.contains(level)) {
+        //   formatCall("%s")(zoomedFn, zoomedRep, zoomedTypeRep, setParams, ctx, escape)
+        // } else {
+        //   formatSimplify(s"ST_SnapToGrid(%s, %s)")(zoomedFn, zoomedRep, zoomedTypeRep, setParams, ctx, escape)
+        // }
+
         formatSimplify(s"ST_SnapToGrid(%s, %s)")(zoomedFn, zoomedRep, zoomedTypeRep, setParams, ctx, escape)
       case _ => throw new Exception("Should never get anything but a number for zoom! Oh no!")
     }

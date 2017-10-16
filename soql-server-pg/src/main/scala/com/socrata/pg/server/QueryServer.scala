@@ -267,14 +267,11 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
                  queryTimeout: Option[Duration]) = {
       val cryptProvider = new CryptProvider(latestCopy.datasetInfo.obfuscationKey)
 
-      val preZoomedColumns = pgu.datasetMapReader.presimplifiedGeoColumns(latestCopy)
-
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.IdRep -> (if (obfuscateId) { new SoQLID.StringRep(cryptProvider) }
                                  else { new ClearNumberRep(cryptProvider) }),
         SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
-        SqlizerContext.CaseSensitivity -> caseSensitivity,
-        SqlizerContext.PreZoomedColumns -> preZoomedColumns
+        SqlizerContext.CaseSensitivity -> caseSensitivity
       )
       val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit)
 
@@ -384,9 +381,9 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
    */
   // TODO: Handle expressions and column aliases.
   private def querySchema(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                  analysis: SoQLAnalysis[UserColumnId, SoQLType],
-                  latest: CopyInfo):
-                  OrderedMap[ColumnId, ColumnInfo[pgu.CT]] = {
+                          analysis: SoQLAnalysis[UserColumnId, SoQLType],
+                          latest: CopyInfo):
+      OrderedMap[ColumnId, ColumnInfo[pgu.CT]] = {
 
     analysis.selection.foldLeft(OrderedMap.empty[ColumnId, ColumnInfo[pgu.CT]]) { (map, entry) =>
       entry match {
@@ -402,7 +399,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
             coreExpr.typ == SoQLID,
             false, // isUserKey
             coreExpr.typ == SoQLVersion,
-            None // computation strategy we aren't actually storing...
+            None, // computation strategy we aren't actually storing...
+            Seq.empty
           )(SoQLTypeContext.typeNamespace, null) // scalastyle:ignore null
           map + (cid -> cinfo)
       }
@@ -542,7 +540,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   }
 
   private def getJoinReps(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                          copy: CopyInfo, tableName: TableName)
+                          copy: CopyInfo,
+                          tableName: TableName)
     : Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]] = {
     val reps = for { readCtx <- pgu.datasetReader.openDataset(copy) } yield {
       val schema = readCtx.schema
@@ -555,6 +554,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         qualifiedUserColumnId -> columnIdReps(columnId)
       }
     }
+
     reps.toMap
   }
 }

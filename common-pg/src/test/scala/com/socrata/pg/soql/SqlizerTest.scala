@@ -135,7 +135,8 @@ object SqlizerTest {
           typ == SoQLID,
           false, // isUserKey
           typ == SoQLVersion,
-          None
+          None,
+          Seq.empty
         )(SoQLTypeContext.typeNamespace, null)
         acc :+ cinfo
     }
@@ -155,7 +156,8 @@ object SqlizerTest {
             typ == SoQLID,
             false, // isUserKey
             typ == SoQLVersion,
-            None
+            None,
+            Seq.empty
           )(SoQLTypeContext.typeNamespace, null)
           val qualifier = if (tableName == TableName.PrimaryTable) None else Some(tableName.qualifier)
           acc + (QualifiedUserColumnId(qualifier, idMap(columnName)) -> cinfo)

@@ -144,74 +144,80 @@ trait LocationIndexable[T] extends GeoIndexable[T] { this: SqlColumnCommonRep[T]
 
 
 object SoQLIndexableRep {
-  private val sqlRepFactories = Map[SoQLType, String => SqlColIdx] (
-    SoQLID -> (base => new IDRep(base)  with NoIndex[SoQLType]), // Already indexed
-    SoQLVersion -> (base => new VersionRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLText -> (base => new TextRep(base) with TextIndexable[SoQLType]),
-    SoQLBoolean -> (base => new BooleanRep(base) with BooleanIndexable[SoQLType]),
-    SoQLNumber -> (base =>
+  private val sqlRepFactories = Map[SoQLType, (String, Seq[Int]) => SqlColIdx] (
+    SoQLID -> ((base, _) => new IDRep(base)  with NoIndex[SoQLType]), // Already indexed
+    SoQLVersion -> ((base, _) => new VersionRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
+    SoQLText -> ((base, _) => new TextRep(base) with TextIndexable[SoQLType]),
+    SoQLBoolean -> ((base, _) => new BooleanRep(base) with BooleanIndexable[SoQLType]),
+    SoQLNumber -> ((base, _) =>
       new NumberLikeRep(
         SoQLNumber,
         _.asInstanceOf[SoQLNumber].value,
         SoQLNumber(_),
         base) with NumberLikeIndexable[SoQLType]),
-    SoQLMoney -> (base =>
+    SoQLMoney -> ((base, _) =>
       new NumberLikeRep(
         SoQLMoney,
         _.asInstanceOf[SoQLMoney].value,
         SoQLMoney(_),
         base) with NumberLikeIndexable[SoQLType]),
-    SoQLFixedTimestamp -> (base => new FixedTimestampRep(base) with TimestampLikeIndexable[SoQLType]),
-    SoQLFloatingTimestamp -> (base => new FloatingTimestampRep(base) with TimestampLikeIndexable[SoQLType]),
-    SoQLDate -> (base => new DateRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLTime -> (base => new TimeRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLDouble -> (base => new DoubleRep(base) with NumberLikeIndexable[SoQLType]),
-    SoQLObject -> (base => new ObjectRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLArray -> (base => new ArrayRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLBlob -> (base => new BlobRep(base) with BlobIndexable[SoQLType]), // TODO: Revisit index need
-    SoQLPhone -> (base => new PhoneRep(base) with TextIndexable[SoQLType]),
-    SoQLLocation -> (base => new LocationRep(base) with LocationIndexable[SoQLType]),
-    SoQLUrl -> (base => new UrlRep(base) with TextIndexable[SoQLType]),
-    SoQLPoint -> (base =>
+    SoQLFixedTimestamp -> ((base, _) => new FixedTimestampRep(base) with TimestampLikeIndexable[SoQLType]),
+    SoQLFloatingTimestamp -> ((base, _) => new FloatingTimestampRep(base) with TimestampLikeIndexable[SoQLType]),
+    SoQLDate -> ((base, _) => new DateRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
+    SoQLTime -> ((base, _) => new TimeRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
+    SoQLDouble -> ((base, _) => new DoubleRep(base) with NumberLikeIndexable[SoQLType]),
+    SoQLObject -> ((base, _) => new ObjectRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
+    SoQLArray -> ((base, _) => new ArrayRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
+    SoQLBlob -> ((base, _) => new BlobRep(base) with BlobIndexable[SoQLType]), // TODO: Revisit index need
+    SoQLPhone -> ((base, _) => new PhoneRep(base) with TextIndexable[SoQLType]),
+    SoQLLocation -> ((base, _) => new LocationRep(base) with LocationIndexable[SoQLType]),
+    SoQLUrl -> ((base, _) => new UrlRep(base) with TextIndexable[SoQLType]),
+    SoQLPoint -> ((base, levels) =>
       new GeometryLikeRep[Point](
         SoQLPoint,
         _.asInstanceOf[SoQLPoint].value,
         SoQLPoint(_),
+        levels,
         base) with GeoIndexable[SoQLType]),
-    SoQLMultiPoint -> (base =>
+    SoQLMultiPoint -> ((base, levels) =>
       new GeometryLikeRep[MultiPoint](
         SoQLMultiPoint,
         _.asInstanceOf[SoQLMultiPoint].value,
         SoQLMultiPoint(_),
+        levels,
         base) with GeoIndexable[SoQLType]),
-    SoQLLine -> (base =>
+    SoQLLine -> ((base, levels) =>
       new GeometryLikeRep[LineString](
         SoQLLine,
         _.asInstanceOf[SoQLLine].value,
         SoQLLine(_),
+        levels,
         base) with GeoIndexable[SoQLType]),
-    SoQLMultiLine -> (base =>
+    SoQLMultiLine -> ((base, levels) =>
       new GeometryLikeRep[MultiLineString](
         SoQLMultiLine,
         _.asInstanceOf[SoQLMultiLine].value,
         SoQLMultiLine(_),
+        levels,
         base) with GeoIndexable[SoQLType]),
-    SoQLPolygon -> (base =>
+    SoQLPolygon -> ((base, levels) =>
       new GeometryLikeRep[Polygon](
         SoQLPolygon,
         _.asInstanceOf[SoQLPolygon].value,
         SoQLPolygon(_),
+        levels,
         base) with GeoIndexable[SoQLType]),
-    SoQLMultiPolygon -> (base =>
+    SoQLMultiPolygon -> ((base, levels) =>
       new GeometryLikeRep[MultiPolygon](
         SoQLMultiPolygon,
         _.asInstanceOf[SoQLMultiPolygon].value,
         SoQLMultiPolygon(_),
+        levels,
         base) with GeoIndexable[SoQLType])
   )
 
   def sqlRep(columnInfo: ColumnInfo[SoQLType]): SqlColIdx =
-    sqlRepFactories(columnInfo.typ)(columnInfo.physicalColumnBase)
+    sqlRepFactories(columnInfo.typ)(columnInfo.physicalColumnBase, columnInfo.presimplifiedZoomLevels)
   def sqlRep(typ: SoQLType, baseName: String): SqlColIdx =
-    sqlRepFactories(typ)(baseName)
+    sqlRepFactories(typ)(baseName, Seq.empty)
 }
