@@ -211,7 +211,7 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           ParametricSql(maybeUpperPhysColumns.map(c => c + selectAlias(expr)(ctx)), setParams)
         }
       case _ if ctx.contains(JoinPrimaryTable) =>
-        val exprRequalifiedForJoin = expr.copy(qualifier = ctx(JoinPrimaryTable).asInstanceOf[Qualifier])(expr.position)
+        val exprRequalifiedForJoin = expr.copy(qualifier = ctx(JoinPrimaryTable).asInstanceOf[Qualifier])
         sql(exprRequalifiedForJoin)(reps, typeRep, setParams, ctx, escape)
       case _ => // Outer soqls do not get rep by column id.  They get rep by datatype.
         val typeReps = typeRep ++

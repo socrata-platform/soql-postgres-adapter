@@ -55,7 +55,7 @@ trait SqlFunctionsComplexType {
     fn.parameters match {
       case Seq(strLit@StringLiteral(value: String, _)) =>
         val phone = value match {
-          case SoQLPhone.phoneRx(phoneType, sep, phoneNumber) =>
+          case SoQLPhone.phoneRx(phoneType, sep, phoneNumber) => // Phone regex...  because Regexes can `match`
             SoQLPhone(Option(phoneNumber).filter(_.nonEmpty),
                       Option(phoneType).filter(_.nonEmpty))
           case _ =>
