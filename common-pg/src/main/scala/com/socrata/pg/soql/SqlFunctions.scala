@@ -139,6 +139,9 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     StddevPop -> nary("stddev_pop") _,
     StddevSamp -> nary("stddev_samp") _,
     Median -> formatCall("percentile_disc(.50) within group (order by %s)") _,
+
+    WindowFunctionOver -> naryish("over", Some("partition by ")) _,
+
     Count -> nary("count") _,
     CountStar -> formatCall("count(*)") _
     // TODO: Complete the function list.
@@ -208,7 +211,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     ParametricSql(Seq(sqlFragsAndParams._1.mkString(fnName + "(", ",", ")")), sqlFragsAndParams._2)
   }
 
-  private def naryish(fnName: String)
+  private def naryish(fnName: String, afterOpenParenText: Option[String] = None)
                      (fn: FunCall,
                       rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                       typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
@@ -216,14 +219,18 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                       ctx: Sqlizer.Context,
                       escape: Escape): ParametricSql = {
 
-    val ParametricSql(Seq(head), setParamsHead) = Sqlizer.sql(fn.parameters.head)(rep, typeRep, setParams, ctx, escape)
+    val ParametricSql(Seq(head), setParamsHead) = Sqlizer.sql(fn.parameters.head)(rep, typeRep, setParams, ctx + (SqlizerContext.NoWrappingParenInFunctionCall -> true), escape)
 
     val sqlFragsAndParams = fn.parameters.tail.foldLeft(Tuple2(Seq.empty[String], setParamsHead)) { (acc, param) =>
       val ParametricSql(Seq(sql), newSetParams) = Sqlizer.sql(param)(rep, typeRep, acc._2, ctx, escape)
       (acc._1 :+ sql, newSetParams)
     }
 
-    ParametricSql(Seq(sqlFragsAndParams._1.mkString(head + " " + fnName + "(", ",", ")")), sqlFragsAndParams._2)
+    val aopt = afterOpenParenText match {
+      case Some(x) if sqlFragsAndParams._1.nonEmpty => x
+      case _ => ""
+    }
+    ParametricSql(Seq(sqlFragsAndParams._1.mkString(head + " " + fnName + "(" + aopt, ",", ")")), sqlFragsAndParams._2)
   }
 
   private def caseCall(fn: FunCall,

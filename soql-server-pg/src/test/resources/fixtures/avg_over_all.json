@@ -1,0 +1,10 @@
+[ { "code": "00000", "make": "APCO", "avg_v_max_over": 50.1111111111111111 },
+  { "code": "14200", "make": "APCO", "avg_v_max_over": 50.1111111111111111 },
+  { "code": "14210", "make": "APCO", "avg_v_max_over": 50.1111111111111111 },
+  { "code": "18520", "make": "APCO", "avg_v_max_over": 50.1111111111111111 },
+  { "code": "BUZZ-Z4", "make": "OZONE", "avg_v_max_over": 50.1111111111111111 },
+  { "code": "CHILI3", "make": "Skywalk", "avg_v_max_over": 50.1111111111111111 },
+  { "code": "MESCAL4", "make": "Skywalk", "avg_v_max_over": 50.1111111111111111 },
+  { "code": "RUSH-3", "make": "OZONE", "avg_v_max_over": 50.1111111111111111 },
+  { "code": "TEQUILA3", "make": "Skywalk", "avg_v_max_over": 50.1111111111111111 }
+]

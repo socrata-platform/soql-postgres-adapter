@@ -139,7 +139,11 @@ object FunctionCallSqlizer extends Sqlizer[FunctionCall[UserColumnId, SoQLType]]
     val ParametricSql(sqls, fnSetParams) = fn(expr, rep, typeRep, setParams, ctx, escape)
     // SoQL parsing bakes parenthesis into the ast tree without explicitly spitting out parenthesis.
     // We add parenthesis to every function call to preserve semantics.
-    ParametricSql(sqls.map(s => s"($s)" + selectAlias(expr)(ctx)), fnSetParams)
+    if (ctx.keySet.contains(NoWrappingParenInFunctionCall)) {
+      ParametricSql(sqls.map(s => s"$s" + selectAlias(expr)(ctx)), fnSetParams)
+    } else {
+      ParametricSql(sqls.map(s => s"($s)" + selectAlias(expr)(ctx)), fnSetParams)
+    }
   }
 }
 
