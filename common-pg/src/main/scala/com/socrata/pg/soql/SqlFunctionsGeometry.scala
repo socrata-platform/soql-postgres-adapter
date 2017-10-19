@@ -99,16 +99,16 @@ trait SqlFunctionsGeometry {
 
         val zoomedFn = fn.copy(parameters = Seq(id, zoom.copy(value=resolution)))
 
-        // val geoReps: Iterable[GeometryLikeRep[_]] = rep.collect {
-        //   case (_, g: GeometryLikeRep[_]) => g
-        // }
+        val geoReps: Iterable[GeometryLikeRep[_]] = rep.collect {
+          case (_, g: GeometryLikeRep[_]) => g
+        }
 
         // Don't snap if we're sure this is already simplified!
-        // if (geoReps.size == 1 && geoReps.head.presimplifiedZoomLevels.contains(level)) {
-        //   formatCall("%s")(zoomedFn, zoomedRep, zoomedTypeRep, setParams, ctx, escape)
-        // } else {
-        //   formatSimplify(s"ST_SnapToGrid(%s, %s)")(zoomedFn, zoomedRep, zoomedTypeRep, setParams, ctx, escape)
-        // }
+        if (geoReps.size == 1 && geoReps.head.presimplifiedZoomLevels.contains(level)) {
+          formatCall("%s")(zoomedFn, zoomedRep, zoomedTypeRep, setParams, ctx, escape)
+        } else {
+          formatSimplify(s"ST_SnapToGrid(%s, %s)")(zoomedFn, zoomedRep, zoomedTypeRep, setParams, ctx, escape)
+        }
 
         formatSimplify(s"ST_SnapToGrid(%s, %s)")(zoomedFn, zoomedRep, zoomedTypeRep, setParams, ctx, escape)
       case _ => throw new Exception("Should never get anything but a number for zoom! Oh no!")
