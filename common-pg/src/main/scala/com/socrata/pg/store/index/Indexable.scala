@@ -132,6 +132,8 @@ trait BooleanIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T]
 
 trait BlobIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] => }
 
+trait PhotoIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] => }
+
 trait GeoIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] =>
 
   def indexableColumns: Array[String] = this.physColumns
