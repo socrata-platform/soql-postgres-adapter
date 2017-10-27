@@ -8,7 +8,7 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.pg.soql.SqlFunctions._
 import com.socrata.pg.soql.Sqlizer._
 import com.socrata.soql.functions.Function
-import com.socrata.soql.functions.SoQLFunctions._
+import com.socrata.soql.functions.SoQLFunctions.{DocumentToFilename, _}
 import com.socrata.soql.typed.StringLiteral
 import com.socrata.soql.types.{SoQLPhone, SoQLType, SoQLUrl, SoQLValue}
 
@@ -43,7 +43,11 @@ trait SqlFunctionsComplexType {
     TextToUrl -> textToUrl _,
     UrlToUrl -> subColumn(0),
     UrlToDescription -> subColumn(1),
-    Url -> formatCall("%s" + SqlFragments.Separator + "%s")
+    Url -> formatCall("%s" + SqlFragments.Separator + "%s"),
+
+    DocumentToFileId -> jsonProp("file_id"),
+    DocumentToFilename -> jsonProp("filename"),
+    DocumentToContentType -> jsonProp("content_type")
   )
 
   private def textToPhone(fn: FunCall,
@@ -90,6 +94,21 @@ trait SqlFunctionsComplexType {
       case Seq(col) =>
         val ParametricSql(sqls, params) = Sqlizer.sql(col)(rep, typeRep, setParams, ctx, escape)
         ParametricSql(Seq(sqls(subColumnIndex)), params) // Drop geom and keep only address
+      case _ => throw new Exception("should never get here")
+    }
+  }
+
+  private def jsonProp(prop: String)
+                      (fn: FunCall,
+                       rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                       typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                       setParams: Seq[SetParam],
+                       ctx: Sqlizer.Context,
+                       escape: Escape): ParametricSql = {
+    fn.parameters match {
+      case Seq(col) =>
+        val ParametricSql(sqls, params) = Sqlizer.sql(col)(rep, typeRep, setParams, ctx, escape)
+        ParametricSql(sqls.map(x => x + s"->>'$prop'"), params) // Drop geom and keep only address
       case _ => throw new Exception("should never get here")
     }
   }

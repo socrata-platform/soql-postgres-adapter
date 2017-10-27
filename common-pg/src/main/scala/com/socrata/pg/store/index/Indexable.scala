@@ -101,6 +101,29 @@ trait BaseIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
   }
 }
 
+trait JsonbIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
+
+  override def createIndex(tableName: String, tablespace: String): Option[String] = {
+    val sql = this.physColumns.map { phyCol =>
+      s"""
+      DO $$$$ BEGIN
+        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_$phyCol') THEN
+          CREATE INDEX idx_${tableName}_$phyCol on $tableName USING GIN ($phyCol)$tablespace;
+        END IF;
+      END; $$$$;"""
+    }.mkString(";")
+    Some(sql)
+  }
+
+  override def dropIndex(tableName: String): Option[String] = {
+    val sql = this.physColumns.map { phyCol =>
+      s"""
+      DROP INDEX IF EXISTS idx_${tableName}_$phyCol"""
+    }.mkString(";")
+    Some(sql)
+  }
+}
+
 trait NumberLikeIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] => }
 
 trait TimestampLikeIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] => }
@@ -172,6 +195,11 @@ object SoQLIndexableRep {
     SoQLPhone -> ((base, _) => new PhoneRep(base) with TextIndexable[SoQLType]),
     SoQLLocation -> ((base, _) => new LocationRep(base) with LocationIndexable[SoQLType]),
     SoQLUrl -> ((base, _) => new UrlRep(base) with TextIndexable[SoQLType]),
+    // TODO: Specifically detect document.filename = literal expression and
+    //       generate document->filename @> 'literal'::jsonb so that this index can be used.
+    //                document->>filename = 'literal' will not use this index
+    SoQLDocument -> ((base, _) => new DocumentRep(base) with JsonbIndexable[SoQLType]),
+    SoQLPhoto -> ((base, _) => new PhotoRep(base) with BlobIndexable[SoQLType]), // TODO: Revisit index need
     SoQLPoint -> ((base, levels) =>
       new GeometryLikeRep[Point](
         SoQLPoint,
