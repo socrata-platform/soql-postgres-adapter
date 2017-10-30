@@ -197,11 +197,10 @@ object SoQLIndexableRep {
     SoQLPhone -> ((base, _) => new PhoneRep(base) with TextIndexable[SoQLType]),
     SoQLLocation -> ((base, _) => new LocationRep(base) with LocationIndexable[SoQLType]),
     SoQLUrl -> ((base, _) => new UrlRep(base) with TextIndexable[SoQLType]),
-    // TODO: Specifically detect document.filename = literal expression and
-    //       generate document->filename @> 'literal'::jsonb so that this index can be used.
-    //                document->>filename = 'literal' will not use this index
+    // document->filename @> 'literal'::jsonb so that this index can be used.
+    // document->>filename = 'literal' will not use this index
     SoQLDocument -> ((base, _) => new DocumentRep(base) with JsonbIndexable[SoQLType]),
-    SoQLPhoto -> ((base, _) => new PhotoRep(base) with BlobIndexable[SoQLType]), // TODO: Revisit index need
+    SoQLPhoto -> ((base, _) => new PhotoRep(base) with BlobIndexable[SoQLType]),
     SoQLPoint -> ((base, levels) =>
       new GeometryLikeRep[Point](
         SoQLPoint,

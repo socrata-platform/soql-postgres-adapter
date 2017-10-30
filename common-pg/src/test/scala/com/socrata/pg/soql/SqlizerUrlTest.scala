@@ -9,7 +9,6 @@ class SqlizerUrlTest extends SqlizerTest {
     val soql = "SELECT url.url as url_url WHERE url.description = 'Home Site' order by url_url"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT (t1.url_url) FROM t1 WHERE ((t1.url_description) = ?) ORDER BY (t1.url_url) nulls last")
-    println(sql)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq("Home Site"))
   }

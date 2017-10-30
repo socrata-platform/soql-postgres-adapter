@@ -84,7 +84,8 @@ object SqlizerTest {
     ColumnName("multipoint") -> ((18, SoQLMultiPoint)),
     ColumnName("location") -> ((19, SoQLLocation)),
     ColumnName("phone") -> ((20, SoQLPhone)),
-    ColumnName("url") -> ((21, SoQLUrl))
+    ColumnName("url") -> ((21, SoQLUrl)),
+    ColumnName("document") -> ((22, SoQLDocument))
   )
 
   private val typeTableColumnMap = Map(
