@@ -16,7 +16,7 @@ class PGSecondaryRowReader[CT, CV](val connection:Connection,
 
   def lookupRows(ids: Iterator[CV]): RowUserIdMap[CV, InspectedRow[CV]] =
     timingReport("lookup-rows") {
-      using(sqlizer.findRows(connection, ids)) { it =>
+      using(sqlizer.findRows(connection, /* puzzlingly */ false, ids)) { it =>
         val result = datasetContext.makeIdMap[InspectedRow[CV]]()
         for { row <- it.flatten } result.put(row.id, row)
         result
