@@ -50,6 +50,11 @@ trait SqlFunctionsGeometry {
     GeoMultiPolygonFromPolygon -> formatCall("ST_Multi(%s)") _,
     GeoMultiLineFromLine -> formatCall("ST_Multi(%s)") _,
     GeoMultiPointFromPoint -> formatCall("ST_Multi(%s)") _,
+    // ST_CollectionExtract takes a type as a second argument
+    // See https://postgis.net/docs/ST_CollectionExtract.html for exact integer -> type mapping
+    GeoCollectionExtractMultiPolygonFromPolygon -> formatCall("ST_CollectionExtract(%s, 3)") _,
+    GeoCollectionExtractMultiLineFromLine -> formatCall("ST_CollectionExtract(%s, 2)") _,
+    GeoCollectionExtractMultiPointFromPoint -> formatCall("ST_CollectionExtract(%s, 1)") _,
     CuratedRegionTest -> curatedRegionTest,
     NumberOfPoints -> formatCall("ST_NPoints(%s)") _,
     Simplify -> formatSimplify("ST_Simplify(%s, %s)") _,
