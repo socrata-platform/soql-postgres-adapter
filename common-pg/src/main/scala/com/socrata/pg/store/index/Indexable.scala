@@ -101,14 +101,20 @@ trait BaseIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
   }
 }
 
-trait JsonbIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
+trait DocumentIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
 
   override def createIndex(tableName: String, tablespace: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
       s"""
       DO $$$$ BEGIN
-        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_$phyCol') THEN
-          CREATE INDEX idx_${tableName}_$phyCol on $tableName USING GIN ($phyCol)$tablespace;
+        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_${phyCol}_file_id') THEN
+          CREATE INDEX idx_${tableName}_${phyCol}_file_id on $tableName ((($phyCol->>'file_id')))$tablespace;
+        END IF;
+        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_${phyCol}_filename') THEN
+          CREATE INDEX idx_${tableName}_${phyCol}_filename on $tableName ((($phyCol->>'filename')))$tablespace;
+        END IF;
+        IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_${phyCol}_content_type') THEN
+          CREATE INDEX idx_${tableName}_${phyCol}_content_type on $tableName ((($phyCol->>'content_type')))$tablespace;
         END IF;
       END; $$$$;"""
     }.mkString(";")
@@ -118,7 +124,9 @@ trait JsonbIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
   override def dropIndex(tableName: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
       s"""
-      DROP INDEX IF EXISTS idx_${tableName}_$phyCol"""
+      DROP INDEX IF EXISTS idx_${tableName}_${phyCol}_file_id;
+      DROP INDEX IF EXISTS idx_${tableName}_${phyCol}_filename
+      DROP INDEX IF EXISTS idx_${tableName}_${phyCol}_content_type"""
     }.mkString(";")
     Some(sql)
   }
@@ -197,9 +205,7 @@ object SoQLIndexableRep {
     SoQLPhone -> ((base, _) => new PhoneRep(base) with TextIndexable[SoQLType]),
     SoQLLocation -> ((base, _) => new LocationRep(base) with LocationIndexable[SoQLType]),
     SoQLUrl -> ((base, _) => new UrlRep(base) with TextIndexable[SoQLType]),
-    // document->filename @> 'literal'::jsonb so that this index can be used.
-    // document->>filename = 'literal' will not use this index
-    SoQLDocument -> ((base, _) => new DocumentRep(base) with JsonbIndexable[SoQLType]),
+    SoQLDocument -> ((base, _) => new DocumentRep(base) with DocumentIndexable[SoQLType]),
     SoQLPhoto -> ((base, _) => new PhotoRep(base) with BlobIndexable[SoQLType]),
     SoQLPoint -> ((base, levels) =>
       new GeometryLikeRep[Point](
