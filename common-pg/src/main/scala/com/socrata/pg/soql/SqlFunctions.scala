@@ -39,8 +39,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     Not -> formatCall("not %s") _,
     In -> naryish("in") _,
     NotIn -> naryish("not in") _,
-    Eq -> infixWithJsonbEqOptimization(SqlEq) _,
-    EqEq -> infixWithJsonbEqOptimization(SqlEq) _,
+    Eq -> infix(SqlEq) _,
+    EqEq -> infix(SqlEq) _,
     Neq -> infix(SqlNeq, " or ") _,
     BangEq -> infix(SqlNeq, " or ") _,
     And -> infix("and") _,
@@ -197,45 +197,6 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
   private val jsonbFields = Map(DocumentToFilename -> "filename",
                                 DocumentToFileId -> "file_id",
                                 DocumentToContentType -> "content_type")
-
-  /**
-    * Detect jsonb optimization.  If there is none, call infix.
-    */
-  private def infixWithJsonbEqOptimization(fnName: String, foldOp: String = " and ")
-                                          (fn: FunCall,
-                                           rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
-                                           typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
-                                           setParams: Seq[SetParam],
-                                           ctx: Sqlizer.Context,
-                                           escape: Escape): ParametricSql = {
-    val optimized = fn.parameters(0) match {
-      case FunctionCall(MonomorphicFunction(jsonbFieldKey, _), Seq(field)) if jsonbFields.contains(jsonbFieldKey) =>
-        fn.parameters(1) match {
-          case strLit@StringLiteral(value: String, _) =>
-            val ParametricSql(ls, setParamsL) = Sqlizer.sql(field)(rep, typeRep, setParams, ctx, escape)
-            val ParametricSql(rs, setParamsLR) = Sqlizer.sql(fn.parameters(1))(rep, typeRep, setParamsL, ctx, escape)
-            val lrs = ls.zip(rs).foldLeft(Seq.empty[String]) { (acc, lr) =>
-              lr match {
-                case (l, r) =>
-                  val fieldName = jsonbFields(jsonbFieldKey)
-                  val s = { s"""$l @> ('{"$fieldName":"' || ? || '"}')::jsonb""" }
-                  acc :+ s
-              }
-            }
-            Some(ParametricSql(lrs, setParamsLR))
-          case _ =>
-            None
-        }
-      case _ =>
-        None
-    }
-
-    optimized match {
-      case Some(x) => x
-      case None =>
-        infix(fnName, foldOp)(fn, rep, typeRep, setParams, ctx, escape)
-    }
-  }
 
   private def nary(fnName: String)
                   (fn: FunCall,
