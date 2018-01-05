@@ -6,7 +6,7 @@ BINDIR=$(dirname "$REALPATH")
 
 psql datacoordinator -c "insert into secondary_stores_config (store_id, next_run_time, interval_in_seconds, group_name) SELECT * FROM (SELECT 'pg'::text as store_id, now(), 5, 'read'::text) t WHERE store_id NOT IN (SELECT store_id FROM secondary_stores_config)"
 
-CONFIG=${SODA_CONFIG:-/etc/pg-secondary.conf}
+CONFIG=${SODA_CONFIG:-"$BINDIR"/../configs/soql-postgres-adapter.conf}
 
 JARFILE=$("$BINDIR"/build.sh "$@" | grep '^store-pg: ' | sed 's/^store-pg: //')
 
