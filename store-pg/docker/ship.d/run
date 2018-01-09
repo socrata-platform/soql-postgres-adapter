@@ -3,9 +3,14 @@ set -ev
 
 export UUID=$(cat /proc/sys/kernel/random/uuid)
 
-/bin/env_parse ${SERVER_CONFIG}.j2
-
-/bin/env_parse ${SECONDARY_CONFIG}.j2
+if [ -z "$MARATHON_APP_ID" ]; then
+  echo "Not running in marathon, so I won't compile the config templates!"
+  echo "To force compilation of config, set the \$MARATHON_APP_ID config var."
+else
+  echo "Compiling config for ${SERVER_CONFIG} and ${SECONDARY_CONFIG}"
+  /bin/env_parse ${SERVER_CONFIG}.j2
+  /bin/env_parse ${SECONDARY_CONFIG}.j2
+fi
 
 exec su socrata -c '/usr/bin/java \
     -Xmx${JAVA_XMX} \
