@@ -5,7 +5,7 @@ set -e
 REALPATH=$(python -c "import os; print(os.path.realpath('$0'))")
 BINDIR=$(dirname "$REALPATH")
 
-CONFIG=${SODA_CONFIG:-"$BINDIR"/../configs/soql-postgres-adapter.conf}
+CONFIG=${SODA_CONFIG:-"$BINDIR"/../configs/application.conf}
 
 JARFILE=$("$BINDIR"/build.sh "$@" | grep '^store-pg: ' | sed 's/^store-pg: //')
 

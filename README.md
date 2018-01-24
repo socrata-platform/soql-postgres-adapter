@@ -19,14 +19,27 @@ sbt test package assembly
 
 ## Running the service
 
-For active development, when you always want the latest up to date code in your repo, you will probably be executing this from an SBT shell:
+### soql-server-pg
 
-    soql-postgres-adapter/run
+For active development, when you always want the latest up to date code in your repo, run with SBT:
 
-For running the soql-postgres-adapter as one of several microservices, it might
+    sbt -Dconfig.file=configs/application.conf soql-server-pg/run
+
+For running soql-server-pg as one of several microservices, it might
 be better to build the assembly and run it to save on memory:
 
     bin/start_soql_server_pg.sh
+
+### secondary-watcher-pg
+
+For active development, when you always want the latest up to date code in your repo, run with SBT:
+
+    sbt -Dconfig.file=configs/application.conf store-pg/run
+
+For running secondary-watcher-pg as one of several microservices, it might
+be better to build the assembly and run it to save on memory:
+
+    bin/start_secondary_watcher_pg.sh
 
 If configured, secondary-watcher-pg can send messages to Eurybates when replication for its group (`"read"`) has completed. To configure this locally add to your secondary-watcher config:
 
