@@ -590,7 +590,7 @@ object QueryServer extends DynamicPortMap with Logging {
     new QueryServerConfig(withDefaultAddress(ConfigFactory.load()), "com.socrata.soql-server-pg")
   } catch {
     case e: Exception =>
-      logger.error(e.toString)
+      e.printStackTrace()
       sys.exit(1)
   }
 
