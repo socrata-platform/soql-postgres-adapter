@@ -24,4 +24,10 @@ class StoreConfig(config: Config, root: String) extends ConfigClass(config, root
   val curatorConfig = optionally(getRawConfig("curator")).map { _ =>
     getConfig("curator", new CuratorConfig(_, _))
   }
+
+  val secondaryMetrics = SecondaryMetricsConfig(config, path("secondary-metrics"))
+}
+
+case class SecondaryMetricsConfig(config: Config, root: String) extends ConfigClass(config, root) {
+  val enabled = optionally(getBoolean("enabled")).getOrElse(false)
 }

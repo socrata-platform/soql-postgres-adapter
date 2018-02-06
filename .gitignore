@@ -18,3 +18,4 @@
 /.idea_modules/
 */docker/*.jar
 configs/local*.conf
+.build.sh.pid

@@ -9,6 +9,7 @@ import com.mchange.v2.c3p0.DataSources
 import com.rojoma.simplearm.Managed
 import com.socrata.datacoordinator.common.DataSourceConfig
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
+import com.socrata.datacoordinator.secondary.Secondary.Cookie
 import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo, CopyInfo => SecondaryCopyInfo, _}
 import com.socrata.datacoordinator.truth.loader.sql.SqlPrevettedLoader
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, DatasetCopyContext}
@@ -55,6 +56,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   private val rowsChangedPreviewHandler = new RowsChangedPreviewHandler(rowsChangedPreviewConfig)
 
   val postgresUniverseCommon = new PostgresUniverseCommon(TablespaceFunction(storeConfig.tablespace), dsInfo.copyIn)
+
+  private val secondaryMetrics = storeConfig.secondaryMetrics
 
   // Called when this process is shutting down (or being killed)
   def shutdown(): Unit = {
@@ -653,6 +656,28 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         new DSInfo(dataSource, PostgresCopyIn) with Closeable {
           def close(): Unit = {}
         }
+    }
+  }
+
+  override def metric(datasetInternalName: String, cookie: Cookie): Option[SecondaryMetric] = {
+    if (secondaryMetrics.enabled) {
+      logger.debug(s"metric '$datasetInternalName' (cookie: $cookie)")
+      withPgu(dsInfo, None) { pgu =>
+        val result = doMetric(pgu, datasetInternalName)
+        pgu.commit()
+
+        result
+      }
+    } else {
+      logger.debug("skipping metric since dataset secondary metrics are not enabled")
+      None
+    }
+  }
+
+  private def doMetric(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                       datasetInternalName: String): Option[SecondaryMetric] = {
+    pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetInternalName).flatMap { datasetId =>
+      pgu.secondaryMetrics.dataset(datasetId)
     }
   }
 }

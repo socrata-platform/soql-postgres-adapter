@@ -104,6 +104,8 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
 
   lazy val lowLevelDatabaseReader = new PostgresDatabaseReader(conn, datasetMapReader, repFor)
 
+  lazy val secondaryMetrics = new PGSecondaryMetrics(conn)
+
   def openDatabase: () => Managed[Any] = lowLevelDatabaseReader.openDatabase _
 
   def logger(datasetInfo: DatasetInfo, user: String): Logger[SoQLType,SoQLValue] =
