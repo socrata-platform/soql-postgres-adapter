@@ -60,6 +60,10 @@ instances {
         max-retries = 29
       }
       {%- endif %}
+
+      secondary-metrics {
+        enabled = {{ PG_SECONDARY_METRICS_ENABLED }}
+      }
     }
   }
 {% endfor %}
