@@ -1,6 +1,6 @@
 {
   "aliases": [ "soql-server" ],
-  "ports": [ 6090, 6091 ],
+  "ports": [ 6090 ],
   "start_container": "bin/start_soql_server_pg_docker.sh",
   "start_process": "bin/start_soql_server_pg.sh"
 }
