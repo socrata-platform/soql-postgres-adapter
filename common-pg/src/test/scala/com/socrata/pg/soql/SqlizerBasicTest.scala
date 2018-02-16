@@ -212,42 +212,42 @@ class SqlizerBasicTest extends SqlizerTest {
   test("date_extract_hh") {
     val soql = "select date_extract_hh(updated_on)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (extract(hour from t1.updated_on)) FROM t1")
+    sql should be ("SELECT (extract(hour from t1.updated_on)::numeric) FROM t1")
     setParams.length should be (0)
   }
 
   test("date_extract_dow - day of week") {
     val soql = "select date_extract_dow(updated_on)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (extract(dow from t1.updated_on)) FROM t1")
+    sql should be ("SELECT (extract(dow from t1.updated_on)::numeric) FROM t1")
     setParams.length should be (0)
   }
 
   test("date_extract_woy - week of year") {
     val soql = "select date_extract_woy(updated_on)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (extract(week from t1.updated_on)) FROM t1")
+    sql should be ("SELECT (extract(week from t1.updated_on)::numeric) FROM t1")
     setParams.length should be (0)
   }
 
   test("date_extract_y") {
     val soql = "select date_extract_y(updated_on)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (extract(year from t1.updated_on)) FROM t1")
+    sql should be ("SELECT (extract(year from t1.updated_on)::numeric) FROM t1")
     setParams.length should be (0)
   }
 
   test("date_extract_m") {
     val soql = "select date_extract_m(updated_on)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (extract(month from t1.updated_on)) FROM t1")
+    sql should be ("SELECT (extract(month from t1.updated_on)::numeric) FROM t1")
     setParams.length should be (0)
   }
 
   test("date_extract_d") {
     val soql = "select date_extract_d(updated_on)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (extract(day from t1.updated_on)) FROM t1")
+    sql should be ("SELECT (extract(day from t1.updated_on)::numeric) FROM t1")
     setParams.length should be (0)
   }
 

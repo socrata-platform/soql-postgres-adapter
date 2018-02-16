@@ -59,7 +59,7 @@ class SqlizerJoinTest  extends SqlizerTest {
   test("join and date extract") {
     val soql = "select case_number, primary_type, date_extract_woy(@type.registered) join @type on primary_type = @type.primary_type"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT t1.case_number,t1.primary_type,(extract(week from t2.registered)) FROM t1 JOIN t2 ON (t1.primary_type = t2.primary_type)")
+    sql should be ("SELECT t1.case_number,t1.primary_type,(extract(week from t2.registered)::numeric) FROM t1 JOIN t2 ON (t1.primary_type = t2.primary_type)")
     setParams.length should be (0)
   }
 }
