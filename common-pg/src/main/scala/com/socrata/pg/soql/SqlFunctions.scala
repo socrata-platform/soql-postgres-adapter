@@ -96,14 +96,14 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     FloatingTimeStampTruncYm -> formatCall("date_trunc('month', %s)") _,
     FloatingTimeStampTruncY -> formatCall("date_trunc('year', %s)") _,
 
-    FloatingTimeStampExtractY-> formatCall("extract(year from %s)") _,
-    FloatingTimeStampExtractM-> formatCall("extract(month from %s)") _,
-    FloatingTimeStampExtractD -> formatCall("extract(day from %s)") _,
-    FloatingTimeStampExtractHh -> formatCall("extract(hour from %s)") _,
-    FloatingTimeStampExtractMm -> formatCall("extract(minute from %s)") _,
-    FloatingTimeStampExtractSs -> formatCall("extract(second from %s)") _,
-    FloatingTimeStampExtractDow -> formatCall("extract(dow from %s)") _,
-    FloatingTimeStampExtractWoy -> formatCall("extract(week from %s)") _,
+    FloatingTimeStampExtractY-> formatCall("extract(year from %s)::numeric") _,
+    FloatingTimeStampExtractM-> formatCall("extract(month from %s)::numeric") _,
+    FloatingTimeStampExtractD -> formatCall("extract(day from %s)::numeric") _,
+    FloatingTimeStampExtractHh -> formatCall("extract(hour from %s)::numeric") _,
+    FloatingTimeStampExtractMm -> formatCall("extract(minute from %s)::numeric") _,
+    FloatingTimeStampExtractSs -> formatCall("extract(second from %s)::numeric") _,
+    FloatingTimeStampExtractDow -> formatCall("extract(dow from %s)::numeric") _,
+    FloatingTimeStampExtractWoy -> formatCall("extract(week from %s)::numeric") _,
 
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html

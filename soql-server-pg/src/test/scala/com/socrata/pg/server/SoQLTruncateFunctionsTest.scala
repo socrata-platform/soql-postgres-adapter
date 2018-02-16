@@ -21,4 +21,8 @@ class SoQLTruncateFunctionsTest extends SoQLTest {
   test("floating timestamp extract - dow") {
     compareSoqlResult("select date_extract_dow(available), count(*) group by date_extract_dow(available) order by date_extract_dow(available)", "group-floatingtimestamp-extract-dow.json")
   }
+
+  test("floating timestamp extract - return type should be numeric") {
+    compareSoqlResult("select date_extract_m('2018-09-16')%12,date_extract_ss('2018-09-16T00:00:00.200')%12 limit 1", "floatingtimestamp-extract-numeric.json")
+  }
 }
