@@ -9,6 +9,7 @@ fi
 
 local_config_dir="$(dirname "$(realpath "$0")")/../configs"
 docker run \
+  -e JMX_PORT=6300 \
   -e SERVER_CONFIG="configs/application-alpha.conf" \
   -v "$local_config_dir":/srv/secondary-watcher/configs \
   -p 6300:6300 \
