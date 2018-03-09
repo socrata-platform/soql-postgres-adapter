@@ -19,3 +19,5 @@
 */docker/*.jar
 configs/local*.conf
 .build.sh.pid
+secondary-watcher-pg*.log
+soql-server-pg*.log

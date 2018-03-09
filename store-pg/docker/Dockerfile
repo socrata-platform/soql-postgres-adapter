@@ -2,7 +2,7 @@ FROM socrata/java8
 
 # TODO expose JMX
 ENV JMX_PORT 6300
-EXPOSE 6300
+EXPOSE $JMX_PORT
 
 ENV SERVER_ROOT /srv/secondary-watcher
 ENV SERVER_ARTIFACT store-pg-assembly.jar
