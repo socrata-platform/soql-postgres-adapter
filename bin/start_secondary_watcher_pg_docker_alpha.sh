@@ -13,4 +13,4 @@ docker run \
   -e SERVER_CONFIG="configs/application-alpha.conf" \
   -v "$local_config_dir":/srv/secondary-watcher/configs \
   -p 6300:6300 \
-  -d -t "$image"
+  -t "$image"
