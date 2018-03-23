@@ -13,4 +13,4 @@ docker run \
   -v "$local_config_dir":/srv/soql-server-pg/configs \
   -p 6090:6090 \
   -p 6091:6091 \
-  -d -t "$image"
+  -t "$image"
