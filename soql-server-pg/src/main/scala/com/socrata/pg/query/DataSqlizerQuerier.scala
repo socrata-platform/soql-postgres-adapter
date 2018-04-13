@@ -32,7 +32,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
             toRowCountSql: (Seq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
             reqRowCount: Boolean,
             querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
-            queryTimeout: Option[Duration]):
+            queryTimeout: Option[Duration],
+            debug: Boolean):
     CloseableIterator[Row[CV]] with RowCount = {
 
     // get row count
@@ -40,7 +41,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
       if (reqRowCount) {
         val rowCountSql = toRowCountSql(analyses, dataTableName)
         // We know this will only return one row, so fetchsize of 0 is ok
-        using(executeSql(conn, rowCountSql, queryTimeout, 0)) { rs =>
+        using(executeSql(conn, rowCountSql, queryTimeout, 0, debug)) { rs =>
           try {
             rs.next()
             Some(rs.getLong(1))
@@ -74,7 +75,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
 
     // get rows
     if (analyses.exists(_.selection.size > 0)) {
-      val rs = executeSql(conn, toSql(analyses, dataTableName), queryTimeout, fetchSize)
+      val sql = toSql(analyses, dataTableName)
+      val rs = executeSql(conn, sql, queryTimeout, fetchSize, debug)
       // Statement and resultset are closed by the iterator.
       new ResultSetIt(rowCount, rs, decodeRow(decoders))
     } else {
@@ -104,7 +106,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
   def setTimeout(timeoutMs: String) = s"SET LOCAL statement_timeout TO $timeoutMs"
   def resetTimeout = "SET LOCAL statement_timeout TO DEFAULT"
 
-  private def executeSql(conn: Connection, pSql: ParametricSql, timeout: Option[Duration], fetchSize: Integer): ResultSet = {
+  private def executeSql(conn: Connection, pSql: ParametricSql, timeout: Option[Duration], fetchSize: Integer, debug: Boolean): ResultSet = {
     try {
       if (timeout.isDefined && timeout.get.isFinite()) {
         val ms = timeout.get.toMillis.min(Int.MaxValue).max(1).toInt.toString
@@ -112,6 +114,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
         execute(conn, setTimeout(ms))
       }
       logger.debug("sql: {}", pSql.sql)
+      if (debug) { logger.info(pSql.toString) }
       // Statement to be closed by caller
       val stmt = conn.prepareStatement(pSql.sql.head)
       // need to explicitly set a fetch size to stream results
