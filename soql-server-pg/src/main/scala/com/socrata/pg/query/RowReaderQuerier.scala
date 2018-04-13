@@ -21,10 +21,11 @@ trait RowReaderQuerier[CT, CV] {
             toRowCountSql: (Seq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
             reqRowCount: Boolean,
             querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
-            queryTimeout: Option[Duration]):
+            queryTimeout: Option[Duration],
+            debug: Boolean):
             Managed[CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount] = {
     val sqlizerq = sqlizer.asInstanceOf[DataSqlizer[CT, CV] with DataSqlizerQuerier[CT, CV]]
-    val resultIter = sqlizerq.query(connection, analyses, toSql, toRowCountSql, reqRowCount, querySchema, queryTimeout)
+    val resultIter = sqlizerq.query(connection, analyses, toSql, toRowCountSql, reqRowCount, querySchema, queryTimeout, debug)
     managed(resultIter)
   }
 

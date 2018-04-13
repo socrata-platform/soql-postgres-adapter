@@ -13,7 +13,13 @@ import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
 import com.socrata.pg.soql.Sqlizer._
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 
-case class ParametricSql(sql: Seq[String], setParams: Seq[SetParam])
+case class ParametricSql(sql: Seq[String], setParams: Seq[SetParam]) {
+  override def toString(): String = {
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    "sql: " + sql.mkString(";") +
+    " params: " + params.mkString(",")
+  }
+}
 
 // scalastyle:off import.grouping
 trait Sqlizer[T] {

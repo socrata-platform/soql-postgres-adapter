@@ -188,9 +188,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val obfuscateId = !Option(servReq.getParameter("obfuscateId")).exists(_ == "false")
     val timeoutMs = Option(servReq.getParameter("queryTimeoutSeconds")).map(_.toDouble * 1000).map(_.toLong)
     val queryTimeout = timeoutMs.map(new FiniteDuration(_, TimeUnit.MILLISECONDS))
+    val debug = Option(servReq.getParameter("X-Socrata-Debug")).isDefined
 
     streamQueryResults(analyses, datasetId, reqRowCount, copy, rollupName, obfuscateId,
-      req.precondition, req.dateTimeHeader("If-Modified-Since"), Option(analysisParam), queryTimeout)
+      req.precondition, req.dateTimeHeader("If-Modified-Since"), Option(analysisParam), queryTimeout, debug)
   }
 
   /**
@@ -208,7 +209,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     precondition: Precondition,
     ifModifiedSince: Option[DateTime],
     etagInfo: Option[String],
-    queryTimeout: Option[Duration]
+    queryTimeout: Option[Duration],
+    debug: Boolean
   ) (resp:HttpServletResponse): Unit = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetId, checkDisabled = true) match {
@@ -224,7 +226,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
               def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
               def requestTimeout(timeout: Option[Duration]) = responses.RequestTimeout ~> Json(Map("timeout" -> timeout.toString))
               execQuery(pgu, datasetId, datasetInfo, analyses, reqRowCount, copy,
-                rollupName, obfuscateId, precondition, ifModifiedSince, etagInfo, queryTimeout) match {
+                rollupName, obfuscateId, precondition, ifModifiedSince, etagInfo, queryTimeout, debug) match {
                 case NotModified(etags) => notModified(etags)(resp)
                 case PreconditionFailed => responses.PreconditionFailed(resp)
                 case RequestTimedOut(timeout) => requestTimeout(timeout)(resp)
@@ -257,7 +259,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     precondition: Precondition,
     ifModifiedSince: Option[DateTime],
     etagInfo: Option[String],
-    queryTimeout: Option[Duration]
+    queryTimeout: Option[Duration],
+    debug: Boolean
   ): QueryResult = {
 
     def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
@@ -311,7 +314,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
           },
           rowCount,
           qryReps,
-          queryTimeout)
+          queryTimeout,
+          debug)
         (qrySchema, latestCopy.dataVersion, results)
       }
     }
