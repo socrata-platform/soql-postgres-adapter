@@ -105,6 +105,17 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     FloatingTimeStampExtractDow -> formatCall("extract(dow from %s)::numeric") _,
     FloatingTimeStampExtractWoy -> formatCall("extract(week from %s)::numeric") _,
 
+    FixedTimeStampTruncYmd -> formatCall("date_trunc('day', %s)") _,
+    FixedTimeStampTruncYm -> formatCall("date_trunc('month', %s)") _,
+    FixedTimeStampTruncY -> formatCall("date_trunc('year', %s)") _,
+
+    FixedTimeStampTruncYmdAtTimeZone -> formatCall("date_trunc('day', %s at time zone %s)") _,
+    FixedTimeStampTruncYmAtTimeZone -> formatCall("date_trunc('month', %s at time zone %s)") _,
+    FixedTimeStampTruncYAtTimeZone -> formatCall("date_trunc('year', %s at time zone %s)") _,
+
+    // Translate a fixed timestamp to a given time zone and convert it to a floating timestamp.
+    ToFloatingTimestamp -> formatCall("%s at time zone %s") _,
+
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
     NumberToText -> formatCall("%s::varchar") _,
