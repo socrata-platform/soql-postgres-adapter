@@ -251,6 +251,14 @@ class SqlizerBasicTest extends SqlizerTest {
     setParams.length should be (0)
   }
 
+  test("to_floating_timestamp") {
+    val soql = "select date_trunc_ymd(to_floating_timestamp(:created_at, 'PST'))"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT (date_trunc('day', (t1.:created_at at time zone ?))) FROM t1")
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq("PST"))
+  }
+
   test("case fn") {
     val soql = "select case(primary_type = 'A', 'X', primary_type = 'B', 'Y')"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
