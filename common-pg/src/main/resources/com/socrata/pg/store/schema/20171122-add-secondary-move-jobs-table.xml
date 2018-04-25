@@ -4,6 +4,7 @@
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
     http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
     <changeSet author="Alexa Rust" id="20171122-add-secondary-move-jobs-table">
+        <validCheckSum>3:577c50a1a3b334a54d733e2a1fa452b3</validCheckSum>
         <preConditions onFail="MARK_RAN">
             <not>
                 <tableExists tableName="secondary_move_jobs"/>
@@ -11,10 +12,6 @@
         </preConditions>
         <createTable tableName="secondary_move_jobs">
             <column name="dataset_system_id" type="BIGINT">
-                <constraints nullable="false"
-                             foreignKeyName="secondary_move_jobs_dataset_system_id_fkey"
-                             references="dataset_map(system_id)"
-                />
             </column>
             <column name="from_store_id" type="VARCHAR(64)">
                 <constraints nullable="false"/>
