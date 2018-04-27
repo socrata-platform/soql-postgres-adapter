@@ -161,28 +161,35 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     val setParamsWhere = where.map(_.setParams).getOrElse(setParamsJoin)
 
     // SEARCH
-    val search = ana.search.map { search =>
-      val searchLit = StringLiteral[SoQLType](search, SoQLText)(NoPosition)
-      val ParametricSql(Seq(searchSql), searchSetParams) =
-        Sqlizer.sql(searchLit)(repMinusComplexJoinTable, typeRep, setParamsWhere, ctx + (SoqlPart -> SoqlSearch), escape)
+    val searchInWhere =
+      if (!analysis.isGrouped) {
+        ana.search.map { search =>
+          val searchLit = StringLiteral[SoQLType](search, SoQLText)(NoPosition)
+          val ParametricSql(Seq(searchSql), searchSetParams) =
+            Sqlizer.sql(searchLit)(repMinusComplexJoinTable, typeRep, setParamsWhere, ctx + (SoqlPart -> SoqlSearch), escape)
 
-      val searchVector = prevAna match {
-        case Some(a) => PostgresUniverseCommon.searchVector(a.selection, Some(ctx))
-        case None =>
-          val primaryTableReps = rep.filter{ case (k, v) => k.qualifier.isEmpty}.values.toSeq
-          PostgresUniverseCommon.searchVector(primaryTableReps, Some(ctx))
+          val searchVector = prevAna match {
+            case Some(a) => PostgresUniverseCommon.searchVector(a.selection, Some(ctx))
+            case None =>
+              val primaryTableReps = rep.filter { case (k, v) => k.qualifier.isEmpty }.values.toSeq
+              PostgresUniverseCommon.searchVector(primaryTableReps, Some(ctx))
+          }
+
+          val andOrWhere = if (where.isDefined) " AND" else " WHERE"
+          searchVector match {
+            case Some(sv) =>
+              val fts = s"$andOrWhere $sv @@ plainto_tsquery('english', $searchSql)"
+              ParametricSql(Seq(fts), searchSetParams)
+            case None =>
+              ParametricSql(Seq(s"$andOrWhere false"), setParamsWhere)
+          }
+
+        }
+      } else {
+        None
       }
 
-      val andOrWhere = if (where.isDefined) " AND" else " WHERE"
-      searchVector match {
-        case Some(sv) =>
-          val fts = s"$andOrWhere $sv @@ plainto_tsquery('english', $searchSql)"
-          ParametricSql(Seq(fts), searchSetParams)
-        case None =>
-          ParametricSql(Seq(s"$andOrWhere false"), setParamsWhere)
-      }
-    }
-    val setParamsSearch = search.map(_.setParams).getOrElse(setParamsWhere)
+    val setParamsSearch = searchInWhere.map(_.setParams).getOrElse(setParamsWhere)
 
     // GROUP BY
     val groupBy = ana.groupBy.map { (groupBys: Seq[CoreExpr[UserColumnId, SoQLType]]) =>
@@ -206,14 +213,46 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     val having = ana.having.map(Sqlizer.sql(_)(repMinusComplexJoinTable, typeRep, setParamsGroupBy, ctxSelectWithJoins + (SoqlPart -> SoqlHaving), escape))
     val setParamsHaving = having.map(_.setParams).getOrElse(setParamsGroupBy)
 
+    val searchInHaving =
+      if (analysis.isGrouped) {
+        analysis.search.map { search =>
+          val searchVectorParametricSqls = analysis.selection.values.toSeq.filter(expr => PostgresUniverseCommon.SearchableTypes.contains(expr.typ)).map { expr =>
+            Sqlizer.sql(expr)(repMinusComplexJoinTable, typeRep, Seq.empty, ctx + (SoqlPart -> SoqlSearch), escape)
+          }
+          val searchVectorSetParams = searchVectorParametricSqls.flatMap(_.setParams)
+
+          val searchLit = StringLiteral[SoQLType](search, SoQLText)(NoPosition)
+          val ParametricSql(Seq(searchSql), searchSetParams) =
+            Sqlizer.sql(searchLit)(
+              repMinusComplexJoinTable,
+              typeRep,
+              setParamsHaving ++ searchVectorSetParams,
+              ctx + (SoqlPart -> SoqlSearch),
+              escape)
+
+          val searchVector = PostgresUniverseCommon.searchVectorFromParametricSql(searchVectorParametricSqls, Some(ctx))
+          val andOrHaving = if (having.isDefined) " AND" else " HAVING"
+          searchVector match {
+            case Some(sv) =>
+              val fts = s"$andOrHaving $sv @@ plainto_tsquery('english', $searchSql)"
+              ParametricSql(Seq(fts), searchSetParams)
+            case None =>
+              ParametricSql(Seq(s"$andOrHaving false"), setParamsHaving)
+          }
+        }
+      } else {
+        None
+      }
+    val setParamsSearchInHaving = searchInHaving.map(_.setParams).getOrElse(setParamsHaving)
+
     // ORDER BY
     val orderBy = ana.orderBy.map { (orderBys: Seq[OrderBy[UserColumnId, SoQLType]]) =>
-      orderBys.foldLeft(Tuple2(Seq.empty[String], setParamsHaving)) { (t2, ob: OrderBy[UserColumnId, SoQLType]) =>
+      orderBys.foldLeft(Tuple2(Seq.empty[String], setParamsSearchInHaving)) { (t2, ob: OrderBy[UserColumnId, SoQLType]) =>
         val ParametricSql(sqls, newSetParams) =
           Sqlizer.sql(ob)(repMinusComplexJoinTable, typeRep, t2._2, ctxSelectWithJoins + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression), escape)
         (t2._1 ++ sqls, newSetParams)
       }}
-    val setParamsOrderBy = orderBy.map(_._2).getOrElse(setParamsHaving)
+    val setParamsOrderBy = orderBy.map(_._2).getOrElse(setParamsSearchInHaving)
 
     val tableName = ana.from.map(TableName(_, None)).getOrElse(TableName.PrimaryTable)
 
@@ -223,9 +262,10 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       s" FROM ${tableNames(tableName)}" +
       joinPhrase.mkString(" ") +
       where.flatMap(_.sql.headOption.map(" WHERE " +  _)).getOrElse("") +
-      search.flatMap(_.sql.headOption).getOrElse("") +
+      searchInWhere.flatMap(_.sql.headOption).getOrElse("") +
       groupBy.map(_._1.mkString(" GROUP BY ", ",", "")).getOrElse("") +
       having.flatMap(_.sql.headOption.map(" HAVING " + _)).getOrElse("") +
+      searchInHaving.flatMap(_.sql.headOption).getOrElse("") +
       orderBy.map(_._1.mkString(" ORDER BY ", ",", "")).getOrElse("") +
       ana.limit.map(" LIMIT " + _.toString).getOrElse("") +
       ana.offset.map(" OFFSET " + _.toString).getOrElse("")

@@ -58,7 +58,7 @@ class PostgresUniverseCommon(val tablespace: String => Option[String],
 
   val repFor = repForIndex
 
-  protected val SearchableTypes: Set[SoQLType] = Set(SoQLText, SoQLObject, SoQLArray)
+  val SearchableTypes: Set[SoQLType] = Set(SoQLText, SoQLObject, SoQLArray)
 
   def tmpDir: File = File.createTempFile("pg-store", "pg").getParentFile
   // unused

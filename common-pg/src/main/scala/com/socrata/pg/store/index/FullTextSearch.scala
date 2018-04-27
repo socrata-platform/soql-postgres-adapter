@@ -2,6 +2,7 @@ package com.socrata.pg.store.index
 
 import com.socrata.datacoordinator.truth.sql.SqlColumnCommonRep
 import com.socrata.pg.soql.Sqlizer._
+import com.socrata.pg.soql.ParametricSql
 import com.socrata.pg.soql.SqlizerContext._
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, TableName}
@@ -10,7 +11,7 @@ import com.socrata.soql.types.{SoQLArray, SoQLObject, SoQLText, SoQLType}
 
 trait FullTextSearch[CT] {
 
-  protected val SearchableTypes: Set[CT]
+  val SearchableTypes: Set[CT]
 
   /**
    * Search vector can be None when there are no columns that support full text search.
@@ -31,6 +32,14 @@ trait FullTextSearch[CT] {
       coalesce(name)
     }
     toTsVector(cols.toSeq)
+  }
+
+  /**
+    * For group views, there are aggregate functions which require parametric sqls to construct the search vector.
+    */
+  def searchVectorFromParametricSql(psqls: Seq[ParametricSql], ctx: Option[Context]): Option[String] = {
+    val xs: Seq[String] = psqls.flatMap(_.sql)
+    toTsVector(xs)
   }
 
   private def qualify(column: String, ctx: Context): String = {
