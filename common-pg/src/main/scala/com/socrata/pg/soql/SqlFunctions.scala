@@ -105,6 +105,10 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     FloatingTimeStampExtractDow -> formatCall("extract(dow from %s)::numeric") _,
     FloatingTimeStampExtractWoy -> formatCall("extract(week from %s)::numeric") _,
 
+    FixedTimeStampZTruncYmd -> formatCall("date_trunc('day', %s)") _,
+    FixedTimeStampZTruncYm -> formatCall("date_trunc('month', %s)") _,
+    FixedTimeStampZTruncY -> formatCall("date_trunc('year', %s)") _,
+    // These are aliases of FixedTimeStampZTrunc*.
     FixedTimeStampTruncYmd -> formatCall("date_trunc('day', %s)") _,
     FixedTimeStampTruncYm -> formatCall("date_trunc('month', %s)") _,
     FixedTimeStampTruncY -> formatCall("date_trunc('year', %s)") _,
