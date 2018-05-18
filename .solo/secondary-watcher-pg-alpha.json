@@ -3,5 +3,6 @@
   "image_name": "secondary-watcher-pg",
   "ports": [ 6300 ],
   "start_container": "bin/start_secondary_watcher_pg_docker_alpha.sh",
-  "start_process": "bin/start_secondary_watcher_pg_alpha.sh"
+  "start_process": "bin/start_secondary_watcher_pg_alpha.sh",
+  "register_by_default": false
 }
