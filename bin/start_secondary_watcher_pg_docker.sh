@@ -12,4 +12,4 @@ docker run \
   -e SERVER_CONFIG="configs/application.conf" \
   -v "$local_config_dir":/srv/secondary-watcher/configs \
   -p 6300:6300 \
-  -t "$image"
+  "$image"
