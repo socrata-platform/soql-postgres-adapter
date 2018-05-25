@@ -1,6 +1,5 @@
 {
-  "aliases": [ "secondary", "sw", "secondary-watcher" ],
-  "ports": [ 6300 ],
+  "aliases": [ "secondary-watcher", "secondary", "sw" ],
   "start_container": "bin/start_secondary_watcher_pg_docker.sh",
   "start_process": "bin/start_secondary_watcher_pg.sh"
 }

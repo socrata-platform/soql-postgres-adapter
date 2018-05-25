@@ -13,4 +13,4 @@ docker run \
   -e SERVER_CONFIG="configs/application-bravo.conf" \
   -v "$local_config_dir":/srv/secondary-watcher/configs \
   -p 6500:6500 \
-  -t "$image"
+  "$image"

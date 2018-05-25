@@ -13,4 +13,4 @@ docker run \
   -e SERVER_CONFIG="configs/application-charlie.conf" \
   -v "$local_config_dir":/srv/secondary-watcher/configs \
   -p 6700:6700 \
-  -t "$image"
+  "$image"
