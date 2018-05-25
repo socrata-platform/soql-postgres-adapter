@@ -108,10 +108,6 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     FixedTimeStampZTruncYmd -> formatCall("date_trunc('day', %s)") _,
     FixedTimeStampZTruncYm -> formatCall("date_trunc('month', %s)") _,
     FixedTimeStampZTruncY -> formatCall("date_trunc('year', %s)") _,
-    // These are aliases of FixedTimeStampZTrunc*.
-    FixedTimeStampTruncYmd -> formatCall("date_trunc('day', %s)") _,
-    FixedTimeStampTruncYm -> formatCall("date_trunc('month', %s)") _,
-    FixedTimeStampTruncY -> formatCall("date_trunc('year', %s)") _,
 
     FixedTimeStampTruncYmdAtTimeZone -> formatCall("date_trunc('day', %s at time zone %s)") _,
     FixedTimeStampTruncYmAtTimeZone -> formatCall("date_trunc('month', %s at time zone %s)") _,
