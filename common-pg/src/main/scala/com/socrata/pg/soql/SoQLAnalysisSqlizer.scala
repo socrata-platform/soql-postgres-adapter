@@ -7,7 +7,7 @@ import com.socrata.soql.analyzer.JoinHelper
 import com.socrata.soql.{SimpleSoQLAnalysis, SoQLAnalysis}
 import com.socrata.soql.environment.{ColumnName, TableName}
 import com.socrata.soql.types._
-import com.socrata.soql.typed.{CoreExpr, OrderBy, StringLiteral, TypedLiteral}
+import com.socrata.soql.typed._
 
 import scala.util.parsing.input.NoPosition
 
@@ -173,15 +173,44 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
           PostgresUniverseCommon.searchVector(primaryTableReps, Some(ctx))
       }
 
+      val searchNumberLitOpt =
+        try {
+          val number = BigDecimal.apply(searchLit.value)
+          Some(NumberLiteral(number, SoQLNumber.t)(searchLit.position))
+        } catch {
+          case _: NumberFormatException =>
+            None
+        }
+
+      val numericCols = searchNumberLitOpt match {
+        case None => Seq.empty[String]
+        case Some(searchNumberLit) =>
+          prevAna match {
+            case Some(a) =>
+              PostgresUniverseCommon.searchNumericVector(a.selection, Some(ctx))
+            case None =>
+              val primaryTableReps = rep.filter{ case (k, v) => k.qualifier.isEmpty}.values.toSeq
+              PostgresUniverseCommon.searchNumericVector(primaryTableReps, Some(ctx))
+          }
+      }
+
+      val searchVectorSql = searchVector.map {sv => s"$sv @@ plainto_tsquery('english', $searchSql)" }.toSeq
+
+      val searchPlusNumericParametricSql = numericCols.foldLeft(ParametricSql(searchVectorSql, searchSetParams)) { (acc, x) =>
+        val ParametricSql(Seq(prev), setParamsBefore) = acc
+        val ParametricSql(Seq(searchSql), setParamsAfter) =
+          Sqlizer.sql(searchNumberLitOpt.get)(repMinusComplexJoinTable, typeRep, setParamsBefore, ctx + (SoqlPart -> SoqlSearch), escape)
+        ParametricSql(Seq(s"$prev OR ($x = $searchSql)"), setParamsAfter)
+      }
+
       val andOrWhere = if (where.isDefined) " AND" else " WHERE"
-      searchVector match {
-        case Some(sv) =>
-          val fts = s"$andOrWhere $sv @@ plainto_tsquery('english', $searchSql)"
-          ParametricSql(Seq(fts), searchSetParams)
-        case None =>
-          ParametricSql(Seq(s"$andOrWhere false"), setParamsWhere)
+      if (searchPlusNumericParametricSql.sql.isEmpty) {
+        ParametricSql(Seq(s"$andOrWhere false"), setParamsWhere)
+      } else {
+        ParametricSql(searchPlusNumericParametricSql.sql.map { x => s"$andOrWhere ($x)" }, searchPlusNumericParametricSql.setParams)
       }
     }
+
     val setParamsSearch = search.map(_.setParams).getOrElse(setParamsWhere)
 
     // GROUP BY
