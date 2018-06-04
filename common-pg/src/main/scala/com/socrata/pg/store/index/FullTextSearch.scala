@@ -5,12 +5,13 @@ import com.socrata.pg.soql.Sqlizer._
 import com.socrata.pg.soql.SqlizerContext._
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, TableName}
-import com.socrata.soql.typed.CoreExpr
+import com.socrata.soql.typed.{CoreExpr, StringLiteral}
 import com.socrata.soql.types.{SoQLArray, SoQLObject, SoQLText, SoQLType}
 
 trait FullTextSearch[CT] {
 
   protected val SearchableTypes: Set[CT]
+  protected val SearchableNumericTypes: Set[CT]
 
   /**
    * Search vector can be None when there are no columns that support full text search.
@@ -31,6 +32,21 @@ trait FullTextSearch[CT] {
       coalesce(name)
     }
     toTsVector(cols.toSeq)
+  }
+
+  def searchNumericVector(selection: OrderedMap[ColumnName, CoreExpr[_, CT]], ctx: Option[Context]): Seq[String] = {
+    val cols = selection.view.filter(x => SearchableNumericTypes.contains(x._2.typ)).map { case (columnName, expr) =>
+      ctx.map(c => qualify(columnName.name, c)).getOrElse(columnName.name)
+    }
+    cols.toSeq
+  }
+
+  def searchNumericVector(reps: Seq[SqlColumnCommonRep[CT]], ctx: Option[Context]): Seq[String] = {
+    val repsSearchableTypes = reps.filter(r => SearchableNumericTypes.contains(r.representedType))
+    val phyCols = repsSearchableTypes.flatMap(rep => rep.physColumns.map(phyCol =>
+      ctx.map(qualify(phyCol, _)).getOrElse(phyCol))
+    )
+    phyCols
   }
 
   private def qualify(column: String, ctx: Context): String = {

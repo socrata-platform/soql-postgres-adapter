@@ -19,4 +19,8 @@ class SoQLSearchTest extends SoQLTest {
   test("search and where ci") {
     compareSoqlResult("select name, make, color where make = 'apco' search 'blue' order by name", "search-and-where.json", caseSensitivity = CaseInsensitive)
   }
+
+  test("number search") {
+    compareSoqlResult("select name, make search '4.9' order by name", "search-number.json")
+  }
 }
