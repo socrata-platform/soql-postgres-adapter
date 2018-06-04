@@ -36,8 +36,7 @@ trait FullTextSearch[CT] {
 
   def searchNumericVector(selection: OrderedMap[ColumnName, CoreExpr[_, CT]], ctx: Option[Context]): Seq[String] = {
     val cols = selection.view.filter(x => SearchableNumericTypes.contains(x._2.typ)).map { case (columnName, expr) =>
-      val name = ctx.map(c => qualify(columnName.name, c)).getOrElse(columnName.name)
-      name
+      ctx.map(c => qualify(columnName.name, c)).getOrElse(columnName.name)
     }
     cols.toSeq
   }
