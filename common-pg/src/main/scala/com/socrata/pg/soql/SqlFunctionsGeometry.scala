@@ -25,6 +25,8 @@ trait SqlFunctionsGeometry {
     TextToPolygon -> formatCall("ST_GeomFromText(%s, 4326)") _,
     TextToMultiPolygon -> formatCall("ST_GeomFromText(%s, 4326)") _,
 
+    Intersection -> formatCall("ST_Intersection(%s, %s)") _,
+
     WithinCircle -> formatCall(
       "ST_within(%s, ST_Buffer(ST_MakePoint(%s, %s)::geography, %s)::geometry)",
       paramPosition = Some(Seq(0, 2, 1, 3))) _,
