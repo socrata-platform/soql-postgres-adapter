@@ -27,22 +27,19 @@ trait SqlFunctionsLocation {
     // The line break in the verbatium string is significant which keep the two sub-fields as
     // two separate fields like (f1), (f2) instead of (f1, f2)
     // TODO: May be we should not wrap expression in () to begin with.
-    Location -> formatCall("%s" + SqlFragments.Separator + humanAddress) _,
-    HumanAddress -> formatCall(humanAddress) _,
+    Location -> formatCall("%s" + SqlFragments.Separator + humanAddress, paramPosition = Some(Seq(0,1,2,3,4,1,2,3,4))),
+    HumanAddress -> formatCall(humanAddress, paramPosition = Some(Seq(0,1,2,3,0,1,2,3))),
     LocationWithinCircle -> geometryFunctionWithLocation(SoQLFunctions.WithinCircle),
     LocationWithinBox -> geometryFunctionWithLocation(SoQLFunctions.WithinBox),
     LocationWithinPolygon -> geometryFunctionWithLocation(SoQLFunctions.WithinPolygon),
     LocationDistanceInMeters -> geometryFunctionWithLocation(SoQLFunctions.DistanceInMeters)
   )
 
-  /**
-   * TODO: human_address will be null if any address field is null.  But we cannot do a simple coalesce
-   * TODO: without handling the edge case to keep human_address as null when all address fields are indeed null.
-   */
   private def humanAddress: String = {
-    Seq("address", "city", "state", "zip")
-      .map(f => s""""$f": ' || to_json(%s::text)::text || '""") // to_json::text encodes special chars in json string.
+    val address = Seq("address", "city", "state", "zip")
+      .map(f => s""""$f": ' || coalesce(to_json(%s::text)::text, '""') || '""") // to_json::text encodes special chars in json string.
       .mkString("'{", ", ", "}'")
+    s"case when coalesce(%s,%s,%s,%s) is null then null else $address end"
   }
 
   private def textToLocation(fn: FunCall,
