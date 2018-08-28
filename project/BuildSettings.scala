@@ -13,8 +13,6 @@ object BuildSettings {
 
   val projectSettings = buildSettings ++
     Seq(
-      com.socrata.sbtplugins.StylePlugin.StyleKeys.styleCheck in Test := {},
-      com.socrata.sbtplugins.StylePlugin.StyleKeys.styleCheck in Compile := {},
       scoverage.ScoverageSbtPlugin.ScoverageKeys.coverageFailOnMinimum := false
     )
 }
