@@ -40,4 +40,10 @@
             <column name="job_id"/>
         </createIndex>
     </changeSet>
+
+    <changeSet author="Chi" id="20180821-add-job-id">
+        <addColumn tableName="secondary_move_jobs">
+            <column name="deleted_at" type="TIMESTAMP WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
 </databaseChangeLog>
