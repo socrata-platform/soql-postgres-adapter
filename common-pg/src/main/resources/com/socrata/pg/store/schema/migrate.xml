@@ -16,5 +16,8 @@
     <include file="com/socrata/pg/store/schema/20170402-add-column-resource-name.xml"/>
     <include file="com/socrata/pg/store/schema/20170615-add-dataset-map-resource-name-index.xml"/>
     <include file="com/socrata/pg/store/schema/20171009-add-column-map-geo-modifiers.xml"/>
+    <!-- The next three tables are only used in Data Coordinator.  But they are created so that cleanup code do not need to be special for pg secondary. -->
     <include file="com/socrata/pg/store/schema/20171122-add-secondary-move-jobs-table.xml"/>
+    <include file="com/socrata/pg/store/schema/20171128-add-collocation-manifest.xml"/>
+    <include file="com/socrata/pg/store/schema/20180202-add-secondary-metrics-table.xml"/>
 </databaseChangeLog>

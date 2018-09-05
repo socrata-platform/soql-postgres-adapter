@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+    <changeSet author="Chi" id="20171128-add-collocation-manifest">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="collocation_manifest"/></not>
+        </preConditions>
+        <createTable tableName="collocation_manifest">
+            <column name="system_id" type="BIGINT" autoIncrement="true">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="dataset_internal_name_left" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dataset_internal_name_right" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="job_id" type="UUID"/>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="deleted_at" type="TIMESTAMP WITH TIME ZONE"/>
+        </createTable>
+    </changeSet>
+</databaseChangeLog>
