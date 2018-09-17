@@ -9,9 +9,9 @@ import com.socrata.soql.environment.{ColumnName, TableName}
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 
 package object soql {
-  type AnalysisTarget = (AUserCol, Map[TableName, String], Seq[SqlColumnRep[SoQLType, SoQLValue]])
-  type ASysCol = Seq[SoQLAnalysis[ColumnName, SoQLType]]
-  type AUserCol = Seq[SoQLAnalysis[UserColumnId, SoQLType]]
+  type AnalysisTarget = (AUserCol, Map[TableName, String], List[SqlColumnRep[SoQLType, SoQLValue]])
+  type ASysCol = List[SoQLAnalysis[ColumnName, SoQLType]]
+  type AUserCol = (List[SoQLAnalysis[UserColumnId, SoQLType]], Option[String])
   type SqlCol = SqlColumnRep[SoQLType, SoQLValue]
   type SqlColIdx = SqlColumnRep[SoQLType, SoQLValue] with Indexable[SoQLType]
   type Escape = String => String
