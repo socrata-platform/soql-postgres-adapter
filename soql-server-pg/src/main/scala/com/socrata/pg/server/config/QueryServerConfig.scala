@@ -17,4 +17,5 @@ class QueryServerConfig(val config: Config, val root: String) extends ConfigClas
   val metrics = MetricsOptions(config.getConfig(path("metrics")))
   val instance = getString("instance")
   val threadpool = getRawConfig("threadpool")
+  val maxConcurrentRequestsPerDataset = getInt("max-concurrent-requests-per-dataset")
 }
