@@ -5,8 +5,8 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.sql.Connection
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
-
 import javax.servlet.http.HttpServletResponse
+
 import com.socrata.pg.BuildInfo
 import com.rojoma.json.v3.ast.JString
 import com.rojoma.json.v3.util.JsonUtil
@@ -37,7 +37,6 @@ import com.socrata.http.server.util.handlers.{NewLoggingHandler, ThreadRenamingH
 import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, StrongEntityTag}
 import com.socrata.pg.SecondaryBase
 import com.socrata.pg.query.{DataSqlizerQuerier, RowCount, RowReaderQuerier}
-import com.socrata.pg.Schema._
 import com.socrata.pg.server.config.{DynamicPortMap, QueryServerConfig}
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.soql._
@@ -176,12 +175,50 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
   }
 
-  def query(req: HttpRequest): HttpServletResponse => Unit =  {
+
+  /** maps dataset name to count of current requests.  Requires synchronization to access. */
+  private val currentRequests = scala.collection.mutable.HashMap[String,Integer]().withDefaultValue(0)
+
+  /**
+    * Limits the maximum concurrent requests for the given dataset.  Requests beyond the limit will return
+    * a HTTP 429 Too Many Requests response.
+    */
+  private def withRequestLimit(datasetId: String, resp: HttpServletResponse, f: HttpServletResponse => Unit) = {
+    val tooManyAlready = currentRequests.synchronized {
+      val currentRequestsForDataset = currentRequests(datasetId)
+      logger.trace(s"Currently processing $currentRequestsForDataset for dataset $datasetId, max allowed is $QueryServer.config.maxConcurrentRequestsPerDataset")
+      if (currentRequestsForDataset >= QueryServer.config.maxConcurrentRequestsPerDataset) {
+        true
+      } else {
+        currentRequests(datasetId) = currentRequestsForDataset + 1
+        false
+      }
+    }
+
+    if (tooManyAlready) {
+      logger.warn(s"Rejecting request for dataset $datasetId, already processing limit of $QueryServer.config.maxConcurrentRequestsPerDataset concurrent requests per dataset")
+      TooManyRequests(resp)
+    } else {
+      try {
+        f(resp)
+      } finally {
+        currentRequests.synchronized {
+          val currentRequestsForDataset = currentRequests(datasetId)
+          if (currentRequestsForDataset <= 1) {
+            currentRequests.remove(datasetId)
+          } else {
+            currentRequests(datasetId) = currentRequestsForDataset - 1
+          }
+        }
+      }
+    }
+  }
+
+  private def query(req: HttpRequest)(resp: HttpServletResponse): Unit =  {
     val servReq = req.servletRequest
     val datasetId = servReq.getParameter("dataset")
     val analysisParam = servReq.getParameter("query")
     val analysisStream = new ByteArrayInputStream(analysisParam.getBytes(StandardCharsets.ISO_8859_1))
-    val schemaHash = servReq.getParameter("schemaHash")
     val analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] = SoQLAnalyzerHelper.deserialize(analysisStream)
     val reqRowCount = Option(servReq.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     val copy = Option(servReq.getParameter("copy"))
@@ -191,15 +228,11 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val queryTimeout = timeoutMs.map(new FiniteDuration(_, TimeUnit.MILLISECONDS))
     val debug = Option(servReq.getParameter("X-Socrata-Debug")).isDefined
 
-    streamQueryResults(analyses, datasetId, reqRowCount, copy, rollupName, obfuscateId,
-      req.precondition, req.dateTimeHeader("If-Modified-Since"), Option(analysisParam), queryTimeout, debug)
+    withRequestLimit(datasetId, resp,
+      streamQueryResults(analyses, datasetId, reqRowCount, copy, rollupName, obfuscateId,
+        req.precondition, req.dateTimeHeader("If-Modified-Since"), Option(analysisParam), queryTimeout, debug))
   }
 
-  /**
-   * Stream the query results; we need to have the entire HttpServletResponse => Unit
-   * passed back to SocrataHttp so the transaction can be maintained through the duration of the
-   * streaming.
-   */
   def streamQueryResults( // scalastyle:ignore parameter.number
     analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]],
     datasetId: String,

@@ -3,13 +3,12 @@ package com.socrata.pg.soql
 import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import com.socrata.pg.soql.Sqlizer.{Context, SetParam}
 import com.socrata.pg.store.PostgresUniverseCommon
 import com.socrata.soql.analyzer.JoinHelper
-import com.socrata.soql.{JoinAnalysis, SoQLAnalysis, SubAnalysis, typed}
 import com.socrata.soql.environment.{ColumnName, TableName}
-import com.socrata.soql.types._
 import com.socrata.soql.typed._
+import com.socrata.soql.types._
+import com.socrata.soql.{SoQLAnalysis, SubAnalysis}
 
 import scala.util.parsing.input.NoPosition
 

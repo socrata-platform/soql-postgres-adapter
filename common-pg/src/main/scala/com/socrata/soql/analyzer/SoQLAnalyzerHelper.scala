@@ -1,16 +1,15 @@
 package com.socrata.soql.analyzer
 
-import com.socrata.pg.soql._
-import com.socrata.soql._
-import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLFunctions, SoQLTypeInfo}
-import com.socrata.soql.environment._
-import com.socrata.soql.types.SoQLType
 import java.io.{InputStream, OutputStream}
 
 import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.id.UserColumnId
+import com.socrata.soql._
+import com.socrata.soql.environment._
+import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLFunctions, SoQLTypeInfo}
 import com.socrata.soql.parsing.Parser
 import com.socrata.soql.typed._
+import com.socrata.soql.types.SoQLType
 
 object SoQLAnalyzerHelper {
   private val serializer: AnalysisSerializer[UserColumnId, SoQLType] =
