@@ -106,6 +106,8 @@ object Sqlizer {
 
   implicit val soqlAnalysisSqlizer = SoQLAnalysisSqlizer
 
+  implicit val topSoqlAnalysisSqlizer = TopSoQLAnalysisSqlizer
+
   implicit object CoreExprSqlizer extends Sqlizer[CoreExpr[UserColumnId, SoQLType]] {
     def sql(expr: CoreExpr[UserColumnId, SoQLType])(rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                                                     typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],

@@ -11,6 +11,7 @@ import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.socrata.soql.SoQLAnalysis
 import java.sql.Connection
 
+import com.socrata.NonEmptySeq
 import org.apache.log4j.PropertyConfigurator
 
 import scala.language.existentials
@@ -55,7 +56,7 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase w
         val datasetCtx = new DatasetContext[SoQLType] {
           val schema = columnNameTypeMap
         }
-        val analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]] =
+        val analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] =
           SoQLAnalyzerHelper.analyzeSoQL(soql, Map(TableName.PrimaryTable.qualifier -> datasetCtx), Map.empty)
         val (requestColumns, version, mresult) =
           ds.map { dsInfo =>

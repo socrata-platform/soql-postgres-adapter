@@ -7,34 +7,37 @@ import com.socrata.soql.environment._
 import com.socrata.soql.types.SoQLType
 import java.io.{InputStream, OutputStream}
 
+import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.soql.parsing.Parser
 import com.socrata.soql.typed._
 
 object SoQLAnalyzerHelper {
-  private val serializer = new AnalysisSerializer(serializeColumn, serializeAnalysisType)
+  private val serializer: AnalysisSerializer[UserColumnId, SoQLType] =
+    new AnalysisSerializer(serializeColumn, serializeAnalysisType)
 
-  private val deserializer = new AnalysisDeserializer(deserializeColumn,
-                                                      deserializeType,
-                                                      SoQLFunctions.functionsByIdentity)
+  private val deserializer: AnalysisDeserializer[UserColumnId, SoQLType] =
+    new AnalysisDeserializer(deserializeColumn,
+      deserializeType,
+      SoQLFunctions.functionsByIdentity)
 
-  def serialize(outputStream: OutputStream, analyses: List[SoQLAnalysis[UserColumnId, SoQLType]]): Unit =
+  def serialize(outputStream: OutputStream, analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]]): Unit =
     serializer(outputStream, analyses)
 
-  def deserialize(inputStream: InputStream): List[SoQLAnalysis[UserColumnId, SoQLType]] = deserializer(inputStream)
+  def deserialize(inputStream: InputStream): NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] = deserializer(inputStream)
 
   private val analyzer = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
 
   def analyzeSoQL(soql: String,
                   datasetCtx: Map[String, DatasetContext[SoQLType]],
-                  idMap: Map[QualifiedColumnName, UserColumnId]): List[SoQLAnalysis[UserColumnId, SoQLType]] = {
+                  idMap: Map[QualifiedColumnName, UserColumnId]): NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] = {
     val parsed = new Parser().selectStatement(soql)
-    val joins = parsed.flatMap(_.joins)
+    val joins = parsed.seq.flatMap(_.joins)
 
     val joinColumnIdMap =
       joins.foldLeft(idMap) { (acc, join) =>
         val joinTableName = join.from.fromTable
-        val joinAlias = join.from.aliasOpt.getOrElse(joinTableName.name)
+        val joinAlias = join.from.alias.getOrElse(joinTableName.name)
         val schema = datasetCtx(joinTableName.qualifier)
         acc ++ schema.columns.map { fieldName =>
           QualifiedColumnName(Some(joinAlias), new ColumnName(fieldName.name)) ->
@@ -52,9 +55,9 @@ object SoQLAnalyzerHelper {
    * in the "Query Coordinator" project QueryParser class.
    */
   private def remapAnalyses(columnIdMapping: Map[QualifiedColumnName, UserColumnId],
-                            analyses: List[SoQLAnalysis[ColumnName, SoQLType]]): List[SoQLAnalysis[UserColumnId, SoQLType]] = {
+                            analyses: NonEmptySeq[SoQLAnalysis[ColumnName, SoQLType]]): NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] = {
     val initialAcc = (columnIdMapping, List.empty[SoQLAnalysis[UserColumnId, SoQLType]])
-    val (_, analysesInColIds) = analyses.foldLeft(initialAcc) { (acc, analysis) =>
+    val (_, analysesInColIds) = analyses.seq.foldLeft(initialAcc) { (acc, analysis) =>
       val (mapping, convertedAnalyses) = acc
       // Newly introduced columns will be used as column id as is.
       // There should be some sanitizer upstream that checks for field_name conformity.
@@ -98,7 +101,7 @@ object SoQLAnalyzerHelper {
       val a: SoQLAnalysis[UserColumnId, SoQLType] = analysis.mapColumnIds(newMappingWithJoin, toColumnNameJoinAlias, toUserColumnId, toUserColumnId)
       (mappingWithNewColumns, convertedAnalyses :+ a)
     }
-    analysesInColIds
+    NonEmptySeq.fromSeqUnsafe(analysesInColIds)
   }
 
   private def qualifiedColumnNameToColumnId[T](qualifiedColumnNameMap: Map[QualifiedColumnName, T])

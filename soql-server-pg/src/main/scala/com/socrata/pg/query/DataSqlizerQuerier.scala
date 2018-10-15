@@ -9,9 +9,12 @@ import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.pg.soql.ParametricSql
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
+
 import scala.concurrent.duration.Duration
 import com.typesafe.scalalogging.slf4j.Logging
 import java.sql.{Connection, ResultSet, SQLException}
+
+import com.socrata.NonEmptySeq
 
 trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
   this: AbstractRepBasedDataSqlizer[CT, CV] => ()
@@ -27,9 +30,9 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     */
   private val sqlFetchSize = 1025
 
-  def query(conn: Connection, analyses: Seq[SoQLAnalysis[UserColumnId, CT]],
-            toSql: (Seq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
-            toRowCountSql: (Seq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
+  def query(conn: Connection, analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
+            toSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
+            toRowCountSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
             reqRowCount: Boolean,
             querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
             queryTimeout: Option[Duration],
@@ -74,7 +77,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
     }
 
     // get rows
-    if (analyses.exists(_.selection.size > 0)) {
+    if (analyses.seq.exists(_.selection.size > 0)) {
       val sql = toSql(analyses, dataTableName)
       val rs = executeSql(conn, sql, queryTimeout, fetchSize, debug)
       // Statement and resultset are closed by the iterator.
