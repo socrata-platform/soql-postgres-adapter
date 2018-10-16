@@ -395,6 +395,10 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         case RollupDropped(rollupInfo) =>
           RollupDroppedHandler(pgu, truthCopyInfo, rollupInfo)
           (rebuildIndex, true, truthCopyInfo, dataLoader)
+        case ComputationStrategyCreated(_) => // no op
+          (rebuildIndex, refreshRollup, truthCopyInfo, dataLoader)
+        case ComputationStrategyRemoved(_) => // no op
+          (rebuildIndex, refreshRollup, truthCopyInfo, dataLoader)
         case RowsChangedPreview(inserted, updated, deleted, truncated) =>
           rowsChangedPreviewHandler(pgu, truthDatasetInfo, truthCopyInfo, truncated, inserted, updated, deleted) match {
             case Some(nci) =>
