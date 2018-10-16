@@ -2,7 +2,8 @@ package com.socrata.pg.store
 
 import com.socrata.datacoordinator.truth.loader.Logger
 import com.socrata.datacoordinator.id.RowId
-import com.socrata.datacoordinator.truth.metadata.{RollupInfo, ColumnInfo, CopyInfo}
+import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, ComputationStrategyInfo, CopyInfo, RollupInfo}
+
 import scala.Some
 import com.typesafe.scalalogging.slf4j.Logging
 import org.joda.time.DateTime
@@ -17,6 +18,9 @@ class PGSecondaryLogger[CT, CV] extends Logger[CT, CV] with Logging {
   def columnCreated(info: ColumnInfo[CT]): Unit = logger.debug("column created")
 
   def columnRemoved(info: ColumnInfo[CT]): Unit = logger.debug("column removed")
+
+  def computationStrategyCreated(info: ColumnInfo[CT], computationStrategyInfo: ComputationStrategyInfo): Unit =
+    logger.debug(s"computation strategy created: $info $computationStrategyInfo")
 
   def computationStrategyRemoved(info: ColumnInfo[CT]): Unit = logger.debug("computation strategy removed: " + info)
 
