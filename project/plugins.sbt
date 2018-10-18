@@ -1,6 +1,5 @@
 resolvers ++= Seq(
-  "socrata maven" at "https://repository-socrata-oss.forge.cloudbees.com/release",
-  "local" at file(Path.userHome.absolutePath + "/.ivy2/local").getAbsolutePath
+  "socrata maven" at "https://repository-socrata-oss.forge.cloudbees.com/release"
 )
 
 addSbtPlugin("com.socrata" % "socrata-sbt-plugins" % "1.5.6")

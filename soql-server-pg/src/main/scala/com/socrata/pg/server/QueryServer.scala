@@ -5,8 +5,8 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.sql.Connection
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
-import javax.servlet.http.HttpServletResponse
 
+import javax.servlet.http.HttpServletResponse
 import com.socrata.pg.BuildInfo
 import com.rojoma.json.v3.ast.JString
 import com.rojoma.json.v3.util.JsonUtil
@@ -41,8 +41,8 @@ import com.socrata.pg.server.config.{DynamicPortMap, QueryServerConfig}
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.soql._
 import com.socrata.pg.store._
-import com.socrata.soql.SoQLAnalysis
-import com.socrata.soql.analyzer.{JoinHelper, SoQLAnalyzerHelper}
+import com.socrata.soql.{SoQLAnalysis, typed}
+import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, ResourceName, TableName}
 import com.socrata.soql.typed.CoreExpr
@@ -564,7 +564,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   private def getJoinCopies(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                             analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]],
                             reqCopy: Option[String]): Map[TableName, CopyInfo] = {
-    val joins = JoinHelper.expandJoins(analyses.seq)
+    val joins = typed.Join.expandJoins(analyses.seq)
     val joinTables = joins.map(x => TableName(x.from.fromTable.name, None))
     joinTables.flatMap { resourceName =>
       getCopy(pgu, new ResourceName(resourceName.name), reqCopy).map(copy => (resourceName, copy))

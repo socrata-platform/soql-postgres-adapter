@@ -4,11 +4,10 @@ import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.pg.store.PostgresUniverseCommon
-import com.socrata.soql.analyzer.JoinHelper
 import com.socrata.soql.environment.{ColumnName, TableName}
 import com.socrata.soql.typed._
 import com.socrata.soql.types._
-import com.socrata.soql.{SoQLAnalysis, SubAnalysis}
+import com.socrata.soql.{SoQLAnalysis, SubAnalysis, typed}
 
 import scala.util.parsing.input.NoPosition
 
@@ -107,7 +106,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
                         (TableMap -> tableNames) +
                         (TableAliasMap -> tableNames.map { case (k, v) => (k.qualifier, realAlias(k, v)) })
 
-    val joins = JoinHelper.expandJoins(Seq(analysis))
+    val joins = typed.Join.expandJoins(Seq(analysis))
 
     // SELECT
     val ctxSelect = ctx + (SoqlPart -> SoqlSelect)
@@ -124,7 +123,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     val tableAliasesWithJoins = ctx(TableAliasMap).asInstanceOf[Map[String, String]] ++ joinTableAliases
     val ctxSelectWithJoins = ctxSelect + (TableMap -> tableNamesWithJoins) + (TableAliasMap -> tableAliasesWithJoins)
 
-    val subQueryJoins = joins.filterNot(JoinHelper.isSimple).map(_.from.fromTable.name).toSet
+    val subQueryJoins = joins.filterNot(_.isSimple).map(_.from.fromTable.name).toSet
     val repMinusComplexJoinTable = rep.filterKeys(!_.qualifier.exists(subQueryJoins.contains))
 
     val (selectPhrase, setParamsSelect) =

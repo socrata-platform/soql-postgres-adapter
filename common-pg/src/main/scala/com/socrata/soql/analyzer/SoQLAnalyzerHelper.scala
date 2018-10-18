@@ -80,7 +80,7 @@ object SoQLAnalyzerHelper {
         }
 
       val newColumnsFromJoin = analysis.joins.flatMap { join =>
-        if (JoinHelper.isSimple(join)) Seq.empty
+        if (join.isSimple) Seq.empty
         else {
           join.from.analyses.last.selection.toSeq.map {
             case (columnName, _) =>
