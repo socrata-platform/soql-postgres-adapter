@@ -2,6 +2,7 @@ package com.socrata.pg.query
 
 import com.rojoma.simplearm.Managed
 import com.rojoma.simplearm.util._
+import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.truth.loader.sql.DataSqlizer
@@ -16,9 +17,9 @@ import scala.concurrent.duration.Duration
 trait RowReaderQuerier[CT, CV] {
   this: PGSecondaryRowReader[CT, CV] => ()
 
-  def query(analyses: Seq[SoQLAnalysis[UserColumnId, CT]],
-            toSql: (Seq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql,
-            toRowCountSql: (Seq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
+  def query(analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
+            toSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql,
+            toRowCountSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
             reqRowCount: Boolean,
             querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
             queryTimeout: Option[Duration],

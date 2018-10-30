@@ -26,6 +26,7 @@ import com.socrata.soql.parsing.standalone_exceptions.StandaloneLexerException
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.scalalogging.slf4j.Logging
 import RollupManager._
+import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.util.{LoggedTimingReport, StackedTimingReport}
 import com.socrata.soql.typed.Qualifier
 
@@ -102,7 +103,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       // We don't want to disable the rollup entirely since it could become valid again, eg. if they then add
       // the column back.  It would be ideal if we had a better way to communicate this failure upwards through
       // the stack.
-      val prefixedRollupAnalyses: Try[Seq[SoQLAnalysis[ColumnName, SoQLType]]] =
+      val prefixedRollupAnalyses: Try[NonEmptySeq[SoQLAnalysis[ColumnName, SoQLType]]] =
         Try { analyzer.analyzeFullQuery(rollupInfo.soql)(prefixedDsContext) }
 
 
@@ -214,7 +215,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
   private def populateRollupTable(tableName: String,
       rollupInfo: RollupInfo,
-      rollupAnalyses: Seq[SoQLAnalysis[ColumnName, SoQLType]],
+      rollupAnalyses: NonEmptySeq[SoQLAnalysis[ColumnName, SoQLType]],
       rollupReps: Seq[SqlColumnRep[SoQLType, SoQLValue]]): Unit = {
     time("populate-rollup-table",
       "dataset_id" -> copyInfo.datasetInfo.systemId.underlying,
@@ -227,7 +228,6 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
       val dsRepMap: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]] =
         dsSchema.values.map(ci => QualifiedUserColumnId(None, ci.userColumnId) -> SoQLIndexableRep.sqlRep(ci)).toMap
-
 
       val tableMap = Map(TableName.PrimaryTable -> copyInfo.dataTableName) // TODO: FIX ME
       val selectParamSql = Sqlizer.sql(Tuple3(soqlAnalysis, tableMap, rollupReps))(
@@ -285,7 +285,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     // TODO: Join handle qualifier
     val analysesColumnId = analyses.map(_.mapColumnIds((name, qualifier) => new UserColumnId(name.name)))
     SoQLAnalyzerHelper.serialize(baos, analysesColumnId)
-    SoQLAnalyzerHelper.deserialize(new ByteArrayInputStream(baos.toByteArray))
+    (SoQLAnalyzerHelper.deserialize(new ByteArrayInputStream(baos.toByteArray)), None)
   }
 }
 

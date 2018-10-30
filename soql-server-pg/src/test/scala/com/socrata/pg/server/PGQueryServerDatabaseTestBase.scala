@@ -3,6 +3,7 @@ package com.socrata.pg.server
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 
 import com.rojoma.json.v3.ast.{JArray, JNumber, JObject, JValue}
+import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
@@ -61,7 +62,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
           acc ++ columnNameIdMap
         }
 
-        val analyses: Seq[SoQLAnalysis[UserColumnId, SoQLType]] =
+        val analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] =
           SoQLAnalyzerHelper.analyzeSoQL(soql, allDatasetCtx, primaryTableColumnNameIdMap ++ joinTableColumnNameIdMap)
 
         val (qrySchema, dataVersion, mresult) =

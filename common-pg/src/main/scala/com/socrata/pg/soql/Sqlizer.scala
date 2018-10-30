@@ -48,12 +48,7 @@ trait Sqlizer[T] {
       case SoqlSelect | SoqlOrder =>
         ctx.get(Analysis) match {
           case Some(analysis: SoQLAnalysis[_, _]) =>
-            analysis.groupBy match {
-              case Some(groupBy) =>
-                // Use upper in select if this expression or the selected expression it belongs to is found in group by
-                groupBy.exists(expr => (e == expr) || rootExpr.exists(_ == expr))
-              case None => false
-            }
+            analysis.groupBys.exists(expr => (e == expr) || rootExpr.exists(_ == expr))
           case _ => false
         }
       case SoqlSearch => false
@@ -110,6 +105,8 @@ object Sqlizer {
   implicit val functionCallSqlizer = FunctionCallSqlizer
 
   implicit val soqlAnalysisSqlizer = SoQLAnalysisSqlizer
+
+  implicit val topSoqlAnalysisSqlizer = TopSoQLAnalysisSqlizer
 
   implicit object CoreExprSqlizer extends Sqlizer[CoreExpr[UserColumnId, SoQLType]] {
     def sql(expr: CoreExpr[UserColumnId, SoQLType])(rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
