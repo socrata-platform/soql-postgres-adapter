@@ -230,6 +230,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
           val ParametricSql(ss, ps) = Sqlizer.sql(gb)(repMinusComplexJoinTable, typeRep, t2._2, ctxSelectWithJoins + (SoqlPart -> SoqlGroup), escape)
           // add ST_AsBinary to geometry type to work around a slowness problem in postgis
           // https://github.com/postgis/postgis/commit/8606a3164111e75754ce59c095a05e193cdae636
+          // appear to be fixed in postgis 2.4.0
           ParametricSql(ss.updated(0, toGeoText(ss.head, gb.typ, None)), ps)
         }
       (t2._1 ++ sqls, newSetParams)
