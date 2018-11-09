@@ -148,6 +148,13 @@ class SoQLGeomFunctionsTest extends SoQLTest {
       "select-snap-to-grid.json")
   }
 
+  test("geometry group by snap to grid") {
+    compareSoqlResult(
+      """select snap_to_grid('polygon((1 1, 1.5 1, 2 1, 2 1.5,  2 2, 1.5 2,  1 2, 1 1.5, 1 1))'::polygon, 2) as snapped, count(*) as ct
+          where name = 'Chili' group by snapped""",
+      "group-snap-to-grid.json")
+  }
+
   test("is empty") {
     val polygon = "POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))"
     val multipolygon = "MULTIPOLYGON(((1 1, 2 1, 2 2, 1 2, 1 1)))"

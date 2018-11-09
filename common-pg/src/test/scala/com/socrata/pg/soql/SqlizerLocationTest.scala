@@ -70,4 +70,16 @@ class SqlizerLocationTest extends SqlizerTest {
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq("point (2.2 1.1)", "101 Main St", "Seattle", "WA", "98104", "101 Main St", "Seattle", "WA", "98104"))
   }
+
+  /**
+    * There is a postgis regression in slowness in group by geometry.
+    * Converting it to binary gets around the perf problem.
+    */
+  test("group by geometry generates ST_AsBinary on geometry column in group by") {
+    val soql = """SELECT snap_to_grid(polygon, 2) as snapped, count(*) GROUP BY snapped"""
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("""SELECT ST_AsBinary((ST_SnapToGrid(t1.polygon, 2))),(count(*)) FROM t1 GROUP BY ST_AsBinary((ST_SnapToGrid(t1.polygon, 2)))""")
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    setParams.length should be (0)
+  }
 }
