@@ -227,11 +227,12 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
           val groupByColumnPosition = analysis.selection.values.toSeq.indexWhere(_ == gb) + 1
           ParametricSql(Seq(groupByColumnPosition.toString), t2._2)
         } else {
-          val ParametricSql(ss, ps) = Sqlizer.sql(gb)(repMinusComplexJoinTable, typeRep, t2._2, ctxSelectWithJoins + (SoqlPart -> SoqlGroup), escape)
+          val psql@ParametricSql(ss, ps) = Sqlizer.sql(gb)(repMinusComplexJoinTable, typeRep, t2._2, ctxSelectWithJoins + (SoqlPart -> SoqlGroup), escape)
           // add ST_AsBinary to geometry type to work around a slowness problem in postgis
           // https://github.com/postgis/postgis/commit/8606a3164111e75754ce59c095a05e193cdae636
           // appear to be fixed in postgis 2.4.0
-          ParametricSql(ss.updated(0, toGeoText(ss.head, gb.typ, None)), ps)
+          if (shouldConvertGeoToText(ctx)) ParametricSql(ss.updated(0, toGeoText(ss.head, gb.typ, None)), ps)
+          else psql
         }
       (t2._1 ++ sqls, newSetParams)
     }
@@ -305,17 +306,21 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
         val (_, selectSetParams) = acc
         val ParametricSql(sqls, newSetParams) = Sqlizer.sql(coreExpr)(rep, typeRep, selectSetParams, ctxSelect, escape)
         val sqlGeomConverted =
-          if (ctx.contains(LeaveGeomAsIs) || strictInnermostSoql || ctx.contains(IsSubQuery)) { sqls }
-          else {
+          if (shouldConvertGeoToText(ctx) && !sqls.isEmpty) {
             val cn = if (strictOutermostSoql) Some(columnName) else None
             // compound type with a geometry and something else like "Location" type
             // must place the geometry in the first part.
-            if (false == ctx(OutermostSoql) || sqls.isEmpty) { sqls }
-            else { sqls.updated(0, toGeoText(sqls.head, coreExpr.typ, cn)) }
+            sqls.updated(0, toGeoText(sqls.head, coreExpr.typ, cn))
+          } else {
+            sqls
           }
         (acc._1 ++ sqlGeomConverted, newSetParams)
       }
     (sqls, setParamsInSelect ++ setParams)
+  }
+
+  private def shouldConvertGeoToText(ctx: Context): Boolean = {
+    !(ctx.contains(LeaveGeomAsIs) || isStrictInnermostSoql(ctx) || ctx.contains(IsSubQuery) || (false == ctx(OutermostSoql)))
   }
 
   /**
