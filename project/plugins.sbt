@@ -1,6 +1,6 @@
 resolvers ++= Seq(
-  "socrata maven" at "https://repository-socrata-oss.forge.cloudbees.com/release"
+  Resolver.url("socrata", url("https://repo.socrata.com/artifactory/ivy-libs-release"))(Resolver.ivyStylePatterns)
 )
 
-addSbtPlugin("com.socrata" % "socrata-sbt-plugins" % "1.5.6")
+addSbtPlugin("com.socrata" % "socrata-sbt-plugins" % "1.6.8")
 addSbtPlugin("com.typesafe.sbt" % "sbt-license-report" % "1.0.0")

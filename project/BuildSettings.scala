@@ -8,7 +8,9 @@ object BuildSettings {
     scalacOptions ++= Seq("-language:implicitConversions"),
     // For debugging, disable stylecheck by uncommenting the next line
     // com.socrata.sbtplugins.StylePlugin.StyleKeys.styleFailOnError in Compile := false,
-    BuildInfoKeys.buildInfoPackage := "com.socrata.pg"
+    BuildInfoKeys.buildInfoPackage := "com.socrata.pg",
+    organization := "com.socrata",
+    resolvers += "socrata" at "https://repo.socrata.com/artifactory/libs-release"
   )
 
   val projectSettings = buildSettings ++
