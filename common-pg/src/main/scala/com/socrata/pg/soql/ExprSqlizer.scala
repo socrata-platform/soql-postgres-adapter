@@ -222,7 +222,8 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
             val sqls = subColumns.map { subCol =>
               val c = idQuote(expr.column.underlying + subCol)
               expr.qualifier.foreach(qualifierRx.findFirstMatchIn(_).orElse(throw BadParse("Invalid table alias", expr.position)))
-              toUpper(expr)(expr.qualifier.map(q => s"$q.$c").getOrElse(c), ctx) + selectAlias(expr, Some(subCol))(ctx)
+              val qualifier = expr.qualifier.orElse(ctx.get(PrimaryTableAlias).map(_.toString))
+              toUpper(expr)(qualifier.map(q => s"$q.$c").getOrElse(c), ctx) + selectAlias(expr, Some(subCol))(ctx)
             }
             ParametricSql(sqls, setParams)
           case None =>

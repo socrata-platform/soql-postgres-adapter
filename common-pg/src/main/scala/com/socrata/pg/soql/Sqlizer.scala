@@ -175,6 +175,9 @@ object SqlizerContext extends Enumeration {
   val TableAliasMap = Value("table-aliases") // resource alias name to table name map
 
   val JoinPrimaryTable = Value("join-primary-table")
+
+  val PrimaryTableAlias = Value("primary-table-alias")
+
   val IsSubQuery = Value("is-sub-query")
   val NoWrappingParenInFunctionCall = Value("no-wrapping-paren-in-fc")
 }
