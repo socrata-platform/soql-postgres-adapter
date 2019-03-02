@@ -66,8 +66,14 @@ class SqlizerJoinTest  extends SqlizerTest {
   test("chained primary table join with chained sub-query - select columns") {
     val soql = "select case_number, primary_type |> select primary_type, count(*) as total group by primary_type |> select primary_type, total |>  select primary_type, total, @y.year, @y.avg_temperature join (SELECT * FROM @year |> SELECT year, avg_temperature WHERE avg_temperature > 30) as y on @y.year = total and total = 2000"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT x3."primary_type",x3."total",_y."year",_y."avg_temperature" FROM (SELECT "primary_type" as "primary_type","total" as "total" FROM (SELECT "primary_type" as "primary_type",(count(*)) as "total" FROM (SELECT t1.case_number as "case_number",t1.primary_type as "primary_type" FROM t1) AS x1 GROUP BY "primary_type") AS x2) AS x3 JOIN (SELECT x3."year" as "year",x3."avg_temperature" as "avg_temperature" FROM (SELECT t3.year as "year",t3.avg_temperature as "avg_temperature" FROM t3) AS x1 WHERE (x3."avg_temperature" > ?)) as _y ON ((_y."year" = x3."total") and (x3."total" = ?))""")
+    sql should be ("""SELECT x1."primary_type",x1."total",_y."year",_y."avg_temperature" FROM (SELECT "primary_type" as "primary_type","total" as "total" FROM (SELECT "primary_type" as "primary_type",(count(*)) as "total" FROM (SELECT t1.case_number as "case_number",t1.primary_type as "primary_type" FROM t1) AS x1 GROUP BY "primary_type") AS x1) AS x1 JOIN (SELECT x1."year" as "year",x1."avg_temperature" as "avg_temperature" FROM (SELECT t3.year as "year",t3.avg_temperature as "avg_temperature" FROM t3) AS x1 WHERE (x1."avg_temperature" > ?)) as _y ON ((_y."year" = x1."total") and (x1."total" = ?))""")
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq(30, 2000).map(BigDecimal(_)))
+
+    val soqlChainSelectMax = soql + " |> select max(year)"
+    val ParametricSql(Seq(sqlChainSelectMax), setParamsChainSelectMax) = sqlize(soqlChainSelectMax, CaseSensitive)
+    sqlChainSelectMax should be ("""SELECT (max("year")) FROM (SELECT x1."primary_type" as "primary_type",x1."total" as "total",_y."year" as "year",_y."avg_temperature" as "avg_temperature" FROM (SELECT "primary_type" as "primary_type","total" as "total" FROM (SELECT "primary_type" as "primary_type",(count(*)) as "total" FROM (SELECT t1.case_number as "case_number",t1.primary_type as "primary_type" FROM t1) AS x1 GROUP BY "primary_type") AS x1) AS x1 JOIN (SELECT x1."year" as "year",x1."avg_temperature" as "avg_temperature" FROM (SELECT t3.year as "year",t3.avg_temperature as "avg_temperature" FROM t3) AS x1 WHERE (x1."avg_temperature" > ?)) as _y ON ((_y."year" = x1."total") and (x1."total" = ?))) AS x1""")
+    val paramsChainSelectMax = setParams.map { (setParam) => setParam(None, 0).get }
+    paramsChainSelectMax should be (params)
   }
 }
