@@ -71,15 +71,13 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
                          (InnermostSoql -> innermostSoql(firstAna, analyses))
     val firstSql = sql(firstAna, None, tableNames, allColumnReps,
                        rowCountForFirstAna, rep, typeRep, setParams, firstCtx, escape, fromTableName)
-    var subTableIdx = 0
     val (result, _) = analyses.tail.foldLeft((firstSql, analyses.head)) { (acc, ana) =>
-      subTableIdx += 1
       val (subParametricSql, prevAna) = acc
-      val chainedTableAlias = s"x${subTableIdx}"
+      val chainedTableAlias = "x1"
       val subTableName = "(%s) AS %s".format(subParametricSql.sql.head, chainedTableAlias)
       val tableNamesSubTableNameReplace = tableNames + (TableName.PrimaryTable -> subTableName)
       val primaryTableAlias =
-        if (ana == lastAna && ana.joins.nonEmpty) Map((PrimaryTableAlias -> chainedTableAlias))
+        if (ana.joins.nonEmpty) Map((PrimaryTableAlias -> chainedTableAlias))
         else Map.empty
       val subCtx = ctx + (OutermostSoql -> outermostSoql(ana, analyses)) +
                          (InnermostSoql -> innermostSoql(ana, analyses)) -
