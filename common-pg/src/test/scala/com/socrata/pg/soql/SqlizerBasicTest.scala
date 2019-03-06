@@ -341,7 +341,7 @@ class SqlizerBasicTest extends SqlizerTest {
         |SELECT aa || 'b' as bb WHERE aa !='11' |>
         |SELECT bb || 'c' as cc WHERE bb !='22'""".stripMargin
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (\"bb\" || ?) FROM (SELECT (\"aa\" || ?) as \"bb\" FROM (SELECT ? as \"aa\" FROM t1 WHERE (t1.primary_type != ?)) AS x1 WHERE (\"aa\" != ?)) AS x2 WHERE (\"bb\" != ?)")
+    sql should be ("SELECT (\"bb\" || ?) FROM (SELECT (\"aa\" || ?) as \"bb\" FROM (SELECT ? as \"aa\" FROM t1 WHERE (t1.primary_type != ?)) AS x1 WHERE (\"aa\" != ?)) AS x1 WHERE (\"bb\" != ?)")
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be(Seq("c", "b", "aa", "00", "11", "22"))
   }
