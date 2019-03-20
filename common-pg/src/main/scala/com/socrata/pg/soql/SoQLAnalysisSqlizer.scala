@@ -108,7 +108,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
                         (TableMap -> tableNames) +
                         (TableAliasMap -> tableNames.map { case (k, v) => (k.qualifier, realAlias(k, v)) })
 
-    val joins = typed.Join.expandJoins(Seq(analysis))
+    val joins = analysis.joins
 
     // SELECT
     val ctxSelect = ctx + (SoqlPart -> SoqlSelect)

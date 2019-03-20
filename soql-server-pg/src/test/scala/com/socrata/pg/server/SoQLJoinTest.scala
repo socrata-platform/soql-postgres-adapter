@@ -158,7 +158,7 @@ SELECT make, code, @z$.timezone
                           JOIN @country as co on country=@co.country) as m on make=@m.make
 LEFT OUTER JOIN @classification as c on class=@c.id
           WHERE @m.make='APCO'
-            and @co.continent = 'Asia'
+            and @m.continent = 'Asia'
           ORDER by @m.make, code
                       """,
       "join-nested.json",
