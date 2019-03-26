@@ -34,4 +34,20 @@ class SqlizerUrlTest extends SqlizerTest {
     sql should be ("SELECT t1.url_url,t1.url_description FROM t1 ORDER BY t1.url_url nulls last,t1.url_description nulls last")
     setParams should be (Seq.empty)
   }
+
+  test("url count") {
+    val soql = "SELECT count(url)"
+    val expected = "SELECT (count((coalesce((t1.url_url),(t1.url_description))))) FROM t1"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be(expected)
+    setParams should be(Seq.empty)
+  }
+
+  test("url.url count") {
+    val soql = "SELECT count(url.url)"
+    val expected = "SELECT (count((t1.url_url))) FROM t1"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be(expected)
+    setParams should be(Seq.empty)
+  }
 }
