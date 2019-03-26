@@ -171,6 +171,14 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     MonomorphicFunction(SoQLFunctions.Concat, bindings)
   }
 
+  private val coalesceText = {
+    val bindings = SoQLFunctions.Coalesce.parameters.map {
+      case VariableType(name) => name -> SoQLText.t
+      case _ => throw new Exception("Unexpected concat function signature")
+    }.toMap
+    MonomorphicFunction(SoQLFunctions.Coalesce, bindings)
+  }
+
   private def passthrough: FunCallToSql = formatCall("%s")
 
   private def infix(fnName: String, foldOp: String = " and ")
@@ -256,12 +264,29 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                    ctx: Sqlizer.Context,
                    escape: Escape): ParametricSql = {
 
-    val sqlFragsAndParams = fn.parameters.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
+    val param2 = specialCountArgument(fn)
+    val sqlFragsAndParams = param2.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, param) =>
       val ParametricSql(Seq(sql), newSetParams) = Sqlizer.sql(param)(rep, typeRep, acc._2, ctx, escape)
       (acc._1 :+ sql, newSetParams)
     }
 
     ParametricSql(Seq(sqlFragsAndParams._1.mkString(fnName + "(", ",", ")")), sqlFragsAndParams._2)
+  }
+
+  private def specialCountArgument(fn: FunCall): Seq[com.socrata.soql.typed.CoreExpr[UserColumnId, SoQLType]] = {
+    fn.function.name match {
+      case Count.name =>
+        fn.parameters match {
+          case Seq(ColumnRef(_, _, typ)) if typ == SoQLUrl.t =>
+            // Only if we have chosen jsonb in UrlRep, this would not be necessary
+            // only counting url.url - ignoring url.description
+            val coalesceArgs = Seq(FunctionCall(UrlToUrl.monomorphic.get, fn.parameters)(fn.position, fn.functionNamePosition),
+                                   FunctionCall(UrlToDescription.monomorphic.get, fn.parameters)(fn.position, fn.functionNamePosition))
+            Seq(FunctionCall(coalesceText, coalesceArgs)(fn.position, fn.functionNamePosition))
+          case _ => fn.parameters
+        }
+      case _ => fn.parameters
+    }
   }
 
   private def naryish(fnName: String, afterOpenParenText: Option[String] = None)
