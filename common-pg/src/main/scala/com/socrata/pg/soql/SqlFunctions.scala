@@ -150,7 +150,11 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     StddevSamp -> nary("stddev_samp") _,
     Median -> formatCall("percentile_disc(.50) within group (order by %s)") _,
 
-    WindowFunctionOver -> naryish("over", Some("partition by ")) _,
+    RowNumber -> nary("row_number") _,
+    Rank -> nary("rank") _,
+    DenseRank -> nary("dense_rank") _,
+
+    WindowFunctionOver -> windowOverCall _, //  naryish("over", Some("partition by ")) _,
 
     Count -> nary("count") _,
     CountStar -> formatCall("count(*)") _
@@ -343,6 +347,35 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
       (acc._1 ++ sqls, p)
     }
     val sql = sqls.mkString("coalesce(", ",", ")")
+    ParametricSql(Seq(sql), params)
+  }
+
+  private def windowOverCall(fn: FunCall,
+                             rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                             setParams: Seq[SetParam],
+                             ctx: Sqlizer.Context,
+                             escape: Escape): ParametricSql = {
+
+    val ParametricSql(Seq(head), setParamsHead) = Sqlizer.sql(fn.parameters.head)(rep, typeRep, setParams, ctx + (SqlizerContext.NoWrappingParenInFunctionCall -> true), escape)
+
+    var prefixComma = false
+    val (sqls: Seq[String], params: Seq[SetParam]) = fn.parameters.tail.foldLeft(Tuple2(Seq.empty[String], setParamsHead)) { (acc, param) =>
+      val ParametricSql(sqls, p) = param match {
+        case strLit@StringLiteral(value: String, _) if value == "partition_by" || value == "order_by" =>
+          prefixComma = false
+          ParametricSql(Seq(" " + value.replace("_", " ")), acc._2)
+        case _ =>
+          val prefix = if (prefixComma) "," else " "
+          prefixComma = true
+          val psql = Sqlizer.sql(param)(rep, typeRep, acc._2, ctx, escape)
+          psql.copy(sql = psql.sql.map(prefix + _))
+      }
+      (acc._1 ++ sqls, p)
+    }
+
+    val sql = sqls.mkString(head + " over(", "", ")")
+
     ParametricSql(Seq(sql), params)
   }
 
