@@ -408,7 +408,7 @@ class SqlizerBasicTest extends SqlizerTest {
     val soql = "select avg(year) over(partition by primary_type, year)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
-    sql should be ("SELECT (avg(t1.year) over(partition by t1.primary_type,t1.year)) FROM t1")
+    sql should be ("SELECT (avg(t1.year) over( partition by t1.primary_type,t1.year)) FROM t1")
     setParams.length should be (0)
   }
 
@@ -417,6 +417,22 @@ class SqlizerBasicTest extends SqlizerTest {
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     sql should be ("SELECT (avg(t1.year) over()) FROM t1")
+    setParams.length should be (0)
+  }
+
+  test("window function row_number") {
+    val soql = "select row_number() over(partition by primary_type, year order by primary_type, year) as rn |> select * where rn < 2"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    sql should be ("""SELECT "rn" FROM (SELECT (row_number() over( partition by t1.primary_type,t1.year order by t1.primary_type,t1.year)) as "rn" FROM t1) AS x1 WHERE ("rn" < ?)""")
+    params should be(Seq(2))
+  }
+
+  test("window function rank over") {
+    val soql = "select rank() over(order by year)"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    sql should be ("SELECT (rank() over( order by t1.year)) FROM t1")
     setParams.length should be (0)
   }
 }
