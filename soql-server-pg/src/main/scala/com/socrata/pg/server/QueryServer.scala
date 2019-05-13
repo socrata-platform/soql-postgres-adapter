@@ -33,7 +33,7 @@ import com.socrata.http.server.routing.SimpleResource
 import com.socrata.http.server.routing.SimpleRouteContext._
 import com.socrata.http.server.util.Precondition._
 import com.socrata.http.server.util.RequestId.ReqIdHeader
-import com.socrata.http.server.util.handlers.{NewLoggingHandler, ThreadRenamingHandler}
+import com.socrata.http.server.util.handlers.{LoggingOptions, NewLoggingHandler, ThreadRenamingHandler}
 import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, StrongEntityTag}
 import com.socrata.pg.SecondaryBase
 import com.socrata.pg.query.{DataSqlizerQuerier, RowCount, RowReaderQuerier}
@@ -60,6 +60,7 @@ import org.apache.curator.x.discovery.ServiceInstanceBuilder
 import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
 import org.postgresql.util.PSQLException
+import org.slf4j.LoggerFactory
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.language.existentials
@@ -664,8 +665,8 @@ object QueryServer extends DynamicPortMap with Logging {
           super.register(hostPort(port))
         }
       }
-      val logOptions = NewLoggingHandler.defaultOptions.copy(
-                         logRequestHeaders = Set(ReqIdHeader, "X-Socrata-Resource"))
+      val logOptions = LoggingOptions(LoggerFactory.getLogger(""),
+                                      logRequestHeaders = Set(ReqIdHeader, "X-Socrata-Resource"))
       val handler = ThreadRenamingHandler(NewLoggingHandler(logOptions)(queryServer.route))
       val server = new SocrataServerJetty(handler,
                      SocrataServerJetty.defaultOptions.
