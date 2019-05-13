@@ -82,7 +82,10 @@ object CJSONWriter {
       writer.write("\"last_modified\":\"%s\"\n,".format(dateTimeFormat.print(lastModified)))
       writer.write("\"locale\":\"%s\"".format(locale))
 
-      val cjsonSortedSchema = qrySchema.values.toSeq.sortWith(_.userColumnId.underlying < _.userColumnId.underlying)
+      // CJSON in the original definition is sorted by field name.
+      // But here cjson is used as an intermediary tool to serve csv, json etc where following SELECT order is human friendly.
+      // Upstream service like soda-fountain may re-sort cjson output.
+      val cjsonSortedSchema = qrySchema.values.toSeq
       val qryColumnIdToUserColumnIdMap = qrySchema.foldLeft(Map.empty[UserColumnId, ColumnId]) { (map, entry) =>
         val (cid, cInfo) = entry
         map + (cInfo.userColumnId -> cid)
