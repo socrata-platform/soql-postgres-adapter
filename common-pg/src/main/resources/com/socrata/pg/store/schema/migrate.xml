@@ -20,4 +20,5 @@
     <include file="com/socrata/pg/store/schema/20171122-add-secondary-move-jobs-table.xml"/>
     <include file="com/socrata/pg/store/schema/20171128-add-collocation-manifest.xml"/>
     <include file="com/socrata/pg/store/schema/20180202-add-secondary-metrics-table.xml"/>
+    <include file="com/socrata/pg/store/schema/20190515-align-truth-instance-name.xml"/>
 </databaseChangeLog>
