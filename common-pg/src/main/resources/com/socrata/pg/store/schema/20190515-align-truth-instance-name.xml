@@ -6,7 +6,7 @@
     <changeSet author="chi" id="20190515-align-truth-instance-name">
         <sql>
             UPDATE dataset_internal_name_map set dataset_internal_name=replace(dataset_internal_name, 'primus', 'alpha')
-             WHERE dataset_system_id like 'primus.%'
+             WHERE dataset_internal_name like 'primus.%'
         </sql>
     </changeSet>
 </databaseChangeLog>
