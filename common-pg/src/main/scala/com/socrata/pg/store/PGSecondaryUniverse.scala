@@ -91,7 +91,7 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
 
   lazy val datasetMapWriter: PGSecondaryDatasetMapWriter[SoQLType]  =
     new PGSecondaryDatasetMapWriter(conn, typeContext.typeNamespace,
-      timingReport, obfuscationKeyGenerator, initialCounterValue)
+      timingReport, obfuscationKeyGenerator, initialCounterValue, commonSupport.initialLatestDataVersion)
 
   lazy val datasetMapReader: DatasetMapReader[SoQLType] =
     new PostgresDatasetMapReader(conn, typeContext.typeNamespace, timingReport)

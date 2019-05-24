@@ -11,6 +11,7 @@ class PGSecondaryDatasetMapWriterTest extends PGSecondaryTestBase with PGSeconda
 
   def noopKeyGen(): Array[Byte] = new Array[Byte](0)
   val ZeroID = 0L
+  val ZeroVersion = 0L
 
   override def beforeAll(): Unit = {
     createDatabases()
@@ -43,7 +44,7 @@ class PGSecondaryDatasetMapWriterTest extends PGSecondaryTestBase with PGSeconda
     withDb() {
       conn => {
         createSchema(conn)
-        val datasetMapWriter = new PGSecondaryDatasetMapWriter(conn, PostgresUniverseCommon.typeContext.typeNamespace, PostgresUniverseCommon.timingReport, noopKeyGen, ZeroID)
+        val datasetMapWriter = new PGSecondaryDatasetMapWriter(conn, PostgresUniverseCommon.typeContext.typeNamespace, PostgresUniverseCommon.timingReport, noopKeyGen, ZeroID, ZeroVersion)
         datasetMapWriter.createInternalNameMapping("Dataset Name", new DatasetId(123))
         val datasetId: DatasetId = new PGSecondaryDatasetMapReader(conn).datasetIdForInternalName("Dataset Name").get
         datasetId shouldEqual new DatasetId(123)
