@@ -17,8 +17,9 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
                                       tns: TypeNamespace[CT],
                                       timingReport: TimingReport,
                                       override val obfuscationKeyGenerator: () => Array[Byte],
-                                      override val initialCounterValue: Long) extends
-  PostgresDatasetMapWriter(conn, tns, timingReport, obfuscationKeyGenerator, initialCounterValue) with Logging {
+                                      override val initialCounterValue: Long,
+                                      val initialVersion: Long) extends
+  PostgresDatasetMapWriter(conn, tns, timingReport, obfuscationKeyGenerator, initialCounterValue, initialVersion) with Logging {
 
   private val createQueryInternalNameMap =
     """INSERT INTO dataset_internal_name_map

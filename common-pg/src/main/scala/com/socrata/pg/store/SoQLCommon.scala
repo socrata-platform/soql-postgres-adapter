@@ -58,6 +58,8 @@ class PostgresUniverseCommon(val tablespace: String => Option[String],
 
   val repFor = repForIndex
 
+  val initialLatestDataVersion: Long = 0
+
   protected val SearchableTypes: Set[SoQLType] = Set(SoQLText, SoQLObject, SoQLArray)
   protected val SearchableNumericTypes: Set[SoQLType] = Set(SoQLNumber)
 
