@@ -19,6 +19,7 @@ import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.SecondaryBase
 import com.socrata.pg.config.StoreConfig
 import com.socrata.pg.store.events.{ColumnCreatedHandler, WorkingCopyPublishedHandler, _}
+import com.socrata.pg.store.index._
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.socrata.thirdparty.typesafeconfig.C3P0Propertizer
 import com.typesafe.config.Config
@@ -407,6 +408,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
             case None =>
               (rebuildIndex, refreshRollup, truthCopyInfo, dataLoader)
           }
+        case SecondaryReindex =>
+          (true, refreshRollup, truthCopyInfo, dataLoader)
         case otherOps: Event[SoQLType,SoQLValue] =>
           throw new UnsupportedOperationException(s"Unexpected operation $otherOps")
       }
