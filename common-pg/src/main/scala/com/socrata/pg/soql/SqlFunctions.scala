@@ -134,6 +134,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                  SoQLFloatingTimestamp.StringRep.apply) _,
     TextToMoney -> formatCall("%s::numeric") _,
     TextToBlob -> passthrough,
+    TextToPhoto -> passthrough,
 
     TextToBool -> formatCall("%s::boolean") _,
     BoolToText -> formatCall("%s::varchar") _,
