@@ -101,8 +101,8 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
       using(conn.createStatement(), conn.prepareStatement(directivesSql)) { (stmt, directivesStmt) =>
         for {
           (ci, idx) <- columnInfos.zipWithIndex
-          createIndexSql <- repFor(ci).createIndex(table, tablespace) if
-            shouldCreateIndex(directivesStmt, ci.copyInfo.datasetInfo.systemId, ci.fieldName)
+          createIndexSql <- repFor(ci).createIndex(table, tablespace)
+            if shouldCreateIndex(directivesStmt, ci.copyInfo.datasetInfo.systemId, ci.fieldName)
         } {
           logger.info("creating index {} {}", ci.userColumnId.underlying, idx.toString)
           sqlErrorHandler.guard(conn) {
