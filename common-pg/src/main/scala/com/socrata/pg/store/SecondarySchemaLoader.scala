@@ -123,7 +123,7 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
   private def shouldCreateIndex(stmt: PreparedStatement, datasetId: DatasetId, fieldName: Option[ColumnName]): Boolean = {
     fieldName.flatMap { field =>
       stmt.setLong(1, datasetId.underlying)
-      stmt.setString(2, field.name)
+      stmt.setString(2, field.caseFolded)
       val resultSet = stmt.executeQuery()
       if (resultSet.next()) {
         Option(resultSet.getString("directives")) match {
@@ -162,5 +162,5 @@ object SecondarySchemaLoader {
     def guard(conn: Connection)(f: => Unit): Unit = rowIsTooBig.guard(conn, None)(f)
   }
 
-  private val directivesSql = "SELECT directives FROM index_directives WHERE dataset_system_id =? AND (field_name = ? OR field_name is null) order by field_name nulls last limit 1"
+  private val directivesSql = "SELECT directives FROM index_directives WHERE dataset_system_id =? AND (field_name_casefolded = ? OR field_name_casefolded is null) order by field_name_casefolded nulls last limit 1"
 }
