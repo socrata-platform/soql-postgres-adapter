@@ -3,12 +3,16 @@ package com.socrata.pg.store
 import com.rojoma.simplearm.util._
 import com.socrata.datacoordinator.truth.loader.sql.{ChangeOwner, RepBasedPostgresSchemaLoader}
 import com.socrata.datacoordinator.truth.loader.Logger
-import com.socrata.datacoordinator.truth.metadata.{CopyInfo, ColumnInfo}
+import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import com.socrata.pg.store.index.{FullTextSearch, Indexable}
-import com.socrata.pg.error.{SqlErrorPattern, SqlErrorHandler, SqlErrorHelper}
+import com.socrata.pg.store.index.{FullTextSearch, IndexDirectives, Indexable}
+import com.socrata.pg.error.{SqlErrorHandler, SqlErrorHelper, SqlErrorPattern}
 import com.typesafe.scalalogging.slf4j.Logging
-import java.sql.{Statement, Connection}
+import java.sql.{Connection, PreparedStatement, Statement}
+
+import com.rojoma.json.v3.util.JsonUtil
+import com.socrata.datacoordinator.id.DatasetId
+import com.socrata.soql.environment.ColumnName
 
 class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
                                     repFor: ColumnInfo[CT] => SqlColumnRep[CT, CV] with Indexable[CT],
@@ -16,6 +20,8 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
                                     fullTextSearch: FullTextSearch[CT],
                                     sqlErrorHandler: SqlErrorHandler) extends
   RepBasedPostgresSchemaLoader[CT, CV](conn, dsLogger, repFor, tablespace) with Logging {
+
+  import SecondarySchemaLoader._
 
   override def addColumns(columnInfos: Iterable[ColumnInfo[CT]]): Unit = {
     if (columnInfos.nonEmpty) super.addColumns(columnInfos)
@@ -48,9 +54,12 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
       fullTextSearch.searchVector(columnInfos.map(repFor).toSeq, None) match {
         case None => // nothing to do
         case Some(allColumnsVector) =>
-          using(conn.createStatement()) { (stmt: Statement) =>
-            SecondarySchemaLoader.fullTextIndexCreateSqlErrorHandler.guard(stmt) {
-              stmt.execute(s"CREATE INDEX idx_search_${table} on ${table} USING GIN ($allColumnsVector) $tablespace")
+          using(conn.createStatement(), conn.prepareStatement(directivesSql)) { (stmt: Statement,  directivesStmt) =>
+            val ci = columnInfos.head
+            if (shouldCreateIndex(directivesStmt, ci.copyInfo.datasetInfo.systemId, Some(ColumnName(":fts")))) {
+              SecondarySchemaLoader.fullTextIndexCreateSqlErrorHandler.guard(stmt) {
+                stmt.execute(s"CREATE INDEX idx_search_${table} on ${table} USING GIN ($allColumnsVector) $tablespace")
+              }
             }
           }
       }
@@ -89,10 +98,11 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
       val table = tableName(columnInfos)
       val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
         throw new Exception(s"${table} does not exist when creating index.")))
-      using(conn.createStatement()) { stmt =>
+      using(conn.createStatement(), conn.prepareStatement(directivesSql)) { (stmt, directivesStmt) =>
         for {
           (ci, idx) <- columnInfos.zipWithIndex
           createIndexSql <- repFor(ci).createIndex(table, tablespace)
+            if shouldCreateIndex(directivesStmt, ci.copyInfo.datasetInfo.systemId, ci.fieldName)
         } {
           logger.info("creating index {} {}", ci.userColumnId.underlying, idx.toString)
           sqlErrorHandler.guard(conn) {
@@ -101,6 +111,34 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
         }
       }
     }
+  }
+
+  /**
+    * To suppress index create
+    *   INSERT into index_directives(dataset_system_id, field_name, directives) VALUES (${datasetSystemId}, ${fieldName}, '{"enable": false}')
+    *      (fieldName can be null to apply to all columns)
+    * To trigger reindex
+    *   curl -v  -X POST -H 'Content-Type: application/json' 'http://localhost:6010/dataset/${resourceName}/!secondary-reindex' --data '{}'
+    */
+  private def shouldCreateIndex(stmt: PreparedStatement, datasetId: DatasetId, fieldName: Option[ColumnName]): Boolean = {
+    fieldName.flatMap { field =>
+      stmt.setLong(1, datasetId.underlying)
+      stmt.setString(2, field.caseFolded)
+      val resultSet = stmt.executeQuery()
+      if (resultSet.next()) {
+        Option(resultSet.getString("directives")) match {
+          case Some(json) =>
+            JsonUtil.parseJson[IndexDirectives](json) match {
+              case Right(indexDirectives) =>
+                Some(indexDirectives.enable)
+              case Left(_) => None
+            }
+          case None => None
+        }
+      } else {
+        None
+      }
+    }.getOrElse(true)
   }
 
   private def tableName(columnInfo: Iterable[ColumnInfo[CT]]) = columnInfo.head.copyInfo.dataTableName
@@ -123,4 +161,6 @@ object SecondarySchemaLoader {
     private val rowIsTooBig = new SqlErrorHelper(SqlErrorPattern("54000", " is too (big|long)".r))
     def guard(conn: Connection)(f: => Unit): Unit = rowIsTooBig.guard(conn, None)(f)
   }
+
+  private val directivesSql = "SELECT directives FROM index_directives WHERE dataset_system_id =? AND (field_name_casefolded = ? OR field_name_casefolded is null) order by field_name_casefolded nulls last limit 1"
 }

@@ -68,4 +68,6 @@ class PGSecondaryLogger[CT, CV] extends Logger[CT, CV] with Logging {
   def rollupCreatedOrUpdated(info: RollupInfo): Unit = logger.debug(s"rollupCreatedOrUpdated: $info")
 
   def rollupDropped(info: RollupInfo): Unit = logger.debug(s"rollupDropped: $info")
+
+  def secondaryReindex(): Unit = logger.debug("secondaryReindex")
 }
