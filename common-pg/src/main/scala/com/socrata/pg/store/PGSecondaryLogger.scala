@@ -3,8 +3,8 @@ package com.socrata.pg.store
 import com.socrata.datacoordinator.truth.loader.Logger
 import com.socrata.datacoordinator.id.RowId
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, ComputationStrategyInfo, CopyInfo, RollupInfo}
+import com.socrata.soql.environment.ColumnName
 
-import scala.Some
 import com.typesafe.scalalogging.slf4j.Logging
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
@@ -70,4 +70,6 @@ class PGSecondaryLogger[CT, CV] extends Logger[CT, CV] with Logging {
   def rollupDropped(info: RollupInfo): Unit = logger.debug(s"rollupDropped: $info")
 
   def secondaryReindex(): Unit = logger.debug("secondaryReindex")
+
+  def secondaryAddIndex(fieldName: ColumnName): Unit = logger.debug("secondaryAddIndex")
 }

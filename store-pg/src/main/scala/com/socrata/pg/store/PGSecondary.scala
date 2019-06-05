@@ -410,6 +410,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           }
         case SecondaryReindex =>
           (true, refreshRollup, truthCopyInfo, dataLoader)
+        case SecondaryAddIndex(column) =>
+          SecondaryAddIndexHandler(pgu, dsId, column, "true")
+          (true, refreshRollup, truthCopyInfo, dataLoader)
         case otherOps: Event[SoQLType,SoQLValue] =>
           throw new UnsupportedOperationException(s"Unexpected operation $otherOps")
       }
