@@ -6,6 +6,7 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import com.socrata.curator.CuratorFromConfig
 import com.socrata.pg.BuildInfo
 import com.mchange.v2.c3p0.DataSources
+import com.rojoma.json.v3.ast.JObject
 import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.common.DataSourceConfig
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
@@ -419,6 +420,14 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           }
         case SecondaryReindex =>
           (true, refreshRollup, truthCopyInfo, dataLoader)
+        case SecondaryAddIndex(fieldName, directives) =>
+          val columnOpt = pgu.datasetMapWriter.schema(truthCopyInfo).values.find(_.fieldName == Some(fieldName))
+          columnOpt.foreach(column => SecondaryAddIndexHandler(pgu, dsId, column, directives))
+          (true, refreshRollup, truthCopyInfo, dataLoader)
+        case SecondaryDeleteIndex(fieldName) =>
+          val columnOpt = pgu.datasetMapWriter.schema(truthCopyInfo).values.find(_.fieldName == Some(fieldName))
+          columnOpt.foreach(column => SecondaryDeleteIndexHandler(pgu, dsId, column))
+          (true, refreshRollup, truthCopyInfo, dataLoader)
         case otherOps: Event[SoQLType,SoQLValue] =>
           throw new UnsupportedOperationException(s"Unexpected operation $otherOps")
       }
@@ -475,13 +484,14 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
              cookie: Secondary.Cookie,
              rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
              rollups: Seq[RollupInfo],
+             indexDirectives: Seq[com.socrata.datacoordinator.truth.metadata.IndexDirectives],
              isLatestLivingCopy: Boolean): Secondary.Cookie = {
     // should tell us the new copy number
     // We need to perform some accounting here to make sure readers know a resync is in process
     logger.info("resync (datasetInfo: {}, secondaryCopyInfo: {}, schema: {}, cookie: {})",
       datasetInfo, secondaryCopyInfo, schema, cookie)
     withPgu(dsInfo, Some(datasetInfo)) { pgu =>
-      val cookieOut = doResync(pgu, datasetInfo, secondaryCopyInfo, schema, cookie, rows, rollups)
+      val cookieOut = doResync(pgu, datasetInfo, secondaryCopyInfo, schema, cookie, rows, rollups, indexDirectives)
       pgu.commit()
       cookieOut
     }
@@ -489,12 +499,13 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
   // scalastyle:ignore method.length cyclomatic.complexity
   def doResync(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-              secondaryDatasetInfo: DatasetInfo,
-              secondaryCopyInfo: SecondaryCopyInfo,
-              newSchema: ColumnIdMap[SecondaryColumnInfo[SoQLType]],
-              cookie: Secondary.Cookie,
-              rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
-              rollups: Seq[RollupInfo]): Secondary.Cookie =
+               secondaryDatasetInfo: DatasetInfo,
+               secondaryCopyInfo: SecondaryCopyInfo,
+               newSchema: ColumnIdMap[SecondaryColumnInfo[SoQLType]],
+               cookie: Secondary.Cookie,
+               rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
+               rollups: Seq[RollupInfo],
+               indexDirectives: Seq[com.socrata.datacoordinator.truth.metadata.IndexDirectives]): Secondary.Cookie =
   {
     val truthCopyInfo = pgu.secondaryDatasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName) match { // scalastyle:ignore line.size.limit
       case None =>
@@ -601,6 +612,14 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     val postUpdateTruthCopyInfo = pgu.datasetMapReader.latest(truthCopyInfo.datasetInfo)
     // re-create rollup metadata
     for { rollup <- rollups } RollupCreatedOrUpdatedHandler(pgu, postUpdateTruthCopyInfo, rollup)
+
+    // re-create index directives
+    val postUpdateTruthSchema = pgu.datasetMapReader.schema(postUpdateTruthCopyInfo)
+    for { idx <- indexDirectives } {
+      val columnOpt = postUpdateTruthSchema.values.find(_.fieldName == Some(idx.fieldName))
+      columnOpt.foreach(column => SecondaryAddIndexHandler(pgu, postUpdateTruthCopyInfo.datasetInfo.systemId, column, idx.directives))
+    }
+
     // re-create rollup tables
     updateRollups(pgu, postUpdateTruthCopyInfo)
     pgu.datasetMapWriter.enableDataset(truthCopyInfo.datasetInfo.systemId) // re-enable soql reads
