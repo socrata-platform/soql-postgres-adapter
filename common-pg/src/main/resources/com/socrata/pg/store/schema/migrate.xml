@@ -22,7 +22,7 @@
     <include file="com/socrata/pg/store/schema/20180202-add-secondary-metrics-table.xml"/>
     <include file="com/socrata/pg/store/schema/20190515-align-truth-instance-name.xml"/>
     <include file="com/socrata/pg/store/schema/20190522-add-dataset-map-latest-data-version.xml"/>
-    <include file="com/socrata/pg/store/schema/20190601-create-index-directives.xml"/>
     <include file="com/socrata/pg/store/schema/20191224-add-some-dc-tables.xml"/>
     <include file="com/socrata/pg/store/schema/20200210-add-median-function.xml"/>
+    <include file="com/socrata/pg/store/schema/20200901-create-index-directive-map.xml"/>
 </databaseChangeLog>
