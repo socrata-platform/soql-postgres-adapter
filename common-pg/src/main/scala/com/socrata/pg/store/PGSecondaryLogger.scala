@@ -35,8 +35,6 @@ class PGSecondaryLogger[CT, CV] extends Logger[CT, CV] {
 
   def rowIdentifierCleared(oldIdentifier: ColumnInfo[CT]): Unit = logger.debug("rowIdentifierCleared: " + oldIdentifier)
 
-  def secondaryAddIndex(fieldName: ColumnName): Unit = logger.debug("secondaryAddIndex: " + fieldName)
-
   def systemIdColumnSet(info: ColumnInfo[CT]): Unit = logger.debug("systemIdColumnSet: " + info)
 
   def versionColumnSet(info: ColumnInfo[CT]): Unit = logger.debug("versionColumnSet: " + info)
@@ -77,4 +75,6 @@ class PGSecondaryLogger[CT, CV] extends Logger[CT, CV] {
   def rollupDropped(info: RollupInfo): Unit = logger.debug(s"rollupDropped: $info")
 
   def secondaryReindex(): Unit = logger.debug("secondaryReindex")
+
+  def secondaryAddIndex(fieldName: ColumnName): Unit = logger.debug("secondaryAddIndex: " + fieldName)
 }
