@@ -1,0 +1,10 @@
+[ { "code": "00000", "make": "APCO", "first_value_v_max_over_partition_by_make_order_by_code": 55, "last_value_v_max_over_partition_by_make_order_by_code": 55 },
+  { "code": "14200", "make": "APCO", "first_value_v_max_over_partition_by_make_order_by_code": 55, "last_value_v_max_over_partition_by_make_order_by_code": 55 },
+  { "code": "14210", "make": "APCO", "first_value_v_max_over_partition_by_make_order_by_code": 55, "last_value_v_max_over_partition_by_make_order_by_code": 55 },
+  { "code": "18520", "make": "APCO", "first_value_v_max_over_partition_by_make_order_by_code": 55, "last_value_v_max_over_partition_by_make_order_by_code": 55 },
+  { "code": "BUZZ-Z4", "make": "OZONE", "first_value_v_max_over_partition_by_make_order_by_code": 53, "last_value_v_max_over_partition_by_make_order_by_code": 49 },
+  { "code": "CHILI3", "make": "Skywalk", "first_value_v_max_over_partition_by_make_order_by_code": 52, "last_value_v_max_over_partition_by_make_order_by_code": 50 },
+  { "code": "MESCAL4", "make": "Skywalk", "first_value_v_max_over_partition_by_make_order_by_code": 52, "last_value_v_max_over_partition_by_make_order_by_code": 50 },
+  { "code": "RUSH-3", "make": "OZONE", "first_value_v_max_over_partition_by_make_order_by_code": 53, "last_value_v_max_over_partition_by_make_order_by_code": 49 },
+  { "code": "TEQUILA3", "make": "Skywalk", "first_value_v_max_over_partition_by_make_order_by_code": 52, "last_value_v_max_over_partition_by_make_order_by_code": 50 }
+]

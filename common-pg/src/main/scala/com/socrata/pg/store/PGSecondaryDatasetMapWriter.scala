@@ -32,10 +32,8 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
     """.stripMargin
   private val deleteQueryInternalNameMap = "DELETE FROM dataset_internal_name_map where dataset_system_id = ?"
   private val enableQueryInternalNameMap = "UPDATE dataset_internal_name_map SET disabled = ? WHERE dataset_system_id = ?"
-  private val deleteIndexDirectives = "DELETE FROM index_directives where dataset_system_id = ?"
 
   override def delete(tableInfo: DatasetInfo): Unit = {
-    deleteIndexDirectives(tableInfo.systemId)
     deleteInternalNameMapping(tableInfo.systemId)
     super.delete(tableInfo)
   }
@@ -50,13 +48,6 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
 
   def deleteInternalNameMapping(datasetSystemId: DatasetId): Unit = {
     using(conn.prepareStatement(deleteQueryInternalNameMap)) { stmt =>
-      stmt.setLong(1, datasetSystemId.underlying)
-      stmt.execute()
-    }
-  }
-
-  def deleteIndexDirectives(datasetSystemId: DatasetId): Unit = {
-    using(conn.prepareStatement(deleteIndexDirectives)) { stmt =>
       stmt.setLong(1, datasetSystemId.underlying)
       stmt.execute()
     }
