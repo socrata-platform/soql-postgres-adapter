@@ -26,7 +26,7 @@ com.socrata.soql-server-pg {
     connectionCustomizerClassName = com.socrata.thirdparty.c3p0.ConnectionCustomizer
     c3p0 {
       extensions {
-        onAcquire = "SET work_mem = '{{ PG_SECONDARY_WORK_MEM }}'; COMMIT"
+        onAcquire = "SET work_mem = '{{ PG_SECONDARY_WORK_MEM }}'; SET client_min_messages = '{{ PG_SECONDARY_CLIENT_MSG_LEVEL }}'; COMMIT"
       }
     }
   }

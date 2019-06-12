@@ -24,3 +24,4 @@ See the Dockerfile for defaults.
 * `PG_SECONDARY_DB_USER` - soql-server-pg DB user name
 * `PG_SECONDARY_INSTANCE` - soql-server-pg instance name
 * `PG_SECONDARY_WORK_MEM` - The postgres `work_mem` setting to use for updating the secondary.  This is primarily useful for allowing PostgreSQL to do expensive queries such as large group by queries.
+* `PG_SECONDARY_CLIENT_MSG_LEVEL` - The postgres `client_min_messages` setting. Setting it to a value such as 'error' is useful in avoiding OOM issues when many PSQLWarnings are created while processing large datasets.
