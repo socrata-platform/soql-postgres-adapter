@@ -136,7 +136,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       }
 
     // JOIN
-    val (joinPhrase, setParamsJoin) = joins.foldLeft((Seq.empty[String], setParamsSelect)) { case ((sqls, setParamAcc), join) =>
+    val (joinPhrase, setParamsJoin) = joins.foldLeft((Seq.empty[String], Seq.empty[SetParam])) { case ((sqls, setParamAcc), join) =>
       val joinTableName = TableName(join.from.fromTable.name, None)
       val joinTableNames = tableNames + (TableName.PrimaryTable -> tableNames(joinTableName))
 
@@ -162,9 +162,10 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       (sqls :+ s" ${join.typ.toString} $tableName ON $joinCondition", joinConditionParamSql.setParams)
     }
 
+    val setParamsSelectJoin = setParamsSelect ++ setParamsJoin
     // WHERE
-    val where = ana.where.map(Sqlizer.sql(_)(repMinusComplexJoinTable, typeRep, setParamsJoin, ctxSelectWithJoins + (SoqlPart -> SoqlWhere), escape))
-    val setParamsWhere = where.map(_.setParams).getOrElse(setParamsJoin)
+    val where = ana.where.map(Sqlizer.sql(_)(repMinusComplexJoinTable, typeRep, setParamsSelectJoin, ctxSelectWithJoins + (SoqlPart -> SoqlWhere), escape))
+    val setParamsWhere = where.map(_.setParams).getOrElse(setParamsSelectJoin)
 
     // SEARCH
     val search = ana.search.map { search =>
