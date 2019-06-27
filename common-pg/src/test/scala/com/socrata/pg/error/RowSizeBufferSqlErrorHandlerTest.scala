@@ -73,7 +73,7 @@ class RowSizeBufferSqlErrorHandlerTest extends FunSuite with Matchers with Befor
         val thrown = intercept[PSQLException] {
           stmt.execute(fullTextIndex)
         }
-        thrown.getSQLState should be ("54000")
+        thrown.getSQLState should be ("54001")
         conn.rollback()
         stmt.execute(s"create table t2 ($createColumns)")
         SecondarySchemaLoader.fullTextIndexCreateSqlErrorHandler.guard(conn) {

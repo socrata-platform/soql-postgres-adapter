@@ -158,7 +158,12 @@ object SecondarySchemaLoader {
     // Example:
     // PSQLException: SQLState = 54000, detailMessage = ERROR: row is too big: size 17880, maximum size 8160
     // PSQLException: SQLState = 54000, detailMessage = ERROR: string is too long for tsvector (1099438 bytes, max 1048575 bytes)
-    private val rowIsTooBig = new SqlErrorHelper(SqlErrorPattern("54000", " is too (big|long)".r))
+
+    // It appears that at some point trying to create too large a GIN index started throwing 54001 instead of 54000
+    private val rowIsTooBig = new SqlErrorHelper(
+      SqlErrorPattern("54000", " is too (big|long)".r),
+      SqlErrorPattern("54001", "stack depth limit exceeded".r)
+    )
     def guard(conn: Connection)(f: => Unit): Unit = rowIsTooBig.guard(conn, None)(f)
   }
 
