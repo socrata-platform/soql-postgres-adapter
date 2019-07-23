@@ -5,8 +5,8 @@ import com.socrata.pg.soql.Sqlizer._
 import com.socrata.pg.soql.SqlizerContext._
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, TableName}
-import com.socrata.soql.typed.{CoreExpr, StringLiteral}
-import com.socrata.soql.types.{SoQLArray, SoQLObject, SoQLText, SoQLType}
+import com.socrata.soql.typed.CoreExpr
+import com.socrata.soql.types.SoQLUrl
 
 trait FullTextSearch[CT] {
 
@@ -27,9 +27,13 @@ trait FullTextSearch[CT] {
   }
 
   def searchVector(selection: OrderedMap[ColumnName, CoreExpr[_, CT]], ctx: Option[Context]): Option[String] = {
-    val cols = selection.view.filter(x => SearchableTypes.contains(x._2.typ)).map { case (columnName, expr) =>
-      val name = ctx.map(c => qualify(columnName.name, c)).getOrElse(columnName.name)
-      coalesce(name)
+    val cols = selection.view.filter(x => SearchableTypes.contains(x._2.typ)).flatMap { case (columnName, expr) =>
+      val subColumns = typeSubColumns(expr.typ)
+      subColumns.map { sc =>
+        val subColumnName = s"${columnName.name}${sc}"
+        val qualifiedSubColumnName = ctx.map(c => qualify(subColumnName, c)).getOrElse(subColumnName)
+        coalesce(qualifiedSubColumnName)
+      }
     }
     toTsVector(cols.toSeq)
   }
@@ -65,5 +69,12 @@ trait FullTextSearch[CT] {
   private def toTsVector(cols: Seq[String]): Option[String] = {
     if (cols.isEmpty) None
     else Some(cols.sorted.mkString("to_tsvector('english', ", " || ' ' || ", ")"))
+  }
+
+  private def typeSubColumns(t: CT): Seq[String] = {
+    t match {
+      case _: SoQLUrl.type => Seq("_url", "_description")
+      case _ => Seq("")
+    }
   }
 }
