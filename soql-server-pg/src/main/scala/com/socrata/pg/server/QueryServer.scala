@@ -162,7 +162,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     override val post = query _
   }
 
-  def etagFromCopy(datasetInternalName: String, copy: CopyInfo, etagInfo: Option[String]): EntityTag = {
+  def etagFromCopy(datasetInternalName: String, copy: CopyInfo, etagInfo: Option[String], debug: Boolean = false): EntityTag = {
     // ETag is a hash based on datasetInternalName_copyNumber_version
     // Upstream components may pass through etag headers to and from query server but generate different queries.
     // For example, "select *" may become "select `a`" or "select `a`, `newly_unhidden_colujmn`"
@@ -173,6 +173,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
       Base64.encodeBase64URLSafeString(md.digest())
     }.getOrElse("")
     val etagContents = s"${datasetInternalName}_${copy.copyNumber}_${copy.dataVersion}$etagInfoDigest"
+    if(debug) logger.info(s"etagContents: $etagContents")
     StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
   }
 
@@ -269,6 +270,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
                   // Very weird separation of concerns between execQuery and streaming. Most likely we will
                   // want yet-another-refactoring where much of execQuery is lifted out into this function.
                   // This will significantly change the tests; however.
+                  if(debug) logger.info(s"Returning etag: ${etag.asBytes.mkString(",")}")
                   ETag(etag)(resp)
                   copyInfoHeaderForRows(copyNumber, dataVersion, lastModified)(resp)
                   rollupName.foreach(r => Header("X-SODA2-Rollup", r.underlying)(resp))
@@ -356,7 +358,13 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     }
 
     val copy = getCopy(pgu, datasetInfo, reqCopy)
-    val etag = etagFromCopy(datasetInternalName, copy, etagInfo)
+    if(debug) {
+      logger.info(s"etagInfo: ${etagInfo.map(_.getBytes.mkString(","))}")
+      logger.info(s"datasetInternalName: $datasetInternalName")
+      logger.info(s"copy: $copy")
+    }
+    val etag = etagFromCopy(datasetInternalName, copy, etagInfo, debug)
+    if(debug) logger.info(s"Generated etag: ${etag.asBytes.mkString(",")}")
     val lastModified = copy.lastModified
 
     // Conditional GET handling
