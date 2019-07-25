@@ -17,7 +17,7 @@ case class ParametricSql(sql: Seq[String], setParams: Seq[SetParam]) {
   override def toString(): String = {
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     "sql: " + sql.mkString(";") +
-    " params: " + params.mkString(",")
+    " params: " + params.mkString("\"", """","""", "\"")
   }
 }
 
