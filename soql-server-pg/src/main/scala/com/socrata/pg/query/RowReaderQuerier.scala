@@ -7,6 +7,7 @@ import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.truth.loader.sql.DataSqlizer
 import com.socrata.datacoordinator.util.CloseableIterator
+import com.socrata.pg.server.QueryServer.ExplainInfo
 import com.socrata.pg.soql.{ParametricSql, QualifiedUserColumnId}
 import com.socrata.pg.store.PGSecondaryRowReader
 import com.socrata.soql.collection.OrderedMap
@@ -28,6 +29,16 @@ trait RowReaderQuerier[CT, CV] {
     val sqlizerq = sqlizer.asInstanceOf[DataSqlizer[CT, CV] with DataSqlizerQuerier[CT, CV]]
     val resultIter = sqlizerq.query(connection, analyses, toSql, toRowCountSql, reqRowCount, querySchema, queryTimeout, debug)
     managed(resultIter)
+  }
+
+  def queryExplain(analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
+            toSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql,
+            queryTimeout: Option[Duration],
+            debug: Boolean,
+            analyze: Boolean): ExplainInfo = {
+    val sqlizerq = sqlizer.asInstanceOf[DataSqlizer[CT, CV] with DataSqlizerQuerier[CT, CV]]
+
+    sqlizerq.explainQuery(connection, analyses, toSql, queryTimeout, analyze)
   }
 
   def getSqlReps(systemToUserColumnMap: Map[ColumnId, UserColumnId]): Map[QualifiedUserColumnId, SqlColumnRep[CT, CV]] = {

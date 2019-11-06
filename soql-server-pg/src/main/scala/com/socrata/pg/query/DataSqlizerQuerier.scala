@@ -15,6 +15,7 @@ import com.typesafe.scalalogging.slf4j.Logging
 import java.sql.{Connection, ResultSet, SQLException}
 
 import com.socrata.NonEmptySeq
+import com.socrata.pg.server.QueryServer.ExplainInfo
 
 trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
   this: AbstractRepBasedDataSqlizer[CT, CV] => ()
@@ -31,8 +32,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
   private val sqlFetchSize = 1025
 
   def query(conn: Connection, analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
-            toSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
-            toRowCountSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
+            toSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analysis, tableName
+            toRowCountSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analysis, tableName
             reqRowCount: Boolean,
             querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
             queryTimeout: Option[Duration],
@@ -122,6 +123,55 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] wit
       val stmt = conn.prepareStatement(pSql.sql.head)
       // need to explicitly set a fetch size to stream results
       stmt.setFetchSize(fetchSize)
+      pSql.setParams.zipWithIndex.foreach { case (setParamFn, idx) =>
+        setParamFn(Some(stmt), idx + 1)
+      }
+      stmt.executeQuery()
+    } catch {
+      case ex: SQLException =>
+        logger.error(s"SQL Exception (${ex.getSQLState}) with timeout=$timeout on $pSql")
+        throw ex
+    }
+  }
+
+  def explainQuery(conn: Connection, analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
+                   toSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
+                   queryTimeout: Option[Duration],
+                   analyze: Boolean):
+  ExplainInfo = {
+    val sql = toSql(analyses, dataTableName)
+    val result = StringBuilder.newBuilder
+    using(explainSql(conn, sql, queryTimeout, analyze)) {
+      rs =>
+        try {
+          while(rs.next()) {
+            result.append(rs.getString(1))
+            result.append("\n")
+          }
+        } finally {
+          rs.getStatement.close()
+        }
+    }
+
+    ExplainInfo(
+      sql.toString(),
+      result.mkString
+    )
+  }
+
+  private def explainSql(conn: Connection, pSql: ParametricSql, timeout: Option[Duration], analyze: Boolean): ResultSet = {
+    try {
+      if (timeout.isDefined && timeout.get.isFinite()) {
+        val ms = timeout.get.toMillis.min(Int.MaxValue).max(1).toInt.toString
+        logger.trace(s"Setting statement timeout to ${ms}ms")
+        execute(conn, setTimeout(ms))
+      }
+
+      val query = "EXPLAIN " + (if(analyze) "ANALYZE " else "") + pSql.sql.head
+
+      // Statement to be closed by caller
+      val stmt = conn.prepareStatement(query)
+
       pSql.setParams.zipWithIndex.foreach { case (setParamFn, idx) =>
         setParamFn(Some(stmt), idx + 1)
       }
