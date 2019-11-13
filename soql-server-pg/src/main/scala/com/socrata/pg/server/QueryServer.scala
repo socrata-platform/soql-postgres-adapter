@@ -436,7 +436,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
 
     val copy = getCopy(pgu, datasetInfo, reqCopy)
     if(debug) {
-      logger.info(s"etagInfo: ${etagInfo.map(_.getBytes.mkString(","))}")
+      logger.info(s"etagInfo: ${etagInfo.map(_.getBytes(StandardCharsets.ISO_8859_1).mkString(","))}")
       logger.info(s"datasetInternalName: $datasetInternalName")
       logger.info(s"copy: $copy")
     }
