@@ -183,6 +183,13 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
   }
 
+  def createEtagFromAnalysis(analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]], fromTable: String): String = {
+    analyses.map{
+      analysis: SoQLAnalysis[UserColumnId, SoQLType] =>
+        // Strictly speaking this table name is incorrect, but it's _consistently_ incorrect
+        analysis.toStringWithFrom(TableName(fromTable))
+    }.toString
+  }
 
   /** maps dataset name to count of current requests.  Requires synchronization to access. */
   private val currentRequests = scala.collection.mutable.HashMap[String,Integer]().withDefaultValue(0)
@@ -247,7 +254,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         obfuscateId = obfuscateId,
         precondition = req.precondition,
         ifModifiedSince = req.dateTimeHeader("If-Modified-Since"),
-        etagInfo = Option(analysisParam),
+        etagInfo = Option(createEtagFromAnalysis(analyses, datasetId)),
         queryTimeout = queryTimeout,
         debug = debug,
         explain = explain,
