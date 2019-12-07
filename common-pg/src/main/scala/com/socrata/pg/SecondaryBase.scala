@@ -1,7 +1,7 @@
 package com.socrata.pg
 
 import java.sql.Connection
-import com.rojoma.simplearm.util._
+import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.common.{DataSourceFromConfig, DataSourceConfig}
 import com.socrata.pg.store.{PostgresUniverseCommon, PGSecondaryUniverse}
 import com.socrata.soql.types.{SoQLValue, SoQLType}
@@ -20,7 +20,7 @@ trait SecondaryBase {
   protected def withDb[T](dsInfo:DSInfo)(f: (Connection) => T): T = {
     for {
       conn <- managed(dsInfo.dataSource.getConnection)
-    } yield {
+    } {
       conn.setAutoCommit(false)
       conn.setClientInfo("ApplicationName", applicationNameString)
       f(conn)
@@ -54,9 +54,7 @@ trait SecondaryBase {
 
   protected def withPgu[T](truthStoreDatasetInfo:Option[DatasetInfo])
                           (f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
-    for {
-      dsInfo <- DataSourceFromConfig(dsConfig)
-    } yield {
+    for(dsInfo <- DataSourceFromConfig(dsConfig)) {
       withPgu(dsInfo, truthStoreDatasetInfo) {
         pgu => f(pgu)
       }

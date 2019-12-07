@@ -48,7 +48,7 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase w
       val idMap =  (cn: ColumnName) => new UserColumnId(cn.name)
       val soql = "select text_USERNAME, number_USERNAME"
 
-      pgu.datasetReader.openDataset(copyInfo).map { readCtx =>
+      pgu.datasetReader.openDataset(copyInfo).run { readCtx =>
         val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
         val columnNameTypeMap: OrderedMap[ColumnName, SoQLType] = baseSchema.values.foldLeft(OrderedMap.empty[ColumnName, SoQLType]) { (map, cinfo) =>
           map + (ColumnName(cinfo.userColumnId.underlying) -> cinfo.typ)
@@ -59,7 +59,7 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase w
         val analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] =
           SoQLAnalyzerHelper.analyzeSoQL(soql, Map(TableName.PrimaryTable.qualifier -> datasetCtx), Map.empty)
         val (requestColumns, version, mresult) =
-          ds.map { dsInfo =>
+          ds.run { dsInfo =>
             val qs = new QueryServer(dsInfo, CaseSensitive)
             qs.execQuery(pgu, "someDatasetInternalName", copyInfo.datasetInfo, analyses, false, None, None, true,
               NoPrecondition, None, None, None, false, false, false) match {

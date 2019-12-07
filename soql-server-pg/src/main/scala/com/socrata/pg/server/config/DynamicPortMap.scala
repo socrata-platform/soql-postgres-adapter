@@ -1,8 +1,13 @@
 package com.socrata.pg.server.config
 
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.Logger
 
-trait DynamicPortMap extends Logging  {
+object DynamicPortMap {
+  private val logger = Logger[DynamicPortMap]
+}
+
+trait DynamicPortMap {
+  import DynamicPortMap.logger
 
   private val intRx = "(\\d+)".r
 

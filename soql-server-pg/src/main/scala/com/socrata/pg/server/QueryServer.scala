@@ -10,8 +10,7 @@ import javax.servlet.http.HttpServletResponse
 import com.socrata.pg.BuildInfo
 import com.rojoma.json.v3.ast.JString
 import com.rojoma.json.v3.util.{AutomaticJsonEncodeBuilder, JsonUtil}
-import com.rojoma.simplearm.Managed
-import com.rojoma.simplearm.util._
+import com.rojoma.simplearm.v2._
 import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.Row
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
@@ -55,7 +54,7 @@ import com.socrata.pg.server.CJSONWriter.utf8EncodingName
 import com.socrata.thirdparty.metrics.{MetricsReporter, SocrataHttpSupport}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.{Config, ConfigFactory}
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.Logger
 import org.apache.commons.codec.binary.Base64
 import org.apache.curator.x.discovery.ServiceInstanceBuilder
 import org.apache.log4j.PropertyConfigurator
@@ -66,7 +65,7 @@ import org.slf4j.LoggerFactory
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.language.existentials
 
-class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase with Logging {
+class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase {
   import QueryServer._ // scalastyle:ignore import.grouping
 
   val dsConfig: DataSourceConfig = null // scalastyle:ignore null // unused
@@ -316,7 +315,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
                   ETag(etag)(resp)
                   copyInfoHeaderForRows(copyNumber, dataVersion, lastModified)(resp)
                   rollupName.foreach(r => Header("X-SODA2-Rollup", r.underlying)(resp))
-                  for { r <- results } yield {
+                  results.run { r =>
                     CJSONWriter.writeCJson(datasetInfo, qrySchema,
                       r, reqRowCount, r.rowCount, dataVersion, lastModified, obfuscateId)(resp)
                   }
@@ -384,7 +383,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
       )
       val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit)
 
-      for { readCtx <- pgu.datasetReader.openDataset(latestCopy) } yield {
+      for(readCtx <- pgu.datasetReader.openDataset(latestCopy)) {
         val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema
         val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
         val qrySchema = querySchema(pgu, analyses.last, latestCopy)
@@ -554,7 +553,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
       } yield {
         val copy = getCopy(pgu, datasetInfo, reqCopy)
-        pgu.datasetReader.openDataset(copy).map(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
+        pgu.datasetReader.openDataset(copy).run(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
       }
     }
   }
@@ -565,7 +564,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         datasetInfo <- pgu.datasetMapReader.datasetInfoByResourceName(ResourceName(id.name))
       } yield {
         val copy = getCopy(pgu, datasetInfo, reqCopy)
-        pgu.datasetReader.openDataset(copy).map(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
+        pgu.datasetReader.openDataset(copy).run(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
       }
     }
   }
@@ -576,7 +575,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         datasetInfo <- pgu.datasetMapReader.datasetInfoByResourceName(ResourceName(id.name))
       } yield {
         val copy = getCopy(pgu, datasetInfo, reqCopy)
-        pgu.datasetReader.openDataset(copy).map(readCtx => pgu.schemaFinder.getSchemaWithFieldName(readCtx.copyCtx))
+        pgu.datasetReader.openDataset(copy).run(readCtx => pgu.schemaFinder.getSchemaWithFieldName(readCtx.copyCtx))
       }
     }
   }
@@ -598,11 +597,11 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   }
 
   private def getSchema(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copy: CopyInfo): Schema = {
-    pgu.datasetReader.openDataset(copy).map(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
+    pgu.datasetReader.openDataset(copy).run(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
   }
 
   private def getSchemaWithFieldName(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copy: CopyInfo): SchemaWithFieldName = {
-    pgu.datasetReader.openDataset(copy).map(readCtx => pgu.schemaFinder.getSchemaWithFieldName(readCtx.copyCtx))
+    pgu.datasetReader.openDataset(copy).run(readCtx => pgu.schemaFinder.getSchemaWithFieldName(readCtx.copyCtx))
   }
 
   private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], ds: String, reqCopy: Option[String])
@@ -678,7 +677,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
                           copy: CopyInfo,
                           tableName: TableName)
     : Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]] = {
-    val reps = for { readCtx <- pgu.datasetReader.openDataset(copy) } yield {
+    for(readCtx <- pgu.datasetReader.openDataset(copy)) {
       val schema = readCtx.schema
       val columnIdUserColumnIdMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
       val columnIdReps = schema.mapValuesStrict(pgu.commonSupport.repFor)
@@ -687,14 +686,13 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         val qualifier = tableName.alias.orElse(copy.datasetInfo.resourceName)
         val qualifiedUserColumnId = new QualifiedUserColumnId(qualifier, userColumnId)
         qualifiedUserColumnId -> columnIdReps(columnId)
-      }
+      }.toMap
     }
-
-    reps.toMap
   }
 }
 
-object QueryServer extends DynamicPortMap with Logging {
+object QueryServer extends DynamicPortMap {
+  private val logger = Logger[QueryServer]
 
   sealed abstract class QueryResult
   case class NotModified(etags: Seq[EntityTag]) extends QueryResult
@@ -741,7 +739,7 @@ object QueryServer extends DynamicPortMap with Logging {
     val address = config.discovery.address
     val datasourceConfig = new DataSourceConfig(config.getRawConfig("store"), "database")
 
-    implicit object executorResource extends com.rojoma.simplearm.Resource[ExecutorService] {
+    implicit object executorResource extends com.rojoma.simplearm.v2.Resource[ExecutorService] {
       def close(a: ExecutorService): Unit = a.shutdown()
     }
 

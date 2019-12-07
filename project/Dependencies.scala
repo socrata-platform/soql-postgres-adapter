@@ -14,18 +14,18 @@ object Dependencies {
     val postgresql = "9.4.1212"
     val simpleArm = "1.1.10"
     val slf4j = "1.7.5"
-    val socrataUtils = "0.10.1"
-    val socrataCuratorUtils = "1.1.2"
-    val socrataThirdPartyUtils = "4.0.16"
-    val socrataHttpCuratorBroker = "3.11.4"
-    val soqlStdlib = "2.11.16"
+    val scalatest = "3.0.8"
+    val socrataUtils = "0.11.0"
+    val socrataCuratorUtils = "1.2.0"
+    val socrataThirdPartyUtils = "5.0.0"
+    val socrataHttpCuratorBroker = "3.12.0"
+    val soqlStdlib = "2.11.21"
     val typesafeConfig = "1.0.0"
-    val dataCoordinator = "3.5.5"
-    val typesafeScalaLogging = "1.1.0"
+    val dataCoordinator = "3.6.0"
+    val typesafeScalaLogging = "3.9.2"
     val rojomaJson = "3.9.1"
-    val metricsJetty = "3.1.0"
-    val metricsGraphite = "3.0.2"
-    val metricsScala = "3.3.0"
+    val metrics = "4.1.2"
+    val metricsScala = "4.1.1"
     val clojure = "1.5.1"
   }
 
@@ -63,19 +63,21 @@ object Dependencies {
   val typesafeConfig = "com.typesafe" % "config" % versions.typesafeConfig
 
   val secondarylib = "com.socrata" %% "secondarylib" % versions.dataCoordinator // % "provided"
-  val coordinatorlib = "com.socrata" %% "coordinator" % versions.dataCoordinator
+  val coordinatorlib = "com.socrata" %% "coordinatorlib" % versions.dataCoordinator
+  val coordinator = "com.socrata" %% "coordinator" % versions.dataCoordinator // ugh, this shouldn't be published at all
 
   val slf4j = "org.slf4j" % "slf4j-log4j12" % versions.slf4j
 
-  val typesafeScalaLogging = "com.typesafe" %% "scalalogging-slf4j" % versions.typesafeScalaLogging
+  val scalatest = "org.scalatest" %% "scalatest" % versions.scalatest
+
+  val typesafeScalaLogging = "com.typesafe.scala-logging" %% "scala-logging" % versions.typesafeScalaLogging
 
   val rojomaJson = "com.rojoma" %% "rojoma-json-v3" % versions.rojomaJson
 
-  val metricsJetty = "io.dropwizard.metrics" % "metrics-jetty9" % versions.metricsJetty
-  // See CORE-3635: use lower version of graphite to work around Graphite reconnect issues
-  val metricsGraphite = "com.codahale.metrics" % "metrics-graphite" % versions.metricsGraphite exclude(
-                           "com.codahale.metrics", "metrics-core")
-  val metricsScala = "nl.grons" %% "metrics-scala" % versions.metricsScala
+  val metricsJetty = "io.dropwizard.metrics" % "metrics-jetty9" % versions.metrics
+  val metricsGraphite = "io.dropwizard.metrics" % "metrics-graphite" % versions.metrics
+  val metricsJmx = "io.dropwizard.metrics" % "metrics-jmx" % versions.metrics
+  val metricsScala = "nl.grons" %% "metrics4-scala" % versions.metricsScala
 
   val clojure = "org.clojure" % "clojure" % versions.clojure
 }

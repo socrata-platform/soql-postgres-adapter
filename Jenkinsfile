@@ -4,9 +4,11 @@
 // set up service and project variables
 def service_server = "soql-server-pg"
 def project_wd_server = "soql-server-pg"
+def project_name_server = "soqlServerPG"
 def deploy_service_pattern_server = "soql-server-pg*"
 def service_secondary = "secondary-watcher-pg"
 def project_wd_secondary = "store-pg"
+def project_name_secondary = "storePG"
 def deploy_service_pattern_secondary = "secondary-watcher-pg*"
 def deploy_environment = "staging"
 
@@ -20,8 +22,12 @@ def boolean stage_deploy = false
 
 // instanciate libraries
 def build_server = new com.socrata.SBTBuild(steps, service_server, project_wd_server)
+build_server.setSubprojectName(project_name_server)
+build_server.setScalaVersion("2.12")
 def dockerize_server = new com.socrata.Dockerize(steps, service_server, BUILD_NUMBER)
 def build_secondary = new com.socrata.SBTBuild(steps, service_secondary, project_wd_secondary)
+build_secondary.setSubprojectName(project_name_secondary)
+build_secondary.setScalaVersion("2.12")
 def dockerize_secondary = new com.socrata.Dockerize(steps, service_secondary, BUILD_NUMBER)
 def deploy = new com.socrata.MarathonDeploy(steps)
 

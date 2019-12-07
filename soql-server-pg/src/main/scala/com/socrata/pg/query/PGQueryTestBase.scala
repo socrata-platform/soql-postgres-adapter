@@ -4,7 +4,7 @@ trait PGQueryTestBase {
 
   val dcInstance = "alpha"
 
-  val project = "soql-server-pg"
+  val projectClassLoader = classOf[PGQueryTestBase].getClassLoader
 
   val storeId = "pg"
 

@@ -1,6 +1,6 @@
 package com.socrata.pg.error
 
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.Logger
 import java.sql.Connection
 import org.postgresql.util.PSQLException
 import scala.util.matching.Regex
@@ -8,7 +8,12 @@ import scala.util.matching.Regex
 
 case class SqlErrorPattern(sqlState: String, message: Regex)
 
-class SqlErrorHelper(patterns: SqlErrorPattern*) extends Logging {
+object SqlErrorHelper {
+  private val logger = Logger[SqlErrorHelper]
+}
+
+class SqlErrorHelper(patterns: SqlErrorPattern*) {
+  import SqlErrorHelper.logger
 
   def guard[E <: Exception](conn: Connection, exceptionClass: Option[Class[E]])(f: => Unit): Unit = {
 

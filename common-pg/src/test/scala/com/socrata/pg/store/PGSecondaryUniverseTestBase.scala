@@ -4,7 +4,7 @@ import java.sql.{Connection, DriverManager}
 import java.util.UUID
 
 import com.rojoma.json.v3.ast.{JArray, JObject, JString}
-import com.rojoma.simplearm.util._
+import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.id.{ColumnId, RowId, UserColumnId}
 import com.socrata.datacoordinator.secondary.DatasetInfo
 import com.socrata.datacoordinator.truth.RowUserIdMap
@@ -90,7 +90,7 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
 
   def getSchema(pgu:PGSecondaryUniverse[SoQLType, SoQLValue],
                 copyInfo:CopyInfo):ColumnIdMap[ColumnInfo[SoQLType]] =
-    pgu.datasetReader.openDataset(copyInfo).map(_.schema)
+    pgu.datasetReader.openDataset(copyInfo).run(_.schema)
 
   def validateSchema(expect:Iterable[ColumnInfo[SoQLType]],
                      schema:ColumnIdMap[ColumnInfo[SoQLType]]): Unit = {

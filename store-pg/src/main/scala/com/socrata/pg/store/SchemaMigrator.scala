@@ -1,7 +1,7 @@
 package com.socrata.pg.store
 
 import com.typesafe.config.Config
-import com.rojoma.simplearm.util._
+import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.datacoordinator.truth.migration.Migration.MigrationOperation.MigrationOperation
 

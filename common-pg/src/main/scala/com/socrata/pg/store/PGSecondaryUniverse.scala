@@ -1,7 +1,7 @@
 package com.socrata.pg.store
 
 import java.sql.Connection
-import com.rojoma.simplearm.Managed
+import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.truth.universe._
 import com.socrata.datacoordinator.truth.universe.sql.{SqlTableCleanup, PostgresCommonSupport}
 import com.socrata.datacoordinator.truth.loader.{DatasetContentsCopier, Logger}

@@ -35,7 +35,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon)
       val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secDatasetId).get)
 
-      pgu.datasetReader.openDataset(copyInfo).map { readCtx =>
+      pgu.datasetReader.openDataset(copyInfo).run { readCtx =>
         val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
         val columnNameTypeMap: OrderedMap[ColumnName, SoQLType] = baseSchema.values.foldLeft(OrderedMap.empty[ColumnName, SoQLType]) { (map, cinfo) =>
           map + (ColumnName(cinfo.userColumnId.underlying) -> cinfo.typ)
@@ -66,7 +66,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
           SoQLAnalyzerHelper.analyzeSoQL(soql, allDatasetCtx, primaryTableColumnNameIdMap ++ joinTableColumnNameIdMap)
 
         val (qrySchema, dataVersion, mresult) =
-          ds.map { dsInfo =>
+          ds.run { dsInfo =>
             val qs = new QueryServer(dsInfo, caseSensitivity)
             qs.execQuery(pgu, "someDatasetInternalName", copyInfo.datasetInfo, analyses, expectedRowCount.isDefined, None, None, true,
               NoPrecondition, None, None, None, false, false, false) match {

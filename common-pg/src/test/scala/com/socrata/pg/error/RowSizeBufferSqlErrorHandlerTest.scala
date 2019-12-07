@@ -4,7 +4,7 @@ import java.sql.{Connection, DriverManager, Statement}
 
 import scala.util.{Success, Try}
 
-import com.rojoma.simplearm.util._
+import com.rojoma.simplearm.v2._
 import com.socrata.pg.store.SecondarySchemaLoader
 import org.postgresql.util.PSQLException
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Matchers}

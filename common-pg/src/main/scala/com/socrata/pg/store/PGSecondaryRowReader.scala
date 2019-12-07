@@ -1,7 +1,7 @@
 package com.socrata.pg.store
 
 import com.socrata.datacoordinator.truth.RowUserIdMap
-import com.rojoma.simplearm.util._
+import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.truth.loader.sql.{DataSqlizer, InspectedRow}
 import com.socrata.datacoordinator.util.TransferrableContextTimingReport
 import java.sql.Connection

@@ -5,7 +5,7 @@ import java.sql.{BatchUpdateException, Connection}
 
 import scala.util.{Failure, Success, Try}
 import com.socrata.datacoordinator.secondary.ResyncSecondaryException
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.Logger
 import org.postgresql.util.PSQLException
 
 object RowSizeBufferSqlErrorContinue extends SqlErrorHandler {
@@ -20,7 +20,11 @@ object RowSizeBufferSqlErrorResync extends SqlErrorHandler {
   }
 }
 
-object RowSizeBufferSqlErrorHandler extends Logging {
+final abstract class RowSizeBufferSqlErrorHandler
+
+object RowSizeBufferSqlErrorHandler {
+  private val logger = Logger[RowSizeBufferSqlErrorHandler]
+
   /**
    * Catch index row size buffer exception and optionally rethrow another exception or just ignore it.
    */

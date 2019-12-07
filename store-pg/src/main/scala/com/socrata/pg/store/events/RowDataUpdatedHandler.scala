@@ -4,10 +4,16 @@ import com.socrata.datacoordinator.secondary.{Delete, Insert, Operation, Update}
 import com.socrata.datacoordinator.truth.loader.sql.SqlPrevettedLoader
 import com.socrata.pg.error.RowSizeBufferSqlErrorResync
 import com.socrata.soql.types.{SoQLType, SoQLValue}
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.Logger
+
+object RowDataUpdatedHandler {
+  private val logger = Logger[RowDataUpdatedHandler]
+}
 
 case class RowDataUpdatedHandler(loader: SqlPrevettedLoader[SoQLType, SoQLValue],
-                                 ops: Seq[Operation[SoQLValue]]) extends Logging {
+                                 ops: Seq[Operation[SoQLValue]]) {
+  import RowDataUpdatedHandler.logger
+
   RowSizeBufferSqlErrorResync.guard(loader.conn) {
     ops.foreach {
       o =>

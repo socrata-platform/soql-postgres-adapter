@@ -6,7 +6,7 @@ import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo}
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo}
 import com.socrata.soql.brita.AsciiIdentifierFilter
 import com.socrata.datacoordinator.id.UserColumnId
-import com.rojoma.simplearm.util._
+import com.rojoma.simplearm.v2._
 
 
 // TODO2 we should be batching these

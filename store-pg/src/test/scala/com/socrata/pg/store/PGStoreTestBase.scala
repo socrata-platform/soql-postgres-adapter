@@ -4,7 +4,7 @@ trait PGStoreTestBase {
 
   val dcInstance = "alpha"
 
-  val project = "store-pg"
+  val projectClassLoader = classOf[PGStoreTestBase].getClassLoader
 
   val storeId = "pg"
 
