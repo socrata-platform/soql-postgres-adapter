@@ -12,13 +12,6 @@ else
   /bin/env_parse ${SECONDARY_CONFIG}.j2
 fi
 
-su socrata -c '/usr/bin/java \
-    -Dconfig.file=${SERVER_ROOT}/${SERVER_CONFIG} \
-    -cp $SERVER_ARTIFACT \
-    com.socrata.pg.store.Main --migrate Migrate \
-    com.socrata.soql-server-pg.migrations \
-    '
-
 exec su socrata -c '/usr/bin/java \
     -Xmx${JAVA_XMX} \
     -Xms${JAVA_XMX} \
