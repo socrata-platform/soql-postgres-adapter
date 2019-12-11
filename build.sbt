@@ -9,10 +9,10 @@ ThisBuild / resolvers += "socrata" at "https://repo.socrata.com/artifactory/libs
 val commonPG = project in file("common-pg")
 
 val storePG = (project in file("store-pg")).
-  dependsOn(commonPG % "test->test;compile->compile")
+  dependsOn(commonPG % "compile;test->test")
 
 val soqlServerPG = (project in file("soql-server-pg")).
-  dependsOn(storePG % "test->test;compile->compile")
+  dependsOn(commonPG, storePG % "test->test")
 
 disablePlugins(AssemblyPlugin)
 
