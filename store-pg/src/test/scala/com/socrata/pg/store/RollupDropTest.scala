@@ -1,15 +1,13 @@
 package com.socrata.pg.store
 
+import com.rojoma.json.v3.ast.JArray
 import com.socrata.pg.store.events.CopyDroppedHandler
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.socrata.datacoordinator.id.DatasetId
-import com.socrata.datacoordinator.truth.loader.sql.messages.LifecycleStage
+import com.socrata.datacoordinator.truth.loader.sql.messages.LogData.LifecycleStage
 
 class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
-
-  // Despite being in the store project, it is getting its mutation script in the query project.
-  override val project: String = "soql-server-pg"
 
   override def beforeAll: Unit = {
     createDatabases()
@@ -55,10 +53,10 @@ class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBas
     createRollup(pgu, latestCopy)
     // create a second copy.  rollup should be copied to the second copy.
     withSoQLCommon(truthDataSourceConfig) { common =>
-      processMutation(common, fixtureFile("mutate-copy.json"), truthDatasetId)
+      processMutation(common, fixtureFile[JArray]("mutate-copy.json"), truthDatasetId)
       pushToSecondary(common, truthDatasetId, false)
       if (publishSecondCopy) {
-        processMutation(common, fixtureFile("mutate-publish.json"), truthDatasetId)
+        processMutation(common, fixtureFile[JArray]("mutate-publish.json"), truthDatasetId)
         pushToSecondary(common, truthDatasetId, false)
       }
     }

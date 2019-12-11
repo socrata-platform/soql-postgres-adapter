@@ -1,7 +1,6 @@
 package com.socrata.pg.query
 
-import com.rojoma.simplearm.Managed
-import com.rojoma.simplearm.util._
+import com.rojoma.simplearm.v2._
 import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep

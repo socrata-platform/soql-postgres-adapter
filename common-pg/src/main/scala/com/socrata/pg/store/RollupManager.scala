@@ -5,7 +5,7 @@ import java.security.MessageDigest
 import java.sql.{Connection, SQLException}
 
 import scala.util.{Failure, Success, Try}
-import com.rojoma.simplearm.util.using
+import com.rojoma.simplearm.v2.using
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.secondary.{RollupInfo => SecondaryRollupInfo}
 import com.socrata.datacoordinator.truth.loader.sql.{ChangeOwner, SqlTableDropper}
@@ -24,20 +24,23 @@ import com.socrata.soql.exceptions.{NoSuchColumn, SoQLException}
 import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLTypeInfo}
 import com.socrata.soql.parsing.standalone_exceptions.StandaloneLexerException
 import com.socrata.soql.types.{SoQLType, SoQLValue}
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.Logger
 import RollupManager._
 import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.util.{LoggedTimingReport, StackedTimingReport}
 import com.socrata.soql.typed.Qualifier
 
 // scalastyle:off multiple.string.literals
-class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) extends Logging {
+class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) {
+  import RollupManager.logger
+
   // put rollups in the same tablespace as the copy
   private val tablespaceSql = pgu.commonSupport.tablespace(copyInfo.dataTableName).map(" TABLESPACE " + _).getOrElse("")
 
-  private val dsSchema: ColumnIdMap[ColumnInfo[SoQLType]] = for {
-    readCtx <- pgu.datasetReader.openDataset(copyInfo)
-  } yield readCtx.schema
+  private val dsSchema: ColumnIdMap[ColumnInfo[SoQLType]] =
+    for(readCtx <- pgu.datasetReader.openDataset(copyInfo)) {
+      readCtx.schema
+    }
 
   private val dsContext = new DatasetContext[SoQLType] {
     // we are sorting by the column name for consistency with query coordinator and how we build
@@ -290,6 +293,8 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 }
 
 object RollupManager {
+  private val logger = Logger[RollupManager]
+
   def rollupTableName(rollupInfo: RollupInfo, dataVersion: Long): String = {
     val sha1 = MessageDigest.getInstance("SHA-1")
     // we have a 63 char limit on table names, so just taking a prefix.  It only has to be

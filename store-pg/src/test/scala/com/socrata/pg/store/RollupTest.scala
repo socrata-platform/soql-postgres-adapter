@@ -1,6 +1,6 @@
 package com.socrata.pg.store
 
-import com.rojoma.simplearm.util.unmanaged
+import com.rojoma.simplearm.v2.unmanaged
 import com.socrata.datacoordinator.id.{ColumnId, CopyId, RollupName, UserColumnId}
 import com.socrata.datacoordinator.secondary._
 import com.socrata.datacoordinator.truth.metadata
@@ -13,9 +13,6 @@ import com.socrata.soql.types._
 import org.joda.time.DateTime
 
 class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
-
-  // Despite being in the store project, it is getting its mutation script in the query project.
-  override val project = "soql-server-pg"
 
   override def beforeAll: Unit = {
     createDatabases()

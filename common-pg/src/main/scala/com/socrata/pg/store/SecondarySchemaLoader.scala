@@ -1,13 +1,13 @@
 package com.socrata.pg.store
 
-import com.rojoma.simplearm.util._
+import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.truth.loader.sql.{ChangeOwner, RepBasedPostgresSchemaLoader}
 import com.socrata.datacoordinator.truth.loader.Logger
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.pg.store.index.{FullTextSearch, IndexDirectives, Indexable}
 import com.socrata.pg.error.{SqlErrorHandler, SqlErrorHelper, SqlErrorPattern}
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.{Logger => SLogger}
 import java.sql.{Connection, PreparedStatement, Statement}
 
 import com.rojoma.json.v3.util.JsonUtil
@@ -19,7 +19,7 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
                                     tablespace: String => Option[String],
                                     fullTextSearch: FullTextSearch[CT],
                                     sqlErrorHandler: SqlErrorHandler) extends
-  RepBasedPostgresSchemaLoader[CT, CV](conn, dsLogger, repFor, tablespace) with Logging {
+  RepBasedPostgresSchemaLoader[CT, CV](conn, dsLogger, repFor, tablespace) {
 
   import SecondarySchemaLoader._
 
@@ -149,6 +149,8 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
 }
 
 object SecondarySchemaLoader {
+  private val logger = SLogger[SecondarySchemaLoader[_, _]]
+
   val fullTextIndexCreateSqlErrorHandler = new SqlErrorHandler {
     // Class 54 — Program Limit Exceeded
     //   54000 	program_limit_exceeded

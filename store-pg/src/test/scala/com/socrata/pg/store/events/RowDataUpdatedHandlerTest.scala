@@ -1,17 +1,18 @@
 package com.socrata.pg.store.events
 
 import scala.language.reflectiveCalls
-import com.rojoma.simplearm.util._
+import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.id.{ColumnId, RowId}
 import com.socrata.datacoordinator.secondary._
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.store._
 import com.socrata.soql.types._
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.Logger
 
 import scala.util.Random
 
-class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase with Logging {
+class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
+  val logger = Logger[RowDataUpdatedHandlerTest]
 
   // We are generating a random string here to make it uncompressible, postgres can handle "simple"
   // repeating strings of longer lengths.

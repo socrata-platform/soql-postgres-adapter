@@ -2,15 +2,16 @@ package com.socrata.pg.store.events
 
 import scala.language.reflectiveCalls
 
-import com.rojoma.simplearm.util.unmanaged
+import com.rojoma.simplearm.v2.unmanaged
 import com.socrata.datacoordinator.id.{ColumnId, RowId}
 import com.socrata.datacoordinator.secondary.{Insert, RowDataUpdated, Truncated}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.store.{PGSecondaryTestBase, PGSecondaryUniverseTestBase, PGStoreTestBase}
 import com.socrata.soql.types.{SoQLID, SoQLText, SoQLVersion}
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.Logger
 
-class TruncateHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase with Logging {
+class TruncateHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
+  val logger = Logger[TruncateHandlerTest]
 
   private val insertOps = Seq(
     (1000, 110, "foo"),

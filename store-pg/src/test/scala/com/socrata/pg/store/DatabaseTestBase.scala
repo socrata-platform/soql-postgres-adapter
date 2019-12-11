@@ -1,6 +1,7 @@
 package com.socrata.pg.store
 
 import java.io.{File, FileInputStream, InputStreamReader}
+import java.nio.charset.StandardCharsets
 import java.sql.{Connection, DriverManager, PreparedStatement, ResultSet}
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -9,9 +10,10 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.io.Codec
 
 import com.rojoma.json.v3.ast.{JArray, JValue}
-import com.rojoma.json.v3.io.JsonEventIterator
+import com.rojoma.json.v3.io.{JsonEventIterator, JsonReader}
 import com.rojoma.json.v3.util.{JsonArrayIterator, JsonUtil}
-import com.rojoma.simplearm.util._
+import com.rojoma.json.v3.codec.JsonDecode
+import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig, SoQLCommon}
 import com.socrata.datacoordinator.id.{DatasetId, RollupName, UserColumnId}
 import com.socrata.datacoordinator.secondary.NamedSecondary
@@ -23,17 +25,17 @@ import com.socrata.datacoordinator.util.{IndexedTempFile, NoopTimingReport, Null
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.config.{Config, ConfigFactory}
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.Logger
 
 /**
  * Recreate test databases of truth and secondary.
  * Provide the tools for creating a dataset and replicated to secondary.
  */
-trait DatabaseTestBase extends Logging {
+trait DatabaseTestBase {
 
   val dcInstance: String // alpha
 
-  val project: String // soql-server-pg
+  val projectClassLoader: ClassLoader
 
   val projectDb: String // Each project has its own databases
 
@@ -66,7 +68,7 @@ trait DatabaseTestBase extends Logging {
   }
 
   def withSoQLCommon[T](datasourceConfig: DataSourceConfig)(f: (SoQLCommon) => T): T = {
-    val result = DataSourceFromConfig(truthDataSourceConfig).map { dsc =>
+    DataSourceFromConfig(truthDataSourceConfig).run { dsc =>
       val executor = java.util.concurrent.Executors.newCachedThreadPool()
       try {
         val common = new SoQLCommon(
@@ -88,7 +90,6 @@ trait DatabaseTestBase extends Logging {
         executor.shutdown()
       }
     }
-    result
   }
 
   /**
@@ -97,8 +98,8 @@ trait DatabaseTestBase extends Logging {
    */
   def importDataset(conn: Connection, mutationScript: String = "mutate-create.json"): Tuple2[DatasetId, DatasetId] = {
     withSoQLCommon(truthDataSourceConfig) { common =>
-      val ProcessCreationReturns(datasetId, _, _, _, _) = processMutationCreate(common, fixtureFile(mutationScript))
-      processMutation(common, fixtureFile("mutate-publish.json"), datasetId)
+      val ProcessCreationReturns(datasetId, _, _, _, _) = processMutationCreate(common, fixtureFile[JArray](mutationScript))
+      processMutation(common, fixtureFile[JArray]("mutate-publish.json"), datasetId)
       pushToSecondary(common, datasetId)
       truthDatasetId = datasetId
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon)
@@ -120,36 +121,31 @@ trait DatabaseTestBase extends Logging {
   }
 
   def fixtureRows(name: String): Iterator[JValue] = {
-    val file = fixtureFile(name)
-    val inputStream = new FileInputStream(file)
-    val jsonEventIter = new JsonEventIterator(new InputStreamReader(inputStream, Codec.UTF8.charSet))
-    JsonArrayIterator.fromEvents[JValue](jsonEventIter)
+    fixtureFile[JArray](name).iterator
   }
 
-  def processMutationCreate(common: SoQLCommon, script: File): ProcessCreationReturns = {
+  def processMutationCreate(common: SoQLCommon, script: JArray): ProcessCreationReturns = {
     for {
       u <- common.universe
       indexedTempFile <- managed(new IndexedTempFile(10 * 1024, 10 * 1024))
-    } yield {
-      val array = JsonUtil.readJsonFile[JArray](script, Codec.UTF8).right.toOption.get
+    } {
       val mutator = new Mutator(indexedTempFile, common.Mutator)
-      mutator.createScript(u, array.iterator)
+      mutator.createScript(u, script.iterator)
     }
   }
 
-  def processMutation(common: SoQLCommon, script: File, datasetId: DatasetId): ProcessMutationReturns = {
+  def processMutation(common: SoQLCommon, script: JArray, datasetId: DatasetId): ProcessMutationReturns = {
     for {
       u <- common.universe
       indexedTempFile <- managed(new IndexedTempFile(10 * 1024, 10 * 1024))
-    } yield {
-      val array = JsonUtil.readJsonFile[JArray](script, Codec.UTF8).right.toOption.get
+    } {
       val mutator = new Mutator(indexedTempFile, common.Mutator)
-      mutator.updateScript(u, datasetId, array.iterator)
+      mutator.updateScript(u, datasetId, script.iterator)
     }
   }
 
   def pushToSecondary(common: SoQLCommon, datasetId: DatasetId, isNew: Boolean = true): Unit = {
-    common.universe.map { u =>
+    common.universe.run { u =>
       val secondary = new PGSecondary(config)
       val pb = u.playbackToSecondary
       val secondaryMfst = u.secondaryManifest
@@ -187,9 +183,14 @@ trait DatabaseTestBase extends Logging {
     resultSetHasRows(conn, sql)
   }
 
-  def fixtureFile(name: String): File = {
-    val rootDir = System.getProperty("user.dir")
-    new File(rootDir + s"/$project/src/test/resources/fixtures/" + name)
+  def fixtureFile[T : JsonDecode](name: String): T = {
+    using(projectClassLoader.getResourceAsStream("fixtures/" + name)) { stream =>
+      if(stream == null) throw new Exception("Unable to find fixture " + name)
+      JsonUtil.readJson[T](new InputStreamReader(stream, StandardCharsets.UTF_8)) match {
+        case Right(res) => res
+        case Left(err) => throw new Exception(s"Error processing fixture $name: ${err.english}")
+      }
+    }
   }
 
   private def resultSetHasRows(conn: Connection, sql: String): Boolean = {
@@ -201,7 +202,8 @@ trait DatabaseTestBase extends Logging {
   }
 }
 
-object DatabaseTestBase extends Logging {
+object DatabaseTestBase {
+  val logger = Logger[DatabaseTestBase]
 
   private var dbInitialized = false
 

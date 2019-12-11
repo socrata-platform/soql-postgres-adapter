@@ -3,7 +3,7 @@ package com.socrata.pg.server
 import com.rojoma.json.v3.ast._
 import com.rojoma.json.v3.io.CompactJsonWriter
 import com.rojoma.json.v3.util.{AutomaticJsonCodecBuilder, JsonUtil}
-import com.rojoma.simplearm.util._
+import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.Row
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.metadata.{DatasetInfo, ColumnInfo}
@@ -11,12 +11,14 @@ import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.pg.store.PostgresUniverseCommon
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.types._
-import com.typesafe.scalalogging.slf4j.Logger
+import com.typesafe.scalalogging.Logger
 import org.slf4j.LoggerFactory
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
 import java.io.{OutputStreamWriter, Writer}
 import javax.servlet.http.HttpServletResponse
+
+final abstract class CJSONWriter
 
 /**
  * Writes rows as CJSON
@@ -38,8 +40,7 @@ import javax.servlet.http.HttpServletResponse
  *
  */
 object CJSONWriter {
-  val logger: Logger =
-    Logger(LoggerFactory getLogger getClass.getName)
+  val logger = Logger[CJSONWriter]
 
   val dateTimeFormat = ISODateTimeFormat.dateTime
   val utf8EncodingName = scala.io.Codec.UTF8.name
@@ -111,6 +112,10 @@ object CJSONWriter {
     }
   }
 
+  private case class Field(c: String, t: String)
+
+  private implicit val fieldCodec = AutomaticJsonCodecBuilder[Field]
+
   private def writeSchema(cjsonSortedSchema:Seq[ColumnInfo[SoQLType]], writer: Writer): Unit = {
     val sel = cjsonSortedSchema.map {
       colInfo => Field(colInfo.userColumnId.underlying, colInfo.typ.toString())
@@ -118,10 +123,6 @@ object CJSONWriter {
     writer.write("\n ,\"schema\":")
     JsonUtil.writeJson(writer, sel)
   }
-
-  private case class Field(c: String, t: String)
-
-  private implicit val fieldCodec = AutomaticJsonCodecBuilder[Field]
 
   private type PGJ2CJ = JValue => JValue
 }

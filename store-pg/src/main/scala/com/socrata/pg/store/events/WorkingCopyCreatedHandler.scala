@@ -5,7 +5,11 @@ import com.socrata.datacoordinator.truth.loader.SchemaLoader
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo}
 import com.socrata.pg.store.{RollupManager, PGSecondaryLogger, PGSecondaryUniverse}
 import com.socrata.soql.types.{SoQLType, SoQLValue}
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.Logger
+
+object WorkingCopyCreatedHandler {
+  private val logger = Logger[WorkingCopyCreatedHandler]
+}
 
 /**
  * Handles WorkingCopyCreated Event
@@ -13,7 +17,9 @@ import com.typesafe.scalalogging.slf4j.Logging
 case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                                      datasetId: Option[com.socrata.datacoordinator.id.DatasetId],
                                      datasetInfo: SecondaryDatasetInfo,
-                                     copyInfo: SecondaryCopyInfo) extends Logging {
+                                     copyInfo: SecondaryCopyInfo) {
+  import WorkingCopyCreatedHandler.logger
+
   copyInfo.copyNumber match {
     case 1 =>
       logger.info(s"create first copy {}", datasetInfo.internalName)

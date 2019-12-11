@@ -1,6 +1,6 @@
 package com.socrata.pg.query
 
-import com.rojoma.simplearm.util._
+import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.{MutableRow, Row}
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.loader.sql.AbstractRepBasedDataSqlizer
@@ -11,14 +11,20 @@ import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.SoQLAnalysis
 
 import scala.concurrent.duration.Duration
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.Logger
 import java.sql.{Connection, ResultSet, SQLException}
 
 import com.socrata.NonEmptySeq
 import com.socrata.pg.server.QueryServer.ExplainInfo
 
-trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] with Logging {
+object DataSqlizerQuerier {
+  private val logger = Logger[DataSqlizerQuerier[_, _]]
+}
+
+trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
   this: AbstractRepBasedDataSqlizer[CT, CV] => ()
+
+  import DataSqlizerQuerier.logger
 
   /**
     * The maximum number of rows we want to have to keep in memory at once.  The JDBC driver

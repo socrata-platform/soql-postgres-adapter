@@ -1,6 +1,8 @@
 resolvers ++= Seq(
-  Resolver.url("socrata", url("https://repo.socrata.com/artifactory/ivy-libs-release"))(Resolver.ivyStylePatterns)
+  Resolver.url("socrata ivy", url("https://repo.socrata.com/artifactory/ivy-libs-release"))(Resolver.ivyStylePatterns)
 )
 
-addSbtPlugin("com.socrata" % "socrata-sbt-plugins" % "1.6.8")
-addSbtPlugin("com.typesafe.sbt" % "sbt-license-report" % "1.0.0")
+addSbtPlugin("com.typesafe.sbt" % "sbt-license-report" % "1.2.0")
+addSbtPlugin("com.eed3si9n" % "sbt-buildinfo" % "0.9.0")
+addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.10")
+addSbtPlugin("com.github.gseitz" % "sbt-release" % "1.0.12")

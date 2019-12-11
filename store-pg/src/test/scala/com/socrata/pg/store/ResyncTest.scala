@@ -6,7 +6,7 @@ import com.socrata.datacoordinator.id.{UserColumnId, ColumnId, CopyId}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.types._
-import com.rojoma.simplearm.util._
+import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.secondary.ColumnInfo
 import com.socrata.datacoordinator.secondary.CopyInfo
 import com.socrata.datacoordinator.secondary.DatasetInfo

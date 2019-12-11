@@ -1,17 +1,20 @@
 package com.socrata.pg.store
 
-import com.rojoma.simplearm.util._
+import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.id.{CopyId, DatasetId}
 import com.socrata.datacoordinator.id.sql._
 import com.socrata.datacoordinator.truth.DatabaseInReadOnlyMode
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo, DatasetInfo, TypeNamespace}
 import com.socrata.datacoordinator.truth.metadata.sql.PostgresDatasetMapWriter
 import com.socrata.datacoordinator.util.TimingReport
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.Logger
 import java.sql.{Connection, Timestamp}
 
 import org.postgresql.util.PSQLException
 
+object PGSecondaryDatasetMapWriter {
+  private val logger = Logger[PGSecondaryDatasetMapWriter[_]]
+}
 
 class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
                                       tns: TypeNamespace[CT],
@@ -19,7 +22,8 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
                                       override val obfuscationKeyGenerator: () => Array[Byte],
                                       override val initialCounterValue: Long,
                                       val initialVersion: Long) extends
-  PostgresDatasetMapWriter(conn, tns, timingReport, obfuscationKeyGenerator, initialCounterValue, initialVersion) with Logging {
+  PostgresDatasetMapWriter(conn, tns, timingReport, obfuscationKeyGenerator, initialCounterValue, initialVersion) {
+  import PGSecondaryDatasetMapWriter.logger
 
   private val createQueryInternalNameMap =
     """INSERT INTO dataset_internal_name_map

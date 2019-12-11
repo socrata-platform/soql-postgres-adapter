@@ -6,7 +6,7 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import com.socrata.curator.CuratorFromConfig
 import com.socrata.pg.BuildInfo
 import com.mchange.v2.c3p0.DataSources
-import com.rojoma.simplearm.Managed
+import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.common.DataSourceConfig
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.secondary.Secondary.Cookie
@@ -23,13 +23,19 @@ import com.socrata.pg.store.index._
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.socrata.thirdparty.typesafeconfig.C3P0Propertizer
 import com.typesafe.config.Config
-import com.typesafe.scalalogging.slf4j.Logging
+import com.typesafe.scalalogging.Logger
 import org.postgresql.ds.PGSimpleDataSource
+
+object PGSecondary {
+  private val logger = Logger[PGSecondary]
+}
 
 /**
  * Postgres Secondary Store Implementation
  */
-class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] with SecondaryBase with Logging {
+class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] with SecondaryBase {
+  import PGSecondary.logger
+
   logger.info(BuildInfo.toJson)
 
   val storeConfig = new StoreConfig(config, "")

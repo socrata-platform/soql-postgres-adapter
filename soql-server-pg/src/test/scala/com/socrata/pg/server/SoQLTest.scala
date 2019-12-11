@@ -29,7 +29,7 @@ abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTe
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
     val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secondaryDatasetId).get)
 
-    pgu.datasetReader.openDataset(copyInfo).map { readCtx =>
+    pgu.datasetReader.openDataset(copyInfo).run { readCtx =>
       val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
       val columnNameTypeMap: OrderedMap[ColumnName, SoQLType] = baseSchema.values.foldLeft(OrderedMap.empty[ColumnName, SoQLType]) { (map, cinfo) =>
         map + (ColumnName(cinfo.userColumnId.underlying) -> cinfo.typ)
