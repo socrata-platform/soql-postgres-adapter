@@ -8,3 +8,5 @@ libraryDependencies ++= Seq(
 )
 
 test in assembly := {}
+
+mainClass := Some("com.socrata.pg.server.QueryServer")
