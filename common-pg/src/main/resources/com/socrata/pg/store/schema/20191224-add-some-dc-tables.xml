@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+
+    <changeSet author="robertm" id="20191224-add-secondary-metrics-history-table">
+      <!-- this is a fake secondary_metrics_history table to keep SqlTableCleanup.cleanupDeleteds happy -->
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="secondary_metrics_history"/></not>
+        </preConditions>
+
+        <createTable tableName="secondary_metrics_history">
+            <column name="dataset_system_id" type="BIGINT"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet author="robertm" id="20191224-add-secondary-manifest-table">
+      <!-- this is a fake secondary_manifest table to keep SqlTableCleanup.cleanupDeleteds happy -->
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="secondary_manifest"/></not>
+        </preConditions>
+
+        <createTable tableName="secondary_manifest">
+            <column name="dataset_system_id" type="BIGINT"/>
+        </createTable>
+    </changeSet>
+
+</databaseChangeLog>
