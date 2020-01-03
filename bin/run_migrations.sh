@@ -8,7 +8,7 @@ psql datacoordinator -c "insert into secondary_stores_config (store_id, next_run
 
 CONFIG=${SODA_CONFIG:-"$BINDIR"/../configs/application.conf}
 
-JARFILE=$("$BINDIR"/build.sh "$@" | grep '^store-pg: ' | sed 's/^store-pg: //')
+JARFILE=$("$BINDIR"/build.sh "$@" | grep '^soql-server-pg: ' | sed 's/^soql-server-pg: //')
 
 ARGS=(Migrate)
-java -Dconfig.file="$CONFIG" -cp "$JARFILE" com.socrata.pg.store.Main --migrate "${ARGS[@]}"
+java -Dconfig.file="$CONFIG" -cp "$JARFILE" com.socrata.pg.server.MigrateSchema "${ARGS[@]}"
