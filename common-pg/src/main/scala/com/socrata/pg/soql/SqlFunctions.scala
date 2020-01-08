@@ -149,7 +149,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     Sum -> nary("sum") _,
     StddevPop -> nary("stddev_pop") _,
     StddevSamp -> nary("stddev_samp") _,
-    Median -> formatCall("percentile_disc(.50) within group (order by %s)") _,
+    Median -> formatCall("percentile_cont(.50) within group (order by %s)") _,
+    MedianDisc -> formatCall("percentile_disc(.50) within group (order by %s)") _,
 
     RowNumber -> nary("row_number") _,
     Rank -> nary("rank") _,
