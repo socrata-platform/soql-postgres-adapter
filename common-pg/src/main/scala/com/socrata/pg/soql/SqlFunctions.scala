@@ -114,9 +114,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     FixedTimeStampTruncYmAtTimeZone -> formatCall("date_trunc('month', %s at time zone %s)") _,
     FixedTimeStampTruncYAtTimeZone -> formatCall("date_trunc('year', %s at time zone %s)") _,
 
-    // The postgres function - age that supports date_diff_d returns an interval with components like months which is not very sensitive to the exact value in days.
-    // It returns 1 month (or 30 days) for both Feb and Mar which typically have 28 and 31 days respectively
-    TimeStampDiffD -> formatCall("trunc(extract(epoch from age(%s, %s))::decimal / 86400)") _,
+    TimeStampDiffD -> formatCall("trunc((extract(epoch from %s) - extract(epoch from %s))::numeric / 86400)") _,
 
     // Translate a fixed timestamp to a given time zone and convert it to a floating timestamp.
     ToFloatingTimestamp -> formatCall("%s at time zone %s") _,

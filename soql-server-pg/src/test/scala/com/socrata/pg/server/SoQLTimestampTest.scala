@@ -10,7 +10,7 @@ class SoQLTimestampTest extends SoQLTest {
 
   test("floating_timestamp date_diff_d") {
     compareSoqlResult(
-      """select name, date_diff_d(to_floating_timestamp(certified, 'EST'), available) - 149 as d1, date_diff_d('2008-08-01T18:12:34'::floating_timestamp, available) as d2 where name='Karma'""",
+      """select name, date_diff_d(to_floating_timestamp(certified, 'EST'), available) - 151 as d1, date_diff_d('2008-08-01T18:12:34'::floating_timestamp, available) as d2 where name='Karma'""",
       "where-date-diff-d.json")
   }
 
