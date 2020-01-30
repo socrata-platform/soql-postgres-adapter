@@ -89,6 +89,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     ModDoubleDouble -> infix("%") _,
     ModMoneyNum -> infix("%") _,
     ModMoneyMoney -> infix("%") _,
+    Absolute -> nary("abs") _,
     Ceiling -> nary("ceil") _,
     Floor -> nary("floor") _,
 
@@ -112,6 +113,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     FixedTimeStampTruncYmdAtTimeZone -> formatCall("date_trunc('day', %s at time zone %s)") _,
     FixedTimeStampTruncYmAtTimeZone -> formatCall("date_trunc('month', %s at time zone %s)") _,
     FixedTimeStampTruncYAtTimeZone -> formatCall("date_trunc('year', %s at time zone %s)") _,
+
+    TimeStampDiffD -> formatCall("trunc((extract(epoch from %s) - extract(epoch from %s))::numeric / 86400)") _,
 
     // Translate a fixed timestamp to a given time zone and convert it to a floating timestamp.
     ToFloatingTimestamp -> formatCall("%s at time zone %s") _,
