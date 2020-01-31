@@ -80,7 +80,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
 
         val qryReps = qrySchema.mapValues( cinfo => jsonReps(cinfo.typ))
 
-        mresult.map { result =>
+        for (result <- mresult) {
           val resultJo = result.map { row =>
             val rowJson = qryReps.map { case (cid, rep) =>
               (qrySchema(cid).userColumnId.underlying -> rep.toJValue(row(cid)))
