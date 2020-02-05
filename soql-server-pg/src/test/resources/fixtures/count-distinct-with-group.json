@@ -1,0 +1,4 @@
+[
+  { "make" : "APCO", "count_distinct_size" : 1, "count_name" : 4 },
+  { "make" : "OZONE", "count_distinct_size" : 2, "count_name" : 2 }
+]

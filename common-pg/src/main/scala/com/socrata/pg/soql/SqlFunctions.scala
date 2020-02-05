@@ -158,11 +158,14 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     RowNumber -> nary("row_number") _,
     Rank -> nary("rank") _,
     DenseRank -> nary("dense_rank") _,
+    FirstValue -> nary("first_value") _,
+    // LastValue -> nary("last_value") _, TODO: consider adding frame clause support before supporting this
 
     WindowFunctionOver -> windowOverCall _, //  naryish("over", Some("partition by ")) _,
 
     Count -> nary("count") _,
-    CountStar -> formatCall("count(*)") _
+    CountStar -> formatCall("count(*)") _,
+    CountDistinct -> formatCall("count(distinct %s)") _
     // TODO: Complete the function list.
   ) ++
     funGeometryMap ++
