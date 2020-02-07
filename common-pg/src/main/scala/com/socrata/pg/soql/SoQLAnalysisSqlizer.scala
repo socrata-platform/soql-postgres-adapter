@@ -231,11 +231,10 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
           ParametricSql(Seq(groupByColumnPosition.toString), t2._2)
         } else {
           val psql@ParametricSql(ss, ps) = Sqlizer.sql(gb)(repMinusComplexJoinTable, typeRep, t2._2, ctxSelectWithJoins + (SoqlPart -> SoqlGroup), escape)
-          // add ST_AsBinary to geometry type to work around a slowness problem in postgis
-          // https://github.com/postgis/postgis/commit/8606a3164111e75754ce59c095a05e193cdae636
-          // appear to be fixed in postgis 2.4.0
-          if (shouldConvertGeomToText(ctx)) ParametricSql(ss.updated(0, toGeoText(ss.head, gb.typ, None)), ps)
-          else psql
+          // EN-37213 removing ST_AsBinary to geometric types because it creates invalid soql
+          // in derived views. Adding ST_AsBinary to a group by column changes the column name
+          // and as such will cause a column must be in group by.
+          psql
         }
       (t2._1 ++ sqls, newSetParams)
     }
