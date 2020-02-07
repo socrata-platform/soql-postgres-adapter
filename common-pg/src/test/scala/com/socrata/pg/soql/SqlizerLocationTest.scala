@@ -82,4 +82,14 @@ class SqlizerLocationTest extends SqlizerTest {
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     setParams.length should be (0)
   }
+
+  test("Group by using ST_AsBinary with having clause") {
+    val soql = """SELECT polygon WHERE within_polygon(snap_to_grid(`polygon`, 0.9), 'POLYGON((-85 35, -85 35, -85 35, -85 35, -85 35))')"""
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    // if the group by clause uses st_asbinary(polygon) then the having should also use the
+    // st_asbinary(polygon) so avoid the ploygon should be a part of group by
+    sql should be ("""SELECT polygon within_polygon(snap_to_grid(st_asbinary(polygon), 0.9))""")
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    setParams.length should be (0)
+  }
 }
