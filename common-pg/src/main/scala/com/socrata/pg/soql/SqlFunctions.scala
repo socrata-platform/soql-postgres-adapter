@@ -152,11 +152,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     Sum -> nary("sum") _,
     StddevPop -> nary("stddev_pop") _,
     StddevSamp -> nary("stddev_samp") _,
-    // percentile_cont doesn't work as a window function so we are using a slightly modified function lifted
-    // from https://wiki.postgresql.org/wiki/Aggregate_Median for continuous median.  It can be significantly slower,
-    // hosever works as a window function.  We could write a similar one to replace percentile_disc if we had the need,
-    // but for now avoiding that effort and testing.
-    Median -> nary("median_ulib_agg") _,
+    Median -> medianContCall _,
     MedianDisc -> formatCall("percentile_disc(.50) within group (order by %s)") _,
 
     RowNumber -> nary("row_number") _,
@@ -369,7 +365,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                              ctx: Sqlizer.Context,
                              escape: Escape): ParametricSql = {
 
-    val ParametricSql(Seq(head), setParamsHead) = Sqlizer.sql(fn.parameters.head)(rep, typeRep, setParams, ctx + (SqlizerContext.NoWrappingParenInFunctionCall -> true), escape)
+    val ctxInsideWindowFn = ctx + (SqlizerContext.NoWrappingParenInFunctionCall -> true) + (SqlizerContext.InsideWindowFn -> true)
+    val ParametricSql(Seq(head), setParamsHead) = Sqlizer.sql(fn.parameters.head)(rep, typeRep, setParams, ctxInsideWindowFn, escape)
 
     var prefixComma = false
     val (sqls: Seq[String], params: Seq[SetParam]) = fn.parameters.tail.foldLeft(Tuple2(Seq.empty[String], setParamsHead)) { (acc, param) =>
@@ -389,6 +386,23 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     val sql = sqls.mkString(head + " over(", "", ")")
 
     ParametricSql(Seq(sql), params)
+  }
+
+  private def medianContCall(fn: FunCall,
+                             rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                             setParams: Seq[SetParam],
+                             ctx: Sqlizer.Context,
+                             escape: Escape): ParametricSql = {
+    if (ctx.contains(SqlizerContext.InsideWindowFn)) {
+      // percentile_cont doesn't work as a window function so we are using a slightly modified function lifted
+      // from https://wiki.postgresql.org/wiki/Aggregate_Median for continuous median.  It can be significantly slower,
+      // hosever works as a window function.  We could write a similar one to replace percentile_disc if we had the need,
+      // but for now avoiding that effort and testing.
+      nary("median_ulib_agg")(fn, rep, typeRep, setParams, ctx, escape)
+    } else {
+      formatCall("percentile_cont(.50) within group (order by %s)")(fn, rep, typeRep, setParams, ctx, escape)
+    }
   }
 
   /**
