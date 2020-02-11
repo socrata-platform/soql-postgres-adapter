@@ -152,7 +152,11 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     Sum -> nary("sum") _,
     StddevPop -> nary("stddev_pop") _,
     StddevSamp -> nary("stddev_samp") _,
-    Median -> formatCall("percentile_cont(.50) within group (order by %s)") _,
+    // percentile_cont doesn't work as a window function so we are using a slightly modified function lifted
+    // from https://wiki.postgresql.org/wiki/Aggregate_Median for continuous median.  It can be significantly slower,
+    // hosever works as a window function.  We could write a similar one to replace percentile_disc if we had the need,
+    // but for now avoiding that effort and testing.
+    Median -> nary("median_ulib_agg") _,
     MedianDisc -> formatCall("percentile_disc(.50) within group (order by %s)") _,
 
     RowNumber -> nary("row_number") _,

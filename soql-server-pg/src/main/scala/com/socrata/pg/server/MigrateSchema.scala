@@ -20,9 +20,9 @@ object MigrateSchema extends App {
   // Verify that two arguments were passed
   if (args.length < 1 || args.length > 2) {
     throw new IllegalArgumentException(
-      "Usage: com.socrata.pg.server.MigrateSchema" +
+      "Usage: com.socrata.pg.server.MigrateSchema " +
         MigrationOperation.values.mkString("|") +
-        "[<dotted path reference to database config in config>]")
+        " [<dotted path reference to database config in config>]")
   }
 
   // Verify that the argument provided is actually a valid operation
