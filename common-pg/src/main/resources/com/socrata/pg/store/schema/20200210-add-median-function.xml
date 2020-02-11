@@ -1,0 +1,49 @@
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+    <changeSet author="Marc Slemko" id="20200210-add-median-function">
+        <sql splitStatements="false">
+            -- This is the second function on https://wiki.postgresql.org/wiki/Aggregate_Median as of 2020/02/10, with
+            -- the following modifications:
+            --
+            -- * Returns anyelement instead of hardcoding float8 to avoid unnecessary type conversions.  In the original
+            --   you could end up returning a value that wasn't in the dataset especially if the source data has already
+            --   been "enhanced" by misconceived floating type conversions outside the platform.
+            --
+            CREATE FUNCTION _final_median_ulib_agg(anyarray) RETURNS anyelement AS $$
+              WITH q AS
+              (
+                 SELECT val
+                 FROM unnest($1) val
+                 WHERE VAL IS NOT NULL
+                 ORDER BY 1
+              ),
+              cnt AS
+              (
+                SELECT COUNT(*) AS c FROM q
+              )
+              SELECT AVG(val)
+              FROM
+              (
+                SELECT val FROM q
+                LIMIT  2 - MOD((SELECT c FROM cnt), 2)
+                OFFSET GREATEST(CEIL((SELECT c FROM cnt) / 2.0) - 1,0)
+              ) q2;
+            $$ LANGUAGE SQL IMMUTABLE;
+
+            CREATE AGGREGATE median_ulib_agg(anyelement) (
+              SFUNC=array_append,
+              STYPE=anyarray,
+              FINALFUNC=_final_median_ulib_agg,
+              INITCOND='{}'
+            );
+        </sql>
+        <rollback>
+            <sql>
+                DROP AGGREGATE median_ulib_agg(anyelement);
+                DROP FUNCTION _final_median_ulib_agg(anyarray);
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

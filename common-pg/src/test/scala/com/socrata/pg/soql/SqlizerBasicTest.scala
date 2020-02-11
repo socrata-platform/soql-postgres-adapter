@@ -169,9 +169,16 @@ class SqlizerBasicTest extends SqlizerTest {
   }
 
   test("select aggregate functions") {
-    val soql = "select count(id), avg(id), min(id), max(id), sum(id), median(id)"
+    val soql = "select count(id), avg(id), min(id), max(id), sum(id), median(id), median(case_number)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (count(t1.id)),(avg(t1.id)),(min(t1.id)),(max(t1.id)),(sum(t1.id)),(percentile_cont(.50) within group (order by t1.id)) FROM t1")
+    sql should be ("SELECT (count(t1.id)),(avg(t1.id)),(min(t1.id)),(max(t1.id)),(sum(t1.id)),(percentile_cont(.50) within group (order by t1.id)),(percentile_disc(.50) within group (order by t1.case_number)) FROM t1")
+    setParams.length should be (0)
+  }
+
+  test("select median inside window function") {
+    val soql = "select median(id) over (partition by primary_type, year)"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT (median_ulib_agg(t1.id) over( partition by t1.primary_type,t1.year)) FROM t1")
     setParams.length should be (0)
   }
 
