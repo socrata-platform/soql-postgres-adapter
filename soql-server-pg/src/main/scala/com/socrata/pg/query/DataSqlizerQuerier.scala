@@ -135,7 +135,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
       stmt.executeQuery()
     } catch {
       case ex: SQLException =>
-        logger.error(s"SQL Exception (${ex.getSQLState}) with timeout=$timeout on $pSql")
+        logger.error(s"SQL Exception (${ex.getSQLState}) with timeout=$timeout on $pSql", ex)
         throw ex
     }
   }
@@ -184,7 +184,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
       stmt.executeQuery()
     } catch {
       case ex: SQLException =>
-        logger.error(s"SQL Exception (${ex.getSQLState}) with timeout=$timeout on $pSql")
+        logger.error(s"SQL Exception (${ex.getSQLState}) with timeout=$timeout on $pSql", ex)
         throw ex
     }
   }
