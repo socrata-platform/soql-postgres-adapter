@@ -17,11 +17,11 @@ import scala.concurrent.duration.Duration
 trait RowReaderQuerier[CT, CV] {
   this: PGSecondaryRowReader[CT, CV] => ()
 
-  def query(analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
-            toSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql,
-            toRowCountSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
+  def query(analyses: NonEmptySeq[SoQLAnalysis[Qualified[UserColumnId], CT]],
+            toSql: (NonEmptySeq[SoQLAnalysis[Qualified[UserColumnId], CT]], String) => ParametricSql,
+            toRowCountSql: (NonEmptySeq[SoQLAnalysis[Qualified[UserColumnId], CT]], String) => ParametricSql, // analsysis, tableName
             reqRowCount: Boolean,
-            querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
+            querySchema: OrderedMap[ColumnName, SqlColumnRep[CT, CV]],
             queryTimeout: Option[Duration],
             debug: Boolean):
             Managed[CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount] = {

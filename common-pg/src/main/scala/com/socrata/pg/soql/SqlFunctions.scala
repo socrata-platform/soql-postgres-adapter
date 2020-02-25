@@ -4,6 +4,7 @@ import scala.util.parsing.input.NoPosition
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.soql.functions._
+import com.socrata.soql.environment.Qualified
 import com.socrata.soql.typed._
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
 import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
@@ -15,11 +16,11 @@ import org.joda.time.{DateTime, LocalDateTime}
 
 // scalastyle:off magic.number multiple.string.literals
 object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with SqlFunctionsComplexType {
-  type FunCall = FunctionCall[UserColumnId, SoQLType]
+  type FunCall = FunctionCall[Qualified[UserColumnId], SoQLType]
 
   type FunCallToSql =
     (FunCall,
-     Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+     Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
      Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
      Seq[SetParam],
      Sqlizer.Context,
@@ -195,7 +196,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
   private def infix(fnName: String, foldOp: String = " and ")
                    (fn: FunCall,
-                    rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                    rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                     typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                     setParams: Seq[SetParam],
                     ctx: Sqlizer.Context,
@@ -234,7 +235,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     */
   private def infixWithJsonbEqOptimization(fnName: String, foldOp: String = " and ")
                                           (fn: FunCall,
-                                           rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                                           rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                                            typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                                            setParams: Seq[SetParam],
                                            ctx: Sqlizer.Context,
@@ -270,7 +271,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
   private def nary(fnName: String)
                   (fn: FunCall,
-                   rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                   rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                    typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                    setParams: Seq[SetParam],
                    ctx: Sqlizer.Context,
@@ -285,11 +286,11 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     ParametricSql(Seq(sqlFragsAndParams._1.mkString(fnName + "(", ",", ")")), sqlFragsAndParams._2)
   }
 
-  private def specialCountArgument(fn: FunCall): Seq[com.socrata.soql.typed.CoreExpr[UserColumnId, SoQLType]] = {
+  private def specialCountArgument(fn: FunCall): Seq[com.socrata.soql.typed.CoreExpr[Qualified[UserColumnId], SoQLType]] = {
     fn.function.name match {
       case Count.name =>
         fn.parameters match {
-          case Seq(ColumnRef(_, _, typ)) if typ == SoQLUrl.t =>
+          case Seq(ColumnRef(_, typ)) if typ == SoQLUrl.t =>
             // Only if we have chosen jsonb in UrlRep, this would not be necessary
             // only counting url.url - ignoring url.description
             val coalesceArgs = Seq(FunctionCall(UrlToUrl.monomorphic.get, fn.parameters)(fn.position, fn.functionNamePosition),
@@ -303,7 +304,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
   private def naryish(fnName: String, afterOpenParenText: Option[String] = None)
                      (fn: FunCall,
-                      rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                      rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                       typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                       setParams: Seq[SetParam],
                       ctx: Sqlizer.Context,
@@ -324,7 +325,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
   }
 
   private def caseCall(fn: FunCall,
-                       rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                       rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                        typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                        setParams: Seq[SetParam],
                        ctx: Sqlizer.Context,
@@ -345,7 +346,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
   }
 
   private def coalesceCall(fn: FunCall,
-                           rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                           rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                            typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                            setParams: Seq[SetParam],
                            ctx: Sqlizer.Context,
@@ -359,7 +360,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
   }
 
   private def windowOverCall(fn: FunCall,
-                             rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                              typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                              setParams: Seq[SetParam],
                              ctx: Sqlizer.Context,
@@ -389,7 +390,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
   }
 
   private def medianContCall(fn: FunCall,
-                             rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                              typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                              setParams: Seq[SetParam],
                              ctx: Sqlizer.Context,
@@ -415,7 +416,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
   }
 
   def notAvailable(fn: FunCall,
-                   rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                   rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                    typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                    setParams: Seq[SetParam],
                    ctx: Sqlizer.Context,
@@ -427,7 +428,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                  foldOp: Option[String] = None,
                  paramPosition: Option[Seq[Int]] = None)
                 (fn: FunCall,
-                 rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                 rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                  typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                  setParams: Seq[SetParam],
                  ctx: Sqlizer.Context,
@@ -435,7 +436,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
     val fnParams = paramPosition match {
       case Some(pos) =>
-        pos.foldLeft(Seq.empty[CoreExpr[UserColumnId, SoQLType]]) { (acc, param) =>
+        pos.foldLeft(Seq.empty[CoreExpr[Qualified[UserColumnId], SoQLType]]) { (acc, param) =>
           acc :+ fn.parameters(param)
         }
       case None => fn.parameters
@@ -474,7 +475,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
   private def decryptString(typ: SoQLType)
                            (fn: FunCall,
-                            rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                            rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                             typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                             setParams: Seq[SetParam],
                             ctx: Sqlizer.Context,
@@ -495,7 +496,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
   private def textToType(template: String, conversion: String => String)
                         (fn: FunCall,
-                         rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                         rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                          typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                          setParams: Seq[SetParam],
                          ctx: Sqlizer.Context,
@@ -512,7 +513,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
   // scalastyle:off parameter.number
   private def infixSuffixWildcard(fnName: String, prefix: Boolean, foldOp: String = " and ")
                                  (fn: FunCall,
-                                  rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                                  rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                                   typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                                   setParams: Seq[SetParam],
                                   ctx: Sqlizer.Context,

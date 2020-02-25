@@ -13,6 +13,7 @@ import com.socrata.soql.functions.Function
 import com.socrata.soql.functions.SoQLFunctions._
 import com.socrata.soql.typed.NumberLiteral
 import com.socrata.soql.types.{SoQLPolygon, SoQLMultiLine, SoQLMultiPolygon, SoQLValue, SoQLType}
+import com.socrata.soql.environment.Qualified
 
 // scalastyle:off magic.number multiple.string.literals
 trait SqlFunctionsGeometry {
@@ -83,7 +84,7 @@ trait SqlFunctionsGeometry {
   }
 
   private def snapForZoom(fn: FunCall,
-                          rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                          rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                           typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                           setParams: Seq[SetParam],
                           ctx: Sqlizer.Context,
@@ -122,7 +123,7 @@ trait SqlFunctionsGeometry {
 
   private def formatSimplify(template: String, paramPosition: Option[Seq[Int]] = None)
                             (fn: FunCall,
-                             rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                              typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                              setParams: Seq[SetParam],
                              ctx: Sqlizer.Context,
@@ -140,7 +141,7 @@ trait SqlFunctionsGeometry {
 
   private def formatValidate(template: String, paramPosition: Option[Seq[Int]] = None)
                             (fn: FunCall,
-                             rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                              typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                              setParams: Seq[SetParam],
                              ctx: Sqlizer.Context,

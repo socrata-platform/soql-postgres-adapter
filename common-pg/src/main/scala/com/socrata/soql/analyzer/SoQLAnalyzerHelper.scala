@@ -2,7 +2,7 @@ package com.socrata.soql.analyzer
 
 import java.io.{InputStream, OutputStream}
 
-import com.socrata.NonEmptySeq
+import com.socrata.soql.collection.NonEmptySeq
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.soql._
 import com.socrata.soql.environment._
@@ -20,16 +20,16 @@ object SoQLAnalyzerHelper {
       deserializeType,
       SoQLFunctions.functionsByIdentity)
 
-  def serialize(outputStream: OutputStream, analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]]): Unit =
+  def serialize(outputStream: OutputStream, analyses: NonEmptySeq[SoQLAnalysis[Qualified[UserColumnId], SoQLType]]): Unit =
     serializer(outputStream, analyses)
 
-  def deserialize(inputStream: InputStream): NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] = deserializer(inputStream)
+  def deserialize(inputStream: InputStream): NonEmptySeq[SoQLAnalysis[Qualified[UserColumnId], SoQLType]] = deserializer(inputStream)
 
   private val analyzer = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
 
   def analyzeSoQL(soql: String,
                   datasetCtx: Map[String, DatasetContext[SoQLType]],
-                  idMap: Map[QualifiedColumnName, UserColumnId]): NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] = {
+                  idMap: Map[Qualified[ColumnName], UserColumnId]): NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] = {
     val parsed = new Parser().selectStatement(soql)
     val joins = parsed.seq.flatMap(_.joins)
 
@@ -89,7 +89,7 @@ object SoQLAnalyzerHelper {
         }
       }.toMap
 
-      val newMappingWithJoin: Map[(ColumnName, Qualifier), UserColumnId] =
+      val newMappingWithJoin: Map[Qualified[ColumnName], UserColumnId] =
         (newMapping ++ newColumnsFromJoin).map { case (k, v) =>
           (k.columnName, k.qualifier ) -> v
         }

@@ -11,6 +11,7 @@ import com.socrata.soql.functions.Function
 import com.socrata.soql.functions.SoQLFunctions.{DocumentToFilename, _}
 import com.socrata.soql.typed.StringLiteral
 import com.socrata.soql.types.{SoQLPhone, SoQLType, SoQLUrl, SoQLValue}
+import com.socrata.soql.environment.Qualified
 
 /**
  * Complex types support does not have the same expressiveness of simple types.
@@ -51,7 +52,7 @@ trait SqlFunctionsComplexType {
   )
 
   private def textToPhone(fn: FunCall,
-                             rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                              typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                              setParams: Seq[SetParam],
                              ctx: Sqlizer.Context,
@@ -85,7 +86,7 @@ trait SqlFunctionsComplexType {
 
   private def subColumn(subColumnIndex: Int)
                             (fn: FunCall,
-                             rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                              typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                              setParams: Seq[SetParam],
                              ctx: Sqlizer.Context,
@@ -100,7 +101,7 @@ trait SqlFunctionsComplexType {
 
   private def jsonProp(prop: String)
                       (fn: FunCall,
-                       rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                       rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                        typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                        setParams: Seq[SetParam],
                        ctx: Sqlizer.Context,
@@ -114,7 +115,7 @@ trait SqlFunctionsComplexType {
   }
 
   private def textToUrl(fn: FunCall,
-                        rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                        rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                         typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                         setParams: Seq[SetParam],
                         ctx: Sqlizer.Context,

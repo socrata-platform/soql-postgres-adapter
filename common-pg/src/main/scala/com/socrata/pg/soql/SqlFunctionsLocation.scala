@@ -11,6 +11,7 @@ import com.socrata.soql.functions.SoQLFunctions._
 import com.socrata.soql.functions.{Function, MonomorphicFunction, SoQLFunctions}
 import com.socrata.soql.typed.{FunctionCall, StringLiteral}
 import com.socrata.soql.types._
+import com.socrata.soql.environment.Qualified
 
 import scala.util.parsing.input.NoPosition
 
@@ -43,7 +44,7 @@ trait SqlFunctionsLocation {
   }
 
   private def textToLocation(fn: FunCall,
-                             rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                              typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                              setParams: Seq[SetParam],
                              ctx: Sqlizer.Context,
@@ -70,7 +71,7 @@ trait SqlFunctionsLocation {
   }
 
   private def locationAddress(fn: FunCall,
-                              rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                              rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                               typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                               setParams: Seq[SetParam],
                               ctx: Sqlizer.Context,
@@ -84,7 +85,7 @@ trait SqlFunctionsLocation {
   }
 
   private def locationLatLng(prop: String)(fn: FunCall,
-                                           rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                                           rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                                            typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                                            setParams: Seq[SetParam],
                                            ctx: Sqlizer.Context,
@@ -105,7 +106,7 @@ trait SqlFunctionsLocation {
   }
 
   private def locationToPoint(fn: FunCall,
-                              rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                              rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                               typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                               setParams: Seq[SetParam],
                               ctx: Sqlizer.Context,
@@ -120,7 +121,7 @@ trait SqlFunctionsLocation {
 
   private def geometryFunctionWithLocation(geomFunction: com.socrata.soql.functions.Function[SoQLType])
                                           (fn: FunCall,
-                                           rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                                           rep: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]],
                                            typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                                            setParams: Seq[SetParam],
                                            ctx: Sqlizer.Context,

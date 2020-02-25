@@ -49,7 +49,7 @@ import com.socrata.soql.types.SoQLID.ClearNumberRep
 import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.curator.{CuratorFromConfig, DiscoveryFromConfig}
-import com.socrata.datacoordinator.truth.sql.SqlColumnRep
+import com.socrata.datacoordinator.truth.sql.SqlColumnReadRep
 import com.socrata.pg.server.CJSONWriter.utf8EncodingName
 import com.socrata.thirdparty.metrics.{MetricsReporter, SocrataHttpSupport}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
@@ -337,6 +337,14 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     }
   }
 
+  def aliasForRef(tableRef: TableRef): String =
+    tableRef match {
+      case TableRef.Primary => "p"
+      case TableRef.JoinPrimary(_, n) => "j" + Integer.toUnsignedString(n)
+      case TableRef.PreviousChainStep(root, n) => aliasForRef(root) + "_" + Integer.toUnsignedString(n)
+      case TableRef.JoinSelect(JoinPrimary(_, n)) => "js_" + Integer.toUnsignedString(n)
+    }
+
   trait QueryResultBall
   case class RowsQueryResult(
     querySchema: OrderedMap[ColumnId, ColumnInfo[SoQLType]],
@@ -352,7 +360,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     datasetInternalName: String,
     datasetInfo: DatasetInfo,
-    analysis: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]],
+    analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]],
     rowCount: Boolean,
     reqCopy: Option[String],
     rollupName: Option[RollupName],
@@ -367,23 +375,182 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   ): QueryResult = {
 
     def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                 latestCopy: CopyInfo,
-                 analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]],
+                 activeCopy: CopyInfo,
                  rowCount: Boolean,
                  queryTimeout: Option[Duration],
                  explain: Boolean,
                  analyze: Boolean): QueryResultBall = {
-      val cryptProvider = new CryptProvider(latestCopy.datasetInfo.obfuscationKey)
+
+      val cryptProvider = new CryptProvider(activeCopy.datasetInfo.obfuscationKey)
 
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.IdRep -> (if (obfuscateId) { new SoQLID.StringRep(cryptProvider) }
                                  else { new ClearNumberRep(cryptProvider) }),
         SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
-        SqlizerContext.CaseSensitivity -> caseSensitivity
+        SqlizerContext.CaseSensitivity -> caseSensitivity,
+        SqlizerContext.TableRefMap -> tableAliasMap
       )
       val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit)
 
-      for(readCtx <- pgu.datasetReader.openDataset(latestCopy)) {
+      for(readCtx <- pgu.datasetReader.openDataset(activeCopy)) {
+        // ok so we have an analysis-chain, and fundamentally what we
+        // want to do with that is:
+        //   1. Find out what tables it references, both primary and joins (Map[ResourceName, table_info])
+        //        - table_info should contain
+        //            - enough information to find the SQL name of the table
+        //            - schema information; specifically a map from UserColumnId to column type
+        //        - note this table is potentially smaller than the set of joins!
+        //        - e.g., if on table aaaa-aaaa you do `select * join @aaaa-aaaa as a1 on true join @aaaa-aaaa as a2 on true`
+        //                you'll get a singleton map
+        //   2. Produce a map of TableRefs to per-ref table info (Map[TableRef, (alias, table_info)])
+        //        - alias doesn't need to be explicitly represented, it can be computed (see aliasForRef above as this is written)
+        //        - the table_info is as above, for the output of the given table
+        //   3. Produce a map of Map[Qualified[UserColumnId], column_info]
+        //        - column_info needs to be able to produce a set of fully-qualified SQL table names
+        //            (probably actually a SqlColumnReadRep)
+        //   4. mapColumnIds over the analysis, changing Qualified[UserColumnId] into
+        //       column_info directly
+        //   5. Run the query; we know the output columns and column_info so we can
+        //      use the readreps we built in step 3
+
+        val allTableRefs: Set[TableRef] = SoQLAnalysis.allTableRefs
+
+        class SqlPhysicalTableRef(val tableName: String, tableRef: TableRef.PrimaryCandidate) {
+          val alias = aliasForRef(ref)
+        }
+
+        class QualfiedSqlColumnReadRep[Type, Value](table: SqlPhysicalTableRef, unqualifiedColumn: SqlColumnReadRep[Type, Value]) extends SqlColumnReadRep[Type, Value] {
+          override val representedType = unqualifiedColumn.representedType
+          override val base = table.alias + "." + unqualifiedColumn.base
+          override val sqlTypes = unqualifiedColumn.sqlTypes
+          override val physColumns = unqualifiedColumn.physColumns.map(table.alias + "." + _)
+
+          override def fromResultSet(rs: ResultSet, start: Int) = unqualifiedColumn.fromResultSet(rs, start)
+          override def computeSelectColumns(physColumns: Array[String]) = unqualifiedColumn.computeSelectColumns(physColumns)
+        }
+
+        def convertJoined(joinAnalysis: JoinAnalysis[QualifiedSqlColumnReadRep[SoQLType, SoQLValue], SoQLType]): String = {
+          joinAnalysis match {
+            case jsa: JoinSelectAnalysis =>
+              "(" + convert(jsa.analyses, lookupPrimaryTable(jsa.fromTable)) + ") AS " + aliasForRef(jsa.outputTable)
+            case jta: JoinTableAnalysis =>
+              lookupPrimaryTable(jsa.fromTable).table + " AS " + aliasForRef(jsa.outputTable)
+          }
+        }
+
+        def convertExpr(expr: CoreExpr[QualifiedSqlColumnReadRep[SoQLType, SoQLValue], SoQLType]): Array[String] = {
+          expr match {
+            case ColumnRef(col, _) => col.physColumns.mkString(",")
+            case NumberLiteral(v, t) => // literals are handled specially...
+            case StringLiteral(v, t) =>
+            case BooleanLiteral(v, t) =>
+            case NullLiteral(v, t) =>
+            case FunctionCall(arg, param) =>
+          }
+        }
+
+        def aliasSeparatorFor(analysis: SoQLAnalysis[QualifiedSqlColumnReadRep[SoQLType, SoQLValue], SoQLType]): String = {
+          // grgrggh namespacing issues!
+          // ok so
+          // we're building column names that look like aliasSUFFIX
+          // where suffix may be empty for simple columns like text
+          // but will not be empty for compound columns like url
+          // so
+          // we need to make sure no two column names collide
+          // so we'll pick a spearator such that that is true
+          // starting with no separator (which will usually work)
+          // and then doing counting forward in base 2 using "_"
+          // and "$" as the "bits".
+          val rawAliases = analyis.selections.keySet
+          def test(separatorCandidate: String): Boolean = {
+            val seen = new mutable.HashSet[String]
+            for((alias, expr) <- analysis.selections) {
+              val (alias, expr) = aliasExpr
+              val rep = repFor(expr.typ, alias.name + separatorCandidate)
+              if(rep.physColumns.exists(used)) return false
+              used ++= rep.physColumns
+            }
+            true
+          }
+
+          val separators = Iterator.from(1).map { n =>
+            val bits = Integer.SIZE - Integer.numberOfLeadingZeros(n) - 1
+            val sb = new StringBuilder
+            for(i <- 0 until bits) {
+              sb.append(if((n & (1 << i)) == 0) '_' else '$')
+            }
+            sb.toString
+          }
+
+          separators.find(test).get
+        }
+
+        def convert(analysis: SoQLAnalysis[QualifiedSqlColumnReadRep[SoQLType, SoQLValue], SoQLType], primaryTable: SqlPhysicalTableRef): String = {
+          // TODO: search clause
+          "SELECT " +
+            analysis.selections.flatMap { case (alias, expr) =>
+              val rep = repFor(expr.typ, alias.name + separator)
+              convert(expr).zipWith(rep.physColumns).map { case (exprSql, physcolName) => exprSql + " AS " + physcolName }
+            }.mkString(",") +
+            " FROM " + primaryTable.tableName + " AS " + primaryTable.alias +
+            analysis.joins.map { join =>
+              join match {
+                case InnerJoin(from, on) => " JOIN " + convertJoined(from) + " ON " + convert(on)
+                case LeftOuterJoin(from, on) => " LEFT OUTER JOIN " + convertJoined(from) + " ON " + convert(on)
+                case RightOuterJoin(from, on) => " RIGHT OUTER JOIN " + convertJoined(from) + " ON " + convert(on)
+                case FullOuterJoin(from, on) => " FULL OUTER JOIN " + convertJoined(from) + " ON " + convert(on)
+              }
+            } +
+            analysis.where.fold("") { expr => " WHERE " + convert(expr) } +
+            (if(analysis.groupBys.isEmpty) "" else " GROUP BY " + analysis.groupBys.map { expr => convert(expr) }) +
+            analysis.having.fold("") { expr => " HAVING " + covert(expr) } +
+            (if(analysis.orderBys.isEmpty) "" else " ORDER BY " + analysis.orderBys.map { orderBy =>
+               val OrderBy(expr, ascending, nullLast) = orderBy
+               convert(expr) + " " + (if(ascending) "ASC" else "DESC") + " " + (if(nullLast) "NULLS LAST" else "NULLS FIRST")
+             }) +
+            analyis.limit.fold("") { n => " LIMIT " + n } +
+            analyis.offset.fold("") { n => " OFFSET " + n }
+        }
+
+        // ...and then wrap the whole thing in
+        //      select * from (...) x
+        // so we can access the columns of "x" without qualification
+
+        val allTables: Map[TableRef, Map[UserColumnId, String]] = locally {
+          val joinTables: Set[ResourceName] = allTableRefs.collect { case TableRef.JoinPrimary(rn, _) => rn }
+          val joinCopies: Map[ResourceName, (CopyInfo, Map[Qualified[UserColumnId], SqlColumnReadRep[SoQLType, SoQLValue]])] =
+            joinTables.iterator.flatMap { rn =>
+              getCopy(pgu, rn, reqCopy).map { copy =>
+                val schema = getJoinReps(pgu, copy, rn)
+                resourceName -> ((copy, schema))
+              }
+            }.toMap
+          val allDatabaseTables: Map[TableRef, CopyInfo] = allTableRefs.iterator.map { tr =>
+            val copy = tr match {
+              case TableRef.Primary =>
+                (mainCopy, mainReps)
+              case TableRef.JoinPrimary(rn, _) =>
+                joinCopies(rn)
+              case TableRef.PreviousChainStep(r, _) =>
+                r match {
+                  case TableRef.Primary => mainCopy
+                  case TableRef.JoinPrimary(rn, _) => joinCopies(rn)
+                }
+              case TableRef.SubselectJoin(TableRef.JoinPrimary(rn, _)) =>
+                joinCopies(rn)
+            }
+            tr -> copy
+          }.toMap
+        }
+
+        val primaryTables: Map[TableRef.PrimaryCandidate, SqlPhysicalTableRef] = locally {
+          allTableRefs.iterator.collect { case ptr: TableRef.PrimaryCandidate =>
+            ptr match {
+              case Primary =>
+              case JoinPrimary(table, alias) =>
+            }
+          }.toMap
+
         val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema
         val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
         val qrySchema = querySchema(pgu, analyses.last, latestCopy)
@@ -398,10 +565,21 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
             columnInfo.typ -> pgu.commonSupport.repFor(columnInfo)
           }
         }.toMap
-        val joinCopiesMap = getJoinCopies(pgu, analysis, reqCopy)
+        val joinCopiesMap =
+          joinTableNames.flatMap { resourceName =>
+            getCopy(pgu, resourceName, reqCopy).map { copy => (resourceName, copy) }
+          }.toMap
         val joinCopies = joinCopiesMap.values.toSeq
 
-        val sqlRepsWithJoin = joinCopiesMap.foldLeft(sqlReps) { (acc, joinCopy) =>
+        val sqlRepsWithJoin =
+          SoQLAnalysis.foldTableRefs(Map.empty[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]]) { (acc, tr) =>
+            tr match {
+              case TableRef.Primary =>
+              case TableRef.JoinPrimary(_, _) =>
+              case TableRef.Join(_) =>
+              case TableRef.PreviousChainStep(_, _) =>
+            }
+        joinCopiesMap.foldLeft(sqlReps) { (acc, joinCopy) =>
           val (tableName, copyInfo) = joinCopy
           acc ++ getJoinReps(pgu, copyInfo, tableName)
         }
@@ -459,7 +637,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
             NotModified(Seq(etag))
           case Some(_) | None =>
             try {
-              runQuery(pgu, copy, analysis, rowCount, queryTimeout, explain, analyze) match {
+              runQuery(pgu, copy, rowCount, queryTimeout, explain, analyze) match {
                 case RowsQueryResult(qrySchema, version, results) =>
                   Success (qrySchema, copy.copyNumber, version, results, etag, lastModified)
                 case InfoQueryResult(dataVersion, explainInfo) =>
@@ -657,16 +835,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
       Header("X-SODA2-DataVersion", dataVersion.toString)
   }
 
-  private def getJoinCopies(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                            analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]],
-                            reqCopy: Option[String]): Map[TableName, CopyInfo] = {
-    val joins = typed.Join.expandJoins(analyses.seq)
-    val joinTables = joins.map(x => TableName(x.from.fromTable.name, None))
-    joinTables.flatMap { resourceName =>
-      getCopy(pgu, new ResourceName(resourceName.name), reqCopy).map(copy => (resourceName, copy))
-    }.toMap
-  }
-
   private def getDatasetTablenameMap(copies: Map[TableName, CopyInfo]): Map[TableName, String] = {
     copies.mapValues { copy =>
        copy.dataTableName
@@ -675,7 +843,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
 
   private def getJoinReps(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                           copy: CopyInfo,
-                          tableName: TableName)
+                          table: ResourceName)
     : Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]] = {
     for(readCtx <- pgu.datasetReader.openDataset(copy)) {
       val schema = readCtx.schema

@@ -4,7 +4,7 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnCommonRep
 import com.socrata.pg.soql.Sqlizer._
 import com.socrata.pg.soql.SqlizerContext._
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName, TableName}
+import com.socrata.soql.environment.{ColumnName, TableRef}
 import com.socrata.soql.typed.CoreExpr
 import com.socrata.soql.types.SoQLUrl
 
@@ -53,10 +53,10 @@ trait FullTextSearch[CT] {
     phyCols
   }
 
-  private def qualify(column: String, ctx: Context): String = {
+  private def qualify(column: String, ctx: Context): String = { // TODO: do not like; Qualified[C] should be involved somewhere in this file
     if (ctx(InnermostSoql) == true) {
-      val tableMap = ctx(TableAliasMap).asInstanceOf[Map[String, String]]
-      s"""${tableMap(TableName.PrimaryTable.qualifier)}."${column}""""
+      val tableMap = ctx(TableRefMap).asInstanceOf[Map[TableRef, String]]
+      s"""${tableMap(TableRef.Primary)}."${column}""""
     } else {
       s""""${column}""""
     }

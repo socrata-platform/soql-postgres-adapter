@@ -18,17 +18,15 @@ import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.store.index.SoQLIndexableRep
 import com.socrata.soql.{SoQLAnalysis, SoQLAnalyzer}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
-import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
+import com.socrata.soql.collection.{NonEmptySeq, OrderedMap}
+import com.socrata.soql.environment.{ColumnName, DatasetContext, TableRef, Qualified, ResourceName}
 import com.socrata.soql.exceptions.{NoSuchColumn, SoQLException}
 import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLTypeInfo}
 import com.socrata.soql.parsing.standalone_exceptions.StandaloneLexerException
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.scalalogging.Logger
 import RollupManager._
-import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.util.{LoggedTimingReport, StackedTimingReport}
-import com.socrata.soql.typed.Qualifier
 
 // scalastyle:off multiple.string.literals
 class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) {
@@ -67,10 +65,10 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    * columns to make the names match up with the underlying dataset schema.
    * TODO: Join - handle qualifier
    */
-  private def columnNameRemovePrefixMap(cn: ColumnName, qualifier: Qualifier): ColumnName = {
-    cn.name(0) match {
+  private def columnNameRemovePrefixMap(cn: Qualified[ColumnName]): Qualified[ColumnName] = {
+    cn.columnName.name(0) match {
       case ':' => cn
-      case _ => new ColumnName(cn.name.drop(1))
+      case _ => cn.copy(columnName = new ColumnName(cn.columnName.name.drop(1)))
     }
   }
 
@@ -92,12 +90,13 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       val newTableName = rollupTableName(rollupInfo, newDataVersion)
       val oldTableName = rollupTableName(rollupInfo, newDataVersion - 1)
 
-      val analyzer = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
+      def tableFinder(names: Set[ResourceName]) =
+        Map(names.head -> new DatasetContext[SoQLType] {
+              val schema: OrderedMap[ColumnName, SoQLType] =
+                OrderedMap(dsSchema.values.map(x => (columnIdToPrefixNameMap(x.userColumnId), x.typ)).toSeq.sortBy(_._1): _*)
+            })
 
-      val prefixedDsContext = Map(TableName.PrimaryTable.qualifier -> new DatasetContext[SoQLType] {
-        val schema: OrderedMap[ColumnName, SoQLType] =
-          OrderedMap(dsSchema.values.map(x => (columnIdToPrefixNameMap(x.userColumnId), x.typ)).toSeq.sortBy(_._1): _*)
-      })
+      val analyzer = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo, tableFinder)
 
       // In most of the secondary update code, if something unexpectedly blows up we just blow up, roll back
       // the whole transaction, and mark the dataset as broken so we can investigate.  For doing the soql
@@ -106,8 +105,8 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       // We don't want to disable the rollup entirely since it could become valid again, eg. if they then add
       // the column back.  It would be ideal if we had a better way to communicate this failure upwards through
       // the stack.
-      val prefixedRollupAnalyses: Try[NonEmptySeq[SoQLAnalysis[ColumnName, SoQLType]]] =
-        Try { analyzer.analyzeFullQuery(rollupInfo.soql)(prefixedDsContext) }
+      val prefixedRollupAnalyses: Try[NonEmptySeq[SoQLAnalysis[Qualified[ColumnName], SoQLType]]] =
+        Try { analyzer.analyzeFullQuery(ResourceName(""), rollupInfo.soql) }
 
 
       prefixedRollupAnalyses match {
@@ -218,7 +217,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
   private def populateRollupTable(tableName: String,
       rollupInfo: RollupInfo,
-      rollupAnalyses: NonEmptySeq[SoQLAnalysis[ColumnName, SoQLType]],
+      rollupAnalyses: NonEmptySeq[SoQLAnalysis[Qualified[ColumnName], SoQLType]],
       rollupReps: Seq[SqlColumnRep[SoQLType, SoQLValue]]): Unit = {
     time("populate-rollup-table",
       "dataset_id" -> copyInfo.datasetInfo.systemId.underlying,
@@ -229,11 +228,11 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
         SqlizerContext.LeaveGeomAsIs -> true
       )
 
-      val dsRepMap: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]] =
-        dsSchema.values.map(ci => QualifiedUserColumnId(None, ci.userColumnId) -> SoQLIndexableRep.sqlRep(ci)).toMap
+      val dsRepMap: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]] =
+        dsSchema.values.map(ci => Qualified(TableRef.Primary, ci.userColumnId) -> SoQLIndexableRep.sqlRep(ci)).toMap
 
-      val tableMap = Map(TableName.PrimaryTable -> copyInfo.dataTableName) // TODO: FIX ME
-      val selectParamSql = Sqlizer.sql(Tuple3(soqlAnalysis, tableMap, rollupReps))(
+      val tableMap = Map[TableRef, String](TableRef.Primary -> copyInfo.dataTableName) // TODO: FIX ME
+      val selectParamSql = Sqlizer.sql((soqlAnalysis, tableMap, rollupReps))(
         rep = dsRepMap,
         Map.empty,
         setParams = Seq(),
@@ -286,7 +285,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
   private def analysesToSoQLType(analyses: ASysCol): AUserCol = {
     val baos = new ByteArrayOutputStream
     // TODO: Join handle qualifier
-    val analysesColumnId = analyses.map(_.mapColumnIds((name, qualifier) => new UserColumnId(name.name)))
+    val analysesColumnId = analyses.map(_.mapColumnIds { case Qualified(tableRef, name) => Qualified(tableRef, new UserColumnId(name.name)) })
     SoQLAnalyzerHelper.serialize(baos, analysesColumnId)
     (SoQLAnalyzerHelper.deserialize(new ByteArrayInputStream(baos.toByteArray)), None)
   }
