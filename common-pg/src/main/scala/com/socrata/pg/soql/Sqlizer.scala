@@ -365,6 +365,14 @@ abstract class Sqlizer {
     SoQLFunctions.StddevSamp.identity -> simple1(PreserveType) { a => sql"stddev_samp($a)" },
     SoQLFunctions.Median.identity -> convertMedian,
     SoQLFunctions.MedianDisc.identity -> simple1(PreserveType) { a => sql"percentile_disc(.50) within group (order by $a)" },
+
+    SoQLFunctions.RowNumber.identity -> simple0(SoQLNumber) { sql"row_number()" },
+    SoQLFunctions.Rank.identity -> simple0(SoQLNumber) { sql"rank()" },
+    SoQLFunctions.DenseRank.identity -> simple0(SoQLNumber) { sql"dense_rank()" },
+    SoQLFunctions.FirstValue.identity -> columnwise1(PreserveType) { a => sql"first_value($a)" }, // TODO: check "columnwise" is correct for multi-column values
+    // SoQLFunctions.LastValue.identity -> columnwise1(PreserveType) { a => sql"last_value($a)" },   TODO: consdier adding frame clause support before supporting this
+
+    WindowFunctionOver
   )
 
   private def reduceInfix(resultType: SoQLType, op: String, exprs: IntermediateSoQLColumn): SoQLColumn =
@@ -556,6 +564,14 @@ abstract class Sqlizer {
     }
   }
 
+  def simple0(t: SoQLType)(f: => ParametricSqlBuilder): (Seq[Expr] => SoQLColumn) = { params =>
+    require(params.length == 0)
+    new SoQLColumn {
+      def sqlFragments = Seq(f)
+      def typ = t
+    }
+  }
+
   def simple1(t: SoQLType)(f: ParametricSqlBuilder => ParametricSqlBuilder): (Seq[Expr] => SoQLColumn) = { params =>
     val a = extract1C(params)
     val aFrags = a.sqlFragments
@@ -604,4 +620,11 @@ abstract class Sqlizer {
     }
   }
 
+  private def columnwise1(t: PreserveType.type)(f: ParametricSqlBuilder => ParametricSqlBuilder): (Seq[Expr] => SoQLColumn) = { params =>
+    val a = extract1C(params)
+    new SoQLColumn {
+      def sqlFragments = a.sqlFragments.map(f)
+      def typ = a.typ
+    }
+  }
 }
