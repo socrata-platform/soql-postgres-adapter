@@ -371,8 +371,6 @@ abstract class Sqlizer {
     SoQLFunctions.DenseRank.identity -> simple0(SoQLNumber) { sql"dense_rank()" },
     SoQLFunctions.FirstValue.identity -> columnwise1(PreserveType) { a => sql"first_value($a)" }, // TODO: check "columnwise" is correct for multi-column values
     // SoQLFunctions.LastValue.identity -> columnwise1(PreserveType) { a => sql"last_value($a)" },   TODO: consdier adding frame clause support before supporting this
-
-    WindowFunctionOver
   )
 
   private def reduceInfix(resultType: SoQLType, op: String, exprs: IntermediateSoQLColumn): SoQLColumn =
