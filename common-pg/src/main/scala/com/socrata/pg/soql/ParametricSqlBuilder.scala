@@ -58,8 +58,16 @@ object ParametricSqlBuilder {
     def position: Position
   }
 
-  private case class Parameter(sql: String, prep: (PreparedStatement, SoQLValue, Int) => Unit, value: SoQLValue, asJValue: SoQLValue => JValue, pos: Position) extends ConcreteFragment {
+  private abstract class Parameter extends ConcreteFragment {
+    def show: JValue
+  }
+
+  private case class SoQLParameter(sql: String, prep: (PreparedStatement, SoQLValue, Int) => Unit, value: SoQLValue, asJValue: SoQLValue => JValue, pos: Position) extends Parameter {
     def show = asJValue(value)
+  }
+
+  private case class RawParameter(sql: String, prep: (PreparedStatement, Int) => Int, asJValue: JValue, pos: Position) extends Parameter {
+    def show = asJValue
   }
 
   private case class Code(sql: String, position: Position) extends ConcreteFragment
@@ -89,9 +97,11 @@ object ParametricSqlBuilder {
   private def finalSetter(fragments: TraversableOnce[ConcreteFragment]): PreparedStatement => Unit = { stmt =>
     fragments.foldLeft(1) { (col, fragment) =>
       fragment match {
-        case param: Parameter =>
+        case param: SoQLParameter =>
           param.prep(stmt, param.value, col)
           col + 1
+        case param: RawParameter =>
+          param.prep(stmt, col)
         case _ : Code =>
           col
       }
@@ -130,7 +140,12 @@ class ParametricSqlBuilder extends ParametricSqlBuilder.Append {
     interspersingRawSql(col.sqlFragments, separator)
 
   def appendParameter(sql: String, prep: (PreparedStatement, SoQLValue, Int) => Unit, value: SoQLValue, asJValue: SoQLValue => JValue, pos: Position): this.type = {
-    builder += Parameter(sql, prep, value, asJValue, pos)
+    builder += SoQLParameter(sql, prep, value, asJValue, pos)
+    this
+  }
+
+  def appendJsonbParameter(v: JValue, pos: Position = NoPosition): this.type = {
+    builder += RawParameter("(? :: jsonb)", (ps, off) => { ps.setString(off, CompactJsonWriter.toString(v)); off + 1 }, v, pos)
     this
   }
 

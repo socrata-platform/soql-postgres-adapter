@@ -2,18 +2,20 @@ package com.socrata.pg.soql
 
 import java.sql.PreparedStatement
 
+import com.rojoma.json.v3.interpolation._
 import com.socrata.datacoordinator.id.UserColumnId
-import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import com.socrata.soql.SoQLAnalysis
-import com.socrata.soql.environment.{ResourceName, Qualified}
+import com.socrata.datacoordinator.truth.sql.{SqlColumnReadRep, SqlColumnWriteRep}
+import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
+import com.socrata.soql.{SoQLAnalysis, JoinAnalysis, JoinTableAnalysis, JoinSelectAnalysis}
+import com.socrata.soql.collection.NonEmptySeq
+import com.socrata.soql.environment.{ResourceName, Qualified, TableRef}
+import com.socrata.soql.functions.{MonomorphicFunction, SoQLFunctions, SoQLTypeClasses}
 import com.socrata.soql.typed._
 import com.socrata.soql.types._
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
 import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
-import com.socrata.pg.soql.Sqlizer._
-import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 
-import ParametricSqlBuilder.Implicits._
+import ParametricSqlBuilder.implicits._
 
 abstract class Sqlizer {
   type ColumnAlias
@@ -30,27 +32,23 @@ abstract class Sqlizer {
   def primaryTableSqlName(ref: TableRef.PrimaryCandidate): String
   def tableRefAlias(ref: TableRef): String
 
-  def apply(analyses: NonEmptySeq[Analysis]): ParametricSql =
-    convertOutput(analyses.head.selection, convertChain(analyses, TableRef.Primary), topLevel = true)
-
-  implicit class QueryHelper(private val sc: StringContext) extends AnyVal {
-    def sql(args: ParametricSqlBuilder*): ParametricSqlBuilder.Append = new ParametricSqlBuilder.Append {
-      def appendTo(builder: ParametricSqlBuilder) {
-        val strings = sc.parts.iterator
-        val exprs = args.iterator
-        appendTo.appendRawSql(strings.next())
-        while(strings.hasNext) {
-          appendTo.
-            appendRawSql("(").
-            appendParametricSql(exprs.next()).
-            appendRawSql(")").
-            appendRawSql(strings.next())
-        }
+  private implicit class QueryHelper(private val sc: StringContext) {
+    def sql(args: ParametricSqlBuilder*): ParametricSqlBuilder = {
+      val result = new ParametricSqlBuilder
+      val strings = sc.parts.iterator
+      val exprs = args.iterator
+      result.appendRawSql(strings.next())
+      while(strings.hasNext) {
+        result.appendRawSql("(").
+          appendParametricSql(exprs.next()).
+          appendRawSql(")").
+          appendRawSql(strings.next())
       }
+      result
     }
   }
 
-  private def convertChain(analyses: NonEmptySeq[Analysis], fromRef: TableRef.PrimaryCandidate, topLevel: Boolean): ParametricSql = {
+  private def convertChain(analyses: NonEmptySeq[Analysis], fromRef: TableRef.PrimaryCandidate, topLevel: Boolean): ParametricSqlBuilder = {
     val initialFrom =
       convertStep(analyses.head, new ParametricSqlBuilder().
                     appendRawSql(primaryTableSqlName(fromRef)).
@@ -64,9 +62,9 @@ abstract class Sqlizer {
     }
   }
 
-  private def convertStep(analysis: Analysis, from: ParametricSql, topLevel: Boolean): ParametricSqlBuilder = {
+  private def convertStep(analysis: Analysis, from: ParametricSqlBuilder, topLevel: Boolean): ParametricSqlBuilder = {
     // TODO: handle search
-    val SoQLAnalyis(_, _, distinct, selection, joins, where, groupBys, having, orderBys, limit, offset, search) = analysis
+    val SoQLAnalysis(_, _, distinct, selection, joins, where, groupBys, having, orderBys, limit, offset, search) = analysis
 
     val result = new ParametricSqlBuilder
 
@@ -96,12 +94,12 @@ abstract class Sqlizer {
 
       if(topLevel) {
         val transformed = rep.selectListTransforms
-        (fragments, transformed).foreach { fragmentXform =>
-          val (fragment, (prefix, suffix)) = fragmentXform
+        (fragments, transformed).zipped.foreach { (fragment, prefixsuffix) =>
+          val (prefix, suffix) = prefixsuffix
           if(didOne) result.appendRawSql(",")
           else didOne = true
           result.appendRawSql(prefix).
-            appendParametricSql(exprFragment).
+            appendParametricSql(fragment).
             appendRawSql(suffix)
         }
       } else {
@@ -109,8 +107,8 @@ abstract class Sqlizer {
           if(didOne) result.appendRawSql(",")
           else didOne = true
           result.appendParametricSql(exprFragment).
-            appendSql("AS").
-            appendSql(alias)
+            appendRawSql("AS").
+            appendRawSql(alias)
         }
       }
     }
@@ -118,13 +116,13 @@ abstract class Sqlizer {
     result
   }
 
-  private def convertJoins(joins: Seq[Join]): ParametricSqlBuilder = {
+  private def convertJoins(joins: Seq[Join[ColumnAlias, SoQLColumn, SoQLType]]): ParametricSqlBuilder = {
     val result = new ParametricSqlBuilder
     for(join <- joins) result ++= convertJoin(join)
     result
   }
 
-  private def convertJoin(join: Join): ParametricSqlBuilder = {
+  private def convertJoin(join: Join[ColumnAlias, SoQLColumn, SoQLType]): ParametricSqlBuilder = {
     val result = new ParametricSqlBuilder
     result.appendRawSql(join.from.toString). // ick
       appendParametricSql(convertJoinFrom(join.from)).
@@ -133,25 +131,25 @@ abstract class Sqlizer {
     result
   }
 
-  def convertJoinFrom(ja: JoinAnalysis[SoQLColumn, SoQLType]): ParametricSqlBuilder = {
+  def convertJoinFrom(ja: JoinAnalysis[ColumnAlias, SoQLColumn, SoQLType]): ParametricSqlBuilder = {
     ja match {
-      case jta: JoinTableAnalysis[SoQLColumn, SoQLType] =>
+      case jta: JoinTableAnalysis[ColumnAlias, SoQLColumn, SoQLType] =>
         convertJoinFromTable(jta)
-      case jsa: JoniSelectAnalysis[SoQLColumn, SoQLType] =>
+      case jsa: JoinSelectAnalysis[ColumnAlias, SoQLColumn, SoQLType] =>
         convertJoinFromSubselect(jsa)
     }
   }
 
-  def convertJoinFromSubselect(jsa: JoinSelectAnalysis[SoQLColumn, SoQLType]): ParametricSqlBuilder = {
+  def convertJoinFromSubselect(jsa: JoinSelectAnalysis[ColumnAlias, SoQLColumn, SoQLType]): ParametricSqlBuilder = {
     val result = new ParametricSqlBuilder
     result.appendRawSql("(").
-      appendParametricSql(convertChain(jsa.analyses, jsa.fromTable)).
+      appendParametricSql(convertChain(jsa.analyses, jsa.fromTable, topLevel = false)).
       appendRawSql(") AS ").
       appendRawSql(tableRefAlias(jsa.outputTable))
     result
   }
 
-  def convertJoinFromTable(jta: JoinTableAnalysis[SoQLColumn, SoQLType]): ParametricSqlBuilder = {
+  def convertJoinFromTable(jta: JoinTableAnalysis[ColumnAlias, SoQLColumn, SoQLType]): ParametricSqlBuilder = {
     val result = new ParametricSqlBuilder
     result.appendRawSql(primaryTableSqlName(jta.fromTable)).
       appendRawSql("AS").
@@ -167,7 +165,7 @@ abstract class Sqlizer {
     result
   }
 
-  private def convertGroupBys(groupBy: Seq[Expr]): ParametricSqlBuilder = {
+  private def convertGroupBys(groupBys: Seq[Expr]): ParametricSqlBuilder = {
     val result = new ParametricSqlBuilder
     if(groupBys.nonEmpty) {
       result.appendRawSql("GROUP BY")
@@ -192,20 +190,20 @@ abstract class Sqlizer {
     result
   }
 
-  private def convertOrderBys(orderBys: Option[Expr]): ParametricSqlBuilder = {
+  private def convertOrderBys(orderBys: Seq[OrderBy[SoQLColumn, SoQLType]]): ParametricSqlBuilder = {
     val result = new ParametricSqlBuilder
     if(orderBys.nonEmpty) {
       result.appendRawSql("ORDER BY")
       var didOne = false
       for {
         ob <- orderBys
-        expr <- convertExpr(ob.expr)
+        expr <- convertExpr(ob.expression)
       } {
-        if(didOne) result.append(",")
+        if(didOne) result.appendRawSql(",")
         else didOne = true
         result.appendParametricSql(expr)
-        if(!ob.ascending) appendRawSql("DESC")
-        if(ob.nullLast) appendRawSql("NULLS LAST")
+        if(!ob.ascending) result.appendRawSql("DESC")
+        if(ob.nullLast) result.appendRawSql("NULLS LAST")
       }
     }
     result
@@ -246,13 +244,13 @@ abstract class Sqlizer {
       case lit: TypedLiteral[SoQLType] => literalCol(lit)
     }
 
-  private def convertColumnRef(cr: ColumnRef[SoQLColumn, SoQLValue]): SoQLColumn = {
+  private def convertColumnRef(cr: ColumnRef[SoQLColumn, SoQLType]): SoQLColumn = {
     assert(cr.typ == cr.column.typ)
     cr.column
   }
 
-  private def convertFunctionCall(fc: FunctionCall[SoQLColumn, SoQLValue]): Seq[ParametricSqlBuilder] = {
-    checkedRenderer(fc.function, functions(fc.function.identity)).render(fc.params)
+  private def convertFunctionCall(fc: FunctionCall[SoQLColumn, SoQLType]): SoQLColumn = {
+    checkedRenderer(fc.function, functions(fc.function.function.identity))(fc.parameters)
   }
 
   private type FunctionRenderer = Seq[Expr] => SoQLColumn
@@ -265,70 +263,70 @@ abstract class Sqlizer {
   }
 
   private val functions = Map[String, FunctionRenderer](
-    SoQLFunctions.IsNull.function.identity -> convertIsNull,
-    SoQLFunctions.IsNotNull.function.identity -> convertIsNotNull,
-    SoQLFunctions.Not.function.identity -> convertNot,
-    SoQLFunctions.In.function.identity -> convertIn,
-    SoQLFunctions.NotIn.function.identity -> convertNotIn,
-    SoQLFunctions.Eq.function.identity -> convertEq,
-    SoQLFunctions.EqEq.function.identity -> convertEq,
-    SoQLFunctions.Neq.function.identity -> convertNeq,
-    SoQLFunctions.BangEq.function.identity -> convertNeq,
-    SoQLFunctions.And.function.identity -> simple2(SoQLBoolean) { (a, b) => sql("$a AND $b") },
-    SoQLFunctions.Or.function.identity -> simple2(SoQLBoolean) { (a, b) => sql("$a OR $b") },
-    SoQLFunctions.NotBetween.function.identity -> convertNotBetween,
-    SoQLFunctions.Between.function.identity -> convertBetween,
-    SoQLFunctions.Lt.function.identity -> simple2(SoQLBoolean) { (a, b) => sql"$a < $b" },
-    SoQLFunctions.Lte.function.identity -> simple2(SoQLBoolean) { (a, b) => sql"$a <= $b" },
-    SoQLFunctions.Gt.function.identity -> simple2(SoQLBoolean) { (a, b) => sql"$a > $b" },
-    SoQLFunctions.Gte.function.identity -> simple2(SoQLBoolean) { (a, b) => sql"$a >= $b" },
+    SoQLFunctions.IsNull.identity -> convertIsNull,
+    SoQLFunctions.IsNotNull.identity -> convertIsNotNull,
+    SoQLFunctions.Not.identity -> convertNot,
+    SoQLFunctions.In.identity -> convertIn,
+    SoQLFunctions.NotIn.identity -> convertNotIn,
+    SoQLFunctions.Eq.identity -> convertEq,
+    SoQLFunctions.EqEq.identity -> convertEq,
+    SoQLFunctions.Neq.identity -> convertNeq,
+    SoQLFunctions.BangEq.identity -> convertNeq,
+    SoQLFunctions.And.identity -> simple2(SoQLBoolean) { (a, b) => sql"$a AND $b" },
+    SoQLFunctions.Or.identity -> simple2(SoQLBoolean) { (a, b) => sql"$a OR $b" },
+    SoQLFunctions.NotBetween.identity -> convertNotBetween,
+    SoQLFunctions.Between.identity -> convertBetween,
+    SoQLFunctions.Lt.identity -> simple2(SoQLBoolean) { (a, b) => sql"$a < $b" },
+    SoQLFunctions.Lte.identity -> simple2(SoQLBoolean) { (a, b) => sql"$a <= $b" },
+    SoQLFunctions.Gt.identity -> simple2(SoQLBoolean) { (a, b) => sql"$a > $b" },
+    SoQLFunctions.Gte.identity -> simple2(SoQLBoolean) { (a, b) => sql"$a >= $b" },
     // TextToRowIdentifier, TextToRowVersion: figure out how to do this over in typechecking
-    SoQLFunctions.Like.function.identity -> simple2(SoQLBoolean) { (a, b) => sql"$a LIKE $b" },
-    SoQLFunctions.NotLike.function.identity -> simple2(SoQLBoolean) { (a, b) => sql"$a NOT LIKE $b" },
-    SoQLFunctions.StartsWith.function.identity -> convertsStartsWith, // not just "$a LIKE ($b || '%')" so we can optimize the text-literal case
-    SoQLFunctions.Contains.function.identity -> convertsContains, // ditto
-    SoQLFunctions.Concat.function.identity -> simple2(SoQLText) { (a, b) => sql"$a || $b" },
-    SoQLFunctions.Lower.function.identity -> simple1(PreserveType) { a => sql"lower($a)" },
-    SoQLFunctions.Upper.function.identity -> simple1(PreserveType) { a => sql"upper($a)" },
-    SoQLFunctions.UnaryPlus.function.identity -> simple1(PreserveType) { a => a },
-    SoQLFunctions.UnaryMinus.function.identity -> simple1(PreserveType) { a => sql"-$a" },
-    SoQLFunctions.SignedMagnitude10.function.identity -> simple1(PreserveType) { a => sql"sign($a) * length(floor(abs($a)) :: text)" },
-    SoQLFunctions.SignedMagnitudeLinear.function.identity -> simple2(PreserveType(0)) { (a, b) => sql"case when $b = 1 then floor($b) else sign($b) * floor(abs($b)/%a + 1) end" },
-    SoQLFunctions.BinaryPlus.function.identity -> simple2(PreserveType(0)) { (a, b) => sql"$a + $b" },
-    SoQLFunctions.BinaryMinus.function.identity -> simple2(PreserveType(0)) { (a, b) => sql"$a - $b" },
-    SoQLFunctions.TimesNumNum.function.identity -> simple2(SoQLNumber) { (a, b) => sql"$a * $b" },
-    SoQLFunctions.TimesNumMoney.function.identity -> simple2(SoQLMoney) { (a, b) => sql"$a * $b" },
-    SoQLFunctions.TimesMoneyNum.function.identity -> simple2(SoQLMoney) { (a, b) => sql"$a * $b" },
-    SoQLFunctions.DivNumNum.function.identity -> simple2(SoQLNumber) { (a, b) => sql"$a / $b" },
-    SoQLFunctions.DivDoubleDouble.function.identity -> simple2(SoQLDouble) { (a, b) => sql"$a / $b" },
-    SoQLFunctions.DivMoneyNum.function.identity -> simple2(SoQLMoney) { (a, b) => sql"$a / $b" },
-    SoQLFunctions.DivMoneyMoney.function.identity -> simple2(SoQLNumber) { (a, b) => sql"$a / $b" },
-    SoQLFunctions.ExpNumNum.function.identity -> simple2(SoQLNumber) { (a, b) => sql"$a / $b" },
-    SoQLFunctions.ExpDoubleDouble.function.identity -> simple2(SoQLDouble) { (a, b) => sql"$a / $b" },
-    SoQLFunctions.ModNumNum.function.identity -> simple2(SoQLNumber) { (a, b) => sql"$a % $b" },
-    SoQLFunctions.ModDoubleDouble.function.identity -> simple2(SoQLDouble) { (a, b) => sql"$a % $b" },
-    SoQLFunctions.ModMoneyNum.function.identity -> simple2(SoQLMoney) { (a, b) => sql"$a % $b" },
-    SoQLFunctions.ModMoneyMoney.function.identity -> simple2(SoQLNumber) { (a, b) => sql"$a % $b" },
-    SoQLFunctions.Absolute.function.identity -> simple1(PreserveType) { a => sql"abs($a)" },
-    SoQLFunctions.Ceil.function.identity -> simple1(PreserveType) { a => sql"ceil($a)" },
-    SoQLFunctions.Floor.function.identity -> simple1(PreserveType) { a => sql"floor($a)" },
+    SoQLFunctions.Like.identity -> simple2(SoQLBoolean) { (a, b) => sql"$a LIKE $b" },
+    SoQLFunctions.NotLike.identity -> simple2(SoQLBoolean) { (a, b) => sql"$a NOT LIKE $b" },
+    SoQLFunctions.StartsWith.identity -> convertsStartsWith, // not just "$a LIKE ($b || '%')" so we can optimize the text-literal case
+    SoQLFunctions.Contains.identity -> convertsContains, // ditto
+    SoQLFunctions.Concat.identity -> simple2(SoQLText) { (a, b) => sql"$a || $b" },
+    SoQLFunctions.Lower.identity -> simple1(PreserveType) { a => sql"lower($a)" },
+    SoQLFunctions.Upper.identity -> simple1(PreserveType) { a => sql"upper($a)" },
+    SoQLFunctions.UnaryPlus.identity -> simple1(PreserveType) { a => a },
+    SoQLFunctions.UnaryMinus.identity -> simple1(PreserveType) { a => sql"-$a" },
+    SoQLFunctions.SignedMagnitude10.identity -> simple1(PreserveType) { a => sql"sign($a) * length(floor(abs($a)) :: text)" },
+    SoQLFunctions.SignedMagnitudeLinear.identity -> simple2(PreserveType(0)) { (a, b) => sql"case when $b = 1 then floor($b) else sign($b) * floor(abs($b)/%a + 1) end" },
+    SoQLFunctions.BinaryPlus.identity -> simple2(PreserveType(0)) { (a, b) => sql"$a + $b" },
+    SoQLFunctions.BinaryMinus.identity -> simple2(PreserveType(0)) { (a, b) => sql"$a - $b" },
+    SoQLFunctions.TimesNumNum.identity -> simple2(SoQLNumber) { (a, b) => sql"$a * $b" },
+    SoQLFunctions.TimesNumMoney.identity -> simple2(SoQLMoney) { (a, b) => sql"$a * $b" },
+    SoQLFunctions.TimesMoneyNum.identity -> simple2(SoQLMoney) { (a, b) => sql"$a * $b" },
+    SoQLFunctions.DivNumNum.identity -> simple2(SoQLNumber) { (a, b) => sql"$a / $b" },
+    SoQLFunctions.DivDoubleDouble.identity -> simple2(SoQLDouble) { (a, b) => sql"$a / $b" },
+    SoQLFunctions.DivMoneyNum.identity -> simple2(SoQLMoney) { (a, b) => sql"$a / $b" },
+    SoQLFunctions.DivMoneyMoney.identity -> simple2(SoQLNumber) { (a, b) => sql"$a / $b" },
+    SoQLFunctions.ExpNumNum.identity -> simple2(SoQLNumber) { (a, b) => sql"$a / $b" },
+    SoQLFunctions.ExpDoubleDouble.identity -> simple2(SoQLDouble) { (a, b) => sql"$a / $b" },
+    SoQLFunctions.ModNumNum.identity -> simple2(SoQLNumber) { (a, b) => sql"$a % $b" },
+    SoQLFunctions.ModDoubleDouble.identity -> simple2(SoQLDouble) { (a, b) => sql"$a % $b" },
+    SoQLFunctions.ModMoneyNum.identity -> simple2(SoQLMoney) { (a, b) => sql"$a % $b" },
+    SoQLFunctions.ModMoneyMoney.identity -> simple2(SoQLNumber) { (a, b) => sql"$a % $b" },
+    SoQLFunctions.Absolute.identity -> simple1(PreserveType) { a => sql"abs($a)" },
+    SoQLFunctions.Ceiling.identity -> simple1(PreserveType) { a => sql"ceil($a)" },
+    SoQLFunctions.Floor.identity -> simple1(PreserveType) { a => sql"floor($a)" },
 
-    SoQLFunctions.FloatingTimeStampTruncYmd.function.identity -> simple1(SoQLFloatingTimestamp) { a => sql"date_trunc('day', $a)" },
-    SoQLFunctions.FloatingTimeStampTruncYm.function.identity -> simple1(SoQLFloatingTimestamp) { a => sql"date_trunc('month', $a)" },
-    SoQLFunctions.FloatingTimeStampTruncY.function.identity -> simple1(SoQLFloatingTimestamp) { a => sql"date_trunc('year', $a)" },
+    SoQLFunctions.FloatingTimeStampTruncYmd.identity -> simple1(SoQLFloatingTimestamp) { a => sql"date_trunc('day', $a)" },
+    SoQLFunctions.FloatingTimeStampTruncYm.identity -> simple1(SoQLFloatingTimestamp) { a => sql"date_trunc('month', $a)" },
+    SoQLFunctions.FloatingTimeStampTruncY.identity -> simple1(SoQLFloatingTimestamp) { a => sql"date_trunc('year', $a)" },
 
-    SoQLFunctions.FloatingTimeStampExtractY.function.identity -> simple1(SoQLFloatingTimestamp) { a => sql"extract(year from $a)::numeric" },
-    SoQLFunctions.FloatingTimeStampExtractM.function.identity -> simple1(SoQLFloatingTimestamp) { a => sql"extract(month from $a)::numeric" },
-    SoQLFunctions.FloatingTimeStampExtractD.function.identity -> simple1(SoQLFloatingTimestamp) { a => sql"extract(day from $a)::numeric" },
-    SoQLFunctions.FloatingTimeStampExtractHh.function.identity -> simple1(SoQLFloatingTimestamp) { a => sql"extract(hour from $a)::numeric" },
-    SoQLFunctions.FloatingTimeStampExtractMm.function.identity -> simple1(SoQLFloatingTimestamp) { a => sql"extract(minute from $a)::numeric" },
-    SoQLFunctions.FloatingTimeStampExtractSs.function.identity -> simple1(SoQLFloatingTimestamp) { a => sql"extract(second from $a)::numeric" },
-    SoQLFunctions.FloatingTimeStampExtractDow.function.identity -> simple1(SoQLFloatingTimestamp) { a => sql"extract(dow from $a)::numeric" },
-    SoQLFunctions.FloatingTimeStampExtractWoy.function.identity -> simple1(SoQLFloatingTimestamp) { a => sql"extract(week from $a)::numeric" },
+    SoQLFunctions.FloatingTimeStampExtractY.identity -> simple1(SoQLFloatingTimestamp) { a => sql"extract(year from $a)::numeric" },
+    SoQLFunctions.FloatingTimeStampExtractM.identity -> simple1(SoQLFloatingTimestamp) { a => sql"extract(month from $a)::numeric" },
+    SoQLFunctions.FloatingTimeStampExtractD.identity -> simple1(SoQLFloatingTimestamp) { a => sql"extract(day from $a)::numeric" },
+    SoQLFunctions.FloatingTimeStampExtractHh.identity -> simple1(SoQLFloatingTimestamp) { a => sql"extract(hour from $a)::numeric" },
+    SoQLFunctions.FloatingTimeStampExtractMm.identity -> simple1(SoQLFloatingTimestamp) { a => sql"extract(minute from $a)::numeric" },
+    SoQLFunctions.FloatingTimeStampExtractSs.identity -> simple1(SoQLFloatingTimestamp) { a => sql"extract(second from $a)::numeric" },
+    SoQLFunctions.FloatingTimeStampExtractDow.identity -> simple1(SoQLFloatingTimestamp) { a => sql"extract(dow from $a)::numeric" },
+    SoQLFunctions.FloatingTimeStampExtractWoy.identity -> simple1(SoQLFloatingTimestamp) { a => sql"extract(week from $a)::numeric" },
 
-    SoQLFunctions.FixedTimeStampZTruncYmd.function.identity -> simple1(SoQLFloatingTimestamp) { a => sql"date_trunc('day', $a)" },
-    SoQLFunctions.FixedTimeStampZTruncYm.function.identity -> simple1(SoQLFloatingTimestamp) { a => sql"date_trunc('month', $a)" },
-    SoQLFunctions.FixedTimeStampZTruncY.function.identity -> simple1(SoQLFloatingTimestamp) { a => sql"date_trunc('year', $a)" },
+    SoQLFunctions.FixedTimeStampZTruncYmd.identity -> simple1(SoQLFloatingTimestamp) { a => sql"date_trunc('day', $a)" },
+    SoQLFunctions.FixedTimeStampZTruncYm.identity -> simple1(SoQLFloatingTimestamp) { a => sql"date_trunc('month', $a)" },
+    SoQLFunctions.FixedTimeStampZTruncY.identity -> simple1(SoQLFloatingTimestamp) { a => sql"date_trunc('year', $a)" },
 
     SoQLFunctions.FixedTimeStampTruncYmdAtTimeZone.identity -> simple2(SoQLFloatingTimestamp) { (a, b) => sql"date_trunc('day', $a at time zone $b)" },
     SoQLFunctions.FixedTimeStampTruncYmAtTimeZone.identity -> simple2(SoQLFloatingTimestamp) { (a, b) => sql"date_trunc('month', $a at time zone $b)" },
@@ -336,7 +334,7 @@ abstract class Sqlizer {
 
     SoQLFunctions.TimeStampDiffD.identity -> simple2(SoQLNumber) { (a, b) => sql"trunc((extract(epoch from $a) - extract(epoch from $b))::numeric / 86400" },
 
-    SoQLFunctions.ToFloatingtimestamp.identity -> simple2(SoQLFloatingTimestamp) { (a, b) => sql"$a at time zone $b" },
+    SoQLFunctions.ToFloatingTimestamp.identity -> simple2(SoQLFloatingTimestamp) { (a, b) => sql"$a at time zone $b" },
 
     SoQLFunctions.NumberToText.identity -> simple1(SoQLText) { a => sql"$a :: varchar" },
     SoQLFunctions.NumberToMoney.identity -> simple1(SoQLMoney) { a => a },
@@ -376,7 +374,7 @@ abstract class Sqlizer {
   private def reduceInfix(resultType: SoQLType, op: String, exprs: IntermediateSoQLColumn): SoQLColumn =
     new SoQLColumn {
       def typ = resultType
-      val builder = exprs.map(_.surrounded("(", ")")).mkSql(op)
+      val builder = exprs.sqlFragments.map(_.surrounded("(", ")")).mkSql(op)
       def sqlFragments = Seq(builder)
     }
 
@@ -434,15 +432,15 @@ abstract class Sqlizer {
 
   private def convertIn(params: Seq[Expr]) = {
     require(params.length >= 2)
-    require(params.all(_.typ == params.head.typ))
+    require(params.forall(_.typ == params.head.typ))
     val converted = params.map(convertExprToColumn)
 
     val scrutinee = converted.head
     val others = converted.tail
 
-    require(others.all(_.typ == scrutinee.typ))
+    require(others.forall(_.typ == scrutinee.typ))
 
-    if(scrutinee.length == 1) { // simple type; actually use a SQL IN
+    if(scrutinee.sqlFragments.length == 1) { // simple type; actually use a SQL IN
       sql"""$scrutinee IN ${converted.mkSql(",")}"""
     } else {
       // compound type; convert to disjoined equality compares
@@ -452,13 +450,13 @@ abstract class Sqlizer {
 
   private def convertNotIn(params: Seq[Expr]) = {
     require(params.length >= 2)
-    require(params.all(_.typ == params.head.typ))
+    require(params.forall(_.typ == params.head.typ))
     val converted = params.map(convertExprToColumn)
 
     val scrutinee = converted.head
     val others = converted.tail
 
-    assert(others.all(_.typ == scrutinee.typ))
+    assert(others.forall(_.typ == scrutinee.typ))
 
     if(scrutinee.length == 1) { // simple type; actually use a SQL IN
       sql"""$scrutinee NOT IN ${converted.mkSql(",")}"""
@@ -468,11 +466,11 @@ abstract class Sqlizer {
     }
   }
 
-  private val jsonbFields = Map(DocumentToFilename.function.identity -> "filename",
-                                DocumentToFileId.function.identity -> "file_id",
-                                DocumentToContentType.function.identity -> "content_type")
+  private val jsonbFields = Map(SoQLFunctions.DocumentToFilename.identity -> "filename",
+                                SoQLFunctions.DocumentToFileId.identity -> "file_id",
+                                SoQLFunctions.DocumentToContentType.identity -> "content_type")
 
-  private def convertEq(params: Seq[Expr]) = {
+  private def convertEq(params: Seq[Expr]): SoQLColumn = {
     val (a, b) = extract2(params)
     // ugggh... this special-casing wouldn't be necessary if Document
     // had a multi-column representation instead of being a jsonb blob
@@ -515,8 +513,8 @@ abstract class Sqlizer {
     convertNeqSql(a, b)
   }
 
-  private def convertNeqSql(a: Seq[ParametricSqlBuilder], b: Seq[ParametricSqlBuilder]) = {
-    require(a.length == b.length)
+  private def convertNeqSql(a: SoQLColumn, b: SoQLColumn) = {
+    require(a.typ == b.typ)
     reduceOr(new IntermediateSoQLColumn {
                 def sqlFragments = (a.sqlFragments, b.sqlFragments).zipped.map { (a1, b1) => sql"$a1 <> $b1" }
               })
@@ -531,7 +529,7 @@ abstract class Sqlizer {
 
     reduceAnd(new IntermediateSoQLColumn {
                 def sqlFragments =
-                  (scrutineeSql.sqlFragments, lowerBound.sqlFragments, upperBound.sqlFragments).zipped.map { (s, l, u) =>
+                  (scrutinee.sqlFragments, lowerBound.sqlFragments, upperBound.sqlFragments).zipped.map { (s, l, u) =>
                     sql"""$s BETWEEN $l AND $u"""
                   }
               })
@@ -544,12 +542,12 @@ abstract class Sqlizer {
     require(scrutinee.typ == upperBound.typ)
     require(SoQLTypeClasses.Ordered(scrutinee.typ))
 
-    reduceAnd(new IntermediateSoQLColumn {
-                def sqlFragments =
-                  (scrutineeSql.sqlFragments, lowerBound.sqlFragments, upperBound.sqlFragments).zipped.map { (s, l, u) =>
-                    sql"""$s NOT BETWEEN $l AND $u"""
-                  }
-              })
+    reduceOr(new IntermediateSoQLColumn {
+               def sqlFragments =
+                 (scrutinee.sqlFragments, lowerBound.sqlFragments, upperBound.sqlFragments).zipped.map { (s, l, u) =>
+                   sql"""$s NOT BETWEEN $l AND $u"""
+                 }
+             })
   }
 
   private def convertCoalesce(params: Seq[Expr]) = {
@@ -557,7 +555,7 @@ abstract class Sqlizer {
       require(params.length >= 1)
       val typ = params.head.typ
       require(params.tail.forall(_.typ == typ))
-      val converted = params.map(convertExprToColumn).map(_.sqlFragments)
+      val converted = params.map(convertExprToColumn)
       def sqlFragments = sql"""coalesce${converted.mkSql(",")}"""
     }
   }
