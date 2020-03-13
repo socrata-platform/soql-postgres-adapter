@@ -17,6 +17,8 @@ import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
 
 import ParametricSqlBuilder.implicits._
 
+case class ArityMismatch(expected: Int, got: Int) extends Exception
+
 abstract class Sqlizer {
   type ColumnAlias
   type ColRep = SqlColumnReadRep[SoQLType, SoQLValue]
@@ -266,8 +268,8 @@ abstract class Sqlizer {
     SoQLFunctions.IsNull.identity -> convertIsNull,
     SoQLFunctions.IsNotNull.identity -> convertIsNotNull,
     SoQLFunctions.Not.identity -> convertNot,
-    SoQLFunctions.In.identity -> convertIn,
-    SoQLFunctions.NotIn.identity -> convertNotIn,
+    // SoQLFunctions.In.identity -> convertIn,
+    // SoQLFunctions.NotIn.identity -> convertNotIn,
     SoQLFunctions.Eq.identity -> convertEq,
     SoQLFunctions.EqEq.identity -> convertEq,
     SoQLFunctions.Neq.identity -> convertNeq,
@@ -283,8 +285,8 @@ abstract class Sqlizer {
     // TextToRowIdentifier, TextToRowVersion: figure out how to do this over in typechecking
     SoQLFunctions.Like.identity -> simple2(SoQLBoolean) { (a, b) => sql"$a LIKE $b" },
     SoQLFunctions.NotLike.identity -> simple2(SoQLBoolean) { (a, b) => sql"$a NOT LIKE $b" },
-    SoQLFunctions.StartsWith.identity -> convertsStartsWith, // not just "$a LIKE ($b || '%')" so we can optimize the text-literal case
-    SoQLFunctions.Contains.identity -> convertsContains, // ditto
+    // SoQLFunctions.StartsWith.identity -> convertsStartsWith, // not just "$a LIKE ($b || '%')" so we can optimize the text-literal case
+    // SoQLFunctions.Contains.identity -> convertsContains, // ditto
     SoQLFunctions.Concat.identity -> simple2(SoQLText) { (a, b) => sql"$a || $b" },
     SoQLFunctions.Lower.identity -> simple1(PreserveType) { a => sql"lower($a)" },
     SoQLFunctions.Upper.identity -> simple1(PreserveType) { a => sql"upper($a)" },
@@ -352,8 +354,8 @@ abstract class Sqlizer {
     SoQLFunctions.TextToBool.identity -> simple1(SoQLBoolean) { a => sql"$a :: boolean" },
     SoQLFunctions.BoolToText.identity -> simple1(SoQLText) { a => sql"$a :: varchar" },
 
-    SoQLFunctions.Case.identity -> convertCase,
-    SoQLFunctions.Coalesce.identity -> convertCoalesce,
+    //SoQLFunctions.Case.identity -> convertCase,
+    //SoQLFunctions.Coalesce.identity -> convertCoalesce,
 
     SoQLFunctions.Avg.identity -> simple1(PreserveType) { a => sql"avg($a)" },
     SoQLFunctions.Min.identity -> simple1(PreserveType) { a => sql"min($a)" },
@@ -361,7 +363,7 @@ abstract class Sqlizer {
     SoQLFunctions.Sum.identity -> simple1(PreserveType) { a => sql"sum($a)" },
     SoQLFunctions.StddevPop.identity -> simple1(PreserveType) { a => sql"stddev_pop($a)" },
     SoQLFunctions.StddevSamp.identity -> simple1(PreserveType) { a => sql"stddev_samp($a)" },
-    SoQLFunctions.Median.identity -> convertMedian,
+    //SoQLFunctions.Median.identity -> convertMedian,
     SoQLFunctions.MedianDisc.identity -> simple1(PreserveType) { a => sql"percentile_disc(.50) within group (order by $a)" },
 
     SoQLFunctions.RowNumber.identity -> simple0(SoQLNumber) { sql"row_number()" },
@@ -440,11 +442,18 @@ abstract class Sqlizer {
 
     require(others.forall(_.typ == scrutinee.typ))
 
-    if(scrutinee.sqlFragments.length == 1) { // simple type; actually use a SQL IN
-      sql"""$scrutinee IN ${converted.mkSql(",")}"""
+    val scrutineeFragments = scrutinee.sqlFragments
+    if(scrutineeFragments.length == 1) { // simple type; actually use a SQL IN
+      sql"""${scrutineeFragments.head} IN ${converted.map(_.sqlFragments.head).mkSql(",")}"""
     } else {
       // compound type; convert to disjoined equality compares
-      reduceOr(others.map { other => convertEqSql(scrutinee, other) })
+      reduceOr(new IntermediateSoQLColumn {
+                 def sqlFragments = others.map { other =>
+                   val otherEq = convertEqSql(scrutinee, other)
+                   require(otherEq.typ == SoQLBoolean)
+                   otherEq.sqlFragments.head
+                 }
+               })
     }
   }
 
@@ -458,11 +467,18 @@ abstract class Sqlizer {
 
     assert(others.forall(_.typ == scrutinee.typ))
 
-    if(scrutinee.length == 1) { // simple type; actually use a SQL IN
-      sql"""$scrutinee NOT IN ${converted.mkSql(",")}"""
+    val scrutineeFragments = scrutinee.sqlFragments
+    if(scrutineeFragments.length == 1) { // simple type; actually use a SQL IN
+      sql"""${scrutineeFragments.head} NOT IN ${converted.map(_.sqlFragments.head).mkSql(",")}"""
     } else {
-      // compound type; convert to disjoined equality compares
-      reduceAnd(others.map { other => convertNeqSql(scrutinee, other) })
+      // compound type; convert to conjoined non-equality compares
+      reduceAnd(new IntermediateSoQLColumn {
+                  def sqlFragments = others.map { other =>
+                    val otherNeq = convertNeqSql(scrutinee, other)
+                    require(otherNeq.typ == SoQLBoolean)
+                    otherNeq.sqlFragments.head
+                  }
+                })
     }
   }
 
@@ -550,15 +566,23 @@ abstract class Sqlizer {
              })
   }
 
-  private def convertCoalesce(params: Seq[Expr]) = {
-    new SoQLColumn {
-      require(params.length >= 1)
-      val typ = params.head.typ
-      require(params.tail.forall(_.typ == typ))
-      val converted = params.map(convertExprToColumn)
-      def sqlFragments = sql"""coalesce${converted.mkSql(",")}"""
-    }
-  }
+  // private def convertCoalesce(params: Seq[Expr]) = {
+  //   new SoQLColumn {
+  //     require(params.length >= 1)
+  //     val typ = params.head.typ
+  //     require(params.tail.forall(_.typ == typ))
+  //     val converted = params.map(convertExprToColumn)
+  //     def sqlFragments = {
+  //       val firstFragments = converted.head.sqlFragments
+  //       if(firstFragments.length == 1) {
+  //         // simple type; just use COALESCE
+  //         Seq(sql"""coalesce${converted.map(_.sqlFragments.head).mkSql(",")}""")
+  //       } else {
+  //         // compound type; convert to a CASE
+  //       }
+  //     }
+  //   }
+  // }
 
   def simple0(t: SoQLType)(f: => ParametricSqlBuilder): (Seq[Expr] => SoQLColumn) = { params =>
     require(params.length == 0)
