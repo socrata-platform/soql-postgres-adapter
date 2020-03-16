@@ -51,18 +51,19 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
       val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
         throw new Exception(table + " does not exist when creating search index.")))
       logger.info("creating fts index")
-      fullTextSearch.searchVector(columnInfos.map(repFor).toSeq, None) match {
-        case None => // nothing to do
-        case Some(allColumnsVector) =>
-          using(conn.createStatement(), conn.prepareStatement(directivesSql)) { (stmt: Statement,  directivesStmt) =>
-            val ci = columnInfos.head
-            if (shouldCreateIndex(directivesStmt, ci.copyInfo.datasetInfo.systemId, Some(ColumnName(":fts")))) {
-              SecondarySchemaLoader.fullTextIndexCreateSqlErrorHandler.guard(stmt) {
-                stmt.execute(s"CREATE INDEX idx_search_${table} on ${table} USING GIN ($allColumnsVector) $tablespace")
-              }
-            }
-          }
-      }
+      // TODO todo
+      // fullTextSearch.searchVector(columnInfos.map(repFor).toSeq, None) match {
+      //   case None => // nothing to do
+      //   case Some(allColumnsVector) =>
+      //     using(conn.createStatement(), conn.prepareStatement(directivesSql)) { (stmt: Statement,  directivesStmt) =>
+      //       val ci = columnInfos.head
+      //       if (shouldCreateIndex(directivesStmt, ci.copyInfo.datasetInfo.systemId, Some(ColumnName(":fts")))) {
+      //         SecondarySchemaLoader.fullTextIndexCreateSqlErrorHandler.guard(stmt) {
+      //           stmt.execute(s"CREATE INDEX idx_search_${table} on ${table} USING GIN ($allColumnsVector) $tablespace")
+      //         }
+      //       }
+      //     }
+      // }
     }
 
   def deoptimize(columnInfos: Iterable[ColumnInfo[CT]]): Unit = {

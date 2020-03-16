@@ -14,7 +14,6 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
 import com.socrata.pg.soql._
-import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.store.index.SoQLIndexableRep
 import com.socrata.soql.{SoQLAnalysis, SoQLAnalyzer}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
@@ -96,7 +95,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
                 OrderedMap(dsSchema.values.map(x => (columnIdToPrefixNameMap(x.userColumnId), x.typ)).toSeq.sortBy(_._1): _*)
             })
 
-      val analyzer = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo, tableFinder)
+      val analyzer = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
 
       // In most of the secondary update code, if something unexpectedly blows up we just blow up, roll back
       // the whole transaction, and mark the dataset as broken so we can investigate.  For doing the soql
@@ -105,13 +104,12 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       // We don't want to disable the rollup entirely since it could become valid again, eg. if they then add
       // the column back.  It would be ideal if we had a better way to communicate this failure upwards through
       // the stack.
-      val prefixedRollupAnalyses: Try[NonEmptySeq[SoQLAnalysis[Qualified[ColumnName], SoQLType]]] =
-        Try { analyzer.analyzeFullQuery(ResourceName(""), rollupInfo.soql) }
+      val prefixedRollupAnalyses: Try[NonEmptySeq[SoQLAnalysis[ColumnName, Qualified[ColumnName], SoQLType]]] =
+        Try { analyzer.analyzeFullQuery(tableFinder, ResourceName(""), rollupInfo.soql) }
 
 
       prefixedRollupAnalyses match {
-        case Success(pra) =>
-          val rollupAnalyses = pra.map(_.mapColumnIds(columnNameRemovePrefixMap))
+        case Success(rollupAnalyses) =>
           // We are naming columns simply c1 .. c<n> based on the order they are in to avoid having
           // to maintain a mapping or deal with edge cases such as length and :system columns.
           val rollupReps = rollupAnalyses.last.selection.values.zipWithIndex.map { case (colRep, idx) =>
@@ -217,32 +215,31 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
   private def populateRollupTable(tableName: String,
       rollupInfo: RollupInfo,
-      rollupAnalyses: NonEmptySeq[SoQLAnalysis[Qualified[ColumnName], SoQLType]],
+      rollupAnalyses: NonEmptySeq[SoQLAnalysis[ColumnName, Qualified[ColumnName], SoQLType]],
       rollupReps: Seq[SqlColumnRep[SoQLType, SoQLValue]]): Unit = {
     time("populate-rollup-table",
       "dataset_id" -> copyInfo.datasetInfo.systemId.underlying,
       "rollupName" -> rollupInfo.name.underlying) {
       val soqlAnalysis = analysesToSoQLType(rollupAnalyses)
-      val sqlCtx = Map[SqlizerContext, Any](
-        SqlizerContext.CaseSensitivity -> true,
-        SqlizerContext.LeaveGeomAsIs -> true
-      )
 
       val dsRepMap: Map[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]] =
         dsSchema.values.map(ci => Qualified(TableRef.Primary, ci.userColumnId) -> SoQLIndexableRep.sqlRep(ci)).toMap
 
       val tableMap = Map[TableRef, String](TableRef.Primary -> copyInfo.dataTableName) // TODO: FIX ME
-      val selectParamSql = Sqlizer.sql((soqlAnalysis, tableMap, rollupReps))(
-        rep = dsRepMap,
-        Map.empty,
-        setParams = Seq(),
-        ctx = sqlCtx,
-        stringLit => SqlUtils.escapeString(pgu.conn, stringLit))
 
-      val insertParamSql = selectParamSql.copy(sql = Seq(s"INSERT INTO ${tableName} ( ${selectParamSql.sql.head} )"))
+      // TODO: todo
 
-      logger.info(s"Populating rollup table ${tableName} for ${copyInfo} / ${rollupInfo} using sql: ${insertParamSql}")
-      executeParamSqlUpdate(pgu.conn, insertParamSql)
+      // val selectParamSql = Sqlizer.sql((soqlAnalysis, tableMap, rollupReps))(
+      //   rep = dsRepMap,
+      //   Map.empty,
+      //   setParams = Seq(),
+      //   ctx = sqlCtx,
+      //   stringLit => SqlUtils.escapeString(pgu.conn, stringLit))
+
+      // val insertParamSql = selectParamSql.copy(sql = Seq(s"INSERT INTO ${tableName} ( ${selectParamSql.sql.head} )"))
+
+      // logger.info(s"Populating rollup table ${tableName} for ${copyInfo} / ${rollupInfo} using sql: ${insertParamSql}")
+      // executeParamSqlUpdate(pgu.conn, insertParamSql)
     }
   }
 
@@ -266,13 +263,11 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     }
   }
 
-  private def executeParamSqlUpdate(conn: Connection, pSql: ParametricSql): Int = {
+  private def executeParamSqlUpdate(conn: Connection, pSql: ParametricSqlBuilder): Int = {
+    val (sql, filler) = pSql.result()
     try {
-      using(conn.prepareStatement(pSql.sql.head)) { stmt =>
-        val stmt = conn.prepareStatement(pSql.sql.head)
-        pSql.setParams.zipWithIndex.foreach { case (setParamFn, idx) =>
-          setParamFn(Some(stmt), idx + 1)
-        }
+      using(conn.prepareStatement(sql)) { stmt =>
+        filler(stmt)
         stmt.executeUpdate()
       }
     } catch {
@@ -282,12 +277,14 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     }
   }
 
-  private def analysesToSoQLType(analyses: ASysCol): AUserCol = {
-    val baos = new ByteArrayOutputStream
-    // TODO: Join handle qualifier
-    val analysesColumnId = analyses.map(_.mapColumnIds { case Qualified(tableRef, name) => Qualified(tableRef, new UserColumnId(name.name)) })
-    SoQLAnalyzerHelper.serialize(baos, analysesColumnId)
-    (SoQLAnalyzerHelper.deserialize(new ByteArrayInputStream(baos.toByteArray)), None)
+  private def analysesToSoQLType(analyses: NonEmptySeq[SoQLAnalysis[ColumnName, Qualified[ColumnName], SoQLType]]): NonEmptySeq[SoQLAnalysis[UserColumnId, Qualified[UserColumnId], SoQLType]] = {
+    // TODO: same as what goes on elsewhere in SoQLAnalyzerHelper
+    ???
+    // val baos = new ByteArrayOutputStream
+    // // TODO: Join handle qualifier
+    // val analysesColumnId = analyses.map(_.mapColumnIds { case Qualified(tableRef, name) => Qualified(tableRef, new UserColumnId(name.name)) })
+    // SoQLAnalyzerHelper.serialize(baos, analysesColumnId)
+    // (SoQLAnalyzerHelper.deserialize(new ByteArrayInputStream(baos.toByteArray)), None)
   }
 }
 

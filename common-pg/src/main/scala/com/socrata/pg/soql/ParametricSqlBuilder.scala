@@ -51,22 +51,22 @@ object SoQLColumn {
 }
 
 object ParametricSqlBuilder {
-  private sealed class Fragment
+  private sealed trait Fragment
 
   private sealed abstract class ConcreteFragment extends Fragment {
     def sql: String
     def position: Position
   }
 
-  private abstract class Parameter extends ConcreteFragment {
+  private sealed abstract class Parameter extends ConcreteFragment {
     def show: JValue
   }
 
-  private case class SoQLParameter(sql: String, prep: (PreparedStatement, SoQLValue, Int) => Unit, value: SoQLValue, asJValue: SoQLValue => JValue, pos: Position) extends Parameter {
+  private case class SoQLParameter(sql: String, prep: (PreparedStatement, SoQLValue, Int) => Unit, value: SoQLValue, asJValue: SoQLValue => JValue, position: Position) extends Parameter {
     def show = asJValue(value)
   }
 
-  private case class RawParameter(sql: String, prep: (PreparedStatement, Int) => Int, asJValue: JValue, pos: Position) extends Parameter {
+  private case class RawParameter(sql: String, prep: (PreparedStatement, Int) => Int, asJValue: JValue, position: Position) extends Parameter {
     def show = asJValue
   }
 

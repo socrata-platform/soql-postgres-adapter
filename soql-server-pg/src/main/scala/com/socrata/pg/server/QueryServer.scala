@@ -11,7 +11,6 @@ import com.socrata.pg.BuildInfo
 import com.rojoma.json.v3.ast.JString
 import com.rojoma.json.v3.util.{AutomaticJsonEncodeBuilder, JsonUtil}
 import com.rojoma.simplearm.v2._
-import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.Row
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
@@ -37,13 +36,12 @@ import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, St
 import com.socrata.pg.SecondaryBase
 import com.socrata.pg.query.{DataSqlizerQuerier, RowCount, RowReaderQuerier}
 import com.socrata.pg.server.config.{DynamicPortMap, QueryServerConfig}
-import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.soql._
 import com.socrata.pg.store._
 import com.socrata.soql.{SoQLAnalysis, typed}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
-import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName, ResourceName, TableName}
+import com.socrata.soql.collection.{OrderedMap, NonEmptySeq}
+import com.socrata.soql.environment.{ColumnName, ResourceName, Qualified, TableRef}
 import com.socrata.soql.typed.CoreExpr
 import com.socrata.soql.types.SoQLID.ClearNumberRep
 import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion}
@@ -65,7 +63,7 @@ import org.slf4j.LoggerFactory
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.language.existentials
 
-class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase {
+class QueryServer(val dsInfo: DSInfo) extends SecondaryBase {
   import QueryServer._ // scalastyle:ignore import.grouping
 
   val dsConfig: DataSourceConfig = null // scalastyle:ignore null // unused
@@ -182,11 +180,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
   }
 
-  def createEtagFromAnalysis(analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]], fromTable: String): String = {
-    analyses.map{
-      analysis: SoQLAnalysis[UserColumnId, SoQLType] =>
-        // Strictly speaking this table name is incorrect, but it's _consistently_ incorrect
-        analysis.toStringWithFrom(TableName(fromTable))
+  def createEtagFromAnalysis(analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, Qualified[UserColumnId], SoQLType]]): String = {
+    analyses.map { analysis =>
+      // Strictly speaking this table name is incorrect, but it's _consistently_ incorrect
+      analysis.toStringWithFrom(TableRef.Primary)
     }.toString
   }
 
@@ -233,7 +230,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     val datasetId = servReq.getParameter("dataset")
     val analysisParam = servReq.getParameter("query")
     val analysisStream = new ByteArrayInputStream(analysisParam.getBytes(StandardCharsets.ISO_8859_1))
-    val analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] = SoQLAnalyzerHelper.deserialize(analysisStream)
+    val analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, Qualified[UserColumnId], SoQLType]] = SoQLAnalyzerHelper.deserialize(analysisStream)
     val reqRowCount = Option(servReq.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     val copy = Option(servReq.getParameter("copy"))
     val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
@@ -253,7 +250,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         obfuscateId = obfuscateId,
         precondition = req.precondition,
         ifModifiedSince = req.dateTimeHeader("If-Modified-Since"),
-        etagInfo = Option(createEtagFromAnalysis(analyses, datasetId)),
+        etagInfo = Option(createEtagFromAnalysis(analyses)),
         queryTimeout = queryTimeout,
         debug = debug,
         explain = explain,
@@ -261,7 +258,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
   }
 
   def streamQueryResults( // scalastyle:ignore parameter.number
-    analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]],
+    analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, Qualified[UserColumnId], SoQLType]],
     datasetId: String,
     reqRowCount: Boolean,
     copy: Option[String],
@@ -342,7 +339,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
       case TableRef.Primary => "p"
       case TableRef.JoinPrimary(_, n) => "j" + Integer.toUnsignedString(n)
       case TableRef.PreviousChainStep(root, n) => aliasForRef(root) + "_" + Integer.toUnsignedString(n)
-      case TableRef.JoinSelect(JoinPrimary(_, n)) => "js_" + Integer.toUnsignedString(n)
+      case TableRef.SubselectJoin(TableRef.JoinPrimary(_, n)) => "js_" + Integer.toUnsignedString(n)
     }
 
   trait QueryResultBall
@@ -360,7 +357,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     datasetInternalName: String,
     datasetInfo: DatasetInfo,
-    analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]],
+    analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, Qualified[UserColumnId], SoQLType]],
     rowCount: Boolean,
     reqCopy: Option[String],
     rollupName: Option[RollupName],
@@ -550,6 +547,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
               case JoinPrimary(table, alias) =>
             }
           }.toMap
+        }
 
         val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema
         val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
@@ -571,14 +569,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
           }.toMap
         val joinCopies = joinCopiesMap.values.toSeq
 
-        val sqlRepsWithJoin =
-          SoQLAnalysis.foldTableRefs(Map.empty[Qualified[UserColumnId], SqlColumnRep[SoQLType, SoQLValue]]) { (acc, tr) =>
-            tr match {
-              case TableRef.Primary =>
-              case TableRef.JoinPrimary(_, _) =>
-              case TableRef.Join(_) =>
-              case TableRef.PreviousChainStep(_, _) =>
-            }
         joinCopiesMap.foldLeft(sqlReps) { (acc, joinCopy) =>
           val (tableName, copyInfo) = joinCopy
           acc ++ getJoinReps(pgu, copyInfo, tableName)
