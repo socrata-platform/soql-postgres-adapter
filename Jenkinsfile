@@ -1,5 +1,5 @@
 // Set up the libraries
-@Library('socrata-pipeline-library')
+@Library('socrata-pipeline-library@jon/better-subprojects')
 
 // set up service and project variables
 def service_server = "soql-server-pg"
