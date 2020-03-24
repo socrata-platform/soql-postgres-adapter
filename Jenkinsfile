@@ -1,14 +1,14 @@
 // Set up the libraries
-@Library('socrata-pipeline-library@jon/better-subprojects')
+@Library('socrata-pipeline-library')
 
 // set up service and project variables
 def service_server = "soql-server-pg"
 def project_wd_server = "soql-server-pg"
-def project_name_server = "soqlServerPG"
+//def project_name_server = "soqlServerPG"
 def deploy_service_pattern_server = "soql-server-pg*"
-def service_secondary = "secondary-watcher-pg"
+//def service_secondary = "secondary-watcher-pg"
 def project_wd_secondary = "store-pg"
-def project_name_secondary = "storePG"
+//def project_name_secondary = "storePG"
 def deploy_service_pattern_secondary = "secondary-watcher-pg*"
 def deploy_environment = "staging"
 def default_branch_specifier = "origin/master"
@@ -155,37 +155,17 @@ pipeline {
           sbtbuild.setScalaVersion("2.12")
           sbtbuild.build()
 
-          echo "Docker Artifacts: ${sbtbuild.getDockerArtifacts()}"
-          echo "Docker Paths: ${sbtbuild.getDockerPaths()}"
-
-          echo "Server:"
-          echo "Version: ${sbtbuild.getServiceVersion()}"
-          echo "sha: ${service_sha}"
-          echo "Artifact: ${sbtbuild.getDockerArtifact(project_wd_server)}"
-          echo "Path: ${sbtbuild.getDockerPath(project_wd_server)}"
-
-          echo "\nSecondary:"
-          echo "Artifact: ${sbtbuild.getDockerArtifact(project_wd_secondary)}"
-          echo "Path: ${sbtbuild.getDockerPath(project_wd_secondary)}"
+          gonnafail = "not_a_real_subproject"
+          echo "Test failing:  ${sbtbuild.getDockerArtifact(gonnafail)}"
         }
       }
     }
-    /*
     stage('Dockerize Server') {
       when { expression { stage_dockerize } }
       steps {
         script {
           echo "Building docker container..."
-          dockerize_server.docker_build(build_server.getServiceVersion(), service_sha, build_server.getDockerPath(), build_server.getDockerArtifact())
-        }
-      }
-    }
-    stage('Build Secondary') {
-      when { expression { stage_build } }
-      steps {
-        script {
-          echo "Building sbt project..."
-          build_secondary.build()
+          dockerize_server.docker_build(sbtbuild.getServiceVersion(), service_sha, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server))
         }
       }
     }
@@ -194,7 +174,7 @@ pipeline {
       steps {
         script {
           echo "Building docker container..."
-          dockerize_secondary.docker_build(build_server.getServiceVersion(), service_sha, build_secondary.getDockerPath(), build_secondary.getDockerArtifact())
+          dockerize_secondary.docker_build(sbtbuild.getServiceVersion(), service_sha, sbtbuild.getDockerPath(project_wd_secondary), sbtbuild.getDockerArtifact(project_wd_secondary))
         }
       }
     }
@@ -210,6 +190,6 @@ pipeline {
           deploy.deploy(deploy_service_pattern_secondary, deploy_environment, dockerize_secondary.getDeployTag())
         }
       }
-    }*/
+    }
   }
 }
