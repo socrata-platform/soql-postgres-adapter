@@ -1,5 +1,5 @@
 // Set up the libraries
-@Library('socrata-pipeline-library@jon/better-subprojects')
+@Library('socrata-pipeline-library')
 
 // set up service and project variables
 def service_server = "soql-server-pg"
@@ -154,9 +154,6 @@ pipeline {
           echo "Building sbt project..."
           sbtbuild.setScalaVersion("2.12")
           sbtbuild.build()
-
-          gonnafail = "not_a_real_subproject"
-          echo "Test failing:  ${sbtbuild.getDockerArtifact(gonnafail)}"
         }
       }
     }
