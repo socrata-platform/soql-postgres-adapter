@@ -22,13 +22,14 @@ def boolean stage_dockerize = false
 def boolean stage_deploy = false
 
 // instanciate libraries
-def build_server = new com.socrata.SBTBuild(steps, service_server, project_wd_server)
-build_server.setSubprojectName(project_name_server)
-build_server.setScalaVersion("2.12")
+def sbtbuild = new com.socrata.SBTBuild(steps, service_server, '.', [project_wd_server, project_wd_secondary])
+//def build_server = new com.socrata.SBTBuild(steps, service_server, project_wd_server)
+//build_server.setSubprojectName(project_name_server)
+//build_server.setScalaVersion("2.12")
 def dockerize_server = new com.socrata.Dockerize(steps, service_server, BUILD_NUMBER)
-def build_secondary = new com.socrata.SBTBuild(steps, service_secondary, project_wd_secondary)
-build_secondary.setSubprojectName(project_name_secondary)
-build_secondary.setScalaVersion("2.12")
+//def build_secondary = new com.socrata.SBTBuild(steps, service_secondary, project_wd_secondary)
+//build_secondary.setSubprojectName(project_name_secondary)
+//build_secondary.setScalaVersion("2.12")
 def dockerize_secondary = new com.socrata.Dockerize(steps, service_secondary, BUILD_NUMBER)
 def deploy = new com.socrata.MarathonDeploy(steps)
 
@@ -151,10 +152,15 @@ pipeline {
       steps {
         script {
           echo "Building sbt project..."
-          build_server.build()
+          sbtbuild.setScalaVersion("2.12")
+          sbtbuild.build()
+
+          echo "Docker Artifacts: ${sbtbuild.getDockerArtifacts()}"
+          echo "Docket Paths: ${sbtbuild.getDockerpaths()}"
         }
       }
     }
+    /*
     stage('Dockerize Server') {
       when { expression { stage_dockerize } }
       steps {
@@ -194,6 +200,6 @@ pipeline {
           deploy.deploy(deploy_service_pattern_secondary, deploy_environment, dockerize_secondary.getDeployTag())
         }
       }
-    }
+    }*/
   }
 }
