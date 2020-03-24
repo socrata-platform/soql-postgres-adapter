@@ -156,7 +156,7 @@ pipeline {
           sbtbuild.build()
 
           echo "Docker Artifacts: ${sbtbuild.getDockerArtifacts()}"
-          echo "Docket Paths: ${sbtbuild.getDockerpaths()}"
+          echo "Docket Paths: ${sbtbuild.getDockerPaths()}"
         }
       }
     }
