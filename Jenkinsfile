@@ -156,7 +156,17 @@ pipeline {
           sbtbuild.build()
 
           echo "Docker Artifacts: ${sbtbuild.getDockerArtifacts()}"
-          echo "Docket Paths: ${sbtbuild.getDockerPaths()}"
+          echo "Docker Paths: ${sbtbuild.getDockerPaths()}"
+
+          echo "Server:"
+          echo "Version: ${sbtbuild.getServiceVersion()}"
+          echo "sha: ${service_sha}"
+          echo "Artifact: ${sbtbuild.getDockerArtifact(project_wd_server)}"
+          echo "Path: ${sbtbuild.getDockerPath(project_wd_server)}"
+
+          echo "\nSecondary:"
+          echo "Artifact: ${sbtbuild.getDockerArtifact(project_wd_secondary)}"
+          echo "Path: ${sbtbuild.getDockerPath(project_wd_secondary)}"
         }
       }
     }
