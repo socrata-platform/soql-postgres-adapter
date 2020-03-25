@@ -4,11 +4,11 @@
 // set up service and project variables
 def service_server = "soql-server-pg"
 def project_wd_server = "soql-server-pg"
-def project_name_server = "soqlServerPG"
+//def project_name_server = "soqlServerPG"
 def deploy_service_pattern_server = "soql-server-pg*"
 def service_secondary = "secondary-watcher-pg"
 def project_wd_secondary = "store-pg"
-def project_name_secondary = "storePG"
+//def project_name_secondary = "storePG"
 def deploy_service_pattern_secondary = "secondary-watcher-pg*"
 def deploy_environment = "staging"
 def default_branch_specifier = "origin/master"
@@ -22,13 +22,14 @@ def boolean stage_dockerize = false
 def boolean stage_deploy = false
 
 // instanciate libraries
-def build_server = new com.socrata.SBTBuild(steps, service_server, project_wd_server)
-build_server.setSubprojectName(project_name_server)
-build_server.setScalaVersion("2.12")
+def sbtbuild = new com.socrata.SBTBuild(steps, service_server, '.', [project_wd_server, project_wd_secondary])
+//def build_server = new com.socrata.SBTBuild(steps, service_server, project_wd_server)
+//build_server.setSubprojectName(project_name_server)
+//build_server.setScalaVersion("2.12")
 def dockerize_server = new com.socrata.Dockerize(steps, service_server, BUILD_NUMBER)
-def build_secondary = new com.socrata.SBTBuild(steps, service_secondary, project_wd_secondary)
-build_secondary.setSubprojectName(project_name_secondary)
-build_secondary.setScalaVersion("2.12")
+//def build_secondary = new com.socrata.SBTBuild(steps, service_secondary, project_wd_secondary)
+//build_secondary.setSubprojectName(project_name_secondary)
+//build_secondary.setScalaVersion("2.12")
 def dockerize_secondary = new com.socrata.Dockerize(steps, service_secondary, BUILD_NUMBER)
 def deploy = new com.socrata.MarathonDeploy(steps)
 
@@ -151,7 +152,8 @@ pipeline {
       steps {
         script {
           echo "Building sbt project..."
-          build_server.build()
+          sbtbuild.setScalaVersion("2.12")
+          sbtbuild.build()
         }
       }
     }
@@ -160,16 +162,7 @@ pipeline {
       steps {
         script {
           echo "Building docker container..."
-          dockerize_server.docker_build(build_server.getServiceVersion(), service_sha, build_server.getDockerPath(), build_server.getDockerArtifact())
-        }
-      }
-    }
-    stage('Build Secondary') {
-      when { expression { stage_build } }
-      steps {
-        script {
-          echo "Building sbt project..."
-          build_secondary.build()
+          dockerize_server.docker_build(sbtbuild.getServiceVersion(), service_sha, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server))
         }
       }
     }
@@ -178,7 +171,7 @@ pipeline {
       steps {
         script {
           echo "Building docker container..."
-          dockerize_secondary.docker_build(build_server.getServiceVersion(), service_sha, build_secondary.getDockerPath(), build_secondary.getDockerArtifact())
+          dockerize_secondary.docker_build(sbtbuild.getServiceVersion(), service_sha, sbtbuild.getDockerPath(project_wd_secondary), sbtbuild.getDockerArtifact(project_wd_secondary))
         }
       }
     }
