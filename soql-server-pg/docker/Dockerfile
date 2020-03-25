@@ -1,4 +1,4 @@
-FROM socrata/java8
+FROM socrata/java8-bionic
 
 # TODO expose JMX
 EXPOSE 6090 6091

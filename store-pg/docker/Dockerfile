@@ -1,4 +1,4 @@
-FROM socrata/java8
+FROM socrata/java8-bionic
 
 # TODO expose JMX
 ENV JMX_PORT 6300
