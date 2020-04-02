@@ -163,9 +163,9 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
     WindowFunctionOver -> windowOverCall _, //  naryish("over", Some("partition by ")) _,
 
-    Count -> nary("count") _,
-    CountStar -> formatCall("count(*)") _,
-    CountDistinct -> formatCall("count(distinct %s)") _
+    Count -> nary("count", Some("numeric")) _,
+    CountStar -> formatCall("(count(*))::numeric") _,
+    CountDistinct -> formatCall("(count(distinct %s))::numeric") _
     // TODO: Complete the function list.
   ) ++
     funGeometryMap ++
@@ -268,7 +268,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     }
   }
 
-  private def nary(fnName: String)
+  private def nary(fnName: String, returnTypeCast: Option[String] = None)
                   (fn: FunCall,
                    rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                    typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
@@ -282,7 +282,9 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
       (acc._1 :+ sql, newSetParams)
     }
 
-    ParametricSql(Seq(sqlFragsAndParams._1.mkString(fnName + "(", ",", ")")), sqlFragsAndParams._2)
+    val sqlNaryFunctionCall = sqlFragsAndParams._1.mkString(fnName + "(", ",", ")")
+    val sqlNaryFunctionCallWithTypeCast = returnTypeCast.map(typ => s"($sqlNaryFunctionCall)::$typ" ).getOrElse(sqlNaryFunctionCall)
+    ParametricSql(Seq(sqlNaryFunctionCallWithTypeCast), sqlFragsAndParams._2)
   }
 
   private def specialCountArgument(fn: FunCall): Seq[com.socrata.soql.typed.CoreExpr[UserColumnId, SoQLType]] = {
