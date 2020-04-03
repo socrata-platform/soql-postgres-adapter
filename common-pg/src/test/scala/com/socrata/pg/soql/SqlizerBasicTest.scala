@@ -164,14 +164,14 @@ class SqlizerBasicTest extends SqlizerTest {
   test("select count(*)") {
     val soql = "select count(*)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (count(*)) FROM t1")
+    sql should be ("SELECT ((count(*))::numeric) FROM t1")
     setParams.length should be (0)
   }
 
   test("select aggregate functions") {
     val soql = "select count(id), avg(id), min(id), max(id), sum(id), median(id), median(case_number)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (count(t1.id)),(avg(t1.id)),(min(t1.id)),(max(t1.id)),(sum(t1.id)),(percentile_cont(.50) within group (order by t1.id)),(percentile_disc(.50) within group (order by t1.case_number)) FROM t1")
+    sql should be ("SELECT ((count(t1.id))::numeric),(avg(t1.id)),(min(t1.id)),(max(t1.id)),(sum(t1.id)),(percentile_cont(.50) within group (order by t1.id)),(percentile_disc(.50) within group (order by t1.case_number)) FROM t1")
     setParams.length should be (0)
   }
 
