@@ -76,4 +76,63 @@ class SqlizerJoinTest  extends SqlizerTest {
     val paramsChainSelectMax = setParams.map { (setParam) => setParam(None, 0).get }
     paramsChainSelectMax should be (params)
   }
+
+  test("parameters should align with joins") {
+    val v1soql = "SELECT year, avg_temperature FROM @year |> SELECT coalesce(max(avg_temperature), 1), year WHERE avg_temperature < 2 GROUP BY year"
+    val v2soql = "SELECT year, avg_temperature FROM @year |> SELECT coalesce(sum(avg_temperature), 3), year WHERE avg_temperature < 4 GROUP BY year"
+
+    val soql =
+      s"""
+         | SELECT case_number
+         | JOIN ($v1soql) AS j1 ON year = @j1.year
+         | JOIN ($v2soql) AS j2 ON year = @j2.year
+         """.stripMargin
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+
+    val expectedSql = """SELECT t1.case_number FROM t1
+      |     JOIN
+      |  (SELECT (coalesce((max("avg_temperature")),?)) as "coalesce_max_avg_temperature_1","year" as "year"
+      |     FROM (SELECT t3.year as "year",t3.avg_temperature as "avg_temperature" FROM t3) AS x1
+      |    WHERE ("avg_temperature" < ?) GROUP BY "year") as _j1 ON (t1.year = _j1."year")
+      |     JOIN
+      |  (SELECT (coalesce((sum("avg_temperature")),?)) as "coalesce_sum_avg_temperature_3","year" as "year"
+      |     FROM (SELECT t3.year as "year",t3.avg_temperature as "avg_temperature" FROM t3) AS x1
+      |    WHERE ("avg_temperature" < ?) GROUP BY "year") as _j2 ON (t1.year = _j2."year")""".stripMargin
+
+    collapseSpace(sql) should be (collapseSpace(expectedSql))
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq(1, 2, 3, 4).map(BigDecimal(_)))
+  }
+
+  test("parameters should align with joins and outer chain") {
+    val v1soql = "SELECT year, avg_temperature FROM @year |> SELECT coalesce(max(avg_temperature), 1), year WHERE avg_temperature < 2 GROUP BY year"
+    val v2soql = "SELECT year, avg_temperature FROM @year |> SELECT coalesce(sum(avg_temperature), 3), year WHERE avg_temperature < 4 GROUP BY year"
+
+    val soql =
+      s"""SELECT case_number
+            JOIN ($v1soql) AS j1 ON year = @j1.year
+            JOIN ($v2soql) AS j2 ON year = @j2.year
+          |> SELECT case_number, 11 as c WHERE 12 = 13
+         """
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+
+    val expectedSql = """SELECT "case_number",? FROM (SELECT t1.case_number as "case_number" FROM t1
+                                  JOIN
+                                       (SELECT (coalesce((max("avg_temperature")),?)) as "coalesce_max_avg_temperature_1","year" as "year"
+                                          FROM (SELECT t3.year as "year",t3.avg_temperature as "avg_temperature" FROM t3) AS x1
+                                         WHERE ("avg_temperature" < ?) GROUP BY "year") as _j1 ON (t1.year = _j1."year")
+                                  JOIN
+                                       (SELECT (coalesce((sum("avg_temperature")),?)) as "coalesce_sum_avg_temperature_3","year" as "year"
+                                          FROM (SELECT t3.year as "year",t3.avg_temperature as "avg_temperature" FROM t3) AS x1
+                                         WHERE ("avg_temperature" < ?) GROUP BY "year") as _j2 ON (t1.year = _j2."year")) AS x1 WHERE (? = ?)"""
+
+    collapseSpace(sql) should be (collapseSpace(expectedSql))
+
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq(11, 1, 2, 3, 4, 12, 13).map(BigDecimal(_)))
+  }
+
+  private def collapseSpace(s: String): String = {
+    s.replaceAll("\\s+", " ")
+  }
 }
