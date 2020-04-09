@@ -69,7 +69,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     val rowCountForFirstAna = reqRowCount && (firstAna == lastAna)
     val firstCtx = ctx + (OutermostSoql -> outermostSoql(firstAna, analyses)) +
                          (InnermostSoql -> innermostSoql(firstAna, analyses))
-    val firstSql = sql(firstAna, None, tableNames, allColumnReps,
+    val (firstSql, _) = sql(firstAna, None, tableNames, allColumnReps,
                        rowCountForFirstAna, rep, typeRep, setParams, firstCtx, escape, fromTableName)
     val (result, _) = analyses.tail.foldLeft((firstSql, analyses.head)) { (acc, ana) =>
       val (subParametricSql, prevAna) = acc
@@ -82,9 +82,14 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       val subCtx = ctx + (OutermostSoql -> outermostSoql(ana, analyses)) +
                          (InnermostSoql -> innermostSoql(ana, analyses)) -
                          JoinPrimaryTable ++ primaryTableAlias
-      val sqls = sql(ana, Some(prevAna), tableNamesSubTableNameReplace, allColumnReps, reqRowCount &&  ana == lastAna,
-          rep, typeRep, subParametricSql.setParams, subCtx, escape)
-      (sqls, ana)
+      val (sqls, paramsCountInSelect) = sql(ana, Some(prevAna), tableNamesSubTableNameReplace, allColumnReps, reqRowCount &&  ana == lastAna,
+          rep, typeRep, Seq.empty, subCtx, escape)
+
+      // query parameters in the select phrase come before those in the sub-query.
+      // query parameters in the other phrases - where, group by, order by, etc come after those in the sub-query.
+      val (setParamsBefore, setParamsAfter) = sqls.setParams.splitAt(paramsCountInSelect)
+      val setParamsAcc = setParamsBefore ++ subParametricSql.setParams ++ setParamsAfter
+      (sqls.copy(setParams = setParamsAcc), ana)
     }
     result
   }
@@ -102,7 +107,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
                   setParams: Seq[SetParam],
                   context: Context,
                   escape: Escape,
-                  fromTableName: Option[String] = None): ParametricSql = {
+                  fromTableName: Option[String] = None): (ParametricSql, /* params count in select, excluding where, group by... */ Int) = {
     val ana = if (reqRowCount) rowCountAnalysis(analysis) else analysis
     val ctx = context + (Analysis -> analysis) +
                         (TableMap -> tableNames) +
@@ -135,6 +140,8 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
         select(analysis)(repMinusComplexJoinTable, typeRep, setParams, ctxSelectWithJoins, escape)
       }
 
+    val paramsCountInSelect = setParamsSelect.size - setParams.size
+
     // JOIN
     val (joinPhrase, setParamsJoin) = joins.foldLeft((Seq.empty[String], Seq.empty[SetParam])) { case ((sqls, setParamAcc), join) =>
       val joinTableName = TableName(join.from.fromTable.name, None)
@@ -148,9 +155,9 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
 
       val (tableName, joinOnParams) = join.from.subAnalysis.map { case SubAnalysis(analyses, alias) =>
         val joinTableLikeParamSql = Sqlizer.sql(
-          ((analyses, Some(join.from.fromTable.name): Option[String]), joinTableNames, allColumnReps))(rep, typeRep, setParamAcc, ctxJoin, escape)
+          ((analyses, Some(join.from.fromTable.name): Option[String]), joinTableNames, allColumnReps))(rep, typeRep, Seq.empty, ctxJoin, escape)
         val tn = "(" + joinTableLikeParamSql.sql.mkString + ") as " + alias
-        (tn, joinTableLikeParamSql.setParams)
+        (tn, setParamAcc ++ joinTableLikeParamSql.setParams)
       }.getOrElse {
         val tableName = tableNames(joinTableName)
         val tn = join.from.alias.map(a => s"$tableName as $a").getOrElse(tableName)
@@ -268,7 +275,8 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       ana.limit.map(" LIMIT " + _.toString).getOrElse("") +
       ana.offset.map(" OFFSET " + _.toString).getOrElse("")
 
-    ParametricSql(Seq(countBySubQuery(analysis)(reqRowCount, completeSql)), setParamsOrderBy)
+    val result = ParametricSql(Seq(countBySubQuery(analysis)(reqRowCount, completeSql)), setParamsOrderBy)
+    (result, paramsCountInSelect)
   }
 
   private def countBySubQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType])(reqRowCount: Boolean, sql: String) =

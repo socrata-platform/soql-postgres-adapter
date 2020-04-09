@@ -345,6 +345,16 @@ class SqlizerBasicTest extends SqlizerTest {
   test("chained soql set params positions match place holder positions in sql") {
     val soql =
       """SELECT 'aa' as aa WHERE primary_type !='00' |>
+        |SELECT aa || 'b' as bb WHERE aa !='11'""".stripMargin
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT (\"aa\" || ?) FROM (SELECT ? as \"aa\" FROM t1 WHERE (t1.primary_type != ?)) AS x1 WHERE (\"aa\" != ?)")
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be(Seq("b", "aa", "00", "11"))
+  }
+
+  test("chained (x3) soql set params positions match place holder positions in sql") {
+    val soql =
+      """SELECT 'aa' as aa WHERE primary_type !='00' |>
         |SELECT aa || 'b' as bb WHERE aa !='11' |>
         |SELECT bb || 'c' as cc WHERE bb !='22'""".stripMargin
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
