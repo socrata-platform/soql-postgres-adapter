@@ -230,12 +230,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
           val groupByColumnPosition = analysis.selection.values.toSeq.indexWhere(_ == gb) + 1
           ParametricSql(Seq(groupByColumnPosition.toString), t2._2)
         } else {
-          val psql@ParametricSql(ss, ps) = Sqlizer.sql(gb)(repMinusComplexJoinTable, typeRep, t2._2, ctxSelectWithJoins + (SoqlPart -> SoqlGroup), escape)
-          // add ST_AsBinary to geometry type to work around a slowness problem in postgis
-          // https://github.com/postgis/postgis/commit/8606a3164111e75754ce59c095a05e193cdae636
-          // appear to be fixed in postgis 2.4.0
-          if (shouldConvertGeomToText(ctx)) ParametricSql(ss.updated(0, toGeoText(ss.head, gb.typ, None)), ps)
-          else psql
+          Sqlizer.sql(gb)(repMinusComplexJoinTable, typeRep, t2._2, ctxSelectWithJoins + (SoqlPart -> SoqlGroup), escape)
         }
       (t2._1 ++ sqls, newSetParams)
     }
