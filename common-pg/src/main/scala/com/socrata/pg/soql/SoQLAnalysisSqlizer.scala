@@ -228,11 +228,20 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     val setParamsSearch = search.map(_.setParams).getOrElse(setParamsWhere)
 
     // GROUP BY
+    val isGroupByAllConstants = !ana.groupBys.exists(!Sqlizer.isLiteral(_))
     val groupBy = ana.groupBys.foldLeft((List.empty[String], setParamsSearch)) { (t2, gb) =>
       val ParametricSql(sqls, newSetParams) =
         if (Sqlizer.isLiteral(gb)) {
-          // SoQL does not support group by column position.  Group by literal does not do anything.
-          ParametricSql(Seq.empty, t2._2)
+          if (isGroupByAllConstants) {
+            // SELECT 'literal' as alias GROUP BY 'literal' does not work in SQL
+            // But that's how the analysis come back from GROUP BY alias
+            // Use group by position.
+            val groupByColumnPosition = analysis.selection.values.toSeq.indexWhere(_ == gb) + 1
+            ParametricSql(Seq(groupByColumnPosition.toString), t2._2)
+          } else {
+            // SoQL does not support group by column position.  Group by literal does not do anything.
+            ParametricSql(Seq.empty, t2._2)
+          }
         } else {
           Sqlizer.sql(gb)(repMinusComplexJoinTable, typeRep, t2._2, ctxSelectWithJoins + (SoqlPart -> SoqlGroup), escape)
         }
@@ -261,7 +270,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       joinPhrase.mkString(" ") +
       where.flatMap(_.sql.headOption.map(" WHERE " +  _)).getOrElse("") +
       search.flatMap(_.sql.headOption).getOrElse("") +
-      (if (ana.groupBys.nonEmpty && groupBy._1.nonEmpty) groupBy._1.mkString(" GROUP BY ", ",", "") else "") +
+      (if (ana.groupBys.nonEmpty) groupBy._1.mkString(" GROUP BY ", ",", "") else "") +
       having.flatMap(_.sql.headOption.map(" HAVING " + _)).getOrElse("") +
       (if (ana.orderBys.nonEmpty) orderBy._1.mkString(" ORDER BY ", ",", "") else "") +
       ana.limit.map(" LIMIT " + _.toString).getOrElse("") +

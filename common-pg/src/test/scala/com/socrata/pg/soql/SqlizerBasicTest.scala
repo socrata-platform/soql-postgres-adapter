@@ -395,17 +395,20 @@ class SqlizerBasicTest extends SqlizerTest {
     params should be(Seq("oNe"))
   }
 
-  test("group by literals") {
+  test("group by literals with constants removed") {
     val soql = "select id, 'stRing' as a, 5 as b, 2*3 as c group by id, a, b, c"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT t1.id,e'stRing',5,(2 * 3) FROM t1 GROUP BY t1.id")
     setParams.length should be (0)
   }
 
-  test("group by literals all removed") {
+  /**
+    * This is an edge case of a pretty useless query.
+    */
+  test("group by all literals and constants stay when everything is a constant") {
     val soql = "select 'stRing' as a, 5 as b, 2*3 as c group by a, b, c"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT e'stRing',5,(2 * 3) FROM t1")
+    sql should be ("SELECT e'stRing',5,(2 * 3) FROM t1 GROUP BY 1,2,3")
     setParams.length should be (0)
   }
 
