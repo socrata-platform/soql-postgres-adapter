@@ -228,14 +228,20 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     val setParamsSearch = search.map(_.setParams).getOrElse(setParamsWhere)
 
     // GROUP BY
+    val isGroupByAllConstants = !ana.groupBys.exists(!Sqlizer.isLiteral(_))
     val groupBy = ana.groupBys.foldLeft((List.empty[String], setParamsSearch)) { (t2, gb) =>
       val ParametricSql(sqls, newSetParams) =
         if (Sqlizer.isLiteral(gb)) {
-          // SELECT 'literal' as alias GROUP BY 'literal' does not work in SQL
-          // But that's how the analysis come back from GROUP BY alias
-          // Use group by position
-          val groupByColumnPosition = analysis.selection.values.toSeq.indexWhere(_ == gb) + 1
-          ParametricSql(Seq(groupByColumnPosition.toString), t2._2)
+          if (isGroupByAllConstants) {
+            // SELECT 'literal' as alias GROUP BY 'literal' does not work in SQL
+            // But that's how the analysis come back from GROUP BY alias
+            // Use group by position.
+            val groupByColumnPosition = analysis.selection.values.toSeq.indexWhere(_ == gb) + 1
+            ParametricSql(Seq(groupByColumnPosition.toString), t2._2)
+          } else {
+            // SoQL does not support group by column position.  Group by literal does not do anything.
+            ParametricSql(Seq.empty, t2._2)
+          }
         } else {
           Sqlizer.sql(gb)(repMinusComplexJoinTable, typeRep, t2._2, ctxSelectWithJoins + (SoqlPart -> SoqlGroup), escape)
         }

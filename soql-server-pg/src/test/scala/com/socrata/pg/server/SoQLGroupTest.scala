@@ -28,4 +28,8 @@ class SoQLGroupTest extends SoQLTest {
   test("group by text fn") {
     compareSoqlResult("select country || '''s ' || make as brand_made, count(name) group by country || '''s ' || make order by country || '''s ' || make", "group-text-expr.json", caseSensitivity = CaseInsensitive)
   }
+
+  test("group by constant") {
+    compareSoqlResult("select upper(make) as umake, 'one' as constant, count(name) as count_name group by upper(make), constant order by upper(make) |> select umake, count_name", "group-text.json")
+  }
 }
