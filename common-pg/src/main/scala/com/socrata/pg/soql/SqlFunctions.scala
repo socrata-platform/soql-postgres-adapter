@@ -161,8 +161,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     DenseRank -> nary("dense_rank") _,
     FirstValue -> nary("first_value") _,
     LastValue -> nary("last_value") _,
-    // LastValue -> nary("last_value") _, TODO: consider adding frame clause support before supporting this
 
+    // TODO: old style - to be deleted
     WindowFunctionOver -> windowOverCall _, //  naryish("over", Some("partition by ")) _,
 
     Count -> nary("count", Some("numeric")) _,
