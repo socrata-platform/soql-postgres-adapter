@@ -462,4 +462,12 @@ class SqlizerBasicTest extends SqlizerTest {
     sql should be ("SELECT (rank() over( order by t1.year nulls last)) FROM t1")
     setParams.length should be (0)
   }
+
+  test("window function with frame clause") {
+    val soql = "select avg(year) over(partition by primary_type, year ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    sql should be ("SELECT (avg(t1.year) over( partition by t1.primary_type,t1.year ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)) FROM t1")
+    setParams.length should be (0)
+  }
 }

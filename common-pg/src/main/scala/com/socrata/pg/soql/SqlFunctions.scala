@@ -382,17 +382,25 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
           (acc._1 :+ sql, newSetParams)
         }
 
-        val sqlFrames = windowFunctionInfo.frames.foldLeft((Seq.empty[String], sqlOrderings._2)) { (acc, ob) =>
-          Sqlizer.sql(ob)(rep, typeRep, acc._2, ctx, escape)
-          acc
+        val sqlFrames = windowFunctionInfo.frames.foldLeft((Seq.empty[String], sqlOrderings._2)) { (acc, param) =>
+          param match {
+            case StringLiteral(x, _) =>
+              (acc._1 :+ x, acc._2)
+            case NumberLiteral(x, param) =>
+              (acc._1 :+ x.toString, acc._2)
+            case _ => // should never happen
+              acc
+          }
         }
 
-        val sqlPartitionsPreable = if (windowFunctionInfo.partitions.isEmpty) "" else " partition by "
-        val sqlOrderingsPreable = if (windowFunctionInfo.orderings.isEmpty) "" else " order by "
+        val sqlPartitionsPreamble = if (windowFunctionInfo.partitions.isEmpty) "" else " partition by "
+        val sqlOrderingsPreamble = if (windowFunctionInfo.orderings.isEmpty) "" else " order by "
+        val sqlFramesPreamble = if (windowFunctionInfo.frames.isEmpty) "" else " "
         val sql = pSql.sql.mkString +
                     " over(" +
-                    sqlPartitions._1.mkString(sqlPartitionsPreable, ",", "") +
-                    sqlOrderings._1.mkString(sqlOrderingsPreable, ",", "") +
+                    sqlPartitions._1.mkString(sqlPartitionsPreamble, ",", "") +
+                    sqlOrderings._1.mkString(sqlOrderingsPreamble, ",", "") +
+                    sqlFrames._1.mkString(sqlFramesPreamble, " ", "") +
                     ")"
         ParametricSql(Seq(sql), sqlFrames._2)
       case None =>
