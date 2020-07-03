@@ -102,7 +102,7 @@ trait SqlFunctionsGeometry {
           case o => o
         }
 
-        val zoomedFn = fn.copy(parameters = Seq(id, zoom.copy(value=resolution)))
+        val zoomedFn = fn.copy(parameters = Seq(id, zoom.copy(value=resolution)), window = fn.window)
 
         val geoReps: Iterable[GeometryLikeRep[_]] = rep.collect {
           case (_, g: GeometryLikeRep[_]) => g

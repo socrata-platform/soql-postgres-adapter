@@ -10,6 +10,7 @@ import java.sql.PreparedStatement
 
 import Sqlizer._
 import SqlizerContext._
+import com.socrata.pg.soql.SqlFunctions.{FunCall, windowOverInfo}
 
 
 object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
@@ -129,6 +130,12 @@ object NullLiteralSqlizer extends Sqlizer[NullLiteral[SoQLType]] {
 }
 
 object FunctionCallSqlizer extends Sqlizer[FunctionCall[UserColumnId, SoQLType]] {
+
+  private def windowFnCtx(fn: FunCall, ctx: Sqlizer.Context): Sqlizer.Context = {
+    if (fn.window.nonEmpty) ctx + (SqlizerContext.NoWrappingParenInFunctionCall -> true) + (SqlizerContext.InsideWindowFn -> true)
+    else ctx
+  }
+
   def sql(expr: FunctionCall[UserColumnId, SoQLType])
          (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
           typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
@@ -136,9 +143,10 @@ object FunctionCallSqlizer extends Sqlizer[FunctionCall[UserColumnId, SoQLType]]
           ctx: Context,
           escape: Escape): ParametricSql = {
     val fn = SqlFunctions(expr.function.function)
-    val ParametricSql(sqls, fnSetParams) = fn(expr, rep, typeRep, setParams, ctx, escape)
+    val pSql = fn(expr, rep, typeRep, setParams, windowFnCtx(expr, ctx), escape)
     // SoQL parsing bakes parenthesis into the ast tree without explicitly spitting out parenthesis.
     // We add parenthesis to every function call to preserve semantics.
+    val ParametricSql(sqls, fnSetParams) = windowOverInfo(pSql, expr, rep, typeRep, pSql.setParams, ctx, escape)
     if (ctx.keySet.contains(NoWrappingParenInFunctionCall)) {
       ParametricSql(sqls.map(s => s"$s" + selectAlias(expr)(ctx)), fnSetParams)
     } else {

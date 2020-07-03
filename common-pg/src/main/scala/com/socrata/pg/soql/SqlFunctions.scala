@@ -10,6 +10,7 @@ import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
 import com.socrata.soql.types._
 import Sqlizer._
 import SoQLFunctions._
+import com.socrata.pg.soql.SqlizerContext.{RootExpr, SoqlPart}
 import com.socrata.soql.exceptions.BadParse
 import org.joda.time.{DateTime, LocalDateTime}
 
@@ -159,8 +160,9 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     Rank -> nary("rank") _,
     DenseRank -> nary("dense_rank") _,
     FirstValue -> nary("first_value") _,
-    // LastValue -> nary("last_value") _, TODO: consider adding frame clause support before supporting this
+    LastValue -> nary("last_value") _,
 
+    // TODO: old style - to be deleted
     WindowFunctionOver -> windowOverCall _, //  naryish("over", Some("partition by ")) _,
 
     Count -> nary("count", Some("numeric")) _,
@@ -240,7 +242,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                                            ctx: Sqlizer.Context,
                                            escape: Escape): ParametricSql = {
     val optimized = fn.parameters(0) match {
-      case FunctionCall(MonomorphicFunction(jsonbFieldKey, _), Seq(field)) if jsonbFields.contains(jsonbFieldKey) =>
+      case FunctionCall(MonomorphicFunction(jsonbFieldKey, _), Seq(field), fn.window) if jsonbFields.contains(jsonbFieldKey) =>
         fn.parameters(1) match {
           case strLit@StringLiteral(value: String, _) =>
             val ParametricSql(ls, setParamsL) = Sqlizer.sql(field)(rep, typeRep, setParams, ctx, escape)
@@ -294,9 +296,9 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
           case Seq(ColumnRef(_, _, typ)) if typ == SoQLUrl.t =>
             // Only if we have chosen jsonb in UrlRep, this would not be necessary
             // only counting url.url - ignoring url.description
-            val coalesceArgs = Seq(FunctionCall(UrlToUrl.monomorphic.get, fn.parameters)(fn.position, fn.functionNamePosition),
-                                   FunctionCall(UrlToDescription.monomorphic.get, fn.parameters)(fn.position, fn.functionNamePosition))
-            Seq(FunctionCall(coalesceText, coalesceArgs)(fn.position, fn.functionNamePosition))
+            val coalesceArgs = Seq(FunctionCall(UrlToUrl.monomorphic.get, fn.parameters, fn.window)(fn.position, fn.functionNamePosition),
+                                   FunctionCall(UrlToDescription.monomorphic.get, fn.parameters, fn.window)(fn.position, fn.functionNamePosition))
+            Seq(FunctionCall(coalesceText, coalesceArgs, fn.window)(fn.position, fn.functionNamePosition))
           case _ => fn.parameters
         }
       case _ => fn.parameters
@@ -358,6 +360,52 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     }
     val sql = sqls.mkString("coalesce(", ",", ")")
     ParametricSql(Seq(sql), params)
+  }
+
+  def windowOverInfo(pSql: ParametricSql,
+                     fn: FunCall,
+                     rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                     typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                     setParams: Seq[SetParam],
+                     ctx: Sqlizer.Context,
+                     escape: Escape): ParametricSql = {
+
+    fn.window match {
+      case Some(windowFunctionInfo) =>
+        val sqlPartitions = windowFunctionInfo.partitions.foldLeft(Tuple2(Seq.empty[String], pSql.setParams)) { (acc, param) =>
+          val ParametricSql(Seq(sql), newSetParams) = Sqlizer.sql(param)(rep, typeRep, acc._2, ctx, escape)
+          (acc._1 :+ sql, newSetParams)
+        }
+
+        val sqlOrderings = windowFunctionInfo.orderings.foldLeft((Seq.empty[String], sqlPartitions._2)) { (acc, ob) =>
+          val ParametricSql(Seq(sql), newSetParams) = Sqlizer.sql(ob)(rep, typeRep, acc._2, ctx, escape)
+          (acc._1 :+ sql, newSetParams)
+        }
+
+        val sqlFrames = windowFunctionInfo.frames.foldLeft((Seq.empty[String], sqlOrderings._2)) { (acc, param) =>
+          param match {
+            case StringLiteral(x, _) =>
+              (acc._1 :+ x, acc._2)
+            case NumberLiteral(x, param) =>
+              (acc._1 :+ x.toString, acc._2)
+            case _ => // should never happen
+              acc
+          }
+        }
+
+        val sqlPartitionsPreamble = if (windowFunctionInfo.partitions.isEmpty) "" else " partition by "
+        val sqlOrderingsPreamble = if (windowFunctionInfo.orderings.isEmpty) "" else " order by "
+        val sqlFramesPreamble = if (windowFunctionInfo.frames.isEmpty) "" else " "
+        val sql = pSql.sql.mkString +
+                    " over(" +
+                    sqlPartitions._1.mkString(sqlPartitionsPreamble, ",", "") +
+                    sqlOrderings._1.mkString(sqlOrderingsPreamble, ",", "") +
+                    sqlFrames._1.mkString(sqlFramesPreamble, " ", "") +
+                    ")"
+        ParametricSql(Seq(sql), sqlFrames._2)
+      case None =>
+        pSql
+    }
   }
 
   private def windowOverCall(fn: FunCall,
@@ -507,7 +555,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
       case x => x
     }
 
-    val fnWithConvertedParams = fn.copy(parameters = convertedParams)
+    val fnWithConvertedParams = fn.copy(parameters = convertedParams, window = fn.window)
     formatCall(template, None, None)(fnWithConvertedParams, rep, typeRep, setParams, ctx, escape)
   }
 
@@ -521,9 +569,9 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                                   escape: Escape): ParametricSql = {
     val ParametricSql(ls, setParamsL) = Sqlizer.sql(fn.parameters(0))(rep, typeRep, setParams, ctx, escape)
     val params = Seq(fn.parameters(1), wildcard)
-    val suffix = FunctionCall(suffixWildcard, params)(fn.position, fn.functionNamePosition)
+    val suffix = FunctionCall(suffixWildcard, params, fn.window)(fn.position, fn.functionNamePosition)
     val wildcardCall =
-      if (prefix) { FunctionCall(suffixWildcard, Seq(wildcard, suffix))(fn.position, fn.functionNamePosition) }
+      if (prefix) { FunctionCall(suffixWildcard, Seq(wildcard, suffix), fn.window)(fn.position, fn.functionNamePosition) }
       else { suffix }
     val ParametricSql(rs, setParamsLR) = Sqlizer.sql(wildcardCall)(rep, typeRep, setParamsL, ctx, escape)
     val lrs = ls.zip(rs).map { case (l, r) => s"$l $fnName $r" }
