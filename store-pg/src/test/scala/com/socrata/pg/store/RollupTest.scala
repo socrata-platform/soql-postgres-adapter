@@ -289,4 +289,24 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       jdbcRowCount(pgu.conn, tableNamePreviousRollup) should be (1)
     }
   }
+
+  test("rollup window function") {
+    withPgu() { pgu =>
+      val secondary = new PGSecondary(config)
+      secondary.shutdown()
+      val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
+      val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
+      val dsName = s"$dcInstance.${truthDatasetId.underlying}"
+      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"),
+        "select _make, avg(_aspect_ratio) over(partition by _make)  AS _avg_asp")
+
+      val rm = new RollupManager(pgu, copyInfo)
+      rm.updateRollup(rollupInfo, copyInfo.dataVersion)
+
+      val tableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
+      jdbcColumnCount(pgu.conn, tableName) should be (2)
+      jdbcRowCount(pgu.conn,tableName) should be (18)
+      secondary.shutdown()
+    }
+  }
 }
