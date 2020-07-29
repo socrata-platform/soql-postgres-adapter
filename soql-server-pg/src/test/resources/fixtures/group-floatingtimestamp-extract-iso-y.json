@@ -1,0 +1,7 @@
+[ { "date_extract_iso_y_available" : 2008, "count" : 1 },
+  { "date_extract_iso_y_available" : 2010, "count" : 1 },
+  { "date_extract_iso_y_available" : 2011, "count" : 2 },
+  { "date_extract_iso_y_available" : 2012, "count" : 3 },
+  { "date_extract_iso_y_available" : 2013, "count" : 2 },
+  { "date_extract_iso_y_available" : null, "count" : 9 }
+]

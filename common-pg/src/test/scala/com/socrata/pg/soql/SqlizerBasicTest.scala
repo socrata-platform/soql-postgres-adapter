@@ -237,6 +237,13 @@ class SqlizerBasicTest extends SqlizerTest {
     setParams.length should be (0)
   }
 
+  test("date_extract_iso_y - iso year") {
+    val soql = "select date_extract_iso_y(updated_on)"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT (extract(isoyear from t1.updated_on)::numeric) FROM t1")
+    setParams.length should be (0)
+  }
+
   test("date_extract_y") {
     val soql = "select date_extract_y(updated_on)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
