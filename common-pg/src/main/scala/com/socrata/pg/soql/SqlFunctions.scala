@@ -105,7 +105,14 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     FloatingTimeStampExtractMm -> formatCall("extract(minute from %s)::numeric") _,
     FloatingTimeStampExtractSs -> formatCall("extract(second from %s)::numeric") _,
     FloatingTimeStampExtractDow -> formatCall("extract(dow from %s)::numeric") _,
+    // Extracting the week from a floating timestamp extracts the iso week (1-53), which
+    // means that sometimes the last few days of December may be considered the first week
+    // of the next year (https://en.wikipedia.org/wiki/ISO_week_date)
     FloatingTimeStampExtractWoy -> formatCall("extract(week from %s)::numeric") _,
+  // This is useful when you are also extracting the week (iso week). This is
+  // because the iso year will give the year associated with the iso week whereas
+  // the year will give the year associated with the iso date.
+    FloatingTimestampExtractIsoY -> formatCall("extract(isoyear from %s)::numeric") _,
 
     FixedTimeStampZTruncYmd -> formatCall("date_trunc('day', %s)") _,
     FixedTimeStampZTruncYm -> formatCall("date_trunc('month', %s)") _,
