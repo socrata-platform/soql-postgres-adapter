@@ -12,6 +12,10 @@ class SoQLWindowFunctionsTest extends SoQLTest {
     compareSoqlResult("select code, make, avg(v_max) over() where v_max is not null order by code", "avg_over_all.json")
   }
 
+  test("avg over all rows with unreserved keyword - range and null\"s\" first") {
+    compareSoqlResult("select code, make, avg(v_max) over() as range where v_max is not null order by code nulls first", "avg_over_all_unreserved_keyword.json")
+  }
+
   test("one model from each make") {
     compareSoqlResult("""
         SELECT code, make, row_number() over(partition by make order by make, code) as rn
