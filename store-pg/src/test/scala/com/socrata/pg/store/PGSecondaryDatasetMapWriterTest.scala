@@ -66,7 +66,7 @@ class PGSecondaryDatasetMapWriterTest extends PGSecondaryTestBase with PGSeconda
     withPgu() { pgu =>
       val f = columnsCreatedFixture
 
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, f.events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, PGCookie.default, f.events.iterator, false)
 
       val truthCopyInfo = getTruthCopyInfo(pgu, f.datasetInfo)
 

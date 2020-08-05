@@ -169,7 +169,6 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val pgs = new PGSecondary(config)
       val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, None)
       val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55, new DateTime())
-      val cookie = Option("monkey")
 
       val newSchema = ColumnIdMap[ColumnInfo[SoQLType]](
         new ColumnId(10) -> ColumnInfo[SoQLType](new ColumnId(10), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, true, false, false, None),
@@ -189,7 +188,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       )
 
       // First resync a dataset that doesn't exist
-      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows.iterator), Seq.empty)
+      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, PGCookie.default, unmanaged(rows.iterator), Seq.empty)
 
       // there are 2 rows
       val truthCopyInfo = getTruthCopyInfo(pgu, secondaryDatasetInfo)
@@ -213,7 +212,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
           new ColumnId(12) -> new SoQLText("taz"))
 
       // resync again with an extra row plus rollup
-      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows2.iterator), Seq(rollup))
+      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, PGCookie.default, unmanaged(rows2.iterator), Seq(rollup))
 
       // there is rollup
       val truthCopyInfoAfterResync = getTruthCopyInfo(pgu, secondaryDatasetInfo)
@@ -276,7 +275,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       secondCopy.copyNumber should be (2L)
 
       val pgs = new PGSecondary(config)
-      pgs.doVersion(pgu, datasetInfo, secondCopy.dataVersion + 1, None, Iterator(WorkingCopyDropped))
+      pgs.doVersion(pgu, datasetInfo, secondCopy.dataVersion + 1, PGCookie.default, Iterator(WorkingCopyDropped), false)
 
       // Check that the rollup in the previous copy is still good.
       val previousCopy = getTruthCopyInfo(pgu, datasetInfo)

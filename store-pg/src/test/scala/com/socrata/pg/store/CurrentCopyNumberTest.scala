@@ -9,7 +9,7 @@ class CurrentCopyNumberTest extends PGSecondaryTestBase with PGSecondaryUniverse
     withPgu() { pgu =>
       val f = workingCopyCreatedFixture
 
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, f.events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, PGCookie.default, f.events.iterator, false)
 
       val actualCopyNum = f.pgs.doCurrentCopyNumber(pgu, f.datasetInfo.internalName, None)
 

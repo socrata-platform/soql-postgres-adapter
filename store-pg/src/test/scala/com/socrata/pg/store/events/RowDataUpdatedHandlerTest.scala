@@ -48,7 +48,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
           RowDataUpdated(insertOps)
         )
 
-        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
+        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, PGCookie.default, events.iterator, false)
 
         for {
           truthCopyInfo <- unmanaged(getTruthCopyInfo(pgu, f.datasetInfo))
@@ -66,9 +66,9 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
           RowDataUpdated(insertOpsLongString)
         )
 
-        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, f.events.iterator)
+        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, PGCookie.default, f.events.iterator, false)
         intercept[ResyncSecondaryException] {
-          f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 2, None, events.iterator)
+          f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 2, PGCookie.default, events.iterator, false)
         }
     }
   }
@@ -81,7 +81,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
         val f = publishedDatasetFixture
         val events = f.events :+ RowDataUpdated(insertOps)
 
-        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
+        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, PGCookie.default, events.iterator, false)
 
         val updateOps = Seq(
           (1000, 110, "bar"),
@@ -95,7 +95,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
 
         val updateEvents = Seq(RowDataUpdated(updateOps))
 
-        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 2, None, updateEvents.iterator)
+        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 2, PGCookie.default, updateEvents.iterator, false)
 
         for {
           truthCopyInfo <- unmanaged(getTruthCopyInfo(pgu, f.datasetInfo))
@@ -113,7 +113,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
         val f = publishedDatasetFixture
         val events = f.events :+ RowDataUpdated(insertOps)
 
-        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
+        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, PGCookie.default, events.iterator, false)
 
         val updateOps = Seq(
           (1000, 110, "bar"),
@@ -128,7 +128,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
         val updateEvents = Seq(RowDataUpdated(updateOps))
 
         intercept[ResyncSecondaryException] {
-          f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 2, None, updateEvents.iterator)
+          f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 2, PGCookie.default, updateEvents.iterator, false)
         }
     }
   }
@@ -139,7 +139,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
       val f = publishedDatasetFixture
       val events = f.events :+ RowDataUpdated(insertOps)
 
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, PGCookie.default, events.iterator, false)
 
       val deleteOps = Seq(
         1000,
@@ -149,7 +149,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
 
       val deleteEvents = Seq(RowDataUpdated(deleteOps))
 
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 2, None, deleteEvents.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 2, PGCookie.default, deleteEvents.iterator, false)
 
       for {
         truthCopyInfo <- unmanaged(getTruthCopyInfo(pgu, f.datasetInfo))

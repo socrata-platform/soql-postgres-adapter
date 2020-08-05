@@ -6,7 +6,7 @@ import com.rojoma.simplearm.v2.unmanaged
 import com.socrata.datacoordinator.id.{ColumnId, RowId}
 import com.socrata.datacoordinator.secondary.{Insert, RowDataUpdated, Truncated}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.pg.store.{PGSecondaryTestBase, PGSecondaryUniverseTestBase, PGStoreTestBase}
+import com.socrata.pg.store.{PGSecondaryTestBase, PGSecondaryUniverseTestBase, PGStoreTestBase, PGCookie}
 import com.socrata.soql.types.{SoQLID, SoQLText, SoQLVersion}
 import com.typesafe.scalalogging.Logger
 
@@ -29,7 +29,7 @@ class TruncateHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTe
       val f = columnsCreatedFixture
       val events = f.events ++ Seq(RowDataUpdated(insertOps), Truncated)
 
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, PGCookie.default, events.iterator, false)
 
       for {
         truthCopyInfo <- unmanaged(getTruthCopyInfo(pgu, f.datasetInfo))

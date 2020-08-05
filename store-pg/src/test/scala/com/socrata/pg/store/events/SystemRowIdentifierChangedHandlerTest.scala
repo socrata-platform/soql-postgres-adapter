@@ -6,7 +6,7 @@ import scala.language.reflectiveCalls
 
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.secondary.{ColumnCreated, ColumnInfo, SystemRowIdentifierChanged}
-import com.socrata.pg.store.{PGSecondaryTestBase, PGSecondaryUniverseTestBase, PGStoreTestBase}
+import com.socrata.pg.store.{PGSecondaryTestBase, PGSecondaryUniverseTestBase, PGStoreTestBase, PGCookie}
 import com.socrata.soql.types.SoQLID
 
 class SystemRowIdentifierChangedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
@@ -18,7 +18,7 @@ class SystemRowIdentifierChangedHandlerTest extends PGSecondaryTestBase with PGS
         ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, false, false, false, None)),
         SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":id")),  SoQLID, false, false, false, None))
       )
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, PGCookie.default, events.iterator, false)
 
       val truthCopyInfo = getTruthCopyInfo(pgu, f.datasetInfo)
       val schema = pgu.datasetMapReader.schema(truthCopyInfo)
@@ -36,7 +36,7 @@ class SystemRowIdentifierChangedHandlerTest extends PGSecondaryTestBase with PGS
         SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, false, false, false, None))
       )
       intercept[UnsupportedOperationException] {
-        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
+        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, PGCookie.default, events.iterator, false)
       }
     }
   }

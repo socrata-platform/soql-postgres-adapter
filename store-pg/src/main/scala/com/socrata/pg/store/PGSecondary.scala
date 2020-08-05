@@ -222,11 +222,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   def version(datasetInfo: DatasetInfo,
               dataVersion: Long,
               cookie: Secondary.Cookie,
-              events: Iterator[Event[SoQLType, SoQLValue]]): Secondary.Cookie = {
+              events: Iterator[Event[SoQLType, SoQLValue]],
+              moreComing: Boolean): Secondary.Cookie = {
     withPgu(dsInfo, Some(datasetInfo)) { pgu =>
-     val cookieOut = doVersion(pgu, datasetInfo, dataVersion, cookie, events)
+     val cookieOut = doVersion(pgu, datasetInfo, dataVersion, PGCookie.decode(cookie), events, moreComing)
      pgu.commit()
-     cookieOut
+     PGCookie.encode(cookieOut)
     }
   }
 
@@ -242,8 +243,11 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   def doVersion(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                         secondaryDatasetInfo: DatasetInfo,
                         newDataVersion: Long,
-                        cookie: Secondary.Cookie,
-                        events: Iterator[Event[SoQLType, SoQLValue]]): Secondary.Cookie = {
+                        initialCookie: PGCookie,
+                        events: Iterator[Event[SoQLType, SoQLValue]],
+                        moreComing: Boolean): PGCookie = {
+    var cookie = initialCookie
+
     // How do we get the copyInfo? dataset_map
     //  - One of the events that comes through here will be working copy created, it must be the first if it does,
     //    separate event for actually copying the data
@@ -293,8 +297,26 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
               secondaryDatasetInfo.internalName, theCopy.get.copyNumber.toString)
             throw new ResyncSecondaryException("Dataset already exists")
           } else {
+            val dsId =
+              pgu.secondaryDatasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName)
+
+            if(cookie.deferredRollup) {
+              dsId match {
+                case Some(dsId) =>
+                  logger.info("Updating deferred rollups before making a working copy")
+                  val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(dsId).get
+                  val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
+                  updateRollups(pgu, truthCopyInfo)
+                  cookie = cookie.copy(deferredRollup = false)
+                case None =>
+                  throw new ResyncSecondaryException(
+                    s"Couldn't find mapping for datasetInternalName ${secondaryDatasetInfo.internalName}, which had deferred rollups"
+                  )
+              }
+            }
+
             WorkingCopyCreatedHandler(pgu,
-              pgu.secondaryDatasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName),
+              dsId,
               secondaryDatasetInfo, copyInfo)
           }
         case _ => throw new UnsupportedOperationException("Unexpected operation")
@@ -337,45 +359,55 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       pgu.commit()
     }
 
+    sealed abstract class RefreshRollup(private val level: Int) {
+      def max(that: RefreshRollup) = if(this.level > that.level) this else that
+    }
+    object RefreshRollup {
+      case object No extends RefreshRollup(0)
+      case object IfAtEnd extends RefreshRollup(1)
+      case object Yes extends RefreshRollup(2)
+    }
+
     // no rebuild index, no refresh rollup and no rows loader.
-    val startCtx = (false, false, initialTruthCopyInfo, Option.empty[SqlPrevettedLoader[SoQLType, SoQLValue]])
+    val initialRefreshRollup: RefreshRollup =
+      if(cookie.deferredRollup) RefreshRollup.IfAtEnd else RefreshRollup.No
+    val startCtx = (false, initialRefreshRollup, initialTruthCopyInfo, Option.empty[SqlPrevettedLoader[SoQLType, SoQLValue]])
+
     val (rebuildIndex, refreshRollup, finalTruthCopyInfo, _) = remainingEvents.foldLeft(startCtx) { (ctx, e) =>
       logger.debug("got event: {}", e)
       val (rebuildIndex, refreshRollup, truthCopyInfo, dataLoader) = ctx
       e match {
         case Truncated =>
           TruncateHandler(pgu, truthCopyInfo)
-          (rebuildIndex, true, truthCopyInfo, dataLoader)
+          (rebuildIndex, refreshRollup.max(RefreshRollup.IfAtEnd), truthCopyInfo, dataLoader)
         case ColumnCreated(secondaryColInfo) =>
           ColumnCreatedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          val shouldRefreshRollup = refreshRollup || (truthCopyInfo.lifecycleStage == TruthLifecycleStage.Published)
-          (rebuildIndex, true, truthCopyInfo, None)
+          (rebuildIndex, refreshRollup.max(RefreshRollup.IfAtEnd), truthCopyInfo, None)
         case ColumnRemoved(secondaryColInfo) =>
           ColumnRemovedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          val shouldRefreshRollup = refreshRollup || (truthCopyInfo.lifecycleStage == TruthLifecycleStage.Published)
-          (rebuildIndex, true, truthCopyInfo, None)
+          (rebuildIndex, refreshRollup.max(RefreshRollup.IfAtEnd), truthCopyInfo, None)
         case FieldNameUpdated(secondaryColInfo) =>
           FieldNameUpdatedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          (rebuildIndex, false,  truthCopyInfo, None)
+          (rebuildIndex, refreshRollup,  truthCopyInfo, None)
         case RowIdentifierSet(info) =>  // no-op
-          (rebuildIndex, true, truthCopyInfo, dataLoader)
+          (rebuildIndex, refreshRollup.max(RefreshRollup.IfAtEnd), truthCopyInfo, dataLoader)
         case RowIdentifierCleared(info) =>  // no-op
-          (rebuildIndex, true, truthCopyInfo, dataLoader)
+          (rebuildIndex, refreshRollup.max(RefreshRollup.IfAtEnd), truthCopyInfo, dataLoader)
         case SystemRowIdentifierChanged(secondaryColInfo) =>
           SystemRowIdentifierChangedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          (rebuildIndex, true, truthCopyInfo, dataLoader)
+          (rebuildIndex, refreshRollup.max(RefreshRollup.IfAtEnd), truthCopyInfo, dataLoader)
         case VersionColumnChanged(secondaryColInfo) =>
           VersionColumnChangedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          (rebuildIndex, true, truthCopyInfo, dataLoader)
+          (rebuildIndex, refreshRollup.max(RefreshRollup.IfAtEnd), truthCopyInfo, dataLoader)
         // TODO when dealing with dropped, figure out what version we have to updated afterwards and how that works...
         // maybe workingcopydropped is guaranteed to be the last event in a batch, and then we can skip updating the
         // version anywhere... ?
         case WorkingCopyDropped =>
           WorkingCopyDroppedHandler(pgu, truthDatasetInfo)
-          (rebuildIndex, false, truthCopyInfo, None)
+          (rebuildIndex, refreshRollup, truthCopyInfo, None)
         case DataCopied =>
           DataCopiedHandler(pgu, truthDatasetInfo, truthCopyInfo)
-          (rebuildIndex, true, truthCopyInfo, dataLoader)
+          (rebuildIndex, refreshRollup.max(RefreshRollup.IfAtEnd), truthCopyInfo, dataLoader)
         case SnapshotDropped(info) =>
           logger.info("drop snapshot system id - {}, copy number - {}",
             info.systemId.toString(), info.copyNumber.toString)
@@ -388,20 +420,20 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           (rebuildIndex, refreshRollup, truthCopyInfo, None)
         case WorkingCopyPublished =>
           WorkingCopyPublishedHandler(pgu, truthCopyInfo)
-          (true, true, truthCopyInfo, dataLoader)
+          (true, RefreshRollup.Yes, truthCopyInfo, dataLoader)
         case RowDataUpdated(ops) =>
           val loader = dataLoader.getOrElse(prevettedLoader(pgu, truthCopyInfo))
           RowDataUpdatedHandler(loader, ops)
-          (rebuildIndex, true, truthCopyInfo, Some(loader))
+          (rebuildIndex, refreshRollup.max(RefreshRollup.IfAtEnd), truthCopyInfo, Some(loader))
         case LastModifiedChanged(lastModified) =>
           pgu.datasetMapWriter.updateLastModified(truthCopyInfo, lastModified)
-          (rebuildIndex, true, truthCopyInfo, dataLoader)
+          (rebuildIndex, refreshRollup, truthCopyInfo, dataLoader)
         case RollupCreatedOrUpdated(rollupInfo) =>
           RollupCreatedOrUpdatedHandler(pgu, truthCopyInfo, rollupInfo)
-          (rebuildIndex, true, truthCopyInfo, dataLoader)
+          (rebuildIndex, RefreshRollup.Yes, truthCopyInfo, dataLoader)
         case RollupDropped(rollupInfo) =>
           RollupDroppedHandler(pgu, truthCopyInfo, rollupInfo)
-          (rebuildIndex, true, truthCopyInfo, dataLoader)
+          (rebuildIndex, RefreshRollup.Yes, truthCopyInfo, dataLoader)
         case ComputationStrategyCreated(_) => // no op
           (rebuildIndex, refreshRollup, truthCopyInfo, dataLoader)
         case ComputationStrategyRemoved(_) => // no op
@@ -410,7 +442,15 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           rowsChangedPreviewHandler(pgu, truthDatasetInfo, truthCopyInfo, truncated, inserted, updated, deleted) match {
             case Some(nci) =>
               val isPublished = nci.lifecycleStage == TruthLifecycleStage.Published
-              (isPublished, isPublished, nci, None)
+              // if it's published and we decided to make an indexless
+              // copy to work on, force the rollups to rebuild now
+              // rather than being deferred.  That way rollups on
+              // non-computed columns will be promptly visible when
+              // a large change occurs.  Rollups on computed columns
+              // will still be delayed until all replication is done,
+              // but then they're _already_ inconsistent with the user
+              // data until all replication is done.
+              (isPublished, if(isPublished) RefreshRollup.Yes else refreshRollup, nci, None)
             case None =>
               (rebuildIndex, refreshRollup, truthCopyInfo, dataLoader)
           }
@@ -449,14 +489,16 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
 
     // Rollups do not materialize if stage is unpublished.
-    if (refreshRollup) {
+    if (refreshRollup == RefreshRollup.Yes || (refreshRollup == RefreshRollup.IfAtEnd && !moreComing)) {
       maybeLogTime("Refreshing rollups") {
         val postUpdateTruthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
         updateRollups(pgu, postUpdateTruthCopyInfo)
       }
     }
 
-    cookie
+    cookie.copy(
+      deferredRollup = refreshRollup == RefreshRollup.IfAtEnd && moreComing
+    )
   }
 
   // This is an expensive operation in that it is both time consuming as well as locking the data source for the
@@ -478,9 +520,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     logger.info("resync (datasetInfo: {}, secondaryCopyInfo: {}, schema: {}, cookie: {})",
       datasetInfo, secondaryCopyInfo, schema, cookie)
     withPgu(dsInfo, Some(datasetInfo)) { pgu =>
-      val cookieOut = doResync(pgu, datasetInfo, secondaryCopyInfo, schema, cookie, rows, rollups)
+      val cookieOut = doResync(pgu, datasetInfo, secondaryCopyInfo, schema, PGCookie.decode(cookie), rows, rollups)
       pgu.commit()
-      cookieOut
+      PGCookie.encode(cookieOut)
     }
   }
 
@@ -489,9 +531,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
               secondaryDatasetInfo: DatasetInfo,
               secondaryCopyInfo: SecondaryCopyInfo,
               newSchema: ColumnIdMap[SecondaryColumnInfo[SoQLType]],
-              cookie: Secondary.Cookie,
+              cookie: PGCookie,
               rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
-              rollups: Seq[RollupInfo]): Secondary.Cookie =
+              rollups: Seq[RollupInfo]): PGCookie =
   {
     val truthCopyInfo = pgu.secondaryDatasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName) match { // scalastyle:ignore line.size.limit
       case None =>
@@ -601,7 +643,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     // re-create rollup tables
     updateRollups(pgu, postUpdateTruthCopyInfo)
     pgu.datasetMapWriter.enableDataset(truthCopyInfo.datasetInfo.systemId) // re-enable soql reads
-    cookie
+    cookie.copy(deferredRollup = false)
   }
 
   private def truthCopyInfo(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],

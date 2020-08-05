@@ -4,7 +4,7 @@ import scala.language.{postfixOps, reflectiveCalls}
 import scala.util.Random
 
 import com.socrata.datacoordinator.secondary.LastModifiedChanged
-import com.socrata.pg.store.{PGSecondaryTestBase, PGSecondaryUniverseTestBase, PGStoreTestBase}
+import com.socrata.pg.store.{PGSecondaryTestBase, PGSecondaryUniverseTestBase, PGStoreTestBase, PGCookie}
 import org.joda.time.DateTime
 
 class LastModifiedChangedTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
@@ -18,7 +18,7 @@ class LastModifiedChangedTest extends PGSecondaryTestBase with PGSecondaryUniver
       val events = f.events ++ Seq(
         LastModifiedChanged(someRandomTime)
       )
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, PGCookie.default, events.iterator, false)
 
       val truthCopyInfo = getTruthCopyInfo(pgu, f.datasetInfo)
       truthCopyInfo.lastModified should be (someRandomTime)

@@ -1,6 +1,6 @@
 package com.socrata.pg.store.events
 
-import com.socrata.pg.store.{PGSecondaryUniverseTestBase, PGStoreTestBase, PGSecondaryTestBase}
+import com.socrata.pg.store.{PGSecondaryUniverseTestBase, PGStoreTestBase, PGSecondaryTestBase, PGCookie}
 import scala.language.reflectiveCalls
 import com.socrata.datacoordinator.secondary.{ColumnCreated, ColumnRemoved}
 import com.socrata.datacoordinator.id.{UserColumnId, ColumnId}
@@ -11,8 +11,7 @@ class ColumnRemovedHandlerTest extends PGSecondaryTestBase with PGSecondaryUnive
     withPgu() { pgu =>
       val f = columnsRemovedFixture
 
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, f.events.iterator)
-
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, PGCookie.default, f.events.iterator, false)
       val truthCopyInfo = getTruthCopyInfo(pgu, f.datasetInfo)
       val schema = pgu.datasetMapReader.schema(truthCopyInfo)
 

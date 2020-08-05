@@ -2,7 +2,7 @@ package com.socrata.pg.store.events
 
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.secondary.{FieldNameUpdated, ColumnCreated}
-import com.socrata.pg.store.{PGStoreTestBase, PGSecondaryUniverseTestBase, PGSecondaryTestBase}
+import com.socrata.pg.store.{PGStoreTestBase, PGSecondaryUniverseTestBase, PGSecondaryTestBase, PGCookie}
 import com.socrata.soql.environment.ColumnName
 import scala.language.reflectiveCalls
 
@@ -12,7 +12,7 @@ class FieldNameUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUn
     withPgu() { pgu =>
       val f = fieldNameUpdatedFixture
 
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, f.events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, PGCookie.default, f.events.iterator, false)
 
       val truthCopyInfo = getTruthCopyInfo(pgu, f.datasetInfo)
       val schema = pgu.datasetMapReader.schema(truthCopyInfo)
