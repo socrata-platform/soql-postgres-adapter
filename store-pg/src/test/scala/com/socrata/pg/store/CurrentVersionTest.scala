@@ -13,7 +13,21 @@ class CurrentVersionTest extends PGSecondaryTestBase with PGSecondaryUniverseTes
       var version = f.dataVersion
       f.events foreach { e =>
         version = version + 1
-        f.pgs.doVersion(pgu, f.datasetInfo, version, None, Iterator(e))
+        f.pgs.doVersion(pgu, f.datasetInfo, version, version, None, Iterator(e))
+      }
+
+      f.pgs.doCurrentVersion(pgu, f.datasetInfo.internalName, None) shouldEqual version
+    }
+  }
+
+  test("handle CurrentVersion over a range") {
+    withPgu() { pgu =>
+      val f = columnsCreatedFixture
+
+      var version = f.dataVersion
+      f.events foreach { e =>
+        f.pgs.doVersion(pgu, f.datasetInfo, version + 1, version + 10, None, Iterator(e))
+        version = version + 10
       }
 
       f.pgs.doCurrentVersion(pgu, f.datasetInfo.internalName, None) shouldEqual version

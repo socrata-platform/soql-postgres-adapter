@@ -29,7 +29,7 @@ class TruncateHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTe
       val f = columnsCreatedFixture
       val events = f.events ++ Seq(RowDataUpdated(insertOps), Truncated)
 
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, None, events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, events.iterator)
 
       for {
         truthCopyInfo <- unmanaged(getTruthCopyInfo(pgu, f.datasetInfo))
