@@ -220,15 +220,17 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   }
 
   def version(datasetInfo: DatasetInfo,
-              dataVersion: Long,
+              initialDataVersion: Long,
+              finalDataVersion: Long,
               cookie: Secondary.Cookie,
               events: Iterator[Event[SoQLType, SoQLValue]]): Secondary.Cookie = {
     withPgu(dsInfo, Some(datasetInfo)) { pgu =>
-     val cookieOut = doVersion(pgu, datasetInfo, dataVersion, cookie, events)
+     val cookieOut = doVersion(pgu, datasetInfo, initialDataVersion, finalDataVersion, cookie, events)
      pgu.commit()
      cookieOut
     }
   }
+
 
   // The main method by which data will be sent to this API.
   // workingCopyCreated event is the (first) event by which this method will be called
@@ -242,6 +244,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   def doVersion(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                         secondaryDatasetInfo: DatasetInfo,
                         newDataVersion: Long,
+                        finalDataVersion: Long,
                         cookie: Secondary.Cookie,
                         events: Iterator[Event[SoQLType, SoQLValue]]): Secondary.Cookie = {
     // How do we get the copyInfo? dataset_map
@@ -421,7 +424,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       }
     }
 
-    pgu.datasetMapWriter.updateDataVersion(finalTruthCopyInfo, newDataVersion)
+    pgu.datasetMapWriter.updateDataVersion(finalTruthCopyInfo, finalDataVersion)
 
     def maybeLogTime[T](label: String)(f: => T): T = {
       val startedAt =
