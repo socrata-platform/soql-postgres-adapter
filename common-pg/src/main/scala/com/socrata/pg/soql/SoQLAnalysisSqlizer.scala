@@ -134,7 +134,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     val repMinusComplexJoinTable = rep.filterKeys(!_.qualifier.exists(subQueryJoins.contains))
 
     val (selectPhrase, setParamsSelect) =
-      if (reqRowCount && analysis.groupBys.isEmpty) {
+      if (reqRowCount && analysis.groupBys.isEmpty && analysis.search.isEmpty) {
         (List("count(*)"), setParams)
       } else {
         select(analysis)(repMinusComplexJoinTable, typeRep, setParams, ctxSelectWithJoins, escape)
@@ -174,62 +174,17 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     val where = ana.where.map(Sqlizer.sql(_)(repMinusComplexJoinTable, typeRep, setParamsSelectJoin, ctxSelectWithJoins + (SoqlPart -> SoqlWhere), escape))
     val setParamsWhere = where.map(_.setParams).getOrElse(setParamsSelectJoin)
 
-    // SEARCH
-    val search = ana.search.map { search =>
-      val searchLit = StringLiteral[SoQLType](search, SoQLText)(NoPosition)
-      val ParametricSql(Seq(searchSql), searchSetParams) =
-        Sqlizer.sql(searchLit)(repMinusComplexJoinTable, typeRep, setParamsWhere, ctx + (SoqlPart -> SoqlSearch), escape)
-
-      val searchVector = prevAna match {
-        case Some(a) => PostgresUniverseCommon.searchVector(a.selection, Some(ctx))
-        case None =>
-          val primaryTableReps = rep.filter{ case (k, v) => k.qualifier.isEmpty}.values.toSeq
-          PostgresUniverseCommon.searchVector(primaryTableReps, Some(ctx))
-      }
-
-      val searchNumberLitOpt =
-        try {
-          val number = BigDecimal.apply(searchLit.value)
-          Some(NumberLiteral(number, SoQLNumber.t)(searchLit.position))
-        } catch {
-          case _: NumberFormatException =>
-            None
-        }
-
-      val numericCols = searchNumberLitOpt match {
-        case None => Seq.empty[String]
-        case Some(searchNumberLit) =>
-          prevAna match {
-            case Some(a) =>
-              PostgresUniverseCommon.searchNumericVector(a.selection, Some(ctx))
-            case None =>
-              val primaryTableReps = rep.filter{ case (k, v) => k.qualifier.isEmpty}.values.toSeq
-              PostgresUniverseCommon.searchNumericVector(primaryTableReps, Some(ctx))
-          }
-      }
-
-      val searchVectorSql = searchVector.map {sv => s"$sv @@ plainto_tsquery('english', $searchSql)" }.toSeq
-
-      val searchPlusNumericParametricSql = numericCols.foldLeft(ParametricSql(searchVectorSql, searchSetParams)) { (acc, x) =>
-        val ParametricSql(Seq(prev), setParamsBefore) = acc
-        val ParametricSql(Seq(searchSql), setParamsAfter) =
-          Sqlizer.sql(searchNumberLitOpt.get)(repMinusComplexJoinTable, typeRep, setParamsBefore, ctx + (SoqlPart -> SoqlSearch), escape)
-        ParametricSql(Seq(s"$prev OR ($x = $searchSql)"), setParamsAfter)
-      }
-
-      val andOrWhere = if (where.isDefined) " AND" else " WHERE"
-      if (searchPlusNumericParametricSql.sql.isEmpty) {
-        ParametricSql(Seq(s"$andOrWhere false"), setParamsWhere)
-      } else {
-        ParametricSql(searchPlusNumericParametricSql.sql.map { x => s"$andOrWhere ($x)" }, searchPlusNumericParametricSql.setParams)
-      }
+    // SEARCH in WHERE
+    val ParametricSql(whereSearch, setParamsWhereSearch) = ana.search match {
+      case Some(s) if (!ana.isGrouped) =>
+        sqlizeSearch(s, ana)(repMinusComplexJoinTable, typeRep, setParamsWhere, ctxSelectWithJoins + (SoqlPart -> SoqlSearch), escape)
+      case _ =>
+        ParametricSql(Seq.empty[String], setParamsWhere)
     }
-
-    val setParamsSearch = search.map(_.setParams).getOrElse(setParamsWhere)
 
     // GROUP BY
     val isGroupByAllConstants = !ana.groupBys.exists(!Sqlizer.isLiteral(_))
-    val groupBy = ana.groupBys.foldLeft((List.empty[String], setParamsSearch)) { (t2, gb) =>
+    val groupBy = ana.groupBys.foldLeft((List.empty[String], setParamsWhereSearch)) { (t2, gb) =>
       val ParametricSql(sqls, newSetParams) =
         if (Sqlizer.isLiteral(gb)) {
           if (isGroupByAllConstants) {
@@ -253,8 +208,16 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     val having = ana.having.map(Sqlizer.sql(_)(repMinusComplexJoinTable, typeRep, setParamsGroupBy, ctxSelectWithJoins + (SoqlPart -> SoqlHaving), escape))
     val setParamsHaving = having.map(_.setParams).getOrElse(setParamsGroupBy)
 
+    // SEARCH in HAVING
+    val ParametricSql(havingSearch, setParamsHavingSearch) = ana.search match {
+      case Some(s) if (ana.isGrouped) =>
+        sqlizeSearch(s, ana)(repMinusComplexJoinTable, typeRep, setParamsHaving, ctxSelectWithJoins + (SoqlPart -> SoqlSearch), escape)
+      case _ =>
+        ParametricSql(Seq.empty[String], setParamsHaving)
+    }
+
     // ORDER BY
-    val orderBy = ana.orderBys.foldLeft((Seq.empty[String], setParamsHaving)) { (t2, ob) =>
+    val orderBy = ana.orderBys.foldLeft((Seq.empty[String], setParamsHavingSearch)) { (t2, ob) =>
       val ParametricSql(sqls, newSetParams) =
         Sqlizer.sql(ob)(repMinusComplexJoinTable, typeRep, t2._2, ctxSelectWithJoins + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression), escape)
       (t2._1 ++ sqls, newSetParams)
@@ -269,9 +232,11 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       s" FROM ${tableNames(tableName)}" +
       joinPhrase.mkString(" ") +
       where.flatMap(_.sql.headOption.map(" WHERE " +  _)).getOrElse("") +
-      search.flatMap(_.sql.headOption).getOrElse("") +
+      //search.flatMap(_.sql.headOption).getOrElse("") +
+      whereSearch.mkString(" ") +
       (if (ana.groupBys.nonEmpty) groupBy._1.mkString(" GROUP BY ", ",", "") else "") +
       having.flatMap(_.sql.headOption.map(" HAVING " + _)).getOrElse("") +
+      havingSearch.mkString(" ") +
       (if (ana.orderBys.nonEmpty) orderBy._1.mkString(" ORDER BY ", ",", "") else "") +
       ana.limit.map(" LIMIT " + _.toString).getOrElse("") +
       ana.offset.map(" OFFSET " + _.toString).getOrElse("")
@@ -281,7 +246,104 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
   }
 
   private def countBySubQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType])(reqRowCount: Boolean, sql: String) =
-    if (reqRowCount && analysis.groupBys.nonEmpty) s"SELECT count(*) FROM ($sql) t_rc" else sql
+    if (reqRowCount && (analysis.groupBys.nonEmpty || analysis.search.nonEmpty)) s"SELECT count(*) FROM ($sql) t_rc" else sql
+
+
+  def sqlizeSearch(searchStr: String, ana: SoQLAnalysis[UserColumnId, SoQLType])
+                  (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                   typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                   setParams: Seq[SetParam],
+                   ctx: Context,
+                   escape: Escape): ParametricSql = {
+
+    val searchLit = StringLiteral[SoQLType](searchStr, SoQLText)(NoPosition)
+
+    val (searchText, setParamsSearchText) = searchVectorText(ana)(rep, typeRep, setParams, ctx + (SoqlPart -> SoqlSearch), escape)
+
+    val ParametricSql(Seq(searchSql), setParamsSearchLit) =
+      Sqlizer.sql(searchLit)(rep, typeRep, setParamsSearchText, ctx + (SoqlPart -> SoqlSearch), escape)
+
+    val searchNumberLitOpt =
+      try {
+        val number = BigDecimal.apply(searchLit.value)
+        Some(NumberLiteral(number, SoQLNumber.t)(searchLit.position))
+      } catch {
+        case _: NumberFormatException =>
+          None
+      }
+
+    val (searchVectorSql, searchVectorSetParams) = searchText match {
+      case None =>
+        (Seq("false"), setParamsSearchText)
+      case Some(sv) =>
+        (Seq(s"$sv @@ plainto_tsquery('english', $searchSql)"), setParamsSearchLit)
+    }
+
+    val (searchNumber, setParamsSearchNumber) = searchNumberLitOpt match {
+      case None => (Seq.empty[String], searchVectorSetParams)
+      case Some(searchNumberLit) =>
+        searchVectorNumber(ana)(rep, typeRep, searchVectorSetParams, ctx + (SoqlPart -> SoqlSearch), escape)
+    }
+
+    val searchTextPlusNumberParametricSql = searchNumber.foldLeft(ParametricSql(searchVectorSql, setParamsSearchNumber)) { (acc, x) =>
+      val ParametricSql(Seq(prev), setParamsBefore) = acc
+      val ParametricSql(Seq(searchSql), setParamsAfter) =
+        Sqlizer.sql(searchNumberLitOpt.get)(rep, typeRep, setParamsBefore, ctx + (SoqlPart -> SoqlSearch), escape)
+      ParametricSql(Seq(s"$prev OR ($x = $searchSql)"), setParamsAfter)
+    }
+
+    val andOrWhereOrHaving = ana.isGrouped match {
+      case false => if (ana.where.isDefined) " AND" else " WHERE"
+      case true => if (ana.having.isDefined) " AND" else " HAVING"
+    }
+
+    if (searchTextPlusNumberParametricSql.sql.isEmpty) {
+      ParametricSql(Seq(s"$andOrWhereOrHaving false"), setParams)
+    } else {
+      ParametricSql(searchTextPlusNumberParametricSql.sql.map { x => s"$andOrWhereOrHaving ($x)" }, searchTextPlusNumberParametricSql.setParams)
+    }
+  }
+
+  private def searchVectorText(analysis: SoQLAnalysis[UserColumnId, SoQLType])
+                              (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                               typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                               setParams: Seq[SetParam],
+                               ctx: Context,
+                               escape: Escape) = {
+
+    val (sqls, setParamsSearch) =
+      analysis.selection.view.filter(x => PostgresUniverseCommon.SearchableTypes.contains(x._2.typ))
+                             .foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, columnNameAndcoreExpr) =>
+        val (columnName, coreExpr) = columnNameAndcoreExpr
+        val (_, setParamsNew) = acc
+        val ctxSelect = ctx + (RootExpr -> coreExpr)
+        val ParametricSql(sqls, newSetParams) = Sqlizer.sql(coreExpr)(rep, typeRep, setParamsNew, ctxSelect, escape)
+        (acc._1 ++ sqls, newSetParams)
+      }
+    (PostgresUniverseCommon.toTsVector(sqls.zip(sqls)), setParamsSearch)
+  }
+
+  private def searchVectorNumber(analysis: SoQLAnalysis[UserColumnId, SoQLType])
+                                (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                                 typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                                 setParams: Seq[SetParam],
+                                 ctx: Context,
+                                 escape: Escape) = {
+
+    val (sqls, setParamsSearch) =
+    // Chain select handles setParams differently than others.  The current setParams are prepended
+    // to existing setParams.  Others are appended.
+    // That is why setParams starts with empty in foldLeft.
+      analysis.selection.view.filter(x => PostgresUniverseCommon.SearchableNumericTypes.contains(x._2.typ))
+                             .foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, columnNameAndcoreExpr) =>
+        val (columnName, coreExpr) = columnNameAndcoreExpr
+        val ctxSelect = ctx + (RootExpr -> coreExpr)
+        val (_, setParamsNew) = acc
+        val ParametricSql(sqls, newSetParams) = Sqlizer.sql(coreExpr)(rep, typeRep, setParamsNew, ctxSelect, escape)
+        (acc._1 :+ sqls.head, newSetParams) // each sql-string is a column
+      }
+    (sqls, setParamsSearch)
+  }
 
   /**
    * This cannot handle SoQLLocation because it is mapped to multiple sql columns.
@@ -336,13 +398,16 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
   }
 
   /**
-   * Basically, analysis for row count has select, limit and offset removed.
+   * Basically, analysis for row count has select (except when there is search), limit and offset removed.
    * TODO: select count(*) // w/o group by which result is always 1.
    * @param a original query analysis
    * @return Analysis for generating row count sql.
    */
   private def rowCountAnalysis(a: SoQLAnalysis[UserColumnId, SoQLType]) = {
-    a.copy(selection = a.selection.empty, orderBys = Nil, limit = None, offset = None)
+    a.copy(selection = if (a.search.isEmpty) a.selection.empty else a.selection,
+           orderBys = Nil,
+           limit = None,
+           offset = None)
   }
 
   private def innermostSoql(a: SoQLAnalysis[_, _], as: NonEmptySeq[SoQLAnalysis[_, _]] ): Boolean = {
