@@ -1,4 +1,4 @@
 [
- {"make":"APCO","name":"Karma"}
-,{"make":"APCO","name":"Karma SP"}
+ {"make":"APCO","name":"Karma", "aspect_ratio": 4.9}
+,{"make":"APCO","name":"Karma SP", "aspect_ratio": 4.9}
 ]

@@ -21,6 +21,10 @@ class SoQLSearchTest extends SoQLTest {
   }
 
   test("number search") {
-    compareSoqlResult("select name, make search '4.9' order by name", "search-number.json")
+    compareSoqlResult("select name, make, aspect_ratio search '4.9' order by name", "search-number.json")
+  }
+
+  test("grouping and number search") {
+    compareSoqlResult("select make, count(*) as count group by make search '2' order by make", "search-post-group-number.json")
   }
 }
