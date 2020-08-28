@@ -232,7 +232,6 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       s" FROM ${tableNames(tableName)}" +
       joinPhrase.mkString(" ") +
       where.flatMap(_.sql.headOption.map(" WHERE " +  _)).getOrElse("") +
-      //search.flatMap(_.sql.headOption).getOrElse("") +
       whereSearch.mkString(" ") +
       (if (ana.groupBys.nonEmpty) groupBy._1.mkString(" GROUP BY ", ",", "") else "") +
       having.flatMap(_.sql.headOption.map(" HAVING " + _)).getOrElse("") +
