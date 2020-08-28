@@ -330,19 +330,14 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
                                  ctx: Context,
                                  escape: Escape) = {
 
-    val (sqls, setParamsSearch) =
-    // Chain select handles setParams differently than others.  The current setParams are prepended
-    // to existing setParams.  Others are appended.
-    // That is why setParams starts with empty in foldLeft.
-      analysis.selection.view.filter(x => PostgresUniverseCommon.SearchableNumericTypes.contains(x._2.typ))
-                             .foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, columnNameAndcoreExpr) =>
-        val (columnName, coreExpr) = columnNameAndcoreExpr
-        val ctxSelect = ctx + (RootExpr -> coreExpr)
-        val (_, setParamsNew) = acc
-        val ParametricSql(sqls, newSetParams) = Sqlizer.sql(coreExpr)(rep, typeRep, setParamsNew, ctxSelect, escape)
-        (acc._1 :+ sqls.head, newSetParams) // each sql-string is a column
-      }
-    (sqls, setParamsSearch)
+    analysis.selection.view.filter(x => PostgresUniverseCommon.SearchableNumericTypes.contains(x._2.typ))
+                           .foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, columnNameAndcoreExpr) =>
+      val (columnName, coreExpr) = columnNameAndcoreExpr
+      val ctxSelect = ctx + (RootExpr -> coreExpr)
+      val (_, setParamsNew) = acc
+      val ParametricSql(sqls, newSetParams) = Sqlizer.sql(coreExpr)(rep, typeRep, setParamsNew, ctxSelect, escape)
+      (acc._1 :+ sqls.head, newSetParams) // each sql-string is a column
+    }
   }
 
   /**
