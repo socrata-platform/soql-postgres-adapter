@@ -30,7 +30,8 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
                         expectedFixture: String,
                         expectedRowCount: Option[Long] = None,
                         caseSensitivity: CaseSensitivity = CaseSensitive,
-                        joinDatasetCtx: Map[String, DatasetContext[SoQLType]] = Map.empty): Unit = {
+                        joinDatasetCtx: Map[String, DatasetContext[SoQLType]] = Map.empty,
+                        leadingSearch: Boolean = true): Unit = {
     withDb() { conn =>
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon)
       val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secDatasetId).get)
@@ -67,7 +68,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
 
         val (qrySchema, dataVersion, mresult) =
           ds.run { dsInfo =>
-            val qs = new QueryServer(dsInfo, caseSensitivity)
+            val qs = new QueryServer(dsInfo, caseSensitivity, leadingSearch)
             qs.execQuery(pgu, "someDatasetInternalName", copyInfo.datasetInfo, analyses, expectedRowCount.isDefined, None, None, true,
               NoPrecondition, None, None, None, false, false, false) match {
               case QueryServer.Success(schema, _, version, results, etag, lastModified) =>

@@ -18,4 +18,5 @@ class QueryServerConfig(val config: Config, val root: String) extends ConfigClas
   val instance = getString("instance")
   val threadpool = getRawConfig("threadpool")
   val maxConcurrentRequestsPerDataset = getInt("max-concurrent-requests-per-dataset")
+  val leadingSearch = getBoolean("leading-search")
 }

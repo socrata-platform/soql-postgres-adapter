@@ -28,7 +28,7 @@ object SqlizerTest {
   val typeTable = TableName("_type", None)
   val yearTable = TableName("_year", Some("_y"))
 
-  def sqlize(soql: String, caseSensitivity: CaseSensitivity, useRepsWithId: Boolean = false): ParametricSql = {
+  def sqlize(soql: String, caseSensitivity: CaseSensitivity, useRepsWithId: Boolean = false, leadingSearch: Boolean = false): ParametricSql = {
     val allColumnReps = columnInfos.map(PostgresUniverseCommon.repForIndex(_))
     val allDatasetCtx = Map(TableName.PrimaryTable.qualifier -> datasetCtx,
                             typeTable.qualifier -> typeDatasetCtx,
@@ -55,7 +55,7 @@ object SqlizerTest {
       if (useRepsWithId) columnRepsWithId else columnReps,
       typeReps,
       Seq.empty,
-      sqlCtx + (SqlizerContext.CaseSensitivity -> caseSensitivity),
+      sqlCtx + (SqlizerContext.CaseSensitivity -> caseSensitivity) + (SqlizerContext.LeadingSearch -> leadingSearch),
       passThrough)
   }
 

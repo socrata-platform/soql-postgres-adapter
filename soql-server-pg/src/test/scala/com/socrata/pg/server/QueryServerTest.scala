@@ -12,7 +12,7 @@ import com.socrata.pg.soql.CaseSensitive
  * @param dsInfo
  * @param pgu
  */
-class QueryServerTest(dsInfo:DSInfo, pgu: PGSecondaryUniverse[SoQLType, SoQLValue]) extends QueryServer(dsInfo, CaseSensitive) {
+class QueryServerTest(dsInfo:DSInfo, pgu: PGSecondaryUniverse[SoQLType, SoQLValue]) extends QueryServer(dsInfo, CaseSensitive, leadingSearch = true) {
 
   override protected def withPgu[T](dsInfo:DSInfo, truthStoreDatasetInfo:Option[DatasetInfo])(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
     f(pgu)
