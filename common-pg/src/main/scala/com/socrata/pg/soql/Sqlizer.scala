@@ -181,6 +181,7 @@ object SqlizerContext extends Enumeration {
   val IsSubQuery = Value("is-sub-query")
   val NoWrappingParenInFunctionCall = Value("no-wrapping-paren-in-fc")
   val InsideWindowFn = Value("inside-window-fn")
+  val LeadingSearch = Value("leading-search")
 }
 
 sealed trait CaseSensitivity

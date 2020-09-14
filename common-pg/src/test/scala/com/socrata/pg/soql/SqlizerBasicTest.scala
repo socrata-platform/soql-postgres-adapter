@@ -388,7 +388,16 @@ class SqlizerBasicTest extends SqlizerTest {
 
   test("chained search scope is limited to the previous result") {
     val soql = "select case_number, primary_type search 'oNe' |> select * search 'tWo'"
-    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive, useRepsWithId = true)
+
+    // search before select, filter, grouping, join
+    val ParametricSql(Seq(sqlLeadingSearch), setParamsLeadingSearch) = sqlize(soql, CaseSensitive, useRepsWithId = true, leadingSearch = true)
+    val expectedSqlLeadingSearch = "SELECT \"case_number\",\"primary_type\" FROM (SELECT t1.case_number_6 as \"case_number\",t1.primary_type_7 as \"primary_type\" FROM t1 WHERE (to_tsvector('english', coalesce(t1.array_12,'') || ' ' || coalesce(t1.case_number_6,'') || ' ' || coalesce(t1.object_11,'') || ' ' || coalesce(t1.primary_type_7,'') || ' ' || coalesce(t1.url_21_description,'') || ' ' || coalesce(t1.url_21_url,'')) @@ plainto_tsquery('english', ?))) AS x1 WHERE (to_tsvector('english', coalesce(\"case_number\",'') || ' ' || coalesce(\"primary_type\",'')) @@ plainto_tsquery('english', ?))"
+    sqlLeadingSearch should be (expectedSqlLeadingSearch)
+    val paramsLeadingSearch = setParamsLeadingSearch.map { (setParam) => setParam(None, 0).get }
+    paramsLeadingSearch should be(Seq("oNe", "tWo"))
+
+    // search after select, filter, grouping, join
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive, useRepsWithId = true, leadingSearch = false)
     sql should be ("SELECT \"case_number\",\"primary_type\" FROM (SELECT t1.case_number_6 as \"case_number\",t1.primary_type_7 as \"primary_type\" FROM t1 WHERE (to_tsvector('english', coalesce(t1.case_number_6,'') || ' ' || coalesce(t1.primary_type_7,'')) @@ plainto_tsquery('english', ?))) AS x1 WHERE (to_tsvector('english', coalesce(\"case_number\",'') || ' ' || coalesce(\"primary_type\",'')) @@ plainto_tsquery('english', ?))")
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be(Seq("oNe", "tWo"))
@@ -396,7 +405,15 @@ class SqlizerBasicTest extends SqlizerTest {
 
   test("chained search scope is limited to the previous result and no searchable types is converted to false") {
     val soql = "select id search 'oNe' |> select * search 'tWo'"
-    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive, useRepsWithId = true)
+
+    // search before select, filter, grouping, join
+    val ParametricSql(Seq(sqlLeadingSearch), setParamsLeadingSearch) = sqlize(soql, CaseSensitive, useRepsWithId = true, leadingSearch = true)
+    sqlLeadingSearch should be ("SELECT \"id\" FROM (SELECT t1.id_5 as \"id\" FROM t1 WHERE (to_tsvector('english', coalesce(t1.array_12,'') || ' ' || coalesce(t1.case_number_6,'') || ' ' || coalesce(t1.object_11,'') || ' ' || coalesce(t1.primary_type_7,'') || ' ' || coalesce(t1.url_21_description,'') || ' ' || coalesce(t1.url_21_url,'')) @@ plainto_tsquery('english', ?))) AS x1 WHERE (false)")
+    val paramsLeadingSearch = setParamsLeadingSearch.map { (setParam) => setParam(None, 0).get }
+    paramsLeadingSearch should be(Seq("oNe"))
+
+    // search after select, filter, grouping, join
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive, useRepsWithId = true, leadingSearch = false)
     sql should be ("SELECT \"id\" FROM (SELECT t1.id_5 as \"id\" FROM t1 WHERE (false)) AS x1 WHERE (false)")
     setParams.length should be (0)
   }

@@ -108,6 +108,11 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
                   context: Context,
                   escape: Escape,
                   fromTableName: Option[String] = None): (ParametricSql, /* params count in select, excluding where, group by... */ Int) = {
+
+    // Use leading search despite being poor in semantics.  It is more likely to use the GIN index and performs better.
+    // TODO: switch to trailing search when there is smarter index support
+    val leadingSearch = context.getOrElse(LeadingSearch, true) != false
+
     val ana = if (reqRowCount) rowCountAnalysis(analysis) else analysis
     val ctx = context + (Analysis -> analysis) +
                         (TableMap -> tableNames) +
@@ -176,8 +181,9 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
 
     // SEARCH in WHERE
     val ParametricSql(whereSearch, setParamsWhereSearch) = ana.search match {
-      case Some(s) if (!ana.isGrouped) =>
-        sqlizeSearch(s, ana)(repMinusComplexJoinTable, typeRep, setParamsWhere, ctxSelectWithJoins + (SoqlPart -> SoqlSearch), escape)
+      case Some(s) if (leadingSearch || !ana.isGrouped) =>
+        val searchAna = if (leadingSearch) leadingSearchAnalysis(ana, prevAna, rep) else ana
+        sqlizeSearch(s, leadingSearch, searchAna)(repMinusComplexJoinTable, typeRep, setParamsWhere, ctxSelectWithJoins + (SoqlPart -> SoqlSearch), escape)
       case _ =>
         ParametricSql(Seq.empty[String], setParamsWhere)
     }
@@ -210,8 +216,8 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
 
     // SEARCH in HAVING
     val ParametricSql(havingSearch, setParamsHavingSearch) = ana.search match {
-      case Some(s) if (ana.isGrouped) =>
-        sqlizeSearch(s, ana)(repMinusComplexJoinTable, typeRep, setParamsHaving, ctxSelectWithJoins + (SoqlPart -> SoqlSearch), escape)
+      case Some(s) if (!leadingSearch && ana.isGrouped) =>
+        sqlizeSearch(s, leadingSearch, ana)(repMinusComplexJoinTable, typeRep, setParamsHaving, ctxSelectWithJoins + (SoqlPart -> SoqlSearch), escape)
       case _ =>
         ParametricSql(Seq.empty[String], setParamsHaving)
     }
@@ -248,7 +254,26 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     if (reqRowCount && (analysis.groupBys.nonEmpty || analysis.search.nonEmpty)) s"SELECT count(*) FROM ($sql) t_rc" else sql
 
 
-  def sqlizeSearch(searchStr: String, ana: SoQLAnalysis[UserColumnId, SoQLType])
+  private def leadingSearchAnalysis(analysis: SoQLAnalysis[UserColumnId, SoQLType], // scalastyle:ignore method.length parameter.number
+                            prevAna: Option[SoQLAnalysis[UserColumnId, SoQLType]],
+                            rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]]): SoQLAnalysis[UserColumnId, SoQLType] = {
+    prevAna match {
+      case Some(ana) => ana
+      case None =>
+        var i = 0
+        val allDefaultColumns = rep.collect {
+          case (QualifiedUserColumnId(None, userColumnId), sqlColumnRep: SqlColumnRep[SoQLType, SoQLValue]) =>
+            val cn = com.socrata.soql.environment.ColumnName(userColumnId.underlying)
+            val cr = new ColumnRef(None, userColumnId, sqlColumnRep.representedType)(NoPosition)
+            i += 1
+            (cn, (i, cr))
+        }.toMap
+        val map = new com.socrata.soql.collection.OrderedMap(allDefaultColumns, allDefaultColumns.keys.toVector)
+        analysis.copy(selection = map)
+    }
+  }
+
+  def sqlizeSearch(searchStr: String, leadingSearch: Boolean, ana: SoQLAnalysis[UserColumnId, SoQLType])
                   (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                    typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                    setParams: Seq[SetParam],
@@ -291,7 +316,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       ParametricSql(Seq(s"$prev OR ($x = $searchSql)"), setParamsAfter)
     }
 
-    val andOrWhereOrHaving = ana.isGrouped match {
+    val andOrWhereOrHaving = ana.isGrouped && !leadingSearch match {
       case false => if (ana.where.isDefined) " AND" else " WHERE"
       case true => if (ana.having.isDefined) " AND" else " HAVING"
     }

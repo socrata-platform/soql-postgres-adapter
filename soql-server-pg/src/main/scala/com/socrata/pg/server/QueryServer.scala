@@ -65,7 +65,7 @@ import org.slf4j.LoggerFactory
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.language.existentials
 
-class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) extends SecondaryBase {
+class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val leadingSearch: Boolean = true) extends SecondaryBase {
   import QueryServer._ // scalastyle:ignore import.grouping
 
   val dsConfig: DataSourceConfig = null // scalastyle:ignore null // unused
@@ -379,7 +379,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity) exte
         SqlizerContext.IdRep -> (if (obfuscateId) { new SoQLID.StringRep(cryptProvider) }
                                  else { new ClearNumberRep(cryptProvider) }),
         SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
-        SqlizerContext.CaseSensitivity -> caseSensitivity
+        SqlizerContext.CaseSensitivity -> caseSensitivity,
+        SqlizerContext.LeadingSearch -> leadingSearch
       )
       val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit)
 
@@ -753,7 +754,7 @@ object QueryServer extends DynamicPortMap {
       reporter <- MetricsReporter.managed(config.metrics)
     } {
       pong.start()
-      val queryServer = new QueryServer(dsInfo, CaseSensitive)
+      val queryServer = new QueryServer(dsInfo, CaseSensitive, config.leadingSearch)
       val advertisedLivenessCheckInfo = new LivenessCheckInfo(hostPort(pong.livenessCheckInfo.getPort),
                                                               pong.livenessCheckInfo.getResponse)
       val auxData = new AuxiliaryData(livenessCheckInfo = Some(advertisedLivenessCheckInfo))

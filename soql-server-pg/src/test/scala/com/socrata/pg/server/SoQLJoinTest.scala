@@ -137,16 +137,16 @@ LEFT OUTER JOIN @classification as c on class=@c.id
   }
 
   test("join and search") {
-    compareSoqlResult("""
+    val soql = """
          SELECT make, code, @m.timezone, @c.description as classification
            JOIN (SELECT * FROM @manufacturer WHERE make='APCO' |> SELECT make, timezone) as m on make=@m.make
 LEFT OUTER JOIN @classification as c on class=@c.id
           WHERE @m.make='APCO'
          SEARCH 'beginner'
           ORDER by @m.make, code
-                      """,
-      "join-search.json",
-      joinDatasetCtx = aliasCtx)
+               """
+    compareSoqlResult(soql, "join-search.json", joinDatasetCtx = aliasCtx, leadingSearch = false)
+    compareSoqlResult(soql, "empty.json", joinDatasetCtx = aliasCtx, leadingSearch = true)
   }
 
   test("invalid table alias") {
