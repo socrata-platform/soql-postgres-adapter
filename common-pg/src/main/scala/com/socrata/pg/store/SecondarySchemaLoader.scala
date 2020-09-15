@@ -5,11 +5,12 @@ import com.socrata.datacoordinator.truth.loader.sql.{ChangeOwner, RepBasedPostgr
 import com.socrata.datacoordinator.truth.loader.Logger
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
-import com.socrata.pg.store.index.{FullTextSearch, IndexDirectives, Indexable}
+import com.socrata.pg.store.index.{FullTextSearch, Indexable}
 import com.socrata.pg.error.{SqlErrorHandler, SqlErrorHelper, SqlErrorPattern}
 import com.typesafe.scalalogging.{Logger => SLogger}
 import java.sql.{Connection, PreparedStatement, Statement}
 
+import com.rojoma.json.v3.ast.{JBoolean, JObject}
 import com.rojoma.json.v3.util.JsonUtil
 import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.soql.environment.ColumnName
@@ -128,9 +129,12 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
       if (resultSet.next()) {
         Option(resultSet.getString("directives")) match {
           case Some(json) =>
-            JsonUtil.parseJson[IndexDirectives](json) match {
-              case Right(indexDirectives) =>
-                Some(indexDirectives.enable)
+            JsonUtil.parseJson[JObject](json) match {
+              case Right(JObject(indexDirectives)) =>
+                indexDirectives.get("enabled") match {
+                  case Some(JBoolean(b)) => Some(b)
+                  case _ => None
+                }
               case Left(_) => None
             }
           case None => None
