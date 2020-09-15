@@ -258,7 +258,13 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
                             prevAna: Option[SoQLAnalysis[UserColumnId, SoQLType]],
                             rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]]): SoQLAnalysis[UserColumnId, SoQLType] = {
     prevAna match {
-      case Some(ana) => ana
+      case Some(ana) =>
+        val sel = ana.selection.map { case (cn: ColumnName, expr: CoreExpr[UserColumnId, SoQLType]) =>
+          val userColumnId = new UserColumnId(cn.caseFolded)
+          val cr = new ColumnRef(None, userColumnId, expr.typ)(expr.position)
+          (cn, cr)
+        }
+        ana.copy(selection = sel)
       case None =>
         var i = 0
         val allDefaultColumns = rep.collect {
