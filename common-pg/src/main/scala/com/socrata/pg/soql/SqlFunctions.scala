@@ -52,6 +52,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     Lte -> infix("<=") _,
     Gt -> infix(">")_,
     Gte -> infix(">=") _,
+    Least -> nary("least") _,
+    Greatest -> nary("greatest") _,
     TextToRowIdentifier -> decryptString(SoQLID) _,
     TextToRowVersion -> decryptString(SoQLVersion) _,
     Like -> infix("like") _,
