@@ -40,7 +40,7 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
         )
 
       // first we resync a datset that doesn't exist
-      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows.iterator), Seq.empty)
+      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows.iterator), Seq.empty, Seq.empty)
 
       // most basic validation... we have 2 rows
       for {
@@ -57,7 +57,7 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
           new ColumnId(12) -> new SoQLText("taz"))
 
       // now we resync again with an extra row
-      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows2.iterator), Seq.empty)
+      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows2.iterator), Seq.empty, Seq.empty)
 
       // most basic validation... we have 3 rows
       for {
@@ -106,8 +106,8 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
 
       // resync with the unpublished copy
       pgs.doDropCopy(pgu, secondaryDatasetInfo, snapshottedCopy, isLatestCopy = false)
-      pgs.doResync(pgu, secondaryDatasetInfo, publishedCopy, newSchema, cookie, unmanaged(rows.iterator), Seq.empty)
-      pgs.doResync(pgu, secondaryDatasetInfo, unpublishedCopy, newSchema, cookie, unmanaged(rows2.iterator), Seq.empty)
+      pgs.doResync(pgu, secondaryDatasetInfo, publishedCopy, newSchema, cookie, unmanaged(rows.iterator), Seq.empty, Seq.empty)
+      pgs.doResync(pgu, secondaryDatasetInfo, unpublishedCopy, newSchema, cookie, unmanaged(rows2.iterator), Seq.empty, Seq.empty)
 
       // unpublished copy should be the "latest"
       for {
@@ -136,7 +136,7 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
 
       // now lets go through the resync process again, but this time the latest copy is discarded
       pgs.doDropCopy(pgu, secondaryDatasetInfo, snapshottedCopy, isLatestCopy = false)
-      pgs.doResync(pgu, secondaryDatasetInfo, publishedCopy, newSchema, cookie, unmanaged(rows.iterator), Seq.empty)
+      pgs.doResync(pgu, secondaryDatasetInfo, publishedCopy, newSchema, cookie, unmanaged(rows.iterator), Seq.empty, Seq.empty)
       pgs.doDropCopy(pgu, secondaryDatasetInfo, discardedCopy, isLatestCopy = true)
 
       // "latest" copy should be the published one
