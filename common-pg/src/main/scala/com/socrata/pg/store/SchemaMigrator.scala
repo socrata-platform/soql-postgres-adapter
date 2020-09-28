@@ -9,14 +9,14 @@ import com.socrata.datacoordinator.truth.migration.Migration.MigrationOperation.
  * Performs Liquibase migrations on the pg secondary.
  */
 object SchemaMigrator {
-  def apply(databaseTree: String, operation: MigrationOperation, config: Config): Unit = {
+  def apply(databaseTree: String, operation: MigrationOperation, config: Config, dryRun: Boolean): Unit = {
     for {
       dataSourceInfo <- DataSourceFromConfig(new DataSourceConfig(config, databaseTree))
       conn <- managed(dataSourceInfo.dataSource.getConnection)
       stmt <- managed(conn.createStatement())
     } {
       stmt.execute("SET lock_timeout = '30s'")
-      Migration.migrateDb(conn, operation)
+      Migration.migrateDb(conn, operation, dryRun = dryRun)
     }
   }
 }

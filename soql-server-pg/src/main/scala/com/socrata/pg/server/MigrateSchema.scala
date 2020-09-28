@@ -18,12 +18,14 @@ object MigrateSchema extends App {
    *        args(1) Optional dotted path reference the database config tree to migrate
    * */
   // Verify that two arguments were passed
-  if (args.length < 1 || args.length > 2) {
+  if (args.length < 1 || args.length > 3) {
     throw new IllegalArgumentException(
       "Usage: com.socrata.pg.server.MigrateSchema " +
         MigrationOperation.values.mkString("|") +
         " [<dotted path reference to database config in config>]")
   }
+
+  val dryRun = args.exists(_ == "--dry-run")
 
   // Verify that the argument provided is actually a valid operation
   val operation = {
@@ -38,16 +40,17 @@ object MigrateSchema extends App {
   }
   val config = ConfigFactory.load
 
-  val configRoot = args.length match {
+  val coreArgs = args.filter(!_.startsWith("--"))
+  val configRoot = coreArgs.length match {
     case 1 =>
       // Run migration on each secondary instance from the perspective of secondary-watcher/pg store plugin.
       "com.socrata.pg.store"
-    case 2 => args(1)
+    case 2 => coreArgs(1)
   }
 
   val dbConfigPath = s"$configRoot.database"
 
   PropertyConfigurator.configure(Propertizer("log4j", config.getConfig(s"$configRoot.log4j")))
 
-  SchemaMigrator(dbConfigPath, operation, config)
+  SchemaMigrator(dbConfigPath, operation, config, dryRun)
 }

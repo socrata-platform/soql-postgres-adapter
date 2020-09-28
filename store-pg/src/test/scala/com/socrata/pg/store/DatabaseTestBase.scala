@@ -216,7 +216,7 @@ object DatabaseTestBase {
         // migrate truth db
         populateTruth(truthDb)
         // migrate secondary db
-        SchemaMigrator("database", MigrationOperation.Migrate, secondaryConfig)
+        SchemaMigrator("database", MigrationOperation.Migrate, secondaryConfig, false)
         DatabaseTestBase.dbInitialized = true
       }
     }
