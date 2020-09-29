@@ -1,10 +1,11 @@
 package com.socrata.pg.store
 
+import java.io.OutputStreamWriter
+
 import liquibase.Liquibase
 import liquibase.lockservice.LockService
 import liquibase.logging.LogFactory
 import liquibase.resource.ClassLoaderResourceAccessor
-
 import java.sql.Connection
 
 import com.socrata.datacoordinator.truth.migration.Migration.MigrationOperation
@@ -20,7 +21,8 @@ object Migration {
    */
   def migrateDb(conn: Connection,
                 operation: MigrationOperation = MigrationOperation.Migrate,
-                changeLogPath: String = MigrationScriptPath): Unit = {
+                changeLogPath: String = MigrationScriptPath,
+                dryRun: Boolean = false): Unit = {
 
     val jdbc = new NonCommmittingJdbcConnenction(conn)
     LogFactory.getLogger().setLogLevel("warning")
@@ -30,7 +32,10 @@ object Migration {
     val database = conn.getCatalog
 
     operation match {
-      case Migrate => liquibase.update(database)
+      case Migrate =>
+        if (dryRun) liquibase.update(database, new OutputStreamWriter(System.out))
+        else liquibase.update(database)
+
       case Undo => liquibase.rollback(1, database)
       case Redo => { liquibase.rollback(1, database); liquibase.update(database) }
     }
