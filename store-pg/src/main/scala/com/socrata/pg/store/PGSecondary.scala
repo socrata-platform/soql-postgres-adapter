@@ -396,7 +396,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         case RowDataUpdated(ops) =>
           val loader = dataLoader.getOrElse(prevettedLoader(pgu, truthCopyInfo))
           RowDataUpdatedHandler(loader, ops)
-          (rebuildIndex, refreshRollup || ops.headOption.isDefined, truthCopyInfo, Some(loader))
+          (rebuildIndex, refreshRollup || ops.nonEmpty, truthCopyInfo, Some(loader))
         case LastModifiedChanged(lastModified) =>
           pgu.datasetMapWriter.updateLastModified(truthCopyInfo, lastModified)
           (rebuildIndex, true, truthCopyInfo, dataLoader)
