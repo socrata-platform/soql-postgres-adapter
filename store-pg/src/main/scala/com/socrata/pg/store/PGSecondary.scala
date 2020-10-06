@@ -360,7 +360,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           (rebuildIndex, true, truthCopyInfo, None)
         case FieldNameUpdated(secondaryColInfo) =>
           FieldNameUpdatedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          (rebuildIndex, false,  truthCopyInfo, None)
+          (rebuildIndex, refreshRollup,  truthCopyInfo, None)
         case RowIdentifierSet(info) =>  // no-op
           (rebuildIndex, refreshRollup, truthCopyInfo, dataLoader)
         case RowIdentifierCleared(info) =>  // no-op
