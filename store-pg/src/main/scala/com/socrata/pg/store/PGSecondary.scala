@@ -224,9 +224,10 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
               initialDataVersion: Long,
               finalDataVersion: Long,
               cookie: Secondary.Cookie,
-              events: Iterator[Event[SoQLType, SoQLValue]]): Secondary.Cookie = {
+              events: Iterator[Event[SoQLType, SoQLValue]],
+              latestDataVersion: () => Long): Secondary.Cookie = {
     withPgu(dsInfo, Some(datasetInfo)) { pgu =>
-     val cookieOut = doVersion(pgu, datasetInfo, initialDataVersion, finalDataVersion, cookie, events)
+     val cookieOut = doVersion(pgu, datasetInfo, initialDataVersion, finalDataVersion, cookie, events, latestDataVersion)
      pgu.commit()
      cookieOut
     }
@@ -247,7 +248,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
                         newDataVersion: Long,
                         finalDataVersion: Long,
                         cookie: Secondary.Cookie,
-                        events: Iterator[Event[SoQLType, SoQLValue]]): Secondary.Cookie = {
+                        events: Iterator[Event[SoQLType, SoQLValue]],
+                        latestDataVersion: () => Long): Secondary.Cookie = {
     // How do we get the copyInfo? dataset_map
     //  - One of the events that comes through here will be working copy created, it must be the first if it does,
     //    separate event for actually copying the data
@@ -456,6 +458,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         sLoader.createFullTextSearchIndex(schema.values)
         pgu.analyzer.analyze(finalTruthCopyInfo)
       }
+    }
+
+    withPgu(dsInfo, Option(secondaryDatasetInfo)) { pgu =>
+      val freshDatasetInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
+      val vvv2 = latestDataVersion()
+      println("XXX: " + vvv2.toString + ":" + freshDatasetInfo.dataVersion.toString)
     }
 
     // Rollups do not materialize if stage is unpublished.
