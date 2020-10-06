@@ -399,7 +399,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           (rebuildIndex, refreshRollup || ops.nonEmpty, truthCopyInfo, Some(loader))
         case LastModifiedChanged(lastModified) =>
           pgu.datasetMapWriter.updateLastModified(truthCopyInfo, lastModified)
-          (rebuildIndex, true, truthCopyInfo, dataLoader)
+          (rebuildIndex, refreshRollup, truthCopyInfo, dataLoader)
         case RollupCreatedOrUpdated(rollupInfo) =>
           RollupCreatedOrUpdatedHandler(pgu, truthCopyInfo, rollupInfo)
           (rebuildIndex, true, truthCopyInfo, dataLoader)
