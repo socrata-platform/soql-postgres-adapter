@@ -362,12 +362,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           FieldNameUpdatedHandler(pgu, truthCopyInfo, secondaryColInfo)
           (rebuildIndex, false,  truthCopyInfo, None)
         case RowIdentifierSet(info) =>  // no-op
-          (rebuildIndex, true, truthCopyInfo, dataLoader)
+          (rebuildIndex, refreshRollup, truthCopyInfo, dataLoader)
         case RowIdentifierCleared(info) =>  // no-op
-          (rebuildIndex, true, truthCopyInfo, dataLoader)
+          (rebuildIndex, refreshRollup, truthCopyInfo, dataLoader)
         case SystemRowIdentifierChanged(secondaryColInfo) =>
           SystemRowIdentifierChangedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          (rebuildIndex, true, truthCopyInfo, dataLoader)
+          (rebuildIndex, refreshRollup, truthCopyInfo, dataLoader)
         case VersionColumnChanged(secondaryColInfo) =>
           VersionColumnChangedHandler(pgu, truthCopyInfo, secondaryColInfo)
           (rebuildIndex, true, truthCopyInfo, dataLoader)
@@ -396,7 +396,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         case RowDataUpdated(ops) =>
           val loader = dataLoader.getOrElse(prevettedLoader(pgu, truthCopyInfo))
           RowDataUpdatedHandler(loader, ops)
-          (rebuildIndex, true, truthCopyInfo, Some(loader))
+          (rebuildIndex, refreshRollup || ops.headOption.isDefined, truthCopyInfo, Some(loader))
         case LastModifiedChanged(lastModified) =>
           pgu.datasetMapWriter.updateLastModified(truthCopyInfo, lastModified)
           (rebuildIndex, true, truthCopyInfo, dataLoader)
