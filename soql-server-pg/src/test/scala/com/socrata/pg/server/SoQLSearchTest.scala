@@ -8,6 +8,10 @@ class SoQLSearchTest extends SoQLTest {
     compareSoqlResult("select name, make, color search 'blue' order by name", "search-1-token.json")
   }
 
+  test("prev query has where and this query has search only") {
+    compareSoqlResult("select * where true |> select name, make, color search 'blue' order by name", "search-1-token.json")
+  }
+
   test("two tokens") {
     compareSoqlResult("select name, make, color search 'blue jade' order by name", "search-2-tokens.json")
   }

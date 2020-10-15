@@ -264,7 +264,8 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
           val cr = new ColumnRef(None, userColumnId, expr.typ)(expr.position)
           (cn, cr)
         }
-        ana.copy(selection = sel)
+        // where and having are used for determining how to combine the search condition.  Only its existance matters.  The actual content doesn't.
+        ana.copy(selection = sel, where = analysis.where, having = analysis.having)
       case None =>
         var i = 0
         val allDefaultColumns = rep.collect {
