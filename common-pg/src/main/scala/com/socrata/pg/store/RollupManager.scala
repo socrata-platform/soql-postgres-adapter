@@ -81,16 +81,18 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    * @param newDataVersion The version of the dataset that will be current after the current
    *                       transaction completes.
    */
-  def updateRollup(rollupInfo: RollupInfo, newDataVersion: Long): Unit =
+  def updateRollup(rollupInfo: RollupInfo, oldCopyInfo: Option[CopyInfo], newDataVersion: Long): Unit =
     // Working copies do not materialize rollups.
-    if (shouldMaterializeRollups(copyInfo.lifecycleStage)) doUpdateRollup(rollupInfo, newDataVersion)
+    if (shouldMaterializeRollups(copyInfo.lifecycleStage)) doUpdateRollup(rollupInfo, oldCopyInfo, newDataVersion)
 
-  private def doUpdateRollup(rollupInfo: RollupInfo, newDataVersion: Long): Unit = {
+  private def doUpdateRollup(rollupInfo: RollupInfo, oldCopyInfo: Option[CopyInfo], newDataVersion: Long): Unit = {
     logger.info(s"Updating copy $copyInfo, rollup $rollupInfo")
     time("update-rollup", "dataset_id" -> copyInfo.datasetInfo.systemId, "rollupName" -> rollupInfo.name) {
 
       val newTableName = rollupTableName(rollupInfo, newDataVersion)
-      val oldTableName = rollupTableName(rollupInfo, newDataVersion - 1)
+      val oldTableName = oldCopyInfo.filter(_.copyNumber == rollupInfo.copyInfo.copyNumber).map { ci =>
+        rollupTableName(rollupInfo, ci.dataVersion)
+      }
 
       val analyzer = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
 
@@ -136,7 +138,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
       // drop the old rollup regardless so it doesn't leak, because we have no way to use or track old rollups at
       // this point.
-      scheduleRollupTablesForDropping(oldTableName)
+      oldTableName.foreach(scheduleRollupTablesForDropping(_))
     }
   }
 
