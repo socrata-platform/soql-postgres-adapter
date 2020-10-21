@@ -51,7 +51,7 @@ case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
           RollupCreatedOrUpdatedHandler(pgu, newCopyInfo, sru)
         }
         pgu.datasetMapReader.rollups(newCopyInfo).foreach { ru =>
-          rm.updateRollup(ru, newCopyInfo.dataVersion)
+          rm.updateRollup(ru, Some(truthCopyInfo), newCopyInfo.dataVersion)
         }
       }
   }
