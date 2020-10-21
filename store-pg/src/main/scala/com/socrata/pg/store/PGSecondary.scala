@@ -459,7 +459,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
     val postUpdateTruthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
     // Rollups do not materialize if stage is unpublished.
-    if (postUpdateTruthCopyInfo.lifecycleStage == LifecycleStage.Published) {
+    if (RollupManager.shouldMaterializeRollups(postUpdateTruthCopyInfo.lifecycleStage)) {
       maybeLogTime("Refreshing rollups") {
         updateRollups(pgu,
                       previouslyPublishedTruthCopyInfo,
