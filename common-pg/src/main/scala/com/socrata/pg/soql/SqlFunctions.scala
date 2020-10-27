@@ -492,7 +492,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
   def formatCall(template: String, // scalastyle:ignore parameter.number
                  foldOp: Option[String] = None,
                  paramPosition: Option[Seq[Int]] = None,
-                 typeCastIfNotWindowFn: Option[String] = None )
+                 typeCastIfNotWindowFn: Option[String] = None)
                 (fn: FunCall,
                  rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                  typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
