@@ -24,7 +24,7 @@ class SqlizerUrlTest extends SqlizerTest {
   test("url group") {
     val soql = "SELECT url, count(*) GROUP BY url"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT t1.url_url,t1.url_description,((count(*))::numeric) FROM t1 GROUP BY t1.url_url,t1.url_description")
+    sql should be ("SELECT t1.url_url,t1.url_description,(count(*)::numeric) FROM t1 GROUP BY t1.url_url,t1.url_description")
     setParams should be (Seq.empty)
   }
 
