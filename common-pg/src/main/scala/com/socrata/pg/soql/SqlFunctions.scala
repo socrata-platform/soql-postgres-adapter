@@ -175,8 +175,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     WindowFunctionOver -> windowOverCall _, //  naryish("over", Some("partition by ")) _,
 
     Count -> nary("count", Some("numeric")) _,
-    CountStar -> formatCall("count(*)") _,
-    CountDistinct -> formatCall("count(distinct %s)") _
+    CountStar -> formatCall("count(*)", typeCastIfNotWindowFn = Some("numeric")) _,
+    CountDistinct -> formatCall("count(distinct %s)", typeCastIfNotWindowFn = Some("numeric")) _
     // TODO: Complete the function list.
   ) ++
     funGeometryMap ++
@@ -491,7 +491,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
   def formatCall(template: String, // scalastyle:ignore parameter.number
                  foldOp: Option[String] = None,
-                 paramPosition: Option[Seq[Int]] = None)
+                 paramPosition: Option[Seq[Int]] = None,
+                 typeCastIfNotWindowFn: Option[String] = None )
                 (fn: FunCall,
                  rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                  typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
@@ -499,6 +500,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                  ctx: Sqlizer.Context,
                  escape: Escape): ParametricSql = {
 
+    val templateTypeCast = if (fn.window.isEmpty && typeCastIfNotWindowFn.isDefined) template + typeCastIfNotWindowFn.map("::" + _).get
+                           else template // when window option is used, typecast is done higher up
     val fnParams = paramPosition match {
       case Some(pos) =>
         pos.foldLeft(Seq.empty[CoreExpr[UserColumnId, SoQLType]]) { (acc, param) =>
@@ -513,9 +516,9 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     }
 
     val foldedSql = foldOp match {
-      case None => template.format(sqlFragsAndParams._1:_*)
+      case None => templateTypeCast.format(sqlFragsAndParams._1:_*)
       case Some(op) =>
-        foldSegments(sqlFragsAndParams._1.map(s => template.format(s)), op)
+        foldSegments(sqlFragsAndParams._1.map(s => templateTypeCast.format(s)), op)
     }
     ParametricSql(foldedSql.split(SqlFragments.SeparatorRx).toSeq, sqlFragsAndParams._2)
   }

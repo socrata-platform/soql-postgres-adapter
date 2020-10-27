@@ -164,7 +164,7 @@ class SqlizerBasicTest extends SqlizerTest {
   test("select count(*)") {
     val soql = "select count(*)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT ((count(*))::numeric) FROM t1")
+    sql should be ("SELECT (count(*)::numeric) FROM t1")
     setParams.length should be (0)
   }
 
