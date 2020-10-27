@@ -85,7 +85,7 @@ object RowSizeBufferSqlErrorHandler {
     }
   }
 
-  private val IndexRowSizeError = """index row size (\d+) exceeds maximum (\d+) for index (.*)""".r
+  private val IndexRowSizeError = """index row size (\d+) exceeds (?:btree version \d+ )?maximum (\d+) for index (.*)""".r
 
   private val IndexRowSizeErrorWoIndexName = """index row requires (\d+) bytes, maximum size is (\d+)""".r
 }
