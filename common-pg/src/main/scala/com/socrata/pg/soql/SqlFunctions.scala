@@ -175,8 +175,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     WindowFunctionOver -> windowOverCall _, //  naryish("over", Some("partition by ")) _,
 
     Count -> nary("count", Some("numeric")) _,
-    CountStar -> formatCall("(count(*))::numeric") _,
-    CountDistinct -> formatCall("(count(distinct %s))::numeric") _
+    CountStar -> formatCall("count(*)") _,
+    CountDistinct -> formatCall("count(distinct %s)") _
     // TODO: Complete the function list.
   ) ++
     funGeometryMap ++
@@ -294,7 +294,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     }
 
     val sqlNaryFunctionCall = sqlFragsAndParams._1.mkString(fnName + "(", ",", ")")
-    val sqlNaryFunctionCallWithTypeCast = returnTypeCast.map(typ => s"($sqlNaryFunctionCall)::$typ" ).getOrElse(sqlNaryFunctionCall)
+    val typeCast = if (fn.window.isDefined) None else returnTypeCast
+    val sqlNaryFunctionCallWithTypeCast = typeCast.map(typ => s"($sqlNaryFunctionCall)::$typ" ).getOrElse(sqlNaryFunctionCall)
     ParametricSql(Seq(sqlNaryFunctionCallWithTypeCast), sqlFragsAndParams._2)
   }
 
@@ -405,12 +406,18 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
         val sqlPartitionsPreamble = if (windowFunctionInfo.partitions.isEmpty) "" else " partition by "
         val sqlOrderingsPreamble = if (windowFunctionInfo.orderings.isEmpty) "" else " order by "
         val sqlFramesPreamble = if (windowFunctionInfo.frames.isEmpty) "" else " "
+
+        val typeCast = fn.function.function match {
+          case SoQLFunctions.Count | SoQLFunctions.CountDistinct | SoQLFunctions.CountStar => "::numeric"
+          case _ => ""
+        }
+
         val sql = pSql.sql.mkString +
                     " over(" +
                     sqlPartitions._1.mkString(sqlPartitionsPreamble, ",", "") +
                     sqlOrderings._1.mkString(sqlOrderingsPreamble, ",", "") +
                     sqlFrames._1.mkString(sqlFramesPreamble, " ", "") +
-                    ")"
+                    ")" + typeCast
         ParametricSql(Seq(sql), sqlFrames._2)
       case None =>
         pSql
