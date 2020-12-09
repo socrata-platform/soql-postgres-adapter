@@ -617,8 +617,10 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       IndexDirectiveCreatedOrUpdatedHandler(pgu, idx.columnInfo, idx.directive)
     }
 
-    // re-create rollup tables
-    updateRollups(pgu, Some(truthCopyInfo), postUpdateTruthCopyInfo)
+    // re-create rollup tables.  We don't need to pass in an old truth
+    // because we just dropped any existing rollups above.
+    updateRollups(pgu, None, postUpdateTruthCopyInfo)
+
     pgu.datasetMapWriter.enableDataset(truthCopyInfo.datasetInfo.systemId) // re-enable soql reads
     cookie
   }
