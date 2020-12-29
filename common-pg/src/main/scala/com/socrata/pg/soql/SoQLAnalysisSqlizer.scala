@@ -246,8 +246,46 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       ana.limit.map(" LIMIT " + _.toString).getOrElse("") +
       ana.offset.map(" OFFSET " + _.toString).getOrElse("")
 
-    val result = ParametricSql(Seq(countBySubQuery(analysis)(reqRowCount, completeSql)), setParamsOrderBy)
-    (result, paramsCountInSelect)
+    val firstPSql = ParametricSql(Seq(countBySubQuery(analysis)(reqRowCount, completeSql)), setParamsOrderBy)
+
+    val analyses = NonEmptySeq(ana, ana.more)
+    val lastAna = analyses.last
+
+    // UNION
+    val (resultPSql, _) = ana.more.foldLeft((firstPSql, ana)) { (acc, ana) =>
+      val (subParametricSql, prevAna) = acc
+      ana.op match {
+        case Some("UNION") =>
+          val prevUnion = subParametricSql.sql.head
+          val subCtx = ctx + (OutermostSoql -> outermostSoql(ana, analyses)) +
+            (InnermostSoql -> innermostSoql(ana, analyses)) -
+            JoinPrimaryTable
+          val (sqls, paramsCountInSelect) = sql(ana, None, tableNames, allColumnReps, reqRowCount &&  ana == lastAna,
+            rep, typeRep, Seq.empty, subCtx, escape, ana.from)
+          val setParamsAcc = subParametricSql.setParams ++ sqls.setParams
+          val unionSql = s"${prevUnion} UNION ${sqls.sql.head}"
+          (ParametricSql(Seq(unionSql), setParamsAcc), ana)
+        case _ => // PIPE
+          val chainedTableAlias = "x1"
+          val subTableName = "(%s) AS %s".format(subParametricSql.sql.head, chainedTableAlias)
+          val tableNamesSubTableNameReplace = tableNames + (TableName.PrimaryTable -> subTableName)
+          val primaryTableAlias =
+            if (ana.joins.nonEmpty) Map((PrimaryTableAlias -> chainedTableAlias))
+            else Map.empty
+          val subCtx = ctx + (OutermostSoql -> outermostSoql(ana, analyses)) +
+            (InnermostSoql -> innermostSoql(ana, analyses)) -
+            JoinPrimaryTable ++ primaryTableAlias
+          val (sqls, paramsCountInSelect) = sql(ana, Some(prevAna), tableNamesSubTableNameReplace, allColumnReps, reqRowCount &&  ana == lastAna,
+            rep, typeRep, Seq.empty, subCtx, escape)
+          // query parameters in the select phrase come before those in the sub-query.
+          // query parameters in the other phrases - where, group by, order by, etc come after those in the sub-query.
+          val (setParamsBefore, setParamsAfter) = sqls.setParams.splitAt(paramsCountInSelect)
+          val setParamsAcc = setParamsBefore ++ subParametricSql.setParams ++ setParamsAfter
+          (sqls.copy(setParams = setParamsAcc), ana)
+      }
+    }
+
+    (resultPSql, paramsCountInSelect)
   }
 
   private def countBySubQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType])(reqRowCount: Boolean, sql: String) =
@@ -395,13 +433,14 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
                      ctx: Context,
                      escape: Escape) = {
     val strictInnermostSoql = isStrictInnermostSoql(ctx)
-    val strictOutermostSoql = isStrictOutermostSoql(ctx)
+    val strictOutermostSoql = analysis.op.isDefined && isStrictOutermostSoql(ctx)
     val (sqls, setParamsInSelect) =
       // Chain select handles setParams differently than others.  The current setParams are prepended
       // to existing setParams.  Others are appended.
       // That is why setParams starts with empty in foldLeft.
       analysis.selection.foldLeft(Tuple2(Seq.empty[String], Seq.empty[SetParam])) { (acc, columnNameAndcoreExpr) =>
         val (columnName, coreExpr) = columnNameAndcoreExpr
+        // WIP WHY COLUMN NAMES ARE NOT RESOLVED in UNION
         val ctxSelect = ctx + (RootExpr -> coreExpr) + (SqlizerContext.ColumnName -> columnName.name)
         val (_, selectSetParams) = acc
         val ParametricSql(sqls, newSetParams) = Sqlizer.sql(coreExpr)(rep, typeRep, selectSetParams, ctxSelect, escape)

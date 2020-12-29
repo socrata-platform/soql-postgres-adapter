@@ -61,7 +61,7 @@ trait Sqlizer[T] {
    */
   protected def selectAlias(e: CoreExpr[_, _], subColumn: Option[String] = None)(ctx: Context): String = {
     ctx(SoqlPart) match {
-      case SoqlSelect if ((true != ctx(OutermostSoql) || ctx.contains(IsSubQuery)) && e == ctx(RootExpr)) =>
+      case SoqlSelect if (/* (true != ctx(OutermostSoql) || ctx.contains(IsSubQuery)) && */ e == ctx(RootExpr)) =>
         // Geometry types require ST_AsBinary and does not work well with aliases
         // Normally, aliases is not needed in the outermost soql.
         val alias = ctx(SqlizerContext.ColumnName).asInstanceOf[String] + subColumn.getOrElse("")

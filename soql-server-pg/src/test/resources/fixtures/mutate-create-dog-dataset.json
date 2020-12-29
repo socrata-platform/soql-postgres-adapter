@@ -1,0 +1,11 @@
+[
+  { c: "create", user: "test", resource: "_dog" },
+  { c: "add column", id: "name", type: "text" },
+  { c: "add column", id: "breed", type: "text" },
+  { c: "add column", id: "specie", type: "text" },
+  { c: "add column", id: "age", type: "number" },
+  { c: "row data" },
+  {"name":"dog1", "breed":"golden retriever", "specie": "dog","age": 1},
+  {"name":"dog2", "breed":"poodle", "specie": "dog","age": 2},
+  {"name":"dog3", "breed":"beagle", "specie": "dog","age": 3}
+]

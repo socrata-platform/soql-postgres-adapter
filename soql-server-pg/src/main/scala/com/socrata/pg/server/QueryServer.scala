@@ -480,6 +480,66 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     }
   }
 
+  def execQuery2( // scalastyle:ignore method.length parameter.number cyclomatic.complexity
+                 pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                 datasetInfo: DatasetInfo,
+                 analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]]): Unit = {
+
+    val obfuscateId = true
+    val latestCopy: CopyInfo = getCopy(pgu, datasetInfo, None)
+    val rollupName = None
+    val reqCopy = None
+
+    val cryptProvider = new CryptProvider(latestCopy.datasetInfo.obfuscationKey)
+
+    val sqlCtx = Map[SqlizerContext, Any](
+      SqlizerContext.IdRep -> (if (obfuscateId) { new SoQLID.StringRep(cryptProvider) }
+      else { new ClearNumberRep(cryptProvider) }),
+      SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
+      SqlizerContext.CaseSensitivity -> caseSensitivity,
+      SqlizerContext.LeadingSearch -> leadingSearch
+    )
+    val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit)
+
+    for(readCtx <- pgu.datasetReader.openDataset(latestCopy)) {
+      val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema
+      val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
+      val qrySchema = querySchema(pgu, analyses.last, latestCopy)
+      val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor)
+      val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
+      val sqlReps = querier.getSqlReps(systemToUserColumnMap)
+
+      // TODO: rethink how reps should be constructed and passed into each chained soql.
+      val typeReps = analyses.seq.flatMap { analysis =>
+        val qrySchema = querySchema(pgu, analysis, latestCopy)
+        qrySchema.map { case (columnId, columnInfo) =>
+          columnInfo.typ -> pgu.commonSupport.repFor(columnInfo)
+        }
+      }.toMap
+      println("WIP getJoinCopies")
+      val joinCopiesMap = getJoinCopies(pgu, analyses, reqCopy)
+      val joinCopies = joinCopiesMap.values.toSeq
+
+      val sqlRepsWithJoin = joinCopiesMap.foldLeft(sqlReps) { (acc, joinCopy) =>
+        val (tableName, copyInfo) = joinCopy
+        acc ++ getJoinReps(pgu, copyInfo, tableName)
+      }
+
+      latestCopy.dataTableName
+
+      val tableNameMap = getDatasetTablenameMap(joinCopiesMap) +
+        (TableName.PrimaryTable -> latestCopy.dataTableName)  // (TableName("_") -> "_cat") (TableName("_dog") -> "_dog")
+      val ParametricSql(sqls, setParams) = Sqlizer.sql((analyses, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
+      val sql: String = sqls.head
+      println(sqls.mkString("HELLO3: ", ",", ":END"))
+      val mystr = "hello world"
+      println("HELLO4: " + sql)
+     // SELECT _cat.u_name_4,_d1.u_breed_5 FROM _cat JOIN _cat as _d1 ON (_cat.u_name_4 = _d1.u_name_4)
+      println(mystr)
+      sqls
+    }
+  }
+
   private def readerWithQuery[SoQLType, SoQLValue](conn: Connection,
                                                    pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                                                    copyCtx: DatasetCopyContext[SoQLType],
@@ -662,10 +722,22 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                             analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]],
                             reqCopy: Option[String]): Map[TableName, CopyInfo] = {
     val joins = typed.Join.expandJoins(analyses.seq)
-    val joinTables = joins.map(x => TableName(x.from.fromTable.name, None))
-    joinTables.flatMap { resourceName =>
+    val froms = analyses.seq.flatMap(x => x.from.map(TableName(_, None)))
+    val joinTables = joins.map(x => TableName(x.from.fromTable.name, None)) ++ froms
+    val joinTableMap = joinTables.flatMap { resourceName =>
       getCopy(pgu, new ResourceName(resourceName.name), reqCopy).map(copy => (resourceName, copy))
     }.toMap
+
+    val allMap = analyses.seq.foldLeft(joinTableMap) { (acc, ana) =>
+      ana.more.headOption match {
+        case Some(h) =>
+          val more = getJoinCopies(pgu, NonEmptySeq(h, ana.more.tail), reqCopy)
+          acc ++ more
+        case None =>
+          acc
+      }
+    }
+    allMap
   }
 
   private def getDatasetTablenameMap(copies: Map[TableName, CopyInfo]): Map[TableName, String] = {

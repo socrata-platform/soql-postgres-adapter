@@ -48,6 +48,33 @@ object SoQLAnalyzerHelper {
     remapAnalyses(joinColumnIdMap, analyses)
   }
 
+  def analyzeSoQLUnion(soql: String,
+                       datasetCtx: Map[String, DatasetContext[SoQLType]],
+                       idMap: Map[QualifiedColumnName, UserColumnId]): NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] = {
+
+    val ast =  new Parser().test3(soql)
+    val parsed = NonEmptySeq(ast)
+    val joins = parsed.seq.flatMap(_.joins)
+
+    val joinColumnIdMap =
+      joins.foldLeft(idMap) { (acc, join) =>
+        val joinTableName = join.from.fromTable
+        val joinAlias = join.from.alias.getOrElse(joinTableName.name)
+        val schema = datasetCtx(joinTableName.qualifier)
+        acc ++ schema.columns.map { fieldName =>
+          QualifiedColumnName(Some(joinAlias), new ColumnName(fieldName.name)) ->
+            new UserColumnId(fieldName.caseFolded)
+        }
+      }
+
+
+    val analysis =  analyzer.analyzeUnion(ast)(datasetCtx) // analyzer.analyze(parsed)(datasetCtx)
+    //val analyses = NonEmptySeq(analysis)
+    //remapAnalyses(joinColumnIdMap, analyses)
+    val analysisr = remapAnalysesUnion(joinColumnIdMap, analysis)
+    NonEmptySeq(analysisr)
+  }
+
   /**
    * Remap chained analyses as each analysis may have different selection.
    * This function is for test setup and should mimic the the same function
@@ -101,6 +128,13 @@ object SoQLAnalyzerHelper {
       (mappingWithNewColumns, convertedAnalyses :+ a)
     }
     NonEmptySeq.fromSeqUnsafe(analysesInColIds)
+  }
+
+  private def remapAnalysesUnion(columnIdMapping: Map[QualifiedColumnName, UserColumnId],
+                            analysis: SoQLAnalysis[ColumnName, SoQLType]): SoQLAnalysis[UserColumnId, SoQLType] = {
+    val seq = NonEmptySeq(analysis, analysis.more)
+    val seqr = remapAnalyses(columnIdMapping, seq)
+    seqr.head.copy(op = analysis.op, more = seqr.tail)
   }
 
   private def qualifiedColumnNameToColumnId[T](qualifiedColumnNameMap: Map[QualifiedColumnName, T])
