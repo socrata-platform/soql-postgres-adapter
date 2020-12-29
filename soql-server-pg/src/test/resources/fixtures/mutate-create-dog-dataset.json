@@ -1,0 +1,17 @@
+[
+  { c: "create", user: "test", resource: "_dog" },
+  { c: "add column", id: "name", type: "text" },
+  { c: "add column", id: "breed", type: "text" },
+  { c: "add column", id: "year", type: "number" },
+  { c: "add column", id: "dog", type: "text" },
+  { c: "add column", id: "url", type: "url" },
+  { c: "add column", id: "point", type: "point" },
+  { c: "add column", id: "point_address", type: "text" },
+  { c: "add column", id: "point_city", type: "text" },
+  { c: "add column", id: "point_state", type: "text" },
+  { c: "add column", id: "point_zip", type: "text" },
+  { c: "row data" },
+  {"name":"dog1", "breed":"golden retriever", "dog": "dog","year": 1, "url": { "url": "http://www.socrata.com", "description": "dog1" }, "point": "POINT(1 2)", "point_address": "101 Main St", "point_city": "Seattle", "point_state": "WA", "point_zip": "98104" },
+  {"name":"dog2", "breed":"poodle", "dog": "dog","year": 2},
+  {"name":"dog3", "breed":"beagle", "dog": "dog","year": 3}
+]

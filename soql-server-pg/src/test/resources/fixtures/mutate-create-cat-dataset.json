@@ -1,0 +1,17 @@
+[
+  { c: "create", user: "test", resource: "_cat" },
+  { c: "add column", id: "name", type: "text" },
+  { c: "add column", id: "breed", type: "text" },
+  { c: "add column", id: "year", type: "number" },
+  { c: "add column", id: "cat", type: "text" },
+  { c: "add column", id: "url", type: "url" },
+  { c: "add column", id: "point", type: "point" },
+  { c: "add column", id: "point_address", type: "text" },
+  { c: "add column", id: "point_city", type: "text" },
+  { c: "add column", id: "point_state", type: "text" },
+  { c: "add column", id: "point_zip", type: "text" },
+  { c: "row data" },
+  {"name":"cat1", "breed":"persian", "cat": "cat","year": 1, "url": { "url": "http://www.socrata.com", "description": "cat1" }, "point": "POINT(1 2)", "point_address": "101 Main St", "point_city": "Seattle", "point_state": "WA", "point_zip": "98104" },
+  {"name":"cat2", "breed":"siamese", "cat": "cat","year": 2 },
+  {"name":"cat3", "breed":"shorthair", "cat": "cat","year": 3}
+]

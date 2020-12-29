@@ -16,7 +16,7 @@ import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
 import com.socrata.pg.soql._
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.store.index.SoQLIndexableRep
-import com.socrata.soql.{SoQLAnalysis, SoQLAnalyzer}
+import com.socrata.soql.{BinaryTree, SoQLAnalysis, SoQLAnalyzer}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
@@ -26,7 +26,6 @@ import com.socrata.soql.parsing.standalone_exceptions.StandaloneLexerException
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.scalalogging.Logger
 import RollupManager._
-import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.util.{LoggedTimingReport, StackedTimingReport}
 import com.socrata.soql.typed.Qualifier
 
@@ -108,13 +107,12 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       // We don't want to disable the rollup entirely since it could become valid again, eg. if they then add
       // the column back.  It would be ideal if we had a better way to communicate this failure upwards through
       // the stack.
-      val prefixedRollupAnalyses: Try[NonEmptySeq[SoQLAnalysis[ColumnName, SoQLType]]] =
-        Try { analyzer.analyzeFullQuery(rollupInfo.soql)(prefixedDsContext) }
-
+      val prefixedRollupAnalyses: Try[BinaryTree[SoQLAnalysis[ColumnName, SoQLType]]] =
+        Try { analyzer.analyzeFullQueryBinary(rollupInfo.soql)(prefixedDsContext) }
 
       prefixedRollupAnalyses match {
         case Success(pra) =>
-          val rollupAnalyses = pra.map(_.mapColumnIds(columnNameRemovePrefixMap))
+          val rollupAnalyses = pra.flatMap(_.mapColumnIds(columnNameRemovePrefixMap))
           // We are naming columns simply c1 .. c<n> based on the order they are in to avoid having
           // to maintain a mapping or deal with edge cases such as length and :system columns.
           val rollupReps = rollupAnalyses.last.selection.values.zipWithIndex.map { case (colRep, idx) =>
@@ -220,7 +218,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
   private def populateRollupTable(tableName: String,
       rollupInfo: RollupInfo,
-      rollupAnalyses: NonEmptySeq[SoQLAnalysis[ColumnName, SoQLType]],
+      rollupAnalyses: BinaryTree[SoQLAnalysis[ColumnName, SoQLType]],
       rollupReps: Seq[SqlColumnRep[SoQLType, SoQLValue]]): Unit = {
     time("populate-rollup-table",
       "dataset_id" -> copyInfo.datasetInfo.systemId.underlying,
@@ -288,9 +286,9 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
   private def analysesToSoQLType(analyses: ASysCol): AUserCol = {
     val baos = new ByteArrayOutputStream
     // TODO: Join handle qualifier
-    val analysesColumnId = analyses.map(_.mapColumnIds((name, qualifier) => new UserColumnId(name.name)))
+    val analysesColumnId = analyses.flatMap(_.mapColumnIds((name, qualifier) => new UserColumnId(name.name)))
     SoQLAnalyzerHelper.serialize(baos, analysesColumnId)
-    (SoQLAnalyzerHelper.deserialize(new ByteArrayInputStream(baos.toByteArray)), None)
+    SoQLAnalyzerHelper.deserialize(new ByteArrayInputStream(baos.toByteArray))
   }
 }
 

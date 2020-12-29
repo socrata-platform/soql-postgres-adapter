@@ -51,7 +51,7 @@ object SqlizerTest {
 
 
     val tableMap = Map(TableName.PrimaryTable -> "t1", typeTable -> "t2", yearTable -> "t3", yearTable.copy(alias = None) -> "t3")
-    TopSoQLAnalysisSqlizer.sql((analyses, tableMap, allColumnReps))(
+    BinarySoQLAnalysisSqlizer.sql((analyses, tableMap, allColumnReps))(
       if (useRepsWithId) columnRepsWithId else columnReps,
       typeReps,
       Seq.empty,

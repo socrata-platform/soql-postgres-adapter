@@ -9,13 +9,12 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.pg.soql.ParametricSql
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.SoQLAnalysis
+import com.socrata.soql.{BinaryTree, SoQLAnalysis}
 
 import scala.concurrent.duration.Duration
 import com.typesafe.scalalogging.Logger
 import java.sql.{Connection, ResultSet, SQLException, PreparedStatement}
 
-import com.socrata.NonEmptySeq
 import com.socrata.pg.server.QueryServer.ExplainInfo
 
 object DataSqlizerQuerier {
@@ -38,9 +37,9 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
     */
   private val sqlFetchSize = 1025
 
-  def query(conn: Connection, context: Map[String, String], analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
-            toSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analysis, tableName
-            toRowCountSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analysis, tableName
+  def query(conn: Connection, context: Map[String, String], analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
+            toSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]]) => ParametricSql,
+            toRowCountSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]]) => ParametricSql,
             reqRowCount: Boolean,
             querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
             queryTimeout: Option[Duration],
@@ -50,7 +49,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
     // get row count
     val rowCount: Option[Long] =
       if (reqRowCount) {
-        val rowCountSql = toRowCountSql(analyses, dataTableName)
+        val rowCountSql = toRowCountSql(analyses)
         // We know this will only return one row, so fetchsize of 0 is ok
         using(executeSql(conn, context, rowCountSql, queryTimeout, 0, debug)) { rs =>
           try {
@@ -86,7 +85,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
 
     // get rows
     if (analyses.seq.exists(_.selection.size > 0)) {
-      val sql = toSql(analyses, dataTableName)
+      val sql = toSql(analyses)
       val rs = executeSql(conn, context, sql, queryTimeout, fetchSize, debug)
       // Statement and resultset are closed by the iterator.
       new ResultSetIt(rowCount, rs, decodeRow(decoders))
@@ -190,12 +189,12 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
     }
   }
 
-  def explainQuery(conn: Connection, context: Map[String, String], analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
-                   toSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
+  def explainQuery(conn: Connection, context: Map[String, String], analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
+                   toSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]]) => ParametricSql,
                    queryTimeout: Option[Duration],
                    analyze: Boolean):
   ExplainInfo = {
-    val sql = toSql(analyses, dataTableName)
+    val sql = toSql(analyses)
     val result = StringBuilder.newBuilder
     setContext(conn, context)
     using(explainSql(conn, sql, queryTimeout, analyze)) {

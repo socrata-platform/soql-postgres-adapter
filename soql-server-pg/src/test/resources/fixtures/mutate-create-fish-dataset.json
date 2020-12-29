@@ -1,0 +1,13 @@
+[
+  { c: "create", user: "test", resource: "_fish" },
+  { c: "add column", id: "name", type: "text" },
+  { c: "add column", id: "breed", type: "text" },
+  { c: "add column", id: "year", type: "number" },
+  { c: "add column", id: "point", type: "point" },
+  { c: "add column", id: "fish", type: "text" },
+  { c: "add column", id: "url", type: "url" },
+  { c: "row data" },
+  {"name":"fish1", "breed":"discus", "fish": "fish","year": 1},
+  {"name":"fish2", "breed":"cichlid", "fish": "fish","year": 2},
+  {"name":"fish3", "breed":"neon tetra", "fish": "fish","year": 3}
+]

@@ -12,7 +12,6 @@ import com.rojoma.json.v3.ast.{JString, JObject}
 import com.rojoma.json.v3.io.CompactJsonWriter
 import com.rojoma.json.v3.util.{AutomaticJsonEncodeBuilder, JsonUtil}
 import com.rojoma.simplearm.v2._
-import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.Row
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
@@ -41,7 +40,7 @@ import com.socrata.pg.server.config.{DynamicPortMap, QueryServerConfig}
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.soql._
 import com.socrata.pg.store._
-import com.socrata.soql.{SoQLAnalysis, typed}
+import com.socrata.soql.{BinaryTree, Compound, SoQLAnalysis, typed}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, ResourceName, TableName}
@@ -184,18 +183,23 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
   }
 
-  def createEtagFromAnalysis(analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]], fromTable: String, contextVars: Map[String, String]): String = {
+  def createEtagFromAnalysis(analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]], fromTable: String, contextVars: Map[String, String]): String = {
     val suffix =
       if(contextVars.nonEmpty) {
         CompactJsonWriter.toString(JObject(SortedMap(contextVars.toSeq : _*).mapValues(JString)))
       } else {
         ""
       }
-    analyses.map{
-      analysis: SoQLAnalysis[UserColumnId, SoQLType] =>
-        // Strictly speaking this table name is incorrect, but it's _consistently_ incorrect
-        analysis.toStringWithFrom(TableName(fromTable))
-    }.toString ++ suffix
+
+    // Strictly speaking this table name is incorrect, but it's _consistently_ incorrect
+    val etag = analyses match {
+      case Compound(op, l, r) =>
+        createEtagFromAnalysis(l, fromTable, Map.empty) + op + createEtagFromAnalysis(r, fromTable, Map.empty)
+      case analysis: SoQLAnalysis[UserColumnId, SoQLType] =>
+        if (analysis.from.isDefined) analysis.toString()
+        else analysis.toStringWithFrom(TableName(fromTable))
+    }
+    etag + suffix
   }
 
   /** maps dataset name to count of current requests.  Requires synchronization to access. */
@@ -241,7 +245,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     val datasetId = servReq.getParameter("dataset")
     val analysisParam = servReq.getParameter("query")
     val analysisStream = new ByteArrayInputStream(analysisParam.getBytes(StandardCharsets.ISO_8859_1))
-    val analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] = SoQLAnalyzerHelper.deserialize(analysisStream)
+    val analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] = SoQLAnalyzerHelper.deserialize(analysisStream)
     val contextVars = Option(servReq.getParameter("context")).fold(Map.empty[String, String]) { contextStr =>
       JsonUtil.parseJson[Map[String,String]](contextStr) match {
         case Right(m) =>
@@ -251,6 +255,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
           return
       }
     }
+
     val reqRowCount = Option(servReq.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     val copy = Option(servReq.getParameter("copy"))
     val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
@@ -279,7 +284,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
   }
 
   def streamQueryResults( // scalastyle:ignore parameter.number
-    analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]],
+    analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]],
     context: Map[String, String],
     datasetId: String,
     reqRowCount: Boolean,
@@ -373,7 +378,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     context: Map[String, String],
     datasetInternalName: String,
     datasetInfo: DatasetInfo,
-    analysis: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]],
+    analysis: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]],
     rowCount: Boolean,
     reqCopy: Option[String],
     rollupName: Option[RollupName],
@@ -390,7 +395,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                  context: Map[String, String],
                  latestCopy: CopyInfo,
-                 analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]],
+                 analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]],
                  rowCount: Boolean,
                  queryTimeout: Option[Duration],
                  explain: Boolean,
@@ -409,7 +414,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
       for(readCtx <- pgu.datasetReader.openDataset(latestCopy)) {
         val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema
         val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
-        val qrySchema = querySchema(pgu, analyses.last, latestCopy)
+        val tableName = latestCopy.dataTableName
+        val qrySchema = querySchema(pgu, analyses.outputSchemaLeaf, latestCopy)
         val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor)
         val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
         val sqlReps = querier.getSqlReps(systemToUserColumnMap)
@@ -433,7 +439,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
           val explain = querier.queryExplain(
             context,
             analyses,
-            (as: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) => {
+            (as: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]]) => {
               val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> tableName)
               Sqlizer.sql((as, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
             },
@@ -446,13 +452,14 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
           val results = querier.query(
             context,
             analyses,
-            (as: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) => {
-              val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> tableName)
+            (as: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]]) => {
+              val tableNameMap = getDatasetTablenameMap(joinCopiesMap) +
+                (TableName.PrimaryTable -> tableName) + (TableName(tableName) -> tableName)
               Sqlizer.sql((as, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
             },
-            (as: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) => {
-              val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> tableName)
-              SoQLAnalysisSqlizer.rowCountSql(((as, None), tableNameMap, sqlReps.values.toSeq))(
+            (as: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]]) => {
+              val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> tableName) + (TableName(tableName) -> tableName)
+              BinarySoQLAnalysisSqlizer.rowCountSql((as, tableNameMap, sqlReps.values.toSeq))(
                 sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
             },
             rowCount,
@@ -683,13 +690,22 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
   }
 
   private def getJoinCopies(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                            analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]],
+                            analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]],
                             reqCopy: Option[String]): Map[TableName, CopyInfo] = {
     val joins = typed.Join.expandJoins(analyses.seq)
-    val joinTables = joins.map(x => TableName(x.from.fromTable.name, None))
-    joinTables.flatMap { resourceName =>
+    val froms = analyses.seq.flatMap(x => x.from.toSeq)
+    val joinTables = joins.flatMap(x => x.from.fromTables) ++ froms
+    val joinTableMap = joinTables.flatMap { resourceName =>
       getCopy(pgu, new ResourceName(resourceName.name), reqCopy).map(copy => (resourceName, copy))
     }.toMap
+
+    val allMap = joinTableMap
+    val allMapNoAliases = allMap.map {
+      case (tableName, copy) =>
+        (tableName.copy(alias = None), copy)
+    }
+
+    allMapNoAliases
   }
 
   private def getDatasetTablenameMap(copies: Map[TableName, CopyInfo]): Map[TableName, String] = {

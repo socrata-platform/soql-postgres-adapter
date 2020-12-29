@@ -1,0 +1,13 @@
+[
+  { c: "create", user: "test", resource: "_bird" },
+  { c: "add column", id: "name", type: "text" },
+  { c: "add column", id: "breed", type: "text" },
+  { c: "add column", id: "year", type: "number" },
+  { c: "add column", id: "point", type: "point" },
+  { c: "add column", id: "bird", type: "text" },
+  { c: "add column", id: "url", type: "url" },
+  { c: "row data" },
+  {"name":"bird1", "breed":"hawk", "bird": "bird","year": 1, "point": "POINT (1 2)"},
+  {"name":"bird2", "breed":"pigeon", "bird": "bird","year": 2, "point": "POINT (3 4)"},
+  {"name":"bird3", "breed":"sparrow", "bird": "bird","year": 3}
+]
