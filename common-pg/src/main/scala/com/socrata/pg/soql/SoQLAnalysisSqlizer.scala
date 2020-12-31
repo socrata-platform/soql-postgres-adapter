@@ -3,7 +3,10 @@ package com.socrata.pg.soql
 import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
+import com.socrata.pg.soql.SoQLAnalysisSqlizer.{innermostSoql, outermostSoql, sql}
 import com.socrata.pg.store.PostgresUniverseCommon
+import com.socrata.soql.BinaryTree
+import com.socrata.soql.Compound
 import com.socrata.soql.environment.{ColumnName, TableName}
 import com.socrata.soql.typed._
 import com.socrata.soql.types._
@@ -22,6 +25,91 @@ object TopSoQLAnalysisSqlizer extends Sqlizer[TopAnalysisTarget] {
           escape: Escape): ParametricSql = {
     val (analyses, tableNames, allColumnReps) = analysis
     SoQLAnalysisSqlizer.sql((analyses, None), tableNames, allColumnReps)(rep, typeRep, setParams, ctx, escape)
+  }
+}
+
+
+
+object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]], Map[TableName, String], Seq[SqlColumnRep[SoQLType, SoQLValue]])] {
+  import Sqlizer._
+  import SqlizerContext._
+
+  def sql(x: (BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]], Map[TableName, String], Seq[SqlColumnRep[SoQLType, SoQLValue]]))
+         (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+          typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+          setParams: Seq[SetParam],
+          ctx: Context,
+          escape: Escape): ParametricSql = {
+    val (banalysis, tableNames, allColumnReps) = x
+    val (psql, _) =  sql(banalysis, None, tableNames, allColumnReps, reqRowCount = false, rep, typeRep, setParams, ctx, escape, None)
+    psql
+  }
+
+  private def sql(banalysis: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]], // scalastyle:ignore method.length parameter.number
+                  prevAna: Option[SoQLAnalysis[UserColumnId, SoQLType]],
+                  tableNames: Map[TableName, String],
+                  allColumnReps: Seq[SqlColumnRep[SoQLType, SoQLValue]],
+                  reqRowCount: Boolean,
+                  rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                  typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                  setParams: Seq[SetParam],
+                  ctx: Context,
+                  escape: Escape,
+                  fromTableName: Option[String] = None): (ParametricSql, /* params count in select, excluding where, group by... */ Int) = {
+    banalysis match {
+      case Compound(op, l, ra: SoQLAnalysis[UserColumnId, SoQLType]) if op == "QUERYPIPE" =>
+        val (lpsql, lParamsCountInSelect) = sql(l, None, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctx, escape, fromTableName)
+        val chainedTableAlias = "x1"
+        val subTableName = "(%s) AS %s".format(lpsql.sql.head, chainedTableAlias)
+        val tableNamesSubTableNameReplace = tableNames + (TableName.PrimaryTable -> subTableName)
+        val primaryTableAlias = Map((PrimaryTableAlias -> chainedTableAlias))
+        val subCtx = ctx ++ primaryTableAlias ++
+          Map(InnermostSoql -> false, OutermostSoql -> true)
+        val prevAna = l.rightMostOfLeft
+        val (rpsql, rParamsCountInSelect) = SoQLAnalysisSqlizer.sql(ra, // scalastyle:ignore method.length parameter.number
+          Option(prevAna),
+          tableNamesSubTableNameReplace,
+          allColumnReps,
+          reqRowCount,
+          rep,
+          typeRep,
+          setParams,
+          subCtx,
+          escape,
+          fromTableName)
+        //            // query parameters in the select phrase come before those in the sub-query.
+        //            // query parameters in the other phrases - where, group by, order by, etc come after those in the sub-query.
+        val (setParamsBefore, setParamsAfter) = rpsql.setParams.splitAt(rParamsCountInSelect)
+        val setParamsAcc = setParamsBefore ++ lpsql.setParams ++ setParamsAfter
+        (rpsql.copy(setParams = setParamsAcc), rParamsCountInSelect)
+      case Compound(op, _, _) if op == "QUERYPIPE" =>
+        throw new Exception("right operand of query pipe cannot be recursive")
+      case Compound(op, l, r) => // UNION
+        val (lpsql, lpcts) = sql(l, None, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctx, escape, fromTableName)
+        val (rpsql, rpcts) = sql(r, None, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctx, escape, fromTableName)
+        //            val prevUnion = subParametricSql.sql.head
+        //            val subCtx = ctx + (OutermostSoql -> outermostSoql(ana, analyses)) +
+        //              (InnermostSoql -> innermostSoql(ana, analyses)) -
+        //              JoinPrimaryTable
+        //            val (sqls, paramsCountInSelect) = sqlbinary(r, None, tableNames, allColumnReps, reqRowCount &&  ana == lastAna,
+        //              rep, typeRep, Seq.empty, subCtx, escape, ana.from)
+        val setParamsAcc = lpsql.setParams ++ rpsql.setParams
+        val unionSql = lpsql.sql.zip(rpsql.sql).map { case (l, r) => s"${l} UNION ${r}" }
+        (ParametricSql(unionSql, setParamsAcc), lpcts + rpcts)
+      case analysis: SoQLAnalysis[UserColumnId, SoQLType] =>
+        val subCtx = ctx ++ Map(InnermostSoql -> true, OutermostSoql -> true)
+        SoQLAnalysisSqlizer.sql(analysis, // scalastyle:ignore method.length parameter.number
+          None,
+          tableNames,
+          allColumnReps,
+          reqRowCount,
+          rep,
+          typeRep,
+          setParams,
+          subCtx,
+          escape,
+          analysis.from.orElse(fromTableName))
+    }
   }
 }
 
@@ -97,17 +185,17 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
   /**
    * Convert one analysis to parameteric sql.
    */
-  private def sql(analysis: SoQLAnalysis[UserColumnId, SoQLType], // scalastyle:ignore method.length parameter.number
-                  prevAna: Option[SoQLAnalysis[UserColumnId, SoQLType]],
-                  tableNames: Map[TableName, String],
-                  allColumnReps: Seq[SqlColumnRep[SoQLType, SoQLValue]],
-                  reqRowCount: Boolean,
-                  rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
-                  typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
-                  setParams: Seq[SetParam],
-                  context: Context,
-                  escape: Escape,
-                  fromTableName: Option[String] = None): (ParametricSql, /* params count in select, excluding where, group by... */ Int) = {
+  def sql(analysis: SoQLAnalysis[UserColumnId, SoQLType], // scalastyle:ignore method.length parameter.number
+          prevAna: Option[SoQLAnalysis[UserColumnId, SoQLType]],
+          tableNames: Map[TableName, String],
+          allColumnReps: Seq[SqlColumnRep[SoQLType, SoQLValue]],
+          reqRowCount: Boolean,
+          rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+          typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+          setParams: Seq[SetParam],
+          context: Context,
+          escape: Escape,
+          fromTableName: Option[String] = None): (ParametricSql, /* params count in select, excluding where, group by... */ Int) = {
 
     // Use leading search despite being poor in semantics.  It is more likely to use the GIN index and performs better.
     // TODO: switch to trailing search when there is smarter index support

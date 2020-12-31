@@ -40,7 +40,7 @@ import com.socrata.pg.server.config.{DynamicPortMap, QueryServerConfig}
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.soql._
 import com.socrata.pg.store._
-import com.socrata.soql.{SoQLAnalysis, typed}
+import com.socrata.soql.{BinaryTree, SoQLAnalysis, typed}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, ResourceName, TableName}
@@ -480,10 +480,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     }
   }
 
-  def execQuery2( // scalastyle:ignore method.length parameter.number cyclomatic.complexity
-                 pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                 datasetInfo: DatasetInfo,
-                 analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]]): Unit = {
+  def execQueryUnion( // scalastyle:ignore method.length parameter.number cyclomatic.complexity
+                      pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                      datasetInfo: DatasetInfo,
+                      analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]]): Unit = {
 
     val obfuscateId = true
     val latestCopy: CopyInfo = getCopy(pgu, datasetInfo, None)
@@ -525,18 +525,72 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
         acc ++ getJoinReps(pgu, copyInfo, tableName)
       }
 
-      latestCopy.dataTableName
-
       val tableNameMap = getDatasetTablenameMap(joinCopiesMap) +
         (TableName.PrimaryTable -> latestCopy.dataTableName)  // (TableName("_") -> "_cat") (TableName("_dog") -> "_dog")
       val ParametricSql(sqls, setParams) = Sqlizer.sql((analyses, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
       val sql: String = sqls.head
-      println(sqls.mkString("HELLO3: ", ",", ":END"))
-      val mystr = "hello world"
-      println("HELLO4: " + sql)
+      println(sqls.mkString("HELLO5: ", ",", ":END"))
+      println("HELLO5: " + sql)
      // SELECT _cat.u_name_4,_d1.u_breed_5 FROM _cat JOIN _cat as _d1 ON (_cat.u_name_4 = _d1.u_name_4)
-      println(mystr)
       sqls
+    }
+  }
+
+  def execQueryBinary( // scalastyle:ignore method.length parameter.number cyclomatic.complexity
+                       pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                       datasetInfo: DatasetInfo,
+                       banalysis: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]]): Unit = {
+
+    val obfuscateId = true
+    val latestCopy: CopyInfo = getCopy(pgu, datasetInfo, None)
+    val rollupName = None
+    val reqCopy = None
+    val analysisSeq = banalysis.seq
+    val analyses = NonEmptySeq(analysisSeq.head, analysisSeq.tail)
+
+    val cryptProvider = new CryptProvider(latestCopy.datasetInfo.obfuscationKey)
+
+    val sqlCtx = Map[SqlizerContext, Any](
+      SqlizerContext.IdRep -> (if (obfuscateId) { new SoQLID.StringRep(cryptProvider) }
+      else { new ClearNumberRep(cryptProvider) }),
+      SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
+      SqlizerContext.CaseSensitivity -> caseSensitivity,
+      SqlizerContext.LeadingSearch -> leadingSearch
+    )
+    val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit)
+
+    for(readCtx <- pgu.datasetReader.openDataset(latestCopy)) {
+      val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema
+      val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
+      val qrySchema = querySchema(pgu, banalysis.last, latestCopy)
+      val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor)
+      val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
+      val sqlReps = querier.getSqlReps(systemToUserColumnMap)
+
+      // TODO: rethink how reps should be constructed and passed into each chained soql.
+      val typeReps = banalysis.seq.flatMap { analysis =>
+        val qrySchema = querySchema(pgu, analysis, latestCopy)
+        qrySchema.map { case (columnId, columnInfo) =>
+          columnInfo.typ -> pgu.commonSupport.repFor(columnInfo)
+        }
+      }.toMap
+      println("WIP getJoinCopies")
+      val joinCopiesMap = getJoinCopies(pgu, analyses, reqCopy)
+      val joinCopies = joinCopiesMap.values.toSeq
+
+      val sqlRepsWithJoin = joinCopiesMap.foldLeft(sqlReps) { (acc, joinCopy) =>
+        val (tableName, copyInfo) = joinCopy
+        acc ++ getJoinReps(pgu, copyInfo, tableName)
+      }
+
+      val tableNameMap = getDatasetTablenameMap(joinCopiesMap) +
+        (TableName.PrimaryTable -> latestCopy.dataTableName)  // (TableName("_") -> "_cat") (TableName("_dog") -> "_dog")
+
+      val ParametricSql(sqls, setParams) = BinarySoQLAnalysisSqlizer.sql((banalysis, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
+     // val ParametricSql(sqls, setParams) = SoQLAnalysisSqlizer.sqlbinary(banalysis, tableNameMap, sqlReps.values.toSeq)(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
+      val sql: String = sqls.head
+      println(sqls.mkString("HELLO5: ", ",", ":END"))
+      println("HELLO5: " + sql)
     }
   }
 
