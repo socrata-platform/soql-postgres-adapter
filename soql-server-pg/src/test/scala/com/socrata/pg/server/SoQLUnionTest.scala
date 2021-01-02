@@ -85,11 +85,10 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
     println("hello")
     var soql = "SELECT name, @d1.breed JOIN @dog as d1 ON name=@d1.name |> select name, breed, 'hi'"
     soql = "SELECT name, breed, age, specie |> SELECT name, breed |> SELECT name, 123"
-  //  soql = "SELECT name, breed UNION SELECT @d1.name, @d1.breed from @dog as d1"
+    soql = "SELECT name, breed UNION SELECT @d1.name, @d1.breed from @dog as d1"
    // soql = "SELECT name, breed, age, specie |> SELECT name, breed UNION SELECT @d1.name, @d1.breed from @dog as d1"
-    soql = "SELECT name, breed, age, specie |> SELECT name, breed UNION SELECT @dog.name, @dog.breed from @dog"
+   // soql = "SELECT name, breed, age, specie |> SELECT name, breed UNION SELECT @dog.name, @dog.breed from @dog"
     // soql = "SELECT name, breed, @dog.name as dogname JOIN @dog on @dog.name=name |> select name, dogname"
-    //soql = "SELECT name, breed, age |> select name, breed"
     secDatasetId = secDatasetIdCat
     val expectedRowCount: Option[Long] = None
     val caseSensitivity: CaseSensitivity = CaseSensitive

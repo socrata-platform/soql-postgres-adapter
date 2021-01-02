@@ -55,7 +55,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
                   setParams: Seq[SetParam],
                   ctx: Context,
                   escape: Escape,
-                  fromTableName: Option[String] = None): (ParametricSql, /* params count in select, excluding where, group by... */ Int) = {
+                  fromTableName: Option[TableName] = None): (ParametricSql, /* params count in select, excluding where, group by... */ Int) = {
     banalysis match {
       case Compound(op, l, ra: SoQLAnalysis[UserColumnId, SoQLType]) if op == "QUERYPIPE" =>
         val (lpsql, lParamsCountInSelect) = sql(l, None, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctx, escape, fromTableName)
@@ -195,7 +195,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
           setParams: Seq[SetParam],
           context: Context,
           escape: Escape,
-          fromTableName: Option[String] = None): (ParametricSql, /* params count in select, excluding where, group by... */ Int) = {
+          fromTableName: Option[TableName] = None): (ParametricSql, /* params count in select, excluding where, group by... */ Int) = {
 
     // Use leading search despite being poor in semantics.  It is more likely to use the GIN index and performs better.
     // TODO: switch to trailing search when there is smarter index support
@@ -248,7 +248,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
 
       val (tableName, joinOnParams) = join.from.subAnalysis.map { case SubAnalysis(analyses, alias) =>
         val joinTableLikeParamSql = Sqlizer.sql(
-          ((analyses, Some(join.from.fromTable.name): Option[String]), joinTableNames, allColumnReps))(rep, typeRep, Seq.empty, ctxJoin, escape)
+          ((analyses, Some(join.from.fromTable): Option[TableName]), joinTableNames, allColumnReps))(rep, typeRep, Seq.empty, ctxJoin, escape)
         val tn = "(" + joinTableLikeParamSql.sql.mkString + ") as " + alias
         (tn, setParamAcc ++ joinTableLikeParamSql.setParams)
       }.getOrElse {
@@ -318,12 +318,12 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     }
     val setParamsOrderBy = orderBy._2
 
-    val tableName = fromTableName.map(TableName(_, None)).getOrElse(TableName.PrimaryTable)
+    val tableName = fromTableName.getOrElse(TableName.PrimaryTable)
 
     // COMPLETE SQL
     val selectOptionalDistinct = "SELECT " + (if (analysis.distinct) "DISTINCT " else "")
     val completeSql = selectPhrase.mkString(selectOptionalDistinct, ",", "") +
-      s" FROM ${tableNames(tableName)}" +
+      s" FROM ${tableNames(tableName)}" + tableName.alias.map(a => s" as ${a}").getOrElse("") +
       joinPhrase.mkString(" ") +
       where.flatMap(_.sql.headOption.map(" WHERE " +  _)).getOrElse("") +
       whereSearch.mkString(" ") +

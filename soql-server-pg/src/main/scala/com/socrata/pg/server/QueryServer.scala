@@ -589,7 +589,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
       val ParametricSql(sqls, setParams) = BinarySoQLAnalysisSqlizer.sql((banalysis, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
      // val ParametricSql(sqls, setParams) = SoQLAnalysisSqlizer.sqlbinary(banalysis, tableNameMap, sqlReps.values.toSeq)(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
       val sql: String = sqls.head
-      println(sqls.mkString("HELLO5: ", ",", ":END"))
       println("HELLO5: " + sql)
     }
   }
@@ -776,8 +775,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                             analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]],
                             reqCopy: Option[String]): Map[TableName, CopyInfo] = {
     val joins = typed.Join.expandJoins(analyses.seq)
-    val froms = analyses.seq.flatMap(x => x.from.map(TableName(_, None)))
-    val joinTables = joins.map(x => TableName(x.from.fromTable.name, None)) ++ froms
+    val froms = analyses.seq.flatMap(x => x.from.toSeq)
+    val joinTables = joins.map(x => x.from.fromTable) ++ froms
     val joinTableMap = joinTables.flatMap { resourceName =>
       getCopy(pgu, new ResourceName(resourceName.name), reqCopy).map(copy => (resourceName, copy))
     }.toMap
