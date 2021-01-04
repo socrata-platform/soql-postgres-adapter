@@ -290,7 +290,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     // TODO: Join handle qualifier
     val analysesColumnId = analyses.map(_.mapColumnIds((name, qualifier) => new UserColumnId(name.name)))
     SoQLAnalyzerHelper.serialize(baos, analysesColumnId)
-    (SoQLAnalyzerHelper.deserialize(new ByteArrayInputStream(baos.toByteArray)), None)
+    SoQLAnalyzerHelper.deserialize(new ByteArrayInputStream(baos.toByteArray))
   }
 }
 

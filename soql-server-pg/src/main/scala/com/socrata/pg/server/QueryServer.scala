@@ -423,12 +423,14 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
           val results = querier.query(
             analyses,
             (as: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) => {
+              println("TABLENAME: " + tableName)
               val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> tableName)
-              Sqlizer.sql((as, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
+              val asFrom = NonEmptySeq(as.head.copy(from = Some(TableName(tableName))), as.tail)
+              Sqlizer.sql((asFrom, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
             },
             (as: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) => {
               val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> tableName)
-              SoQLAnalysisSqlizer.rowCountSql(((as, None), tableNameMap, sqlReps.values.toSeq))(
+              SoQLAnalysisSqlizer.rowCountSql((as, tableNameMap, sqlReps.values.toSeq))(
                 sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
             },
             rowCount,
@@ -539,7 +541,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
   def execQueryBinary( // scalastyle:ignore method.length parameter.number cyclomatic.complexity
                        pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                        datasetInfo: DatasetInfo,
-                       banalysis: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]]): Unit = {
+                       banalysis: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]]): String = {
 
     val obfuscateId = true
     val latestCopy: CopyInfo = getCopy(pgu, datasetInfo, None)
@@ -590,6 +592,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
      // val ParametricSql(sqls, setParams) = SoQLAnalysisSqlizer.sqlbinary(banalysis, tableNameMap, sqlReps.values.toSeq)(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
       val sql: String = sqls.head
       println("HELLO5: " + sql)
+      sql
     }
   }
 
@@ -790,7 +793,13 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
           acc
       }
     }
-    allMap
+
+    val allMapNoAliases = allMap.map {
+      case (tableName, copy) =>
+        (tableName.copy(alias = None), copy)
+    }
+
+    allMapNoAliases
   }
 
   private def getDatasetTablenameMap(copies: Map[TableName, CopyInfo]): Map[TableName, String] = {

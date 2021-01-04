@@ -25,9 +25,11 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
   var secDatasetIdCat = DatasetId.Invalid
   var truthDatasetIdDog = DatasetId.Invalid
   var secDatasetIdDog = DatasetId.Invalid
+  var truthDatasetIdBird = DatasetId.Invalid
+  var secDatasetIdBird = DatasetId.Invalid
 
 
-
+  private lazy val birdCtx = getContext(secDatasetIdBird)
   private lazy val catCtx = getContext(secDatasetIdCat)
   private lazy val dogCtx = getContext(secDatasetIdDog)
 
@@ -48,21 +50,27 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
   }
 
   lazy val plainCtx = Map(TableName("_").qualifier -> catCtx,
-    TableName("_dog").qualifier -> dogCtx)
+    TableName("_dog").qualifier -> dogCtx,
+    TableName("_bird").qualifier -> birdCtx)
   lazy val aliasCtx = plainCtx ++ Map(
-    TableName("_dog", Some("_d1")).qualifier -> dogCtx)
+    TableName("_dog", Some("_d1")).qualifier -> dogCtx,
+    TableName("_bird", Some("_b1")).qualifier -> birdCtx)
 
   override def beforeAll: Unit = {
     createDatabases()
     withDb() { conn =>
       val (truthCatId2, secCatId2) = importDataset(conn, "mutate-create-cat-dataset.json")
       val (truthDogId3, secDogId3) = importDataset(conn, "mutate-create-dog-dataset.json")
+      val (truthBirdId4, secBirdId4) = importDataset(conn, "mutate-create-bird-dataset.json")
 
       truthDatasetIdCat = truthCatId2
       secDatasetIdCat = secCatId2
 
       truthDatasetIdDog = truthDogId3
       secDatasetIdDog = secDogId3
+
+      truthDatasetIdBird = truthBirdId4
+      secDatasetIdBird = secBirdId4
 
       importDataset(conn)
     }
@@ -71,7 +79,7 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
   override def afterAll: Unit = {
     withPgu() { pgu =>
 
-      Seq(truthDatasetIdCat, truthDatasetIdDog).foreach { dsId =>
+      Seq(truthDatasetIdCat, truthDatasetIdDog, truthDatasetIdBird).foreach { dsId =>
         if (dsId != DatasetId.Invalid) {
           dropDataset(pgu, dsId)
         }
@@ -85,7 +93,9 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
     println("hello")
     var soql = "SELECT name, @d1.breed JOIN @dog as d1 ON name=@d1.name |> select name, breed, 'hi'"
     soql = "SELECT name, breed, age, specie |> SELECT name, breed |> SELECT name, 123"
-    soql = "SELECT name, breed UNION SELECT @d1.name, @d1.breed from @dog as d1"
+    soql = "SELECT name, `union`, breed UNION select name, `union` from @dog as d1"
+   // soql = "SELECT name, breed UNION SELECT @d1.name, @d1.breed from @dog as d1 UNION SELECT @b1.name, @b1.breed from @bird as b1"
+   // soql = "SELECT name, breed UNION SELECT @dog.name, @dog.breed from @dog"
    // soql = "SELECT name, breed, age, specie |> SELECT name, breed UNION SELECT @d1.name, @d1.breed from @dog as d1"
    // soql = "SELECT name, breed, age, specie |> SELECT name, breed UNION SELECT @dog.name, @dog.breed from @dog"
     // soql = "SELECT name, breed, @dog.name as dogname JOIN @dog on @dog.name=name |> select name, dogname"
@@ -135,7 +145,8 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
         ds.run { dsInfo =>
           val qs = new QueryServer(dsInfo, caseSensitivity, leadingSearch)
           //qs.execQueryUnion(pgu, copyInfo.datasetInfo, analyses)
-          qs.execQueryBinary(pgu, copyInfo.datasetInfo, banalysis)
+          val sql = qs.execQueryBinary(pgu, copyInfo.datasetInfo, banalysis)
+          println(sql)
         }
 
 

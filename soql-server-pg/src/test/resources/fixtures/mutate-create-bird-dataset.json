@@ -1,5 +1,5 @@
 [
-  { c: "create", user: "test", resource: "_dog" },
+  { c: "create", user: "test", resource: "_bird" },
   { c: "add column", id: "name", type: "text" },
   { c: "add column", id: "breed", type: "text" },
   { c: "add column", id: "specie", type: "text" },
@@ -7,7 +7,7 @@
   { c: "add column", id: "point", type: "point" },
   { c: "add column", id: "union", type: "text" },
   { c: "row data" },
-  {"name":"dog1", "breed":"golden retriever", "specie": "dog","age": 1},
-  {"name":"dog2", "breed":"poodle", "specie": "dog","age": 2},
-  {"name":"dog3", "breed":"beagle", "specie": "dog","age": 3}
+  {"name":"bird1", "breed":"hawk", "specie": "bird","age": 1, "point": "POINT (1 2)"},
+  {"name":"bird2", "breed":"pigeon", "specie": "bird","age": 2, "point": "POINT (3 4)"},
+  {"name":"bird3", "breed":"sparrow", "specie": "bird","age": 3}
 ]
