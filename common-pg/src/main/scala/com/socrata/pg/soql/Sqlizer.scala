@@ -11,7 +11,7 @@ import com.socrata.soql.types._
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
 import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
 import com.socrata.pg.soql.Sqlizer._
-import com.socrata.pg.soql.SqlizerContext.SqlizerContext
+import com.socrata.pg.soql.SqlizerContext.{SqlizerContext, Value}
 
 case class ParametricSql(sql: Seq[String], setParams: Seq[SetParam]) {
   override def toString(): String = {
@@ -170,6 +170,7 @@ object SqlizerContext extends Enumeration {
   val CaseSensitivity = Value("case-sensitivity")
   val InnermostSoql = Value("innermost-soql")
   val OutermostSoql = Value("outermost-soql")
+  val OutermostSoqls = Value("outermost-soqls")
 
   val TableMap = Value("tables") // resource name to table name map
   val TableAliasMap = Value("table-aliases") // resource alias name to table name map

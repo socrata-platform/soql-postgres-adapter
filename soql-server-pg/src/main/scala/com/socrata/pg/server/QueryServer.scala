@@ -556,6 +556,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
       SqlizerContext.IdRep -> (if (obfuscateId) { new SoQLID.StringRep(cryptProvider) }
       else { new ClearNumberRep(cryptProvider) }),
       SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
+      SqlizerContext.OutermostSoqls -> BinarySoQLAnalysisSqlizer.outerMostAnalyses(banalysis),
       SqlizerContext.CaseSensitivity -> caseSensitivity,
       SqlizerContext.LeadingSearch -> leadingSearch
     )

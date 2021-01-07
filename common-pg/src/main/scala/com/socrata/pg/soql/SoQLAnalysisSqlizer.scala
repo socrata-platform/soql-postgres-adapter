@@ -56,6 +56,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
                   ctx: Context,
                   escape: Escape,
                   fromTableName: Option[TableName] = None): (ParametricSql, /* params count in select, excluding where, group by... */ Int) = {
+
     banalysis match {
       case Compound(op, l, ra: SoQLAnalysis[UserColumnId, SoQLType]) if op == "QUERYPIPE" =>
         val (lpsql, lParamsCountInSelect) = sql(l, None, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctx, escape, fromTableName)
@@ -109,6 +110,18 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
           subCtx,
           escape,
           analysis.from.orElse(fromTableName))
+    }
+  }
+
+  def outerMostAnalyses(bt: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]], set: Set[SoQLAnalysis[UserColumnId, SoQLType]] = Set.empty):
+    Set[SoQLAnalysis[UserColumnId, SoQLType]] = {
+    bt match {
+      case Compound("QUERYPIPE", l, r) =>
+        outerMostAnalyses(r, set)
+      case Compound(_, l, r) => // union
+        outerMostAnalyses(l, set) ++ outerMostAnalyses(r, set)
+      case x: SoQLAnalysis[UserColumnId, SoQLType]  =>
+        set + x
     }
   }
 }
@@ -553,7 +566,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
         val (_, selectSetParams) = acc
         val ParametricSql(sqls, newSetParams) = Sqlizer.sql(coreExpr)(rep, typeRep, selectSetParams, ctxSelect, escape)
         val sqlGeomConverted =
-          if (shouldConvertGeomToText(ctx) && !sqls.isEmpty) {
+          if (shouldConvertGeomToText(ctx, analysis) && !sqls.isEmpty) {
             val cn = if (strictOutermostSoql) Some(columnName) else None
             // compound type with a geometry and something else like "Location" type
             // must place the geometry in the first part.
@@ -566,8 +579,9 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     (sqls, setParamsInSelect ++ setParams)
   }
 
-  private def shouldConvertGeomToText(ctx: Context): Boolean = {
-    !(ctx.contains(LeaveGeomAsIs) || isStrictInnermostSoql(ctx) || ctx.contains(IsSubQuery) || (false == ctx(OutermostSoql)))
+  private def shouldConvertGeomToText(ctx: Context, analysis: SoQLAnalysis[_, _]): Boolean = {
+   val isOutermost = ctx(OutermostSoqls).asInstanceOf[Set[SoQLAnalysis[_, _]]].contains(analysis)
+    !(ctx.contains(LeaveGeomAsIs) || /* isStrictInnermostSoql(ctx) || */ ctx.contains(IsSubQuery) ||  (false == isOutermost))
   }
 
   /**
