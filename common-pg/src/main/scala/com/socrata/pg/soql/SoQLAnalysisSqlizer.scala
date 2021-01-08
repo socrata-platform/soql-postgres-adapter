@@ -3,6 +3,7 @@ package com.socrata.pg.soql
 import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
+import com.socrata.pg.soql.BinarySoQLAnalysisSqlizer.sql
 import com.socrata.pg.soql.SoQLAnalysisSqlizer.{innermostSoql, outermostSoql, sql}
 import com.socrata.pg.store.PostgresUniverseCommon
 import com.socrata.soql.BinaryTree
@@ -43,6 +44,35 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
     val (banalysis, tableNames, allColumnReps) = x
     val (psql, _) =  sql(banalysis, None, tableNames, allColumnReps, reqRowCount = false, rep, typeRep, setParams, ctx, escape, None)
     psql
+  }
+
+
+  /**
+   * For rowcount w/o group by, just replace the select with count(*).
+   * For rowcount with group by, wrap the original group by sql with a select count(*) from ( {original}) t_rc
+   */
+  def rowCountSql(analysis: BAnalysisTarget)
+                 (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                  typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                  setParams: Seq[SetParam],
+                  ctx: Context,
+                  escape: Escape): ParametricSql = {
+
+    // FIX ME
+    val (banalysis, tableNames, allColumnReps) = analysis
+    val (psql, _) = BinarySoQLAnalysisSqlizer.sql(banalysis,
+      prevAna = None,
+      tableNames,
+      allColumnReps,
+      reqRowCount = true,
+      rep,
+      typeRep,
+      setParams,
+      ctx,
+      escape,
+      fromTableName = None)
+    psql
+    // sql(analysis, reqRowCount = true, rep, typeRep, setParams, ctx, escape)
   }
 
   private def sql(banalysis: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]], // scalastyle:ignore method.length parameter.number
@@ -144,13 +174,16 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
    * For rowcount w/o group by, just replace the select with count(*).
    * For rowcount with group by, wrap the original group by sql with a select count(*) from ( {original}) t_rc
    */
-  def rowCountSql(analysis: AnalysisTarget)
+  def rowCountSql(analysis: BAnalysisTarget)
                  (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                   typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
                   setParams: Seq[SetParam],
                   ctx: Context,
                   escape: Escape): ParametricSql = {
-    sql(analysis, reqRowCount = true, rep, typeRep, setParams, ctx, escape)
+
+     // FIX ME
+     null
+    // sql(analysis, reqRowCount = true, rep, typeRep, setParams, ctx, escape)
   }
 
   /**
@@ -230,6 +263,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     }
 
     val ctx = context + (Analysis -> analysis) +
+                        (OutermostSoql -> isOutermostAnalysis(analysis, context)) +
                         (TableMap -> (tableNames ++ fromTableNames)) +
                         (TableAliasMap -> (tableNames.map { case (k, v) => (k.qualifier, realAlias(k, v)) } ++ fromTableAliases) )
 
@@ -367,46 +401,8 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       ana.limit.map(" LIMIT " + _.toString).getOrElse("") +
       ana.offset.map(" OFFSET " + _.toString).getOrElse("")
 
-    val firstPSql = ParametricSql(Seq(countBySubQuery(analysis)(reqRowCount, completeSql)), setParamsOrderBy)
-
-    val analyses = NonEmptySeq(ana, ana.more)
-    val lastAna = analyses.last
-
-    // UNION
-    val (resultPSql, _) = ana.more.foldLeft((firstPSql, ana)) { (acc, ana) =>
-      val (subParametricSql, prevAna) = acc
-      ana.op match {
-        case Some("UNION") =>
-          val prevUnion = subParametricSql.sql.head
-          val subCtx = ctx + (OutermostSoql -> outermostSoql(ana, analyses)) +
-            (InnermostSoql -> innermostSoql(ana, analyses)) -
-            JoinPrimaryTable
-          val (sqls, paramsCountInSelect) = sql(ana, None, tableNames, allColumnReps, reqRowCount &&  ana == lastAna,
-            rep, typeRep, Seq.empty, subCtx, escape, ana.from)
-          val setParamsAcc = subParametricSql.setParams ++ sqls.setParams
-          val unionSql = s"${prevUnion} UNION ${sqls.sql.head}"
-          (ParametricSql(Seq(unionSql), setParamsAcc), ana)
-        case _ => // PIPE
-          val chainedTableAlias = "x1"
-          val subTableName = "(%s) AS %s".format(subParametricSql.sql.head, chainedTableAlias)
-          val tableNamesSubTableNameReplace = tableNames + (TableName.PrimaryTable -> subTableName)
-          val primaryTableAlias =
-            if (ana.joins.nonEmpty) Map((PrimaryTableAlias -> chainedTableAlias))
-            else Map.empty
-          val subCtx = ctx + (OutermostSoql -> outermostSoql(ana, analyses)) +
-            (InnermostSoql -> innermostSoql(ana, analyses)) -
-            JoinPrimaryTable ++ primaryTableAlias
-          val (sqls, paramsCountInSelect) = sql(ana, Some(prevAna), tableNamesSubTableNameReplace, allColumnReps, reqRowCount &&  ana == lastAna,
-            rep, typeRep, Seq.empty, subCtx, escape)
-          // query parameters in the select phrase come before those in the sub-query.
-          // query parameters in the other phrases - where, group by, order by, etc come after those in the sub-query.
-          val (setParamsBefore, setParamsAfter) = sqls.setParams.splitAt(paramsCountInSelect)
-          val setParamsAcc = setParamsBefore ++ subParametricSql.setParams ++ setParamsAfter
-          (sqls.copy(setParams = setParamsAcc), ana)
-      }
-    }
-
-    (resultPSql, paramsCountInSelect)
+    val result = ParametricSql(Seq(countBySubQuery(analysis)(reqRowCount, completeSql)), setParamsOrderBy)
+    (result, paramsCountInSelect)
   }
 
   private def countBySubQuery(analysis: SoQLAnalysis[UserColumnId, SoQLType])(reqRowCount: Boolean, sql: String) =
@@ -554,7 +550,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
                      ctx: Context,
                      escape: Escape) = {
     val strictInnermostSoql = isStrictInnermostSoql(ctx)
-    val strictOutermostSoql = analysis.op.isDefined && isStrictOutermostSoql(ctx)
+    val strictOutermostSoql = isStrictOutermostSoql(ctx)
     val (sqls, setParamsInSelect) =
       // Chain select handles setParams differently than others.  The current setParams are prepended
       // to existing setParams.  Others are appended.
@@ -579,9 +575,17 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     (sqls, setParamsInSelect ++ setParams)
   }
 
+  private def isOutermostAnalysis(analysis: SoQLAnalysis[_, _], ctx: Context) = {
+    ctx.get(OutermostSoqls) match {
+      case Some(set) =>
+        set.asInstanceOf[Set[SoQLAnalysis[_, _]]].contains(analysis)
+      case None =>
+        ctx(OutermostSoql) == true
+    }
+  }
+
   private def shouldConvertGeomToText(ctx: Context, analysis: SoQLAnalysis[_, _]): Boolean = {
-   val isOutermost = ctx(OutermostSoqls).asInstanceOf[Set[SoQLAnalysis[_, _]]].contains(analysis)
-    !(ctx.contains(LeaveGeomAsIs) || /* isStrictInnermostSoql(ctx) || */ ctx.contains(IsSubQuery) ||  (false == isOutermost))
+    !(ctx.contains(LeaveGeomAsIs) || /* isStrictInnermostSoql(ctx) || */ ctx.contains(IsSubQuery) || false == ctx(OutermostSoql))
   }
 
   /**

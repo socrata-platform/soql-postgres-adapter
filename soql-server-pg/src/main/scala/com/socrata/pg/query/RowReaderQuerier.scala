@@ -10,16 +10,16 @@ import com.socrata.pg.server.QueryServer.ExplainInfo
 import com.socrata.pg.soql.{ParametricSql, QualifiedUserColumnId}
 import com.socrata.pg.store.PGSecondaryRowReader
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.SoQLAnalysis
+import com.socrata.soql.{BinaryTree, SoQLAnalysis}
 
 import scala.concurrent.duration.Duration
 
 trait RowReaderQuerier[CT, CV] {
   this: PGSecondaryRowReader[CT, CV] => ()
 
-  def query(analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
-            toSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql,
-            toRowCountSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
+  def query(analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
+            toSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql,
+            toRowCountSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
             reqRowCount: Boolean,
             querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
             queryTimeout: Option[Duration],
@@ -30,8 +30,8 @@ trait RowReaderQuerier[CT, CV] {
     managed(resultIter)
   }
 
-  def queryExplain(analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
-            toSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql,
+  def queryExplain(analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
+            toSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql,
             queryTimeout: Option[Duration],
             debug: Boolean,
             analyze: Boolean): ExplainInfo = {

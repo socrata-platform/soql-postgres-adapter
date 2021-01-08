@@ -20,10 +20,16 @@ object SoQLAnalyzerHelper {
       deserializeType,
       SoQLFunctions.functionsByIdentity)
 
-  def serialize(outputStream: OutputStream, analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]]): Unit =
-    serializer(outputStream, analyses)
+  def serialize(outputStream: OutputStream, analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]]): Unit =
+    serializer.applyBinaryTree(outputStream, analyses)
 
-  def deserialize(inputStream: InputStream): NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] = deserializer(inputStream)
+  def deserialize(inputStream: InputStream): BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] = deserializer.applyBinaryTree(inputStream)
+
+  def serializeSeq(outputStream: OutputStream, analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]]): Unit =
+    serializer.apply(outputStream, analyses)
+
+  def deserializeSeq(inputStream: InputStream): NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] =
+    deserializer.apply(inputStream)
 
   private val analyzer = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
 

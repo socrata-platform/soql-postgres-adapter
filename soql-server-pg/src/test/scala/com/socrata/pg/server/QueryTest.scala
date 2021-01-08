@@ -8,7 +8,7 @@ import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName, Type
 import com.socrata.soql.types.{SoQLID, SoQLType}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.thirdparty.typesafeconfig.Propertizer
-import com.socrata.soql.SoQLAnalysis
+import com.socrata.soql.{BinaryTree, SoQLAnalysis}
 import java.sql.Connection
 
 import com.socrata.NonEmptySeq
@@ -56,8 +56,8 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase w
         val datasetCtx = new DatasetContext[SoQLType] {
           val schema = columnNameTypeMap
         }
-        val analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] =
-          SoQLAnalyzerHelper.analyzeSoQL(soql, Map(TableName.PrimaryTable.qualifier -> datasetCtx), Map.empty)
+        val analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] =
+          SoQLAnalyzerHelper.analyzeSoQLBinary(soql, Map(TableName.PrimaryTable.qualifier -> datasetCtx), Map.empty)
         val (requestColumns, version, mresult) =
           ds.run { dsInfo =>
             val qs = new QueryServer(dsInfo, CaseSensitive, leadingSearch = true)

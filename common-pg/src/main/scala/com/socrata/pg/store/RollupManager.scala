@@ -16,7 +16,7 @@ import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
 import com.socrata.pg.soql._
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.store.index.SoQLIndexableRep
-import com.socrata.soql.{SoQLAnalysis, SoQLAnalyzer}
+import com.socrata.soql.{AnalysisDeserializer, SoQLAnalysis, SoQLAnalyzer}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
@@ -289,8 +289,8 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     val baos = new ByteArrayOutputStream
     // TODO: Join handle qualifier
     val analysesColumnId = analyses.map(_.mapColumnIds((name, qualifier) => new UserColumnId(name.name)))
-    SoQLAnalyzerHelper.serialize(baos, analysesColumnId)
-    SoQLAnalyzerHelper.deserialize(new ByteArrayInputStream(baos.toByteArray))
+    SoQLAnalyzerHelper.serializeSeq(baos, analysesColumnId)
+    SoQLAnalyzerHelper.deserializeSeq(new ByteArrayInputStream(baos.toByteArray))
   }
 }
 

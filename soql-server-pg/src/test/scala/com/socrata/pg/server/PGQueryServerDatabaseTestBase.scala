@@ -11,7 +11,7 @@ import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.http.server.util.NoPrecondition
 import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity}
 import com.socrata.pg.store._
-import com.socrata.soql.SoQLAnalysis
+import com.socrata.soql.{BinaryTree, SoQLAnalysis}
 import com.socrata.soql.analyzer.{QualifiedColumnName, SoQLAnalyzerHelper}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
@@ -63,8 +63,8 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
           acc ++ columnNameIdMap
         }
 
-        val analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] =
-          SoQLAnalyzerHelper.analyzeSoQL(soql, allDatasetCtx, primaryTableColumnNameIdMap ++ joinTableColumnNameIdMap)
+        val analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] =
+          SoQLAnalyzerHelper.analyzeSoQLBinary(soql, allDatasetCtx, primaryTableColumnNameIdMap ++ joinTableColumnNameIdMap)
 
         val (qrySchema, dataVersion, mresult) =
           ds.run { dsInfo =>

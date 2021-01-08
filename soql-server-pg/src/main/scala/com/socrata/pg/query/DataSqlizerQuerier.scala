@@ -8,7 +8,7 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.pg.soql.ParametricSql
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.SoQLAnalysis
+import com.socrata.soql.{BinaryTree, SoQLAnalysis}
 
 import scala.concurrent.duration.Duration
 import com.typesafe.scalalogging.Logger
@@ -37,9 +37,9 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
     */
   private val sqlFetchSize = 1025
 
-  def query(conn: Connection, analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
-            toSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analysis, tableName
-            toRowCountSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analysis, tableName
+  def query(conn: Connection, analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
+            toSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analysis, tableName
+            toRowCountSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analysis, tableName
             reqRowCount: Boolean,
             querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
             queryTimeout: Option[Duration],
@@ -140,8 +140,8 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
     }
   }
 
-  def explainQuery(conn: Connection, analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
-                   toSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
+  def explainQuery(conn: Connection, analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
+                   toSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
                    queryTimeout: Option[Duration],
                    analyze: Boolean):
   ExplainInfo = {
