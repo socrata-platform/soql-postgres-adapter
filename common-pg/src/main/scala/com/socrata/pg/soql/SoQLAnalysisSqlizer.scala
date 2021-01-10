@@ -263,6 +263,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     }
 
     val ctx = context + (Analysis -> analysis) +
+                 // UNION FIX ME       (InnermostSoql -> analysis.from.isDefined) +
                         (OutermostSoql -> isOutermostAnalysis(analysis, context)) +
                         (TableMap -> (tableNames ++ fromTableNames)) +
                         (TableAliasMap -> (tableNames.map { case (k, v) => (k.qualifier, realAlias(k, v)) } ++ fromTableAliases) )
