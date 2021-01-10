@@ -440,7 +440,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
               Sqlizer.sql((as, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
             },
             (as: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) => {
-              val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> tableName)
+              val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> tableName) + (TableName(tableName) -> tableName)
               BinarySoQLAnalysisSqlizer.rowCountSql((as, tableNameMap, sqlReps.values.toSeq))(
                 sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
             },

@@ -64,15 +64,21 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
 
     // FIX ME
     val (banalysis, tableNames, allColumnReps) = analysis
-    val (psql, _) = BinarySoQLAnalysisSqlizer.sql(banalysis,
+    // TODO: DRY this logic with non rowcount
+    val primaryTable = tableNames(TableName.PrimaryTable)
+    val banalysis2 = updateFrom(banalysis, TableName(primaryTable))
+    val tableNames2 = tableNames + (TableName(primaryTable) -> primaryTable)
+    val ctx2 = ctx + (SqlizerContext.OutermostSoqls -> BinarySoQLAnalysisSqlizer.outerMostAnalyses(banalysis2))
+    // TODO: END
+    val (psql, _) = BinarySoQLAnalysisSqlizer.sql(banalysis2,
       prevAna = None,
-      tableNames,
+      tableNames2,
       allColumnReps,
       reqRowCount = true,
       rep,
       typeRep,
       setParams,
-      ctx,
+      ctx2,
       escape,
       fromTableName = None)
     psql
