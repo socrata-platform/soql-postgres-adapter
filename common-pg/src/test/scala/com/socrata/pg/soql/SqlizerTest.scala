@@ -43,7 +43,7 @@ object SqlizerTest {
       PostgresUniverseCommon.repForIndex(ci)
     }
 
-    val analyses = SoQLAnalyzerHelper.analyzeSoQL(soql, allDatasetCtx, allColumnIdMap)
+    val analyses = SoQLAnalyzerHelper.analyzeSoQLBinary(soql, allDatasetCtx, allColumnIdMap)
     val typeReps: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]] =
       columnInfos.map { colInfo  =>
         (colInfo.typ -> SoQLRep.sqlRep(colInfo))
@@ -51,7 +51,7 @@ object SqlizerTest {
 
 
     val tableMap = Map(TableName.PrimaryTable -> "t1", typeTable -> "t2", yearTable -> "t3", yearTable.copy(alias = None) -> "t3")
-    SoQLAnalysisSqlizer.sql((analyses, tableMap, allColumnReps))(
+    BinarySoQLAnalysisSqlizer.sql((analyses, tableMap, allColumnReps))(
       if (useRepsWithId) columnRepsWithId else columnReps,
       typeReps,
       Seq.empty,

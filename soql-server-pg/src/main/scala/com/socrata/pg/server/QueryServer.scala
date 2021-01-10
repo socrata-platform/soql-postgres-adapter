@@ -371,7 +371,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
 
     def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                  latestCopy: CopyInfo,
-                 analysesWOFrom: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]],
+                 analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]],
                  rowCount: Boolean,
                  queryTimeout: Option[Duration],
                  explain: Boolean,
@@ -379,13 +379,13 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
       val cryptProvider = new CryptProvider(latestCopy.datasetInfo.obfuscationKey)
 
       val tableName = latestCopy.dataTableName
-      val analyses = updateFrom(analysesWOFrom, TableName(latestCopy.dataTableName))
+     // val analyses = BinarySoQLAnalysisSqlizer.updateFrom(analysesWOFrom, TableName(latestCopy.dataTableName))
 
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.IdRep -> (if (obfuscateId) { new SoQLID.StringRep(cryptProvider) }
                                  else { new ClearNumberRep(cryptProvider) }),
         SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
-        SqlizerContext.OutermostSoqls -> BinarySoQLAnalysisSqlizer.outerMostAnalyses(analyses),
+   //     SqlizerContext.OutermostSoqls -> BinarySoQLAnalysisSqlizer.outerMostAnalyses(analyses),
         SqlizerContext.CaseSensitivity -> caseSensitivity,
         SqlizerContext.LeadingSearch -> leadingSearch
       )
@@ -493,15 +493,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     }
   }
 
-  def updateFrom(banalysis: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]], tableName: TableName): BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] = {
-    banalysis match {
-      case x@Compound(op, left, right) =>
-         x.copy(left = updateFrom(left, tableName))
-      case x: SoQLAnalysis[UserColumnId, SoQLType] =>
-        x.copy(from = Some(tableName))
-    }
-  }
-
   def execQueryBinary( // scalastyle:ignore method.length parameter.number cyclomatic.complexity
                        pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                        datasetInfo: DatasetInfo,
@@ -549,10 +540,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
         val (tableName, copyInfo) = joinCopy
         acc ++ getJoinReps(pgu, copyInfo, tableName)
       }
-
+      println("X1")
       val tableNameMap = getDatasetTablenameMap(joinCopiesMap) +
         (TableName.PrimaryTable -> latestCopy.dataTableName)  // (TableName("_") -> "_cat") (TableName("_dog") -> "_dog")
-
+      println("X2")
       val ParametricSql(sqls, setParams) = BinarySoQLAnalysisSqlizer.sql((banalysis, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
      // val ParametricSql(sqls, setParams) = SoQLAnalysisSqlizer.sqlbinary(banalysis, tableNameMap, sqlReps.values.toSeq)(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
       val sql: String = sqls.head

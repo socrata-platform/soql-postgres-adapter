@@ -42,7 +42,11 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
           ctx: Context,
           escape: Escape): ParametricSql = {
     val (banalysis, tableNames, allColumnReps) = x
-    val (psql, _) =  sql(banalysis, None, tableNames, allColumnReps, reqRowCount = false, rep, typeRep, setParams, ctx, escape, None)
+    val primaryTable = tableNames(TableName.PrimaryTable)
+    val banalysis2 = updateFrom(banalysis, TableName(primaryTable))
+    val tableNames2 = tableNames + (TableName(primaryTable) -> primaryTable)
+    val ctx2 = ctx + (SqlizerContext.OutermostSoqls -> BinarySoQLAnalysisSqlizer.outerMostAnalyses(banalysis2))
+    val (psql, _) =  sql(banalysis2, None, tableNames2, allColumnReps, reqRowCount = false, rep, typeRep, setParams, ctx2, escape, None)
     psql
   }
 
@@ -73,6 +77,15 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
       fromTableName = None)
     psql
     // sql(analysis, reqRowCount = true, rep, typeRep, setParams, ctx, escape)
+  }
+
+  private def updateFrom(banalysis: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]], tableName: TableName): BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] = {
+    banalysis match {
+      case x@Compound(op, left, right) =>
+        x.copy(left = updateFrom(left, tableName))
+      case x: SoQLAnalysis[UserColumnId, SoQLType] =>
+        x.copy(from = Some(tableName))
+    }
   }
 
   private def sql(banalysis: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]], // scalastyle:ignore method.length parameter.number
@@ -263,7 +276,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     }
 
     val ctx = context + (Analysis -> analysis) +
-                 // UNION FIX ME       (InnermostSoql -> analysis.from.isDefined) +
+                  (InnermostSoql -> analysis.from.isDefined) +
                         (OutermostSoql -> isOutermostAnalysis(analysis, context)) +
                         (TableMap -> (tableNames ++ fromTableNames)) +
                         (TableAliasMap -> (tableNames.map { case (k, v) => (k.qualifier, realAlias(k, v)) } ++ fromTableAliases) )
