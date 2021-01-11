@@ -54,33 +54,6 @@ object SoQLAnalyzerHelper {
     remapAnalyses(joinColumnIdMap, analyses)
   }
 
-  def analyzeSoQLUnion(soql: String,
-                       datasetCtx: Map[String, DatasetContext[SoQLType]],
-                       idMap: Map[QualifiedColumnName, UserColumnId]): NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] = {
-
-    val ast =  new Parser().test3(soql)
-    val parsed = NonEmptySeq(ast)
-    val joins = parsed.seq.flatMap(_.joins)
-
-    val joinColumnIdMap =
-      joins.foldLeft(idMap) { (acc, join) =>
-        val joinTableName = join.from.fromTable
-        val joinAlias = join.from.alias.getOrElse(joinTableName.name)
-        val schema = datasetCtx(joinTableName.qualifier)
-        acc ++ schema.columns.map { fieldName =>
-          QualifiedColumnName(Some(joinAlias), new ColumnName(fieldName.name)) ->
-            new UserColumnId(fieldName.caseFolded)
-        }
-      }
-
-
-    val analysis =  analyzer.analyzeUnion(ast)(datasetCtx) // analyzer.analyze(parsed)(datasetCtx)
-    //val analyses = NonEmptySeq(analysis)
-    //remapAnalyses(joinColumnIdMap, analyses)
-    val analysisr = remapAnalysesUnion(joinColumnIdMap, analysis)
-    NonEmptySeq(analysisr)
-  }
-
   def analyzeSoQLBinary(soql: String,
                         datasetCtx: Map[String, DatasetContext[SoQLType]],
                         idMap: Map[QualifiedColumnName, UserColumnId]): BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] = {
@@ -164,21 +137,6 @@ object SoQLAnalyzerHelper {
     NonEmptySeq.fromSeqUnsafe(analysesInColIds)
   }
 
-  private def remapAnalysesUnion(columnIdMapping: Map[QualifiedColumnName, UserColumnId],
-                            analysis: SoQLAnalysis[ColumnName, SoQLType]): SoQLAnalysis[UserColumnId, SoQLType] = {
-    val seq = NonEmptySeq(analysis, analysis.more)
-    val seqr = remapAnalyses(columnIdMapping, seq)
-    seqr.head.copy(op = analysis.op, more = seqr.tail)
-  }
-
-  private def remapAnalysesBinaryBad(columnIdMapping: Map[QualifiedColumnName, UserColumnId],
-                                  btree: BinaryTree[SoQLAnalysis[ColumnName, SoQLType]]): BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] = {
-    btree.map {
-      case x =>
-        remapAnalysesUnion(columnIdMapping, x)
-    }
-  }
-
   private def remapAnalysesBinary(columnIdMapping: Map[QualifiedColumnName, UserColumnId],
                                     btree: BinaryTree[SoQLAnalysis[ColumnName, SoQLType]]): BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] = {
     val initialAcc = (columnIdMapping, List.empty[SoQLAnalysis[UserColumnId, SoQLType]])
@@ -190,8 +148,8 @@ object SoQLAnalyzerHelper {
           // There should be some sanitizer upstream that checks for field_name conformity.
           // TODO: Alternatively, we may need to use internal column name map for new and temporary columns
 
-          val lrm = l.rightMost
-          val newlyIntroducedColumns = lrm.selection.keys.map(QualifiedColumnName(None, _)).filter {
+          val prev = l.previous
+          val newlyIntroducedColumns = prev.selection.keys.map(QualifiedColumnName(None, _)).filter {
             columnName => !mapping.contains(columnName)
           }
           val mappingWithNewColumns = newlyIntroducedColumns.foldLeft(mapping) { (acc, newColumn) =>
@@ -209,7 +167,7 @@ object SoQLAnalyzerHelper {
               mappingWithNewColumns
             }
 
-          val newColumnsFromJoin = lrm.joins.flatMap { join =>
+          val newColumnsFromJoin = prev.joins.flatMap { join =>
             if (join.isSimple) Seq.empty
             else {
               join.from.analyses.last.selection.toSeq.map {
