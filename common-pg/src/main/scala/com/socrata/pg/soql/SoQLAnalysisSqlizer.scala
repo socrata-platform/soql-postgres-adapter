@@ -115,7 +115,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
         val primaryTableAlias = Map((PrimaryTableAlias -> chainedTableAlias))
         val subCtx = ctx ++ primaryTableAlias ++
           Map(InnermostSoql -> false, OutermostSoql -> true)
-        val prevAna = l.rightMostOfLeft
+        val prevAna = l.rightMost
         val (rpsql, rParamsCountInSelect) = SoQLAnalysisSqlizer.sql(ra, // scalastyle:ignore method.length parameter.number
           Option(prevAna),
           tableNamesSubTableNameReplace,

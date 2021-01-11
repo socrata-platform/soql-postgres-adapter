@@ -98,7 +98,10 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
    // soql = "SELECT name, breed UNION SELECT @dog.name, @dog.breed from @dog"
    // soql = "SELECT name, breed, age, specie |> SELECT name, breed UNION SELECT @d1.name, @d1.breed from @dog as d1"
     soql = "SELECT name, breed, age, specie, point |> SELECT name, breed, point UNION SELECT @dog.name, @dog.breed, @dog.point from @dog"
-    soql = "SELECT name, breed, age, specie, point"
+    soql = "SELECT name || 'x' as name2 |> SELECT name2 || 'y' as xx" // FAILED
+    soql = "SELECT name as name2 |> SELECT name2" // OK
+    soql = "SELECT name || 'x' as name2 |> SELECT name2" // OK
+    soql = "SELECT name || 'x' as name2 |> SELECT name2 || 'y'" // ?
     secDatasetId = secDatasetIdCat
     val expectedRowCount: Option[Long] = None
     val caseSensitivity: CaseSensitivity = CaseSensitive
