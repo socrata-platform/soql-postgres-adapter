@@ -112,7 +112,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
         val chainedTableAlias = "x1"
         val subTableName = "(%s) AS %s".format(lpsql.sql.head, chainedTableAlias)
         val tableNamesSubTableNameReplace = tableNames + (TableName.PrimaryTable -> subTableName)
-        val primaryTableAlias = Map((PrimaryTableAlias -> chainedTableAlias))
+        val primaryTableAlias = if (ra.joins.nonEmpty) Map((PrimaryTableAlias -> chainedTableAlias)) else Map.empty
         val subCtx = ctx ++ primaryTableAlias ++
           Map(InnermostSoql -> false, OutermostSoql -> true)
         val prevAna = l.rightMost
