@@ -88,7 +88,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
   private def updateFrom(banalysis: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]], tableName: TableName): BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] = {
     banalysis match {
       case x@Compound(op, left, right) =>
-        x.copy(left = updateFrom(left, tableName))
+        Compound(op, updateFrom(left, tableName), right)
       case x: SoQLAnalysis[UserColumnId, SoQLType] =>
         x.copy(from = Some(tableName))
     }

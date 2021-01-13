@@ -188,7 +188,7 @@ object SoQLAnalyzerHelper {
 
           val la = remapAnalysesBinary(columnIdMapping, l)
           val ra = remapAnalysesBinary(newMappingWithJoin, r)
-          x.copy(left = la, right = ra)
+          Compound(op, la, ra)
 //          def toColumnNameJoinAlias(joinAlias: Option[String], columnName: ColumnName) = (columnName, joinAlias)
 //          def toUserColumnId(columnName: ColumnName) = new UserColumnId(columnName.name)
 //          val a: SoQLAnalysis[UserColumnId, SoQLType] = analysis.mapColumnIds(newMappingWithJoin, toColumnNameJoinAlias, toUserColumnId, toUserColumnId)
@@ -198,7 +198,7 @@ object SoQLAnalyzerHelper {
       case x@Compound(op, l, r) => // if op == "QUERYUNION" =>
         val la = remapAnalysesBinary(columnIdMapping, l)
         val ra = remapAnalysesBinary(columnIdMapping, r)
-        x.copy(left = la, right = ra)
+        Compound(op, la, ra)
       case analysis: SoQLAnalysis[ColumnName, SoQLType] =>
         //val (_, analysesInColIds) = analyses.seq.foldLeft(initialAcc) { (acc, analysis) =>
           val (mapping, convertedAnalyses) = initialAcc
