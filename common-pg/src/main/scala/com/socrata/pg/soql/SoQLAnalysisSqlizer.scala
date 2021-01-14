@@ -1,5 +1,7 @@
 package com.socrata.pg.soql
 
+import java.util.Date
+
 import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
@@ -42,11 +44,18 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
           ctx: Context,
           escape: Escape): ParametricSql = {
     val (banalysis, tableNames, allColumnReps) = x
+    println("BinarySqlize " + (new Date()).toString)
     val primaryTable = tableNames(TableName.PrimaryTable)
     val banalysis2 = updateFrom(banalysis, TableName(primaryTable))
+//    val dbgSelection = banalysis2.asT.joins.head.from.subAnalysis.right.get.analyses.previous.asT.selection
+//    println(dbgSelection.keys.mkString(","))
+//    val dbgexpr = dbgSelection.values.head
+//    val dbg2 = dbgexpr.toString()
+//    println(dbg2)
     val tableNames2 = tableNames + (TableName(primaryTable) -> primaryTable)
-    val ctx2 = ctx + (SqlizerContext.OutermostSoqls -> BinarySoQLAnalysisSqlizer.outerMostAnalyses(banalysis2))
-    val (psql, _) =  sql(banalysis2, None, tableNames2, allColumnReps, reqRowCount = false, rep, typeRep, setParams, ctx2, escape, None)
+    val ctx2 = if (ctx.contains(SqlizerContext.OutermostSoqls)) ctx
+               else ctx + (SqlizerContext.OutermostSoqls -> BinarySoQLAnalysisSqlizer.outerMostAnalyses(banalysis2))
+    val (psql, _) = sql(banalysis2, None, tableNames2, allColumnReps, reqRowCount = false, rep, typeRep, setParams, ctx2, escape, None)
     psql
   }
 
@@ -90,7 +99,8 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
       case x@Compound(op, left, right) =>
         Compound(op, updateFrom(left, tableName), right)
       case x: SoQLAnalysis[UserColumnId, SoQLType] =>
-        x.copy(from = Some(tableName))
+        if (x.from.isEmpty) x.copy(from = Some(tableName))
+        else x
     }
   }
 
@@ -281,7 +291,15 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       }
     }
 
-    val ctx = context + (Analysis -> analysis) +
+    val joinPrimaryTable = analysis.from match {
+      case Some(tableName) if context.contains(JoinPrimaryTable) =>
+        // inside join and override join primary table because of union
+        Map(JoinPrimaryTable -> Some(tableName.name))
+      case _ =>
+        Map.empty
+    }
+
+    val ctx = context ++ joinPrimaryTable + (Analysis -> analysis) +
                   (InnermostSoql -> analysis.from.isDefined) +
                         (OutermostSoql -> isOutermostAnalysis(analysis, context)) +
                         (TableMap -> (tableNames ++ fromTableNames)) +
@@ -291,20 +309,26 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
 
     // SELECT
     val ctxSelect = ctx + (SoqlPart -> SoqlSelect)
-
     val joinTableNames = joins.foldLeft(Map.empty[TableName, String]) { (acc, j) =>
       acc ++ j.from.alias.map(x => TableName(x, None) -> x)
     }
 
     val joinTableAliases = joins.foldLeft(Map.empty[String, String]) { (acc, j) =>
-      acc ++ j.from.alias.map(x => x -> j.from.fromTable.name)
+      val entry = j.from.subAnalysis match {
+        case Left(TableName(name, alias)) =>
+          (alias.getOrElse(name) -> name)
+        case Right(SubAnalysis(analyses, alias)) =>
+          (alias -> alias)
+      }
+      acc + entry
+      // acc ++ j.from.alias.map(x => x -> j.from.fromTable.name)
     }
 
     val tableNamesWithJoins = ctx(TableMap).asInstanceOf[Map[TableName, String]] ++ joinTableNames
     val tableAliasesWithJoins = ctx(TableAliasMap).asInstanceOf[Map[String, String]] ++ joinTableAliases
     val ctxSelectWithJoins = ctxSelect + (TableMap -> tableNamesWithJoins) + (TableAliasMap -> tableAliasesWithJoins)
 
-    val subQueryJoins = joins.filterNot(_.isSimple).map(_.from.fromTable.name).toSet
+    val subQueryJoins: Set[String] = joins.filterNot(_.isSimple).flatMap(_.from.fromTables.map(_.name)).toSet
     val repMinusComplexJoinTable = rep.filterKeys(!_.qualifier.exists(subQueryJoins.contains))
 
     val (selectPhrase, setParamsSelect) =
@@ -318,30 +342,38 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
 
     // JOIN
     val (joinPhrase, setParamsJoin) = joins.foldLeft((Seq.empty[String], Seq.empty[SetParam])) { case ((sqls, setParamAcc), join) =>
-      val joinTableName =  TableName(join.from.fromTable.name, None)
-     // val joinTableName =  join.from.fromTable
-      println(joinTableName)
+      val fromTableName = join.from.subAnalysis match {
+        case Right(SubAnalysis(analyses, alias)) =>
+          analyses.previous.from.map(_.name).get
+        case Left(tableName) => tableName.name
+      }
+
+      val joinTableName =  TableName(fromTableName, None)
       val joinTableNames = tableNames + (TableName.PrimaryTable -> tableNames(joinTableName))
 
       val ctxJoin = ctx +
         (SoqlPart -> SoqlJoin) +
         (TableMap -> joinTableNames) +
         (IsSubQuery -> true) +
-        (JoinPrimaryTable -> Some(join.from.fromTable.name))
+        (JoinPrimaryTable -> Some( fromTableName /* join.from.fromTable.name */))
 
-      val (tableName, joinOnParams) = join.from.subAnalysis.map { case SubAnalysis(analyses, alias) =>
-        val joinanalysis = analyses.head
-        println("JOIN")
-        println(joinanalysis.from)
-        val joinTableLikeParamSql = Sqlizer.sql(
-          (analyses, joinTableNames, allColumnReps))(rep, typeRep, Seq.empty, ctxJoin, escape)
-        //((analyses, Some(join.from.fromTable): Option[TableName]), joinTableNames, allColumnReps))(rep, typeRep, Seq.empty, ctxJoin, escape)
-        val tn = "(" + joinTableLikeParamSql.sql.mkString + ") as " + alias
-        (tn, setParamAcc ++ joinTableLikeParamSql.setParams)
-      }.getOrElse {
-        val tableName = tableNames(joinTableName)
-        val tn = join.from.alias.map(a => s"$tableName as $a").getOrElse(tableName)
-        (tn, setParamAcc)
+      val (tableName, joinOnParams) = join.from.subAnalysis match {
+        case Right(SubAnalysis(analyses, alias)) =>
+//          val joinanalysis = analyses.head
+//          println("JOIN")
+//          println(joinanalysis.from)
+          val joinTableLikeParamSql = Sqlizer.sql(
+            (analyses, joinTableNames, allColumnReps))(rep, typeRep, Seq.empty, ctxJoin, escape)
+          //((analyses, Some(join.from.fromTable): Option[TableName]), joinTableNames, allColumnReps))(rep, typeRep, Seq.empty, ctxJoin, escape)
+          val tn = "(" + joinTableLikeParamSql.sql.mkString + ") as " + alias
+          (tn, setParamAcc ++ joinTableLikeParamSql.setParams)
+        case Left(tableName) =>
+          val key = TableName(tableName.name, None)
+          val realTableName = tableNames(key)
+          val qualifier = tableName.qualifier
+          //val tn = join.from.alias.map(a => s"$tableName as $a").getOrElse(tableName)
+          val tn = s"$realTableName as $qualifier"
+          (tn, setParamAcc)
       }
 
       val joinConditionParamSql = Sqlizer.sql(join.on)(repMinusComplexJoinTable, typeRep, joinOnParams, ctxSelectWithJoins + (SoqlPart -> SoqlJoin), escape)

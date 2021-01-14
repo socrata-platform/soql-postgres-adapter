@@ -184,7 +184,8 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
     val repKeyQualifier =
       ctx.get(JoinPrimaryTable) match {
         case Some(Some(s: String)) =>
-          expr.qualifier.orElse(Some(s))
+          expr.qualifier.flatMap(tableMap.get(_)).orElse(Some(s))
+          //expr.qualifier.orElse(Some(s))
         case _ =>
           if (ista) qualifierFromAlias(expr, tableMap)
           else expr.qualifier

@@ -511,7 +511,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
       SqlizerContext.IdRep -> (if (obfuscateId) { new SoQLID.StringRep(cryptProvider) }
       else { new ClearNumberRep(cryptProvider) }),
       SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
-      SqlizerContext.OutermostSoqls -> BinarySoQLAnalysisSqlizer.outerMostAnalyses(banalysis),
+     // SqlizerContext.OutermostSoqls -> BinarySoQLAnalysisSqlizer.outerMostAnalyses(banalysis),
       SqlizerContext.CaseSensitivity -> caseSensitivity,
       SqlizerContext.LeadingSearch -> leadingSearch
     )
@@ -735,7 +735,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                             reqCopy: Option[String]): Map[TableName, CopyInfo] = {
     val joins = typed.Join.expandJoins(analyses.seq)
     val froms = analyses.seq.flatMap(x => x.from.toSeq)
-    val joinTables = joins.map(x => x.from.fromTable) ++ froms
+    val joinTables = joins.flatMap(x => x.from.fromTables) ++ froms
     val joinTableMap = joinTables.flatMap { resourceName =>
       getCopy(pgu, new ResourceName(resourceName.name), reqCopy).map(copy => (resourceName, copy))
     }.toMap

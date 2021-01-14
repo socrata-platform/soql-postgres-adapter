@@ -5,6 +5,7 @@ import java.io.{InputStream, OutputStream}
 import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.soql._
+import com.socrata.soql.ast.SubSelect
 import com.socrata.soql.environment._
 import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLFunctions, SoQLTypeInfo}
 import com.socrata.soql.parsing.Parser
@@ -36,22 +37,24 @@ object SoQLAnalyzerHelper {
   def analyzeSoQL(soql: String,
                   datasetCtx: Map[String, DatasetContext[SoQLType]],
                   idMap: Map[QualifiedColumnName, UserColumnId]): NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] = {
-    val parsed = new Parser().selectStatement(soql)
-    val joins = parsed.seq.flatMap(_.joins)
-
-    val joinColumnIdMap =
-      joins.foldLeft(idMap) { (acc, join) =>
-        val joinTableName = join.from.fromTable
-        val joinAlias = join.from.alias.getOrElse(joinTableName.name)
-        val schema = datasetCtx(joinTableName.qualifier)
-        acc ++ schema.columns.map { fieldName =>
-          QualifiedColumnName(Some(joinAlias), new ColumnName(fieldName.name)) ->
-            new UserColumnId(fieldName.caseFolded)
-        }
-      }
-
-    val analyses = analyzer.analyze(parsed)(datasetCtx)
-    remapAnalyses(joinColumnIdMap, analyses)
+    ???
+    // NOT USED ANYMORE
+//    val parsed = new Parser().selectStatement(soql)
+//    val joins = parsed.seq.flatMap(_.joins)
+//
+//    val joinColumnIdMap =
+//      joins.foldLeft(idMap) { (acc, join) =>
+//        val joinTableName = join.from.fromTable
+//        val joinAlias = join.from.alias.getOrElse(joinTableName.name)
+//        val schema = datasetCtx(joinTableName.qualifier)
+//        acc ++ schema.columns.map { fieldName =>
+//          QualifiedColumnName(Some(joinAlias), new ColumnName(fieldName.name)) ->
+//            new UserColumnId(fieldName.caseFolded)
+//        }
+//      }
+//
+//    val analyses = analyzer.analyze(parsed)(datasetCtx)
+//    remapAnalyses(joinColumnIdMap, analyses)
   }
 
   def analyzeSoQLBinary(soql: String,
@@ -64,13 +67,25 @@ object SoQLAnalyzerHelper {
 
     val joinColumnIdMap =
       joins.foldLeft(idMap) { (acc, join) =>
-        val joinTableName = join.from.fromTable
-        val joinAlias = join.from.alias.getOrElse(joinTableName.name)
-        val schema = datasetCtx(joinTableName.qualifier)
-        acc ++ schema.columns.map { fieldName =>
-          QualifiedColumnName(Some(joinAlias), new ColumnName(fieldName.name)) ->
-            new UserColumnId(fieldName.caseFolded)
+        join.from.subSelect match {
+          case Left(joinTableName) =>
+            val joinAlias = join.from.alias.getOrElse(joinTableName.name)
+            val schema = datasetCtx(joinTableName.qualifier)
+            acc ++ schema.columns.map { fieldName =>
+              QualifiedColumnName(Some(joinAlias), new ColumnName(fieldName.name)) ->
+                new UserColumnId(fieldName.caseFolded)
+            }
+          case Right(SubSelect(selects, alias)) =>
+              // TODO: Do we need to build schema here?
+              acc
         }
+//        val joinTableName = join.from.fromTable
+//        val joinAlias = join.from.alias.getOrElse(joinTableName.name)
+//        val schema = datasetCtx(joinTableName.qualifier)
+//        acc ++ schema.columns.map { fieldName =>
+//          QualifiedColumnName(Some(joinAlias), new ColumnName(fieldName.name)) ->
+//            new UserColumnId(fieldName.caseFolded)
+//        }
       }
 
     val analysis = analyzer.analyzeBinary(ast)(datasetCtx)
@@ -114,13 +129,22 @@ object SoQLAnalyzerHelper {
         }
 
       val newColumnsFromJoin = analysis.joins.flatMap { join =>
-        if (join.isSimple) Seq.empty
-        else {
-          join.from.analyses.last.selection.toSeq.map {
-            case (columnName, _) =>
-              QualifiedColumnName(join.from.alias, columnName) -> new UserColumnId(columnName.name)
-          }
+        join.from.subAnalysis match {
+          case Left(tableName) =>
+            Seq.empty
+          case Right(SubAnalysis(analyses, alias)) =>
+            analyses.previous.selection.toSeq.map {
+              case (columnName, _) =>
+                QualifiedColumnName(join.from.alias, columnName) -> new UserColumnId(columnName.name)
+            }
         }
+//        if (join.isSimple) Seq.empty
+//        else {
+//          join.from.analyses.last.selection.toSeq.map {
+//            case (columnName, _) =>
+//              QualifiedColumnName(join.from.alias, columnName) -> new UserColumnId(columnName.name)
+//          }
+//        }
       }.toMap
 
       val newMappingWithJoin: Map[(ColumnName, Qualifier), UserColumnId] =
@@ -168,13 +192,22 @@ object SoQLAnalyzerHelper {
             }
 
           val newColumnsFromJoin = prev.joins.flatMap { join =>
-            if (join.isSimple) Seq.empty
-            else {
-              join.from.analyses.last.selection.toSeq.map {
-                case (columnName, _) =>
-                  QualifiedColumnName(join.from.alias, columnName) -> new UserColumnId(columnName.name)
-              }
+            join.from.subAnalysis match {
+              case Left(tableName) =>
+                Seq.empty
+              case Right(SubAnalysis(analyses, alias)) =>
+                analyses.previous.selection.toSeq.map {
+                  case (columnName, _) =>
+                    QualifiedColumnName(join.from.alias, columnName) -> new UserColumnId(columnName.name)
+                }
             }
+//            if (join.isSimple) Seq.empty
+//            else {
+//              join.from.analyses.last.selection.toSeq.map {
+//                case (columnName, _) =>
+//                  QualifiedColumnName(join.from.alias, columnName) -> new UserColumnId(columnName.name)
+//              }
+//            }
           }.toMap
 
         //   case class QualifiedColumnName(qualifier: Option[String], columnName: ColumnName)
@@ -224,13 +257,22 @@ object SoQLAnalyzerHelper {
             }
 
           val newColumnsFromJoin = analysis.joins.flatMap { join =>
-            if (join.isSimple) Seq.empty
-            else {
-              join.from.analyses.last.selection.toSeq.map {
-                case (columnName, _) =>
-                  QualifiedColumnName(join.from.alias, columnName) -> new UserColumnId(columnName.name)
-              }
+            join.from.subAnalysis match {
+              case Left(tableName) =>
+                Seq.empty
+              case Right(SubAnalysis(analyses, alias)) =>
+                analyses.previous.selection.toSeq.map {
+                  case (columnName, _) =>
+                    QualifiedColumnName(join.from.alias, columnName) -> new UserColumnId(columnName.name)
+                }
             }
+//            if (join.isSimple) Seq.empty
+//            else {
+//              join.from.analyses.last.selection.toSeq.map {
+//                case (columnName, _) =>
+//                  QualifiedColumnName(join.from.alias, columnName) -> new UserColumnId(columnName.name)
+//              }
+//            }
           }.toMap
 
           val newMappingWithJoin: Map[(ColumnName, Qualifier), UserColumnId] =

@@ -104,7 +104,16 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
     soql = "SELECT name, breed limit 2 UNiON all SELECT @dog.name, @dog.breed from @dog"
     soql = "SELECT name, breed, age, specie join (SELECT name, breed FROM @dog |> SELECT name) as j1 on @j1.name=name"
     soql = "SELECT name, breed, age, specie join (SELECT @dog.name, @dog.breed FROM @dog |> SELECT name) as j1 on @j1.name=name"
-    soql = "SELECT name, breed, age, specie join (SELECT name, breed FROM @dog union SELECT name, breed FROM @bird) as j1 on @j1.name=name"
+    soql = "SELECT name join (SELECT @dog.name FROM @dog union SELECT @bird.name FROM @bird) as j1 on @j1.name=name"
+    soql = "SELECT name join (SELECT @d1.name FROM @dog as d1 union SELECT @b1.breed FROM @bird as b1) as j1 on @j1.name=name"
+    soql = "SELECT name union SELECT @dog.name FROM @dog "
+    soql = "SELECT name |> SELECT name as name2 |> SELECT name2 as name3"
+    soql = "SELECT name, @d1.breed join @dog as d1 on @d1.name=name where @d1.name='hi'"
+    soql = "SELECT name, @j1.breed join (select name, breed from @dog) as j1 on true"
+    soql = "SELECT name, @j1.breed join (select @d1.name, @d1.breed from @dog as d1) as j1 on @j1.name=name"
+    // SELECT t1_1.u_name_4 as "name" FROM t1_1 - simplest
+    // SELECT t1_1.u_name_4 as "name" FROM t1_1 UNION SELECT t2_1.u_name_4 FROM t2_1
+    // SELECT t1_1.u_name_4,t1_1.u_breed_5,t1_1.u_age_7,t1_1.u_specie_6 FROM t1_1 JOIN (SELECT _dog.u_name_4 as "name",_dog.u_breed_5 as "breed" FROM t2_1) as _j1 ON (_j1."name" = t1_1.u_name_4)
     secDatasetId = secDatasetIdCat
     val expectedRowCount: Option[Long] = None
     val caseSensitivity: CaseSensitivity = CaseSensitive
