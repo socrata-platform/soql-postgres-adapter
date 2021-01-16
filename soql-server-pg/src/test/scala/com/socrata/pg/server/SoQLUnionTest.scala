@@ -94,11 +94,9 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
     var soql = "SELECT name, @d1.breed JOIN @dog as d1 ON name=@d1.name |> select name, breed, 'hi'"
     soql = "SELECT name, breed, age, specie, point |> SELECT name, breed, point |> SELECT point"
     soql = "SELECT name, `union`, breed, point UNION select @d1.name, @d1.`union`, point from @dog as d1"
-   // soql = "SELECT name, breed UNION SELECT @d1.name, @d1.breed from @dog as d1 UNION SELECT @b1.name, @b1.breed from @bird as b1"
    // soql = "SELECT name, breed, age, specie |> SELECT name, breed UNION SELECT @d1.name, @d1.breed from @dog as d1"
     soql = "SELECT name, breed, age, specie, point |> SELECT name, breed, point UNION SELECT @dog.name, @dog.breed, @dog.point from @dog"
     soql = "SELECT name || 'x' as name2 |> SELECT name2 || 'y' as xx" // FAILED
-    soql = "SELECT name as name2 |> SELECT name2" // OK
     soql = "SELECT name || 'x' as name2 |> SELECT name2" // OK
     soql = "SELECT name || 'x' as name2 |> SELECT name2 || 'y'" // ?
     soql = "SELECT name, breed limit 2 UNiON all SELECT @dog.name, @dog.breed from @dog"
@@ -107,17 +105,28 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
     soql = "SELECT name join (SELECT @dog.name FROM @dog union SELECT @bird.name FROM @bird) as j1 on @j1.name=name"
     soql = "SELECT name join (SELECT @d1.name FROM @dog as d1 union SELECT @b1.breed FROM @bird as b1) as j1 on @j1.name=name"
     soql = "SELECT name union SELECT @dog.name FROM @dog "
-    soql = "SELECT name |> SELECT name as name2 |> SELECT name2 as name3"
-    soql = "SELECT name, @d1.breed join @dog as d1 on @d1.name=name where @d1.name='hi'"
-    soql = "SELECT name, @j1.breed join (select name, breed from @dog) as j1 on true"
+    soql = "SELECT name |> SELECT name as name2"
+    soql = "SELECT name, @j1.breed join (select name, breed from @dog) as j1 on @j1.name=name"
     soql = "SELECT name, @j1.breed join (select @d1.name, @d1.breed from @dog as d1) as j1 on @j1.name=name"
+
+    soql = "SELECT name"
+    soql = "SELECT name, @dog.breed join @dog on true"
+ //   soql = "SELECT name, @d1.breed as breed2 join @dog as d1 on true"
+   // soql = "SELECT name, @j1.breed as breed4 join (select @d1.breed from @dog as d1) as j1 on true"
+   // soql = "SELECT name, @j1.breed as breed3 join (select breed from @dog) as j1 on true"
+    //soql = "SELECT name, @j1.breed as breed5 join (select @dog.breed from @dog) as j1 on true"
+
+    soql = "SELECT name as name2 |> SELECT name2 as name3, @dog.breed join @dog on true" // OK
+    soql = "SELECT name, breed UNION SELECT @d1.name, @d1.breed from @dog as d1 UNION SELECT @bird.name, @bird.breed from @bird"
+    soql = "SELECT name |> SELECT name as name2  |> SELECT name2 as name3"
+    //
     // SELECT t1_1.u_name_4 as "name" FROM t1_1 - simplest
     // SELECT t1_1.u_name_4 as "name" FROM t1_1 UNION SELECT t2_1.u_name_4 FROM t2_1
     // SELECT t1_1.u_name_4,t1_1.u_breed_5,t1_1.u_age_7,t1_1.u_specie_6 FROM t1_1 JOIN (SELECT _dog.u_name_4 as "name",_dog.u_breed_5 as "breed" FROM t2_1) as _j1 ON (_j1."name" = t1_1.u_name_4)
     secDatasetId = secDatasetIdCat
     val expectedRowCount: Option[Long] = None
     val caseSensitivity: CaseSensitivity = CaseSensitive
-    val joinDatasetCtx: Map[String, DatasetContext[SoQLType]] = aliasCtx
+    val joinDatasetCtx: Map[String, DatasetContext[SoQLType]] = plainCtx
     val leadingSearch: Boolean = true
 
     withDb() { conn =>
@@ -151,33 +160,56 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
           acc ++ columnNameIdMap
         }
 
+
+        ///// SoQL STRING TO ANALYSIS
         var analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] = null
-       // analyses = SoQLAnalyzerHelper.analyzeSoQLUnion(soql, allDatasetCtx, primaryTableColumnNameIdMap ++ joinTableColumnNameIdMap)
+        // analyses = SoQLAnalyzerHelper.analyzeSoQLUnion(soql, allDatasetCtx, primaryTableColumnNameIdMap ++ joinTableColumnNameIdMap)
         //analyses = SoQLAnalyzerHelper.analyzeSoQL(soql, allDatasetCtx, primaryTableColumnNameIdMap ++ joinTableColumnNameIdMap)
         var banalysis = SoQLAnalyzerHelper.analyzeSoQLBinary(soql, allDatasetCtx, primaryTableColumnNameIdMap ++ joinTableColumnNameIdMap)
+
         println("analyses done new")
 
-        ds.run { dsInfo =>
-          val qs = new QueryServer(dsInfo, caseSensitivity, leadingSearch)
-          //qs.execQueryUnion(pgu, copyInfo.datasetInfo, analyses)
-          val sql = qs.execQueryBinary(pgu, copyInfo.datasetInfo, banalysis)
-          println(sql)
+        ///// ANALYSIS TO SQL ONLY
+
+        if (true) {
+          ds.run { dsInfo =>
+            val qs = new QueryServer(dsInfo, caseSensitivity, leadingSearch)
+            //qs.execQueryUnion(pgu, copyInfo.datasetInfo, analyses)
+            val sql = qs.execQueryBinary(pgu, copyInfo.datasetInfo, banalysis)
+            println("SoQL: " + soql)
+            println("SQL : " + sql)
+          }
         }
 
+        ///// ANALYSIS TO SQL TO ROWS
+        if (false) {
+          val (qrySchema, dataVersion, mresult) =
+            ds.run { dsInfo =>
+              val qs = new QueryServer(dsInfo, caseSensitivity, leadingSearch)
+              qs.execQuery(pgu, "someDatasetInternalName", copyInfo.datasetInfo, banalysis, expectedRowCount.isDefined, None, None, true,
+                NoPrecondition, None, None, None, false, false, false) match {
+                case QueryServer.Success(schema, _, version, results, etag, lastModified) =>
+                  (schema, version, results)
+                case queryFail: QueryServer.QueryResult =>
+                  throw new Exception(s"Query Fail ${queryFail.getClass.getName}")
+              }
+            }
 
-  //      val jsonReps = PostgresUniverseCommon.jsonReps(copyInfo.datasetInfo, true)
+          val jsonReps = PostgresUniverseCommon.jsonReps(copyInfo.datasetInfo, true)
 
-//        val qryReps = qrySchema.mapValues( cinfo => jsonReps(cinfo.typ))
-//
-//        for (result <- mresult) {
-//          val resultJo = result.map { row =>
-//            val rowJson = qryReps.map { case (cid, rep) =>
-//              (qrySchema(cid).userColumnId.underlying -> rep.toJValue(row(cid)))
-//            }
-//            println(rowJson)
-//            //JObject(rowJson)
-//          }
-//        }
+          val qryReps = qrySchema.mapValues(cinfo => jsonReps(cinfo.typ))
+
+          for (result <- mresult) {
+            val listResult = result.toList
+            val resultJo = listResult.map { row =>
+              val rowJson = qryReps.map { case (cid, rep) =>
+                (qrySchema(cid).userColumnId.underlying -> rep.toJValue(row(cid)))
+              }
+              val jo = JObject(rowJson)
+              println(jo)
+            }
+          }
+        }
       }
     }
   }

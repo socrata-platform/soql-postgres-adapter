@@ -5,9 +5,9 @@
   { c: "add column", id: "specie", type: "text" },
   { c: "add column", id: "age", type: "number" },
   { c: "add column", id: "point", type: "point" },
-  { c: "add column", id: "union", type: "text" },
+  { c: "add column", id: "cat", type: "text" },
   { c: "row data" },
-  {"name":"cat1", "breed":"persian", "specie": "cat","age": 1, "union": "union"},
+  {"name":"cat1", "breed":"persian", "specie": "cat","age": 1},
   {"name":"cat2", "breed":"siamese", "specie": "cat","age": 2},
   {"name":"cat3", "breed":"shorthair", "specie": "cat","age": 3}
 ]

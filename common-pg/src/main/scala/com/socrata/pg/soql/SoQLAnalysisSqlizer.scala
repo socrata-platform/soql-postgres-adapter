@@ -278,6 +278,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
 
     val ana = if (reqRowCount) rowCountAnalysis(analysis) else analysis
 
+    val joins = analysis.joins
 
     val fromTableNames = ana.from.foldLeft(Map.empty[TableName, String]) { (acc, from) =>
       acc + (from.copy(alias = None) -> from.name)
@@ -299,13 +300,34 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
         Map.empty
     }
 
+    val simpleJoinMapAcc: Map[String, String] = analysis.from match {
+      case Some(TableName(name, Some(alias))) =>
+        Map(alias -> name, name -> alias)
+      case Some(TableName(name, None)) =>
+        Map(name -> name)
+      case _ =>
+        Map.empty
+    }
+    val simpleJoinMap = joins.foldLeft(simpleJoinMapAcc) { (acc, j) =>
+      j.from.subAnalysis match {
+        case Left(TableName(name, Some(alias))) =>
+          acc + (alias -> name) + (name -> alias)
+        case Left(TableName(name, None)) =>
+          acc + (name -> name)
+        case _ =>
+          acc
+        // simple join w/o alias does not need remap
+        // complex join rep is just qualifier.name and don't need and don't need entry in rep map
+      }
+    }
+
     val ctx = context ++ joinPrimaryTable + (Analysis -> analysis) +
-                  (InnermostSoql -> analysis.from.isDefined) +
+                        (Chain -> prevAna.isDefined) +
+                        (SimpleJoinMap -> simpleJoinMap) +
+                        (InnermostSoql -> analysis.from.isDefined) +
                         (OutermostSoql -> isOutermostAnalysis(analysis, context)) +
                         (TableMap -> (tableNames ++ fromTableNames)) +
                         (TableAliasMap -> (tableNames.map { case (k, v) => (k.qualifier, realAlias(k, v)) } ++ fromTableAliases) )
-
-    val joins = analysis.joins
 
     // SELECT
     val ctxSelect = ctx + (SoqlPart -> SoqlSelect)
@@ -324,12 +346,69 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
       // acc ++ j.from.alias.map(x => x -> j.from.fromTable.name)
     }
 
+    val repByQualifier = rep.groupBy(_._1.qualifier)
+    val repFrom = analysis.from.foldLeft(Map.empty[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]]) { (acc, tableName) =>
+      tableName match {
+        case TableName(name, a@Some(alias)) =>
+          val joinRep = repByQualifier(Some(name))
+          val newJoinRep = joinRep.map { case (QualifiedUserColumnId(qualifier, userColumnId), sqlColumnRep) =>
+            (QualifiedUserColumnId(a, userColumnId), sqlColumnRep)
+          }
+          acc ++ newJoinRep
+        case TableName(name, None) =>
+          repByQualifier.get(Some(name)) match {
+            case Some(joinRep) =>
+              val newJoinRep = joinRep.map { case (QualifiedUserColumnId(qualifier, userColumnId), sqlColumnRep) =>
+                (QualifiedUserColumnId(None, userColumnId), sqlColumnRep)
+              }
+              acc ++ newJoinRep
+            case None =>
+              acc
+          }
+      }
+    }
+
+    val repJoins = joins.foldLeft(repFrom) { (acc, join) =>
+      join.from.subAnalysis match {
+        case Left(TableName(name, a@Some(alias))) =>
+          val joinRep = repByQualifier(Some(name))
+          val newJoinRep = joinRep.map { case (QualifiedUserColumnId(qualifier, userColumnId), sqlColumnRep) =>
+            (QualifiedUserColumnId(a, userColumnId), sqlColumnRep)
+          }
+          acc ++ newJoinRep
+//        case Left(TableName(name, None)) =>
+//          val joinRep = repByQualifier(Some(name))
+//          val newJoinRep = joinRep.map { case (QualifiedUserColumnId(qualifier, userColumnId), sqlColumnRep) =>
+//            (QualifiedUserColumnId(None, userColumnId), sqlColumnRep)
+//          }
+//          acc ++ newJoinRep
+        case _ =>
+          acc
+      }
+    }
+
+    val repMinusComplexJoinTable2 = rep.foldLeft(Map.empty[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]]) { (acc, r) =>
+      r match {
+        case (qid@QualifiedUserColumnId(Some(qual), userColumnId), sqlColumnRep) =>
+          simpleJoinMap.get(qual) match {
+            case nq@Some(_) =>
+              acc + (QualifiedUserColumnId(nq, userColumnId) -> sqlColumnRep)
+            case None =>
+              acc + (qid -> sqlColumnRep)
+          }
+        case (qid@QualifiedUserColumnId(None, userColumnId), sqlColumnRep) =>
+          acc + r
+        case x =>
+          acc + x
+      }
+    }
+
     val tableNamesWithJoins = ctx(TableMap).asInstanceOf[Map[TableName, String]] ++ joinTableNames
     val tableAliasesWithJoins = ctx(TableAliasMap).asInstanceOf[Map[String, String]] ++ joinTableAliases
     val ctxSelectWithJoins = ctxSelect + (TableMap -> tableNamesWithJoins) + (TableAliasMap -> tableAliasesWithJoins)
 
     val subQueryJoins: Set[String] = joins.filterNot(_.isSimple).flatMap(_.from.fromTables.map(_.name)).toSet
-    val repMinusComplexJoinTable = rep.filterKeys(!_.qualifier.exists(subQueryJoins.contains))
+    val repMinusComplexJoinTable = repMinusComplexJoinTable2 ++ repJoins //  rep.filterKeys(!_.qualifier.exists(subQueryJoins.contains))
 
     val (selectPhrase, setParamsSelect) =
       if (reqRowCount && analysis.groupBys.isEmpty && analysis.search.isEmpty) {
@@ -344,7 +423,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     val (joinPhrase, setParamsJoin) = joins.foldLeft((Seq.empty[String], Seq.empty[SetParam])) { case ((sqls, setParamAcc), join) =>
       val fromTableName = join.from.subAnalysis match {
         case Right(SubAnalysis(analyses, alias)) =>
-          analyses.previous.from.map(_.name).get
+          analyses.seq.head.from.map(_.name).get
         case Left(tableName) => tableName.name
       }
 

@@ -6,6 +6,7 @@
   { c: "add column", id: "age", type: "number" },
   { c: "add column", id: "point", type: "point" },
   { c: "add column", id: "union", type: "text" },
+  { c: "add column", id: "bird", type: "text" },
   { c: "row data" },
   {"name":"bird1", "breed":"hawk", "specie": "bird","age": 1, "point": "POINT (1 2)"},
   {"name":"bird2", "breed":"pigeon", "specie": "bird","age": 2, "point": "POINT (3 4)"},

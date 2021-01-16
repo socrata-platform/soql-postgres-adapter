@@ -8,6 +8,7 @@ import com.socrata.soql._
 import com.socrata.soql.ast.SubSelect
 import com.socrata.soql.environment._
 import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLFunctions, SoQLTypeInfo}
+import com.socrata.soql.mapping.ColumnIdMapper
 import com.socrata.soql.parsing.Parser
 import com.socrata.soql.typed._
 import com.socrata.soql.types.SoQLType
@@ -63,33 +64,8 @@ object SoQLAnalyzerHelper {
 
     val ast =  new Parser().test(soql)
     //val parsed = NonEmptySeq(ast)
-    val joins = ast.seq.flatMap(_.joins)
-
-    val joinColumnIdMap =
-      joins.foldLeft(idMap) { (acc, join) =>
-        join.from.subSelect match {
-          case Left(joinTableName) =>
-            val joinAlias = join.from.alias.getOrElse(joinTableName.name)
-            val schema = datasetCtx(joinTableName.qualifier)
-            acc ++ schema.columns.map { fieldName =>
-              QualifiedColumnName(Some(joinAlias), new ColumnName(fieldName.name)) ->
-                new UserColumnId(fieldName.caseFolded)
-            }
-          case Right(SubSelect(selects, alias)) =>
-              // TODO: Do we need to build schema here?
-              acc
-        }
-//        val joinTableName = join.from.fromTable
-//        val joinAlias = join.from.alias.getOrElse(joinTableName.name)
-//        val schema = datasetCtx(joinTableName.qualifier)
-//        acc ++ schema.columns.map { fieldName =>
-//          QualifiedColumnName(Some(joinAlias), new ColumnName(fieldName.name)) ->
-//            new UserColumnId(fieldName.caseFolded)
-//        }
-      }
-
     val analysis = analyzer.analyzeBinary(ast)(datasetCtx)
-    val analysisr = remapAnalysesBinary(joinColumnIdMap, analysis)
+    val analysisr = remapAnalysesBinary(idMap, analysis)
     analysisr
 //
 //    val analysis =  analyzer.analyzeUnion(ast)(datasetCtx) // analyzer.analyze(parsed)(datasetCtx)
@@ -161,132 +137,33 @@ object SoQLAnalyzerHelper {
     NonEmptySeq.fromSeqUnsafe(analysesInColIds)
   }
 
+
   private def remapAnalysesBinary(columnIdMapping: Map[QualifiedColumnName, UserColumnId],
                                     btree: BinaryTree[SoQLAnalysis[ColumnName, SoQLType]]): BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] = {
-    val initialAcc = (columnIdMapping, List.empty[SoQLAnalysis[UserColumnId, SoQLType]])
+    val newMapping: Map[(ColumnName, Qualifier), UserColumnId] = columnIdMapping map { case (QualifiedColumnName(qualifier, columnName), userColumnId) =>
+      ((columnName, qualifier), userColumnId)
+    }
+
+    def toColumnNameJoinAlias(joinAlias: Option[String], columnName: ColumnName) = (columnName, joinAlias)
+    def toUserColumnId(columnName: ColumnName) = new UserColumnId(columnName.name)
+
     btree match {
-      case x@Compound(op, l, r) if op == "QUERYPIPE" =>
-        //val (_, analysesInColIds) = analyses.seq.foldLeft(initialAcc) { (acc, analysis) =>
-          val (mapping, convertedAnalyses) = initialAcc
-          // Newly introduced columns will be used as column id as is.
-          // There should be some sanitizer upstream that checks for field_name conformity.
-          // TODO: Alternatively, we may need to use internal column name map for new and temporary columns
-
-          val prev = l.previous
-          val newlyIntroducedColumns = prev.selection.keys.map(QualifiedColumnName(None, _)).filter {
-            columnName => !mapping.contains(columnName)
-          }
-          val mappingWithNewColumns = newlyIntroducedColumns.foldLeft(mapping) { (acc, newColumn) =>
-            acc + (newColumn -> new UserColumnId(newColumn.columnName.name))
-          }
-          // Re-map columns except for the innermost soql
-          val newMapping =
-            if (convertedAnalyses.nonEmpty) {
-              val prevAnalysis = convertedAnalyses.last
-              prevAnalysis.selection.foldLeft(mapping) { (acc, selCol) =>
-                val (colName, expr) = selCol
-                acc + (QualifiedColumnName(None, colName) -> new UserColumnId(colName.name))
-              }
-            } else {
-              mappingWithNewColumns
-            }
-
-          val newColumnsFromJoin = prev.joins.flatMap { join =>
-            join.from.subAnalysis match {
-              case Left(tableName) =>
-                Seq.empty
-              case Right(SubAnalysis(analyses, alias)) =>
-                analyses.previous.selection.toSeq.map {
-                  case (columnName, _) =>
-                    QualifiedColumnName(join.from.alias, columnName) -> new UserColumnId(columnName.name)
-                }
-            }
-//            if (join.isSimple) Seq.empty
-//            else {
-//              join.from.analyses.last.selection.toSeq.map {
-//                case (columnName, _) =>
-//                  QualifiedColumnName(join.from.alias, columnName) -> new UserColumnId(columnName.name)
-//              }
-//            }
-          }.toMap
-
-        //   case class QualifiedColumnName(qualifier: Option[String], columnName: ColumnName)
-
-          val newMappingWithJoin: Map[QualifiedColumnName, UserColumnId] =
-            (newMapping ++ newColumnsFromJoin).map { case (k, v) =>
-              //(k.columnName, k.qualifier ) -> v
-              QualifiedColumnName(k.qualifier, k.columnName) -> v
-            }
-
-
-          val la = remapAnalysesBinary(columnIdMapping, l)
-          val ra = remapAnalysesBinary(newMappingWithJoin, r)
-          Compound(op, la, ra)
-//          def toColumnNameJoinAlias(joinAlias: Option[String], columnName: ColumnName) = (columnName, joinAlias)
-//          def toUserColumnId(columnName: ColumnName) = new UserColumnId(columnName.name)
-//          val a: SoQLAnalysis[UserColumnId, SoQLType] = analysis.mapColumnIds(newMappingWithJoin, toColumnNameJoinAlias, toUserColumnId, toUserColumnId)
-      //    (mappingWithNewColumns, convertedAnalyses :+ a)
-       // }
-
-      case x@Compound(op, l, r) => // if op == "QUERYUNION" =>
+      case PipeQuery(l, r) =>
+        val nl = remapAnalysesBinary(columnIdMapping, l)
+        val prev = nl.previous
+        val prevQColumnIdToQColumnIdMap = prev.selection.foldLeft(newMapping) { (acc, selCol) =>
+          val (colName, expr) = selCol
+          acc + ((colName, None) -> toUserColumnId(colName))
+        }
+        val nr = r.asT.mapColumnIds(prevQColumnIdToQColumnIdMap, toColumnNameJoinAlias, toUserColumnId, toUserColumnId)
+        PipeQuery(nl, nr)
+      case Compound(op, l, r) => // if op == "QUERYUNION" =>
         val la = remapAnalysesBinary(columnIdMapping, l)
         val ra = remapAnalysesBinary(columnIdMapping, r)
         Compound(op, la, ra)
       case analysis: SoQLAnalysis[ColumnName, SoQLType] =>
-        //val (_, analysesInColIds) = analyses.seq.foldLeft(initialAcc) { (acc, analysis) =>
-          val (mapping, convertedAnalyses) = initialAcc
-          // Newly introduced columns will be used as column id as is.
-          // There should be some sanitizer upstream that checks for field_name conformity.
-          // TODO: Alternatively, we may need to use internal column name map for new and temporary columns
-          val newlyIntroducedColumns = analysis.selection.keys.map(QualifiedColumnName(None, _)).filter {
-            columnName => !mapping.contains(columnName)
-          }
-          val mappingWithNewColumns = newlyIntroducedColumns.foldLeft(mapping) { (acc, newColumn) =>
-            acc + (newColumn -> new UserColumnId(newColumn.columnName.name))
-          }
-          // Re-map columns except for the innermost soql
-          val newMapping =
-            if (convertedAnalyses.nonEmpty) {
-              val prevAnalysis = convertedAnalyses.last
-              prevAnalysis.selection.foldLeft(mapping) { (acc, selCol) =>
-                val (colName, expr) = selCol
-                acc + (QualifiedColumnName(None, colName) -> new UserColumnId(colName.name))
-              }
-            } else {
-              mappingWithNewColumns
-            }
-
-          val newColumnsFromJoin = analysis.joins.flatMap { join =>
-            join.from.subAnalysis match {
-              case Left(tableName) =>
-                Seq.empty
-              case Right(SubAnalysis(analyses, alias)) =>
-                analyses.previous.selection.toSeq.map {
-                  case (columnName, _) =>
-                    QualifiedColumnName(join.from.alias, columnName) -> new UserColumnId(columnName.name)
-                }
-            }
-//            if (join.isSimple) Seq.empty
-//            else {
-//              join.from.analyses.last.selection.toSeq.map {
-//                case (columnName, _) =>
-//                  QualifiedColumnName(join.from.alias, columnName) -> new UserColumnId(columnName.name)
-//              }
-//            }
-          }.toMap
-
-          val newMappingWithJoin: Map[(ColumnName, Qualifier), UserColumnId] =
-            (newMapping ++ newColumnsFromJoin).map { case (k, v) =>
-              (k.columnName, k.qualifier ) -> v
-            }
-
-          def toColumnNameJoinAlias(joinAlias: Option[String], columnName: ColumnName) = (columnName, joinAlias)
-          def toUserColumnId(columnName: ColumnName) = new UserColumnId(columnName.name)
-
-          val a: SoQLAnalysis[UserColumnId, SoQLType] = analysis.mapColumnIds(newMappingWithJoin, toColumnNameJoinAlias, toUserColumnId, toUserColumnId)
-          (mappingWithNewColumns, convertedAnalyses :+ a)
-       // }
-        a
+        val na: SoQLAnalysis[UserColumnId, SoQLType] =  analysis.mapColumnIds(newMapping, toColumnNameJoinAlias, toUserColumnId, toUserColumnId)
+        na
     }
   }
 

@@ -173,9 +173,11 @@ object SqlizerContext extends Enumeration {
   val InnermostSoql = Value("innermost-soql")
   val OutermostSoql = Value("outermost-soql")
   val OutermostSoqls = Value("outermost-soqls")
+  val Chain = Value("chain")
 
   val TableMap = Value("tables") // resource name to table name map
   val TableAliasMap = Value("table-aliases") // resource alias name to table name map
+  val SimpleJoinMap = Value("simple-joins")
 
   val JoinPrimaryTable = Value("join-primary-table")
 

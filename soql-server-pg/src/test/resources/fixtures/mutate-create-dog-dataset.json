@@ -6,6 +6,7 @@
   { c: "add column", id: "age", type: "number" },
   { c: "add column", id: "point", type: "point" },
   { c: "add column", id: "union", type: "text" },
+  { c: "add column", id: "dog", type: "text" },
   { c: "row data" },
   {"name":"dog1", "breed":"golden retriever", "specie": "dog","age": 1},
   {"name":"dog2", "breed":"poodle", "specie": "dog","age": 2},
