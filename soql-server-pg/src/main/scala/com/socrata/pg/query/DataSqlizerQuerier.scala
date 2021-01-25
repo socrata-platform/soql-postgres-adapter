@@ -1,5 +1,6 @@
 package com.socrata.pg.query
 
+import com.rojoma.json.v3.ast.JString
 import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.{MutableRow, Row}
 import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
@@ -37,7 +38,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
     */
   private val sqlFetchSize = 1025
 
-  def query(conn: Connection, analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
+  def query(conn: Connection, context: Map[String, String], analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
             toSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analysis, tableName
             toRowCountSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analysis, tableName
             reqRowCount: Boolean,
@@ -51,7 +52,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
       if (reqRowCount) {
         val rowCountSql = toRowCountSql(analyses, dataTableName)
         // We know this will only return one row, so fetchsize of 0 is ok
-        using(executeSql(conn, rowCountSql, queryTimeout, 0, debug)) { rs =>
+        using(executeSql(conn, context, rowCountSql, queryTimeout, 0, debug)) { rs =>
           try {
             rs.next()
             Some(rs.getLong(1))
@@ -86,7 +87,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
     // get rows
     if (analyses.seq.exists(_.selection.size > 0)) {
       val sql = toSql(analyses, dataTableName)
-      val rs = executeSql(conn, sql, queryTimeout, fetchSize, debug)
+      val rs = executeSql(conn, context, sql, queryTimeout, fetchSize, debug)
       // Statement and resultset are closed by the iterator.
       new ResultSetIt(rowCount, rs, decodeRow(decoders))
     } else {
@@ -116,13 +117,37 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
   def setTimeout(timeoutMs: String) = s"SET LOCAL statement_timeout TO $timeoutMs"
   def resetTimeout = "SET LOCAL statement_timeout TO DEFAULT"
 
-  private def executeSql(conn: Connection, pSql: ParametricSql, timeout: Option[Duration], fetchSize: Integer, debug: Boolean): ResultSet = {
+  def setContext(conn: Connection, context: Map[String, String]) {
+    if(context.nonEmpty) {
+      // Although in my experiments it looks like an arbitrary string
+      // works fine for the variable name, I'm md5ing it because I'm
+      // not willing to expose our databases to potential hostile
+      // activity in a thing that's not generally considered part of
+      // the query path.
+      //
+      // Because these things are mainly/exclusively set by core, I'm
+      // not going to care overmuch about the values' trustworthiness.
+      // This is mostly to prevent hypothetical attacks via the
+      // get_context function.
+      using(conn.prepareStatement("select set_config('user_variables.' || md5(?), ?, true)")) { stmt =>
+        for((varName, varValue) <- context) {
+          logger.debug("Setting context variable {} to {}", JString(varName), JString(varValue))
+          stmt.setString(1, varName)
+          stmt.setString(2, varValue)
+          stmt.executeQuery().close()
+        }
+      }
+    }
+  }
+
+  private def executeSql(conn: Connection, context: Map[String, String], pSql: ParametricSql, timeout: Option[Duration], fetchSize: Integer, debug: Boolean): ResultSet = {
     try {
       if (timeout.isDefined && timeout.get.isFinite()) {
         val ms = timeout.get.toMillis.min(Int.MaxValue).max(1).toInt.toString
         logger.trace(s"Setting statement timeout to ${ms}ms")
         execute(conn, setTimeout(ms))
       }
+      setContext(conn, context)
       logger.debug("sql: {}", pSql.sql)
       if (debug) { logger.info(pSql.toString) }
       // Statement to be closed by caller
@@ -140,13 +165,14 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
     }
   }
 
-  def explainQuery(conn: Connection, analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
+  def explainQuery(conn: Connection, context: Map[String, String], analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
                    toSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
                    queryTimeout: Option[Duration],
                    analyze: Boolean):
   ExplainInfo = {
     val sql = toSql(analyses, dataTableName)
     val result = StringBuilder.newBuilder
+    setContext(conn, context)
     using(explainSql(conn, sql, queryTimeout, analyze)) {
       rs =>
         try {

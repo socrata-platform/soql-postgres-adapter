@@ -8,7 +8,8 @@ import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 
 import javax.servlet.http.HttpServletResponse
 import com.socrata.pg.BuildInfo
-import com.rojoma.json.v3.ast.JString
+import com.rojoma.json.v3.ast.{JString, JObject}
+import com.rojoma.json.v3.io.CompactJsonWriter
 import com.rojoma.json.v3.util.{AutomaticJsonEncodeBuilder, JsonUtil}
 import com.rojoma.simplearm.v2._
 import com.socrata.NonEmptySeq
@@ -63,6 +64,7 @@ import org.postgresql.util.PSQLException
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.collection.immutable.SortedMap
 import scala.language.existentials
 
 class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val leadingSearch: Boolean = true) extends SecondaryBase {
@@ -182,12 +184,18 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
   }
 
-  def createEtagFromAnalysis(analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]], fromTable: String): String = {
+  def createEtagFromAnalysis(analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]], fromTable: String, contextVars: Map[String, String]): String = {
+    val suffix =
+      if(contextVars.nonEmpty) {
+        CompactJsonWriter.toString(JObject(SortedMap(contextVars.toSeq : _*).mapValues(JString)))
+      } else {
+        ""
+      }
     analyses.map{
       analysis: SoQLAnalysis[UserColumnId, SoQLType] =>
         // Strictly speaking this table name is incorrect, but it's _consistently_ incorrect
         analysis.toStringWithFrom(TableName(fromTable))
-    }.toString
+    }.toString ++ suffix
   }
 
   /** maps dataset name to count of current requests.  Requires synchronization to access. */
@@ -234,6 +242,15 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     val analysisParam = servReq.getParameter("query")
     val analysisStream = new ByteArrayInputStream(analysisParam.getBytes(StandardCharsets.ISO_8859_1))
     val analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] = SoQLAnalyzerHelper.deserialize(analysisStream)
+    val contextVars = Option(servReq.getParameter("context")).fold(Map.empty[String, String]) { contextStr =>
+      JsonUtil.parseJson[Map[String,String]](contextStr) match {
+        case Right(m) =>
+          m
+        case Left(_) =>
+          resp.setStatus(HttpServletResponse.SC_BAD_REQUEST)
+          return
+      }
+    }
     val reqRowCount = Option(servReq.getParameter("rowCount")).map(_ == "approximate").getOrElse(false)
     val copy = Option(servReq.getParameter("copy"))
     val rollupName = Option(servReq.getParameter("rollupName")).map(new RollupName(_))
@@ -246,6 +263,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     withRequestLimit(datasetId, resp,
       streamQueryResults(
         analyses = analyses,
+        context = contextVars,
         datasetId = datasetId,
         reqRowCount = reqRowCount,
         copy = copy,
@@ -253,7 +271,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
         obfuscateId = obfuscateId,
         precondition = req.precondition,
         ifModifiedSince = req.dateTimeHeader("If-Modified-Since"),
-        etagInfo = Option(createEtagFromAnalysis(analyses, datasetId)),
+        etagInfo = Option(createEtagFromAnalysis(analyses, datasetId, contextVars)),
         queryTimeout = queryTimeout,
         debug = debug,
         explain = explain,
@@ -262,6 +280,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
 
   def streamQueryResults( // scalastyle:ignore parameter.number
     analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]],
+    context: Map[String, String],
     datasetId: String,
     reqRowCount: Boolean,
     copy: Option[String],
@@ -290,6 +309,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
               def requestTimeout(timeout: Option[Duration]) = responses.RequestTimeout ~> Json(Map("timeout" -> timeout.toString))
               execQuery(
                 pgu = pgu,
+                context = context,
                 datasetInternalName = datasetId,
                 datasetInfo = datasetInfo,
                 analysis = analyses,
@@ -350,6 +370,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
 
   def execQuery( // scalastyle:ignore method.length parameter.number cyclomatic.complexity
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+    context: Map[String, String],
     datasetInternalName: String,
     datasetInfo: DatasetInfo,
     analysis: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]],
@@ -367,6 +388,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
   ): QueryResult = {
 
     def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                 context: Map[String, String],
                  latestCopy: CopyInfo,
                  analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]],
                  rowCount: Boolean,
@@ -409,6 +431,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
 
         if (explain) {
           val explain = querier.queryExplain(
+            context,
             analyses,
             (as: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) => {
               val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> tableName)
@@ -421,6 +444,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
           InfoQueryResult(latestCopy.dataVersion, explain)
         } else {
           val results = querier.query(
+            context,
             analyses,
             (as: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]], tableName: String) => {
               val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> tableName)
@@ -460,7 +484,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
             NotModified(Seq(etag))
           case Some(_) | None =>
             try {
-              runQuery(pgu, copy, analysis, rowCount, queryTimeout, explain, analyze) match {
+              runQuery(pgu, context, copy, analysis, rowCount, queryTimeout, explain, analyze) match {
                 case RowsQueryResult(qrySchema, version, results) =>
                   Success (qrySchema, copy.copyNumber, version, results, etag, lastModified)
                 case InfoQueryResult(dataVersion, explainInfo) =>

@@ -17,7 +17,8 @@ import scala.concurrent.duration.Duration
 trait RowReaderQuerier[CT, CV] {
   this: PGSecondaryRowReader[CT, CV] => ()
 
-  def query(analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
+  def query(context: Map[String, String],
+            analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
             toSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql,
             toRowCountSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql, // analsysis, tableName
             reqRowCount: Boolean,
@@ -26,18 +27,19 @@ trait RowReaderQuerier[CT, CV] {
             debug: Boolean):
             Managed[CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount] = {
     val sqlizerq = sqlizer.asInstanceOf[DataSqlizer[CT, CV] with DataSqlizerQuerier[CT, CV]]
-    val resultIter = sqlizerq.query(connection, analyses, toSql, toRowCountSql, reqRowCount, querySchema, queryTimeout, debug)
+    val resultIter = sqlizerq.query(connection, context, analyses, toSql, toRowCountSql, reqRowCount, querySchema, queryTimeout, debug)
     managed(resultIter)
   }
 
-  def queryExplain(analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
+  def queryExplain(context: Map[String, String],
+            analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, CT]],
             toSql: (NonEmptySeq[SoQLAnalysis[UserColumnId, CT]], String) => ParametricSql,
             queryTimeout: Option[Duration],
             debug: Boolean,
             analyze: Boolean): ExplainInfo = {
     val sqlizerq = sqlizer.asInstanceOf[DataSqlizer[CT, CV] with DataSqlizerQuerier[CT, CV]]
 
-    sqlizerq.explainQuery(connection, analyses, toSql, queryTimeout, analyze)
+    sqlizerq.explainQuery(connection, context, analyses, toSql, queryTimeout, analyze)
   }
 
   def getSqlReps(systemToUserColumnMap: Map[ColumnId, UserColumnId]): Map[QualifiedUserColumnId, SqlColumnRep[CT, CV]] = {
