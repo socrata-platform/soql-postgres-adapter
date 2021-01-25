@@ -336,13 +336,14 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     }
 
     val joinTableAliases = joins.foldLeft(Map.empty[String, String]) { (acc, j) =>
-      val entry = j.from.subAnalysis match {
+      j.from.subAnalysis match {
+        case Left(TableName(name, None)) =>
+          acc
         case Left(TableName(name, alias)) =>
-          (alias.getOrElse(name) -> name)
+          acc + (alias.getOrElse(name) -> name)
         case Right(SubAnalysis(analyses, alias)) =>
-          (alias -> alias)
+          acc + (alias -> alias)
       }
-      acc + entry
       // acc ++ j.from.alias.map(x => x -> j.from.fromTable.name)
     }
 
@@ -451,7 +452,7 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
           val realTableName = tableNames(key)
           val qualifier = tableName.qualifier
           //val tn = join.from.alias.map(a => s"$tableName as $a").getOrElse(tableName)
-          val tn = s"$realTableName as $qualifier"
+          val tn = if (tableName.alias.isEmpty) realTableName else s"$realTableName as $qualifier"
           (tn, setParamAcc)
       }
 
