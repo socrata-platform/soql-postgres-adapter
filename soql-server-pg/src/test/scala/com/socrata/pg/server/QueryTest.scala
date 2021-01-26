@@ -3,7 +3,7 @@ package com.socrata.pg.server
 import com.socrata.datacoordinator.id.{RowId, UserColumnId}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.store._
-import com.socrata.soql.analyzer.SoQLAnalyzerHelper
+import com.socrata.soql.analyzer.{QualifiedColumnName, SoQLAnalyzerHelper}
 import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName, TypeName}
 import com.socrata.soql.types.{SoQLID, SoQLType}
 import com.socrata.soql.collection.OrderedMap
@@ -56,8 +56,17 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase w
         val datasetCtx = new DatasetContext[SoQLType] {
           val schema = columnNameTypeMap
         }
+
+        val columnNameIdMap = columnNameTypeMap.map { case (columnName, typ) =>
+          columnName -> idMap(columnName)
+        }
+
+        val primaryTableColumnNameIdMap = columnNameIdMap.map { case (k, v) =>
+          QualifiedColumnName(None, k) -> v
+        }
+
         val analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] =
-          SoQLAnalyzerHelper.analyzeSoQLBinary(soql, Map(TableName.PrimaryTable.qualifier -> datasetCtx), Map.empty)
+          SoQLAnalyzerHelper.analyzeSoQLBinary(soql, Map(TableName.PrimaryTable.qualifier -> datasetCtx), primaryTableColumnNameIdMap)
         val (requestColumns, version, mresult) =
           ds.run { dsInfo =>
             val qs = new QueryServer(dsInfo, CaseSensitive, leadingSearch = true)
