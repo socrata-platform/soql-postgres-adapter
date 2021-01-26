@@ -518,11 +518,14 @@ object SoQLAnalysisSqlizer extends Sqlizer[AnalysisTarget] {
     val setParamsOrderBy = orderBy._2
 
     val tableName = fromTableName.getOrElse(TableName.PrimaryTable)
+    val from =
+      if (prevAna.isEmpty && fromTableName.isEmpty) ""
+      else s" FROM ${tableNames(tableName.copy(alias = None))}" + tableName.alias.map(a => s" as ${a}").getOrElse("")
 
     // COMPLETE SQL
     val selectOptionalDistinct = "SELECT " + (if (analysis.distinct) "DISTINCT " else "")
     val completeSql = selectPhrase.mkString(selectOptionalDistinct, ",", "") +
-      s" FROM ${tableNames(tableName.copy(alias = None))}" + tableName.alias.map(a => s" as ${a}").getOrElse("") +
+      from +
       joinPhrase.mkString(" ") +
       where.flatMap(_.sql.headOption.map(" WHERE " +  _)).getOrElse("") +
       whereSearch.mkString(" ") +

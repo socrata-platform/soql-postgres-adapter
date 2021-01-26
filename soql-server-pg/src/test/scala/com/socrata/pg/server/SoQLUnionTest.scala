@@ -116,9 +116,9 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
    // soql = "SELECT name, @j1.breed as breed3 join (select breed from @dog) as j1 on true"
     //soql = "SELECT name, @j1.breed as breed5 join (select @dog.breed from @dog) as j1 on true"
 
-    soql = "SELECT name as name2 |> SELECT name2 as name3, @dog.breed join @dog on true" // OK
-    soql = "SELECT name, breed UNION SELECT @d1.name, @d1.breed from @dog as d1 UNION SELECT @bird.name, @bird.breed from @bird"
-    soql = "SELECT name |> SELECT name as name2  |> SELECT name2 as name3"
+    soql = "SELECT name as name2 |> SELECT name2 as name3, @j1.breed as breed3 join (select name,breed from @dog union select @b1.name,@b1.breed from @bird as b1) as j1 on @j1.name=name2 |> select name3, breed3 union select 'name3', 'breed3'" // OK
+    //soql = "SELECT name, breed UNION SELECT @d1.name, @d1.breed from @dog as d1 UNION SELECT @bird.name, @bird.breed from @bird"
+    //soql = "SELECT name |> SELECT name as name2  |> SELECT name2 as name3"
     //
     // SELECT t1_1.u_name_4 as "name" FROM t1_1 - simplest
     // SELECT t1_1.u_name_4 as "name" FROM t1_1 UNION SELECT t2_1.u_name_4 FROM t2_1
