@@ -65,6 +65,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     Lower -> nary("lower") _,
     Upper -> nary("upper") _,
 
+    GetContext -> formatCall("current_setting('user_variables.' || md5(%s), true)") _,
+
     // Number
     // http://beta.dev.socrata.com/docs/datatypes/numeric.html
     UnaryPlus -> passthrough,
