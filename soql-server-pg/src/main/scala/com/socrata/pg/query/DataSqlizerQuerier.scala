@@ -13,7 +13,7 @@ import com.socrata.soql.SoQLAnalysis
 
 import scala.concurrent.duration.Duration
 import com.typesafe.scalalogging.Logger
-import java.sql.{Connection, ResultSet, SQLException}
+import java.sql.{Connection, ResultSet, SQLException, PreparedStatement}
 
 import com.socrata.NonEmptySeq
 import com.socrata.pg.server.QueryServer.ExplainInfo
@@ -129,11 +129,36 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
       // not going to care overmuch about the values' trustworthiness.
       // This is mostly to prevent hypothetical attacks via the
       // get_context function.
-      using(conn.prepareStatement("select set_config('user_variables.' || md5(?), ?, true)")) { stmt =>
-        for((varName, varValue) <- context) {
-          logger.debug("Setting context variable {} to {}", JString(varName), JString(varValue))
-          stmt.setString(1, varName)
-          stmt.setString(2, varValue)
+      using(new ResourceScope) { rs =>
+        // Can't just use statement batching with SELECTs, so we'll
+        // have to do it ourselves.
+        val BatchSize = 5
+        var fullStmt = Option.empty[PreparedStatement]
+
+        def sql(n: Int) =
+          Iterator.fill(n) { "set_config('user_variables.' || md5(?), ?, true)" }.
+            mkString("SELECT ", ", ", "")
+
+        for(group <- context.iterator.grouped(BatchSize)) {
+          val stmt =
+            group.length match {
+              case BatchSize =>
+                fullStmt match {
+                  case None =>
+                    val stmt = rs.open(conn.prepareStatement(sql(BatchSize)))
+                    fullStmt = Some(stmt)
+                    stmt
+                  case Some(stmt) =>
+                    stmt
+                }
+              case n =>
+                rs.open(conn.prepareStatement(sql(n)))
+            }
+          for(((varName, varValue), i) <- group.iterator.zipWithIndex) {
+            logger.debug("Setting context variable {} to {}", JString(varName), JString(varValue))
+            stmt.setString(1 + 2*i, varName)
+            stmt.setString(2 + 2*i, varValue)
+          }
           stmt.executeQuery().close()
         }
       }
