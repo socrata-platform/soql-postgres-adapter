@@ -154,6 +154,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     TextToBool -> formatCall("%s::boolean") _,
     BoolToText -> formatCall("%s::varchar") _,
 
+    Iif -> formatCall("case when %s then %s else %s end") _,
     Case -> caseCall _,
     Coalesce -> coalesceCall _,
 
