@@ -62,14 +62,14 @@ object SoQLAnalyzerHelper {
           acc + ((colName, None) -> toUserColumnId(colName))
         }
         val nr = r.asLeaf.get.mapColumnIds(prevQColumnIdToQColumnIdMap, toColumnNameJoinAlias, toUserColumnId, toUserColumnId)
-        PipeQuery(nl, nr)
+        PipeQuery(nl, Leaf(nr))
       case Compound(op, l, r) =>
         val la = remapAnalyses(columnIdMapping, l)
         val ra = remapAnalyses(columnIdMapping, r)
         Compound(op, la, ra)
-      case analysis: SoQLAnalysis[ColumnName, SoQLType] =>
+      case Leaf(analysis) =>
         val remapped: SoQLAnalysis[UserColumnId, SoQLType] = analysis.mapColumnIds(newMapping, toColumnNameJoinAlias, toUserColumnId, toUserColumnId)
-        remapped
+        Leaf(remapped)
     }
   }
 

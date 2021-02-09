@@ -8,7 +8,7 @@ import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 
 import javax.servlet.http.HttpServletResponse
 import com.socrata.pg.BuildInfo
-import com.rojoma.json.v3.ast.{JString, JObject}
+import com.rojoma.json.v3.ast.{JObject, JString}
 import com.rojoma.json.v3.io.CompactJsonWriter
 import com.rojoma.json.v3.util.{AutomaticJsonEncodeBuilder, JsonUtil}
 import com.rojoma.simplearm.v2._
@@ -40,7 +40,7 @@ import com.socrata.pg.server.config.{DynamicPortMap, QueryServerConfig}
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.soql._
 import com.socrata.pg.store._
-import com.socrata.soql.{BinaryTree, Compound, SoQLAnalysis, typed}
+import com.socrata.soql.{BinaryTree, Compound, Leaf, SoQLAnalysis, typed}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, ResourceName, TableName}
@@ -195,7 +195,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     val etag = analyses match {
       case Compound(op, l, r) =>
         createEtagFromAnalysis(l, fromTable, Map.empty) + op + createEtagFromAnalysis(r, fromTable, Map.empty)
-      case analysis: SoQLAnalysis[UserColumnId, SoQLType] =>
+      case Leaf(analysis) =>
         if (analysis.from.isDefined) analysis.toString()
         else analysis.toStringWithFrom(TableName(fromTable))
     }

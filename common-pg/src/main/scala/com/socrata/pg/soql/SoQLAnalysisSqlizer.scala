@@ -4,7 +4,7 @@ import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.pg.store.PostgresUniverseCommon
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.{BinaryTree, Compound, PipeQuery, SoQLAnalysis, SubAnalysis}
+import com.socrata.soql.{BinaryTree, Compound, Leaf, PipeQuery, SoQLAnalysis, SubAnalysis}
 import com.socrata.soql.environment.{ColumnName, TableName}
 import com.socrata.soql.functions.SoQLFunctions
 import com.socrata.soql.typed._
@@ -66,7 +66,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
       case Compound(_, _, _) =>
         val selection = OrderedMap(com.socrata.soql.environment.ColumnName("count") -> (FunctionCall(SoQLFunctions.CountStar.monomorphic.get, Seq.empty, None)(NoPosition, NoPosition)))
         val countAnalysis = SoQLAnalysis[UserColumnId, SoQLType](false, false, selection, None, Seq.empty, None, Seq.empty, None, Seq.empty, None, None, None)
-        PipeQuery(analysis, countAnalysis)
+        PipeQuery(analysis, Leaf(countAnalysis))
       case _ =>
         analysis
     }
@@ -76,9 +76,9 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
     analyses match {
       case Compound(op, left, right) =>
         Compound(op, updateFrom(left, tableName), right)
-      case analysis: SoQLAnalysis[UserColumnId, SoQLType] =>
-        if (analysis.from.isEmpty) analysis.copy(from = Some(tableName))
-        else analysis
+      case leaf@Leaf(analysis) =>
+        if (analysis.from.isEmpty) Leaf(analysis.copy(from = Some(tableName)))
+        else leaf
     }
   }
 
@@ -94,7 +94,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
                   fromTableName: Option[TableName] = None): (ParametricSql, /* params count in select, excluding where, group by... */ Int) = {
 
     analyses match {
-      case PipeQuery(l, ra: SoQLAnalysis[UserColumnId, SoQLType]) =>
+      case PipeQuery(l, Leaf(ra)) =>
         val (lpsql, _) = sql(l, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctx, escape, fromTableName)
         val chainedTableAlias = "x1"
         val subTableName = "(%s) AS %s".format(lpsql.sql.head, chainedTableAlias)
@@ -121,7 +121,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
           else s"${ls} $op (${rs})"
         }
         (ParametricSql(unionSql, setParamsAcc), lpcts + rpcts)
-      case analysis: SoQLAnalysis[UserColumnId, SoQLType] =>
+      case Leaf(analysis) =>
         toSql(analysis, None, tableNames, allColumnReps, reqRowCount, rep, typeRep,
               setParams, ctx, escape, analysis.from.orElse(fromTableName))
     }
@@ -134,7 +134,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
         outerMostAnalyses(r, set)
       case Compound(_, l, r) =>
         outerMostAnalyses(l, set) ++ outerMostAnalyses(r, set)
-      case analysis: SoQLAnalysis[UserColumnId, SoQLType]  =>
+      case Leaf(analysis) =>
         set + analysis
     }
   }
