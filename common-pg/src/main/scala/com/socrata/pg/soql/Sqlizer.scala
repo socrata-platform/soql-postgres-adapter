@@ -104,9 +104,7 @@ object Sqlizer {
 
   implicit val functionCallSqlizer = FunctionCallSqlizer
 
-  implicit val soqlAnalysisSqlizer = SoQLAnalysisSqlizer
-
-  implicit val topSoqlAnalysisSqlizer = TopSoQLAnalysisSqlizer
+  implicit val binaryTreeSoqlAnalysisSqlizer = BinarySoQLAnalysisSqlizer
 
   implicit object CoreExprSqlizer extends Sqlizer[CoreExpr[UserColumnId, SoQLType]] {
     def sql(expr: CoreExpr[UserColumnId, SoQLType])(rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
@@ -170,11 +168,11 @@ object SqlizerContext extends Enumeration {
   val CaseSensitivity = Value("case-sensitivity")
   val InnermostSoql = Value("innermost-soql")
   val OutermostSoql = Value("outermost-soql")
+  val OutermostSoqls = Value("outermost-soqls")
 
   val TableMap = Value("tables") // resource name to table name map
   val TableAliasMap = Value("table-aliases") // resource alias name to table name map
-
-  val JoinPrimaryTable = Value("join-primary-table")
+  val SimpleJoinMap = Value("simple-joins")
 
   val PrimaryTableAlias = Value("primary-table-alias")
 

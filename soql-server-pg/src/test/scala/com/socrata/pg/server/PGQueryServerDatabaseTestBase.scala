@@ -1,21 +1,19 @@
 package com.socrata.pg.server
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 
 import com.rojoma.json.v3.ast.{JArray, JNumber, JObject, JValue}
-import com.socrata.NonEmptySeq
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
-import com.socrata.datacoordinator.id.UserColumnId
+import com.socrata.datacoordinator.id.{DatasetId, UserColumnId}
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.http.server.util.NoPrecondition
 import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity}
 import com.socrata.pg.store._
-import com.socrata.soql.SoQLAnalysis
+import com.socrata.soql.{BinaryTree, SoQLAnalysis}
 import com.socrata.soql.analyzer.{QualifiedColumnName, SoQLAnalyzerHelper}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
-import com.socrata.soql.types.{SoQLAnalysisType, SoQLType, SoQLValue}
+import com.socrata.soql.types.{SoQLType, SoQLValue}
 import org.scalatest.matchers.{BeMatcher, MatchResult}
 
 import scala.language.existentials
@@ -32,7 +30,8 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
                         caseSensitivity: CaseSensitivity = CaseSensitive,
                         joinDatasetCtx: Map[String, DatasetContext[SoQLType]] = Map.empty,
                         leadingSearch: Boolean = true,
-                        context: Map[String, String] = Map.empty): Unit = {
+                        context: Map[String, String] = Map.empty,
+                        secDatasetId: DatasetId = secDatasetId): Unit = {
     withDb() { conn =>
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon)
       val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secDatasetId).get)
@@ -64,7 +63,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
           acc ++ columnNameIdMap
         }
 
-        val analyses: NonEmptySeq[SoQLAnalysis[UserColumnId, SoQLType]] =
+        val analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] =
           SoQLAnalyzerHelper.analyzeSoQL(soql, allDatasetCtx, primaryTableColumnNameIdMap ++ joinTableColumnNameIdMap)
 
         val (qrySchema, dataVersion, mresult) =

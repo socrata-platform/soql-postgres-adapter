@@ -167,7 +167,11 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
 
   private def isTableAlias(q: Qualifier, aliases: Map[String, String]): Boolean = {
     q match {
-      case Some(x) => aliases.get(x).map(aliases.contains(_)).getOrElse(false)
+      case Some(x) =>
+        aliases.get(x) match {
+          case Some(a) => a != x
+          case None => false
+        }
       case None => false
     }
   }
@@ -180,65 +184,65 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           ctx: Context,
           escape: Escape): ParametricSql = {
     val tableMap = ctx(TableAliasMap).asInstanceOf[Map[String, String]]
-    val ista = isTableAlias(expr.qualifier, tableMap)
-    val repKeyQualifier =
-      ctx.get(JoinPrimaryTable) match {
-        case Some(Some(s: String)) =>
-          expr.qualifier.orElse(Some(s))
-        case _ =>
-          if (ista) qualifierFromAlias(expr, tableMap)
-          else expr.qualifier
+
+    val simpleJoinMap = ctx(SimpleJoinMap).asInstanceOf[Map[String, String]]
+
+    val useTypeRep = expr.qualifier match {
+      case Some(qual) =>
+        !simpleJoinMap.contains(qual)
+      case None =>
+        val chained = ctx(InnermostSoql) != true
+        chained
+    }
+
+    val ista = isTableAlias(expr.qualifier, simpleJoinMap)
+
+    if (useTypeRep) {
+      val typeReps = typeRep ++ // TODO: Adding reps seems unnecessary but keep to minimize change for now
+        reps.values.map((rep: SqlColumnRep[SoQLType, SoQLValue]) => (rep.representedType -> rep)).toMap
+      typeReps.get(expr.typ) match {
+        case Some(rep) =>
+          val subColumns = rep.physColumns.map { pc => pc.replace(rep.base, "") }
+          val sqls = subColumns.map { subCol =>
+            val c = idQuote(expr.column.underlying + subCol)
+            expr.qualifier.foreach(qualifierRx.findFirstMatchIn(_).orElse(throw BadParse("Invalid table alias", expr.position)))
+            val qualifier = expr.qualifier.orElse(ctx.get(PrimaryTableAlias).map(_.toString))
+            toUpper(expr)(qualifier.map(q => s"$q.$c").getOrElse(c), ctx) + selectAlias(expr, Some(subCol))(ctx)
+          }
+          ParametricSql(sqls, setParams)
+        case None =>
+          val schema = reps.map { case (columnId, rep) => (columnId.userColumnId.underlying -> rep.representedType) }
+          val soql = ctx.get(SoqlSelect).getOrElse("no select info")
+          throw new Exception(s"cannot find rep for ${expr.column.underlying} ${expr.typ}\n$soql\n${schema.toString}")
       }
-    reps.get(QualifiedUserColumnId(repKeyQualifier, expr.column)) match {
-      case Some(rep) if ctx(InnermostSoql) == true || expr.qualifier.nonEmpty => // scalastyle:off simplify.boolean.expression
-        // fields from the innermost soql and fields from joins in following chained soqls interact with physical tables.
-        if (complexTypes.contains(expr.typ) &&
-            ctx.get(SoqlPart).exists(_ == SoqlSelect) &&
-            ctx.get(RootExpr).exists(_ == expr)) {
-          val qualifer = tableMap.get(expr.qualifier.getOrElse(TableName.PrimaryTable.qualifier))
-          val maybeUpperPhysColumns =
-            rep.physColumns.zip(rep.sqlTypes).map { case (physCol, sqlType) =>
-              toUpper(expr, sqlType)(qualifer.map(q => s"$q.$physCol").getOrElse(physCol), ctx)
-            }
-          val subColumns = rep.physColumns.map(pc => pc.replace(rep.base, ""))
-          val physColumnsWithSubColumns = maybeUpperPhysColumns.zip(subColumns)
-          val columnsWithAlias = physColumnsWithSubColumns.map { case (physCol, subCol) =>
-            physCol + selectAlias(expr, Some(subCol))(ctx)
+    } else {
+      val rep = reps(QualifiedUserColumnId(expr.qualifier, expr.column))
+      if (complexTypes.contains(expr.typ) &&
+        ctx.get(SoqlPart).exists(_ == SoqlSelect) &&
+        ctx.get(RootExpr).exists(_ == expr)) {
+        val qualifer = tableMap.get(expr.qualifier.getOrElse(TableName.PrimaryTable.qualifier))
+        val maybeUpperPhysColumns =
+          rep.physColumns.zip(rep.sqlTypes).map { case (physCol, sqlType) =>
+            toUpper(expr, sqlType)(qualifer.map(q => s"$q.$physCol").getOrElse(physCol), ctx)
           }
-          ParametricSql(columnsWithAlias, setParams)
-        } else {
-          val qualifier = expr.qualifier match {
-            case Some(x) =>
-              if (ista) expr.qualifier
-              else Some(tableMap(x))
-            case None =>
-              tableMap.get(TableName.PrimaryTable.qualifier)
-          }
-          qualifier.foreach(qualifierRx.findFirstMatchIn(_).orElse(throw BadParse("Invalid table alias", expr.position)))
-          val maybeUpperPhysColumns = rep.physColumns.map(c => toUpper(expr)(qualifier.map(q => s"$q.$c").getOrElse(c), ctx))
-          ParametricSql(maybeUpperPhysColumns.map(c => c + selectAlias(expr)(ctx)), setParams)
+        val subColumns = rep.physColumns.map(pc => pc.replace(rep.base, ""))
+        val physColumnsWithSubColumns = maybeUpperPhysColumns.zip(subColumns)
+        val columnsWithAlias = physColumnsWithSubColumns.map { case (physCol, subCol) =>
+          physCol + selectAlias(expr, Some(subCol))(ctx)
         }
-      case _ if ctx.contains(JoinPrimaryTable) =>
-        val exprRequalifiedForJoin = expr.copy(qualifier = ctx(JoinPrimaryTable).asInstanceOf[Qualifier])
-        sql(exprRequalifiedForJoin)(reps, typeRep, setParams, ctx, escape)
-      case _ => // Outer soqls do not get rep by column id.  They get rep by datatype.
-        val typeReps = typeRep ++
-                       reps.values.map((rep: SqlColumnRep[SoQLType, SoQLValue]) => (rep.representedType -> rep)).toMap
-        typeReps.get(expr.typ) match {
-          case Some(rep) =>
-            val subColumns = rep.physColumns.map { pc => pc.replace(rep.base, "") }
-            val sqls = subColumns.map { subCol =>
-              val c = idQuote(expr.column.underlying + subCol)
-              expr.qualifier.foreach(qualifierRx.findFirstMatchIn(_).orElse(throw BadParse("Invalid table alias", expr.position)))
-              val qualifier = expr.qualifier.orElse(ctx.get(PrimaryTableAlias).map(_.toString))
-              toUpper(expr)(qualifier.map(q => s"$q.$c").getOrElse(c), ctx) + selectAlias(expr, Some(subCol))(ctx)
-            }
-            ParametricSql(sqls, setParams)
+        ParametricSql(columnsWithAlias, setParams)
+      } else {
+        val qualifier = expr.qualifier match {
+          case Some(x) =>
+            if (ista) expr.qualifier
+            else Some(tableMap(x))
           case None =>
-            val schema = reps.map { case (columnId, rep) => (columnId.userColumnId.underlying -> rep.representedType) }
-            val soql = ctx.get(SoqlSelect).getOrElse("no select info")
-            throw new Exception(s"cannot find rep for ${expr.column.underlying} ${expr.typ}\n$soql\n${schema.toString}")
+            tableMap.get(TableName.PrimaryTable.qualifier)
         }
+        qualifier.foreach(qualifierRx.findFirstMatchIn(_).orElse(throw BadParse("Invalid table alias", expr.position)))
+        val maybeUpperPhysColumns = rep.physColumns.map(c => toUpper(expr)(qualifier.map(q => s"$q.$c").getOrElse(c), ctx))
+        ParametricSql(maybeUpperPhysColumns.map(c => c + selectAlias(expr)(ctx)), setParams)
+      }
     }
   }
 

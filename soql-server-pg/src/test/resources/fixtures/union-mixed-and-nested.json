@@ -1,0 +1,5 @@
+[
+  {"name": "cat1", "breed": "golden retriever", "b3": "cichlid", "type": "fish"},
+  {"name": "cat1", "breed": "golden retriever", "b3": "hawk", "type": "bird"},
+  {"name": "cat1", "breed": "golden retriever", "b3": "sparrow", "type": "bird"}
+]
