@@ -414,7 +414,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
       for(readCtx <- pgu.datasetReader.openDataset(latestCopy)) {
         val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema
         val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
-        val tableName = latestCopy.dataTableName
         val qrySchema = querySchema(pgu, analyses.outputSchemaLeaf, latestCopy)
         val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor)
         val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
@@ -434,6 +433,9 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
           val (tableName, copyInfo) = joinCopy
           acc ++ getJoinReps(pgu, copyInfo, tableName)
         }
+
+        // rollups will cause querier's dataTableName to be different than the normal dataset tablename
+        val tableName = querier.sqlizer.dataTableName
 
         if (explain) {
           val explain = querier.queryExplain(
