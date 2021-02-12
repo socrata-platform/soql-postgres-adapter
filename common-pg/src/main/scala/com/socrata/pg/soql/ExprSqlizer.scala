@@ -225,7 +225,7 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           val maybeUpperPhysColumns = rep.physColumns.map(c => toUpper(expr)(qualifier.map(q => s"$q.$c").getOrElse(c), ctx))
           ParametricSql(maybeUpperPhysColumns.map(c => c + selectAlias(expr)(ctx)), setParams)
         }
-      case _ =>
+      case _ => // rollups also flow here by not finding entries in reps
         val typeReps = typeRep ++ // TODO: Adding reps seems unnecessary but keep to minimize change for now
           reps.values.map((rep: SqlColumnRep[SoQLType, SoQLValue]) => (rep.representedType -> rep)).toMap
         typeReps.get(expr.typ) match {
