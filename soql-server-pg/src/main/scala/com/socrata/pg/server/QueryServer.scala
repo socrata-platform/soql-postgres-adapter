@@ -434,6 +434,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
           acc ++ getJoinReps(pgu, copyInfo, tableName)
         }
 
+        // rollups will cause querier's dataTableName to be different than the normal dataset tablename
         val tableName = querier.sqlizer.dataTableName
 
         if (explain) {
