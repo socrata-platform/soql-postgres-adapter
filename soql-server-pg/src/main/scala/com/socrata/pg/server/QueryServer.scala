@@ -434,12 +434,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
           acc ++ getJoinReps(pgu, copyInfo, tableName)
         }
 
-        val tableName = rollupName match {
-          case Some(_) =>
-            querier.sqlizer.dataTableName
-          case None =>
-            latestCopy.dataTableName
-        }
+        val tableName = querier.sqlizer.dataTableName
 
         if (explain) {
           val explain = querier.queryExplain(
