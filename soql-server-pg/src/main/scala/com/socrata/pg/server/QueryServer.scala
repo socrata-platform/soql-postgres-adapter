@@ -148,10 +148,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
 
   def rollups(req: HttpRequest): HttpResponse = {
     val servReq = req.servletRequest
-    val ds = servReq.getParameter("ds")
+    val dsOrRn = Option(servReq.getParameter("ds")).toLeft(servReq.getParameter("rn"))
     val copy = Option(servReq.getParameter("copy"))
     val includeUnmaterialized = java.lang.Boolean.parseBoolean(servReq.getParameter("include_unmaterialized"))
-    getRollups(ds, copy, includeUnmaterialized) match {
+    getRollups(dsOrRn, copy, includeUnmaterialized) match {
       case Some(rollups) =>
         OK ~> Write(JsonContentType)(JsonUtil.writeJson(_, rollups.map(r => r.unanchored).toSeq, buffer = true))
       case None =>
@@ -614,10 +614,22 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     }
   }
 
-  def getRollups(ds: String, reqCopy: Option[String], includeUnmaterialized: Boolean): Option[Iterable[RollupInfo]] = {
+  def getRollups(dsOrRn: Either[String, String], reqCopy: Option[String], includeUnmaterialized: Boolean): Option[Iterable[RollupInfo]] = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
+      // get dataset by either id or resource name
+      val datasetIdOption = dsOrRn match {
+        case Left(ds) =>
+          pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds, checkDisabled = true)
+        case Right(rn) =>
+          val datasetInfo = pgu.datasetMapReader.datasetInfoByResourceName(ResourceName(rn))
+          datasetInfo.map(_.systemId)
+        case _ =>
+          logger.warn("Require either dataset internal name or resource name to fetch rollups.  Possibly error from upstream Query Coordinator")
+          None
+      }
+
       for {
-        datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds, checkDisabled = true)
+        datasetId <- datasetIdOption
         datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
       } yield {
         val copy = getCopy(pgu, datasetInfo, reqCopy)
