@@ -165,7 +165,9 @@ trait SoQLAnalysisSqlizer {
     // TODO: switch to trailing search when there is smarter index support
     val leadingSearch = context.getOrElse(LeadingSearch, true) != false
 
-    val ana = if (reqRowCount) rowCountAnalysis(analysis) else analysis
+    val isOutermost = isOutermostAnalysis(analysis, context)
+    val reqRowCountFinal = reqRowCount && isOutermost
+    val ana = if (reqRowCountFinal) rowCountAnalysis(analysis) else analysis
 
     val joins = analysis.joins
 
@@ -206,7 +208,7 @@ trait SoQLAnalysisSqlizer {
     val ctx = context + (Analysis -> analysis) +
       (SimpleJoinMap -> simpleJoinMap) +
       (InnermostSoql -> analysis.from.isDefined) +
-      (OutermostSoql -> isOutermostAnalysis(analysis, context)) +
+      (OutermostSoql -> isOutermost) +
       (TableMap -> (tableNames ++ fromTableNames)) +
       (TableAliasMap -> (tableNames.map { case (k, v) => (k.qualifier, realAlias(k, v)) } ++ fromTableAliases) )
 
@@ -279,7 +281,7 @@ trait SoQLAnalysisSqlizer {
     val repMinusComplexJoinTable = rep ++ repJoins
 
     val (selectPhrase, setParamsSelect) =
-      if (reqRowCount && analysis.groupBys.isEmpty && analysis.search.isEmpty) {
+      if (reqRowCountFinal && analysis.groupBys.isEmpty && analysis.search.isEmpty) {
         (List("count(*)"), setParams)
       } else {
         select(analysis)(repMinusComplexJoinTable, typeRep, setParams, ctxSelectWithJoins, escape)
@@ -397,7 +399,7 @@ trait SoQLAnalysisSqlizer {
       ana.limit.map(" LIMIT " + _.toString).getOrElse("") +
       ana.offset.map(" OFFSET " + _.toString).getOrElse("")
 
-    val result = ParametricSql(Seq(countBySubQuery(analysis)(reqRowCount, completeSql)), setParamsOrderBy)
+    val result = ParametricSql(Seq(countBySubQuery(analysis)(reqRowCountFinal, completeSql)), setParamsOrderBy)
     (result, paramsCountInSelect)
   }
 
