@@ -217,6 +217,11 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
       Seq(1, 1, 2, 1, 2, 1, 3, 1))
   }
 
+  test("Union rows_count") {
+    val soql = "SELECT name UNION SELECT name FROM @dog UNION ALL SELECT name FROM @bird UNION SELECT name FROM @fish |> SELECT name ORDER BY name OFFSET 2 LIMIT 2"
+    compareSoqlResult(soql, "union-rows-count.json", expectedRowCount = Some(12), CaseSensitive, plainCtx, secDatasetId = secDatasetIdCat)
+  }
+
   test("Sqlize - cannot select column in the other part of an union") {
     val err = intercept[NoSuchColumn] {
       sqlizeTest("SELECT name UNION SELECT cat FROM @fish", "")

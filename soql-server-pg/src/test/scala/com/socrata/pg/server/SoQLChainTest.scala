@@ -59,6 +59,17 @@ class SoQLChainTest extends SoQLTest {
   test("chain outer group") {
     compareSoqlResult(
       "SELECT make, -v_min as neg_v_min WHERE make = 'OZONE' |> SELECT make, sum(neg_v_min) GROUP BY make",
-      "chain-outer-group.json")
+      "chain-outer-group.json",
+      expectedRowCount = Some(1)
+    )
   }
+
+  test("chain group rows_count") {
+    compareSoqlResult(
+      "SELECT make, max(class) as max_class, count(name) as ct_name WHERE class is not null GROUP BY make |> SELECT max_class, sum(ct_name) GROUP By max_class ORDER BY max_class LIMIT 1",
+      "chain-group-rows-count.json",
+      expectedRowCount = Some(2)
+    )
+  }
+
 }
