@@ -493,4 +493,13 @@ class SqlizerBasicTest extends SqlizerTest {
     sql should be ("SELECT (avg(t1.year) over( partition by t1.primary_type,t1.year ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)) FROM t1")
     setParams.length should be (0)
   }
+
+
+
+  test("json array contains") {
+    val soql = "select case_number where json_array_contains(case_number, 'foo')"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    println(sql)
+    // val params = setParams.map { (setParam) => setParam(None, 0).get }
+  }
 }
