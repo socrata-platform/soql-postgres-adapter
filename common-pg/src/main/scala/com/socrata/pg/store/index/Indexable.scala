@@ -201,6 +201,7 @@ object SoQLIndexableRep {
     // document->>filename = 'literal' will not use this index
     SoQLDocument -> ((base, _) => new DocumentRep(base) with JsonbIndexable[SoQLType]),
     SoQLPhoto -> ((base, _) => new PhotoRep(base) with BlobIndexable[SoQLType]),
+    SoQLJson -> ((base, _) => new JsonRep(base) with NoIndex[SoQLType]),
     SoQLPoint -> ((base, levels) =>
       new GeometryLikeRep[Point](
         SoQLPoint,
