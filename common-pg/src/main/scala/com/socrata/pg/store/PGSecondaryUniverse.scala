@@ -73,7 +73,7 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
   }
 
   def schemaLoader(logger: Logger[SoQLType, SoQLValue]): SecondarySchemaLoader[SoQLType,SoQLValue] =
-    new SecondarySchemaLoader(conn, logger, repForIndex, tablespace, commonSupport, RowSizeBufferSqlErrorContinue)
+    new SecondarySchemaLoader(conn, logger, repForIndex, tablespace, commonSupport, RowSizeBufferSqlErrorContinue, timingReport)
 
   def datasetContentsCopier(logger: Logger[SoQLType, SoQLValue]): DatasetContentsCopier[SoQLType] =
     new RepBasedSqlDatasetContentsCopier(conn, logger, repFor, timingReport)
