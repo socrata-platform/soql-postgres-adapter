@@ -13,13 +13,15 @@ import java.sql.{Connection, PreparedStatement, Statement}
 import com.rojoma.json.v3.ast.{JBoolean, JObject}
 import com.rojoma.json.v3.util.JsonUtil
 import com.socrata.datacoordinator.id.DatasetId
+import com.socrata.datacoordinator.util.TimingReport
 import com.socrata.soql.environment.ColumnName
 
 class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
                                     repFor: ColumnInfo[CT] => SqlColumnRep[CT, CV] with Indexable[CT],
                                     tablespace: String => Option[String],
                                     fullTextSearch: FullTextSearch[CT],
-                                    sqlErrorHandler: SqlErrorHandler) extends
+                                    sqlErrorHandler: SqlErrorHandler,
+                                    time: TimingReport) extends
   RepBasedPostgresSchemaLoader[CT, CV](conn, dsLogger, repFor, tablespace) {
 
   import SecondarySchemaLoader._
@@ -59,8 +61,10 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
             val column = columnInfos.find(_.userColumnId.underlying == ":id")
             val shouldCreateSearchIndex = column.map(c => shouldCreateIndex(directivesStmt, c)).getOrElse(true)
             if (shouldCreateSearchIndex) {
-              SecondarySchemaLoader.fullTextIndexCreateSqlErrorHandler.guard(stmt) {
-                stmt.execute(s"CREATE INDEX idx_search_${table} on ${table} USING GIN ($allColumnsVector) $tablespace")
+              time("create-search-index", "table" -> table) {
+                SecondarySchemaLoader.fullTextIndexCreateSqlErrorHandler.guard(stmt) {
+                  stmt.execute(s"CREATE INDEX idx_search_${table} on ${table} USING GIN ($allColumnsVector) $tablespace")
+                }
               }
             }
           }
@@ -107,9 +111,12 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
           createIndexSql <- repFor(ci).createIndex(table, tablespace)
             if shouldCreateIndex(directivesStmt, ci)
         } {
-          logger.info("creating index {} {}", ci.userColumnId.underlying, idx.toString)
-          sqlErrorHandler.guard(conn) {
-            stmt.execute(createIndexSql)
+          time("creating-index",
+               "column_id" -> ci.userColumnId.underlying,
+               "index" -> idx.toString) {
+            sqlErrorHandler.guard(conn) {
+              stmt.execute(createIndexSql)
+            }
           }
         }
       }
