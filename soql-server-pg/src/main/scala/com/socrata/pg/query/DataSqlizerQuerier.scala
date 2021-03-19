@@ -84,15 +84,10 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
     }
 
     // get rows
-    if (analyses.seq.exists(_.selection.size > 0)) {
-      val sql = toSql(analyses)
-      val rs = executeSql(conn, context, sql, queryTimeout, fetchSize, debug)
-      // Statement and resultset are closed by the iterator.
-      new ResultSetIt(rowCount, rs, decodeRow(decoders))
-    } else {
-      logger.debug("Queried a dataset with no user columns")
-      EmptyIt
-    }
+    val sql = toSql(analyses)
+    val rs = executeSql(conn, context, sql, queryTimeout, fetchSize, debug)
+    // Statement and resultset are closed by the iterator.
+    new ResultSetIt(rowCount, rs, decodeRow(decoders))
   }
 
   def decodeRow(decoders: Array[(ColumnId, (ResultSet, Int) => CV, Int)])(rs: ResultSet): Row[CV] = {
