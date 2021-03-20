@@ -56,10 +56,17 @@ object SoQLAnalyzerHelper {
     analyses match {
       case PipeQuery(l, r) =>
         val nl = remapAnalyses(columnIdMapping, l)
-        val prev = nl.outputSchemaLeaf
+        val prev = nl.outputSchema.leaf
+        val ra = r.asLeaf.get
+        val prevQueryAlias = ra.from match {
+          case Some(TableName(name, alias@Some(_))) if name == TableName.This =>
+            alias
+          case _ =>
+            None
+        }
         val prevQColumnIdToQColumnIdMap = prev.selection.foldLeft(newMapping) { (acc, selCol) =>
           val (colName, _expr) = selCol
-          acc + ((colName, None) -> toUserColumnId(colName))
+          acc + ((colName, prevQueryAlias) -> toUserColumnId(colName))
         }
         val nr = r.asLeaf.get.mapColumnIds(prevQColumnIdToQColumnIdMap, toColumnNameJoinAlias, toUserColumnId, toUserColumnId)
         PipeQuery(nl, Leaf(nr))
@@ -68,7 +75,22 @@ object SoQLAnalyzerHelper {
         val ra = remapAnalyses(columnIdMapping, r)
         Compound(op, la, ra)
       case Leaf(analysis) =>
-        val remapped: SoQLAnalysis[UserColumnId, SoQLType] = analysis.mapColumnIds(newMapping, toColumnNameJoinAlias, toUserColumnId, toUserColumnId)
+        val newMappingThisAlias = analysis.from match {
+          case Some(tn@TableName(name, Some(alias))) if name == TableName.This =>
+            newMapping.foldLeft(newMapping) { (acc, mapEntry) =>
+              mapEntry match {
+                case ((columnName, None), userColumnId) =>
+                  acc ++ Map((columnName, Some(tn.qualifier)) -> userColumnId,
+                             (columnName, Some(name)) -> userColumnId)
+                case x =>
+                  acc
+              }
+            }
+          case _ =>
+            newMapping
+        }
+
+        val remapped: SoQLAnalysis[UserColumnId, SoQLType] = analysis.mapColumnIds(newMappingThisAlias, toColumnNameJoinAlias, toUserColumnId, toUserColumnId)
         Leaf(remapped)
     }
   }

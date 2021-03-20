@@ -96,10 +96,16 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
     analyses match {
       case PipeQuery(l, Leaf(ra)) =>
         val (lpsql, _) = sql(l, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctx, escape, fromTableName)
-        val chainedTableAlias = "x1"
-        val subTableName = "(%s) AS %s".format(lpsql.sql.head, chainedTableAlias)
-        val tableNamesSubTableNameReplace = tableNames + (TableName.PrimaryTable -> subTableName)
-        val primaryTableAlias = if (ra.joins.nonEmpty) Map((PrimaryTableAlias -> chainedTableAlias)) else Map.empty
+        val (primaryTableName, chainedTableAlias) = ra.from match {
+            case Some(tn@TableName(name, Some(alias))) if name == TableName.This =>
+              (tn.copy(alias = None), alias)
+            case _ =>
+              (TableName.PrimaryTable, "x1")
+          }
+        val subTableName = if (ra.from.isEmpty) "(%s) AS %s".format(lpsql.sql.head, chainedTableAlias)
+                           else "(%s)".format(lpsql.sql.head)
+        val tableNamesSubTableNameReplace = tableNames + (primaryTableName -> subTableName)
+        val primaryTableAlias = if (ra.joins.nonEmpty) Map((PrimaryTableAlias -> chainedTableAlias)) else Map.empty // REVISIT
         val subCtx = ctx ++ primaryTableAlias
         val prevAna = l.outputSchemaLeaf
         val (rpsql, rParamsCountInSelect) =
@@ -154,7 +160,7 @@ trait SoQLAnalysisSqlizer {
             tableNames: Map[TableName, String],
             allColumnReps: Seq[SqlColumnRep[SoQLType, SoQLValue]],
             reqRowCount: Boolean,
-            rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+            rep0: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
             typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
             setParams: Seq[SetParam],
             context: Context,
@@ -164,6 +170,23 @@ trait SoQLAnalysisSqlizer {
     // Use leading search despite being poor in semantics.  It is more likely to use the GIN index and performs better.
     // TODO: switch to trailing search when there is smarter index support
     val leadingSearch = context.getOrElse(LeadingSearch, true) != false
+    val tableNamesWithThis =
+      if (tableNames.contains(TableName(TableName.This, None))) tableNames
+      else tableNames + (TableName(TableName.This, None) -> tableNames(TableName.PrimaryTable))
+
+    val rep = analysis.from match {
+      case Some(tn@TableName(name, Some(_))) if name == TableName.This =>
+        rep0.flatMap {
+          case (QualifiedUserColumnId(None, r), x) =>
+            Map((QualifiedUserColumnId(None, r) -> x)) ++
+              Map((QualifiedUserColumnId(Some(TableName.This), r) -> x)) ++
+              Map((QualifiedUserColumnId(Some(tn.aliasWithoutPrefix.get), r) -> x))
+          case (x, y) =>
+            Map(x -> y)
+        }
+      case _ =>
+        rep0
+    }
 
     val isOutermost = isOutermostAnalysis(analysis, context)
     val reqRowCountFinal = reqRowCount && isOutermost
@@ -183,14 +206,22 @@ trait SoQLAnalysisSqlizer {
       }
     }
 
-    val simpleJoinMapAcc: Map[String, String] = analysis.from match {
+    val parentSimpleJoinMap = context.get(SimpleJoinMap) match {
+      case Some(map) => map.asInstanceOf[Map[String, String]]
+      case None => Map.empty[String, String]
+    }
+
+    val simpleJoinMapAcc: Map[String, String] = parentSimpleJoinMap ++ (analysis.from match {
+      case Some(TableName(TableName.This, Some(alias))) =>
+        val name = tableNames(TableName.PrimaryTable)
+        Map(alias -> name, name -> alias)
       case Some(TableName(name, Some(alias))) =>
         Map(alias -> name, name -> alias)
       case Some(TableName(name, None)) =>
         Map(name -> name)
       case _ =>
         Map.empty
-    }
+    })
 
     val simpleJoinMap = joins.foldLeft(simpleJoinMapAcc) { (acc, j) =>
       j.from.subAnalysis match {
@@ -205,12 +236,22 @@ trait SoQLAnalysisSqlizer {
       }
     }
 
+    val prevTableAliasMap = context.get(TableAliasMap) match {
+      case Some(x) => x.asInstanceOf[Map[String, String]]
+      case None => Map.empty[String, String]
+    }
+
+    val tableAliasMap = (prevTableAliasMap ++ tableNames.map {
+        case (k, v) =>
+          (k.qualifier, realAlias(k, v))
+      } ++ fromTableAliases)
+
     val ctx = context + (Analysis -> analysis) +
       (SimpleJoinMap -> simpleJoinMap) +
       (InnermostSoql -> analysis.from.isDefined) +
       (OutermostSoql -> isOutermost) +
       (TableMap -> (tableNames ++ fromTableNames)) +
-      (TableAliasMap -> (tableNames.map { case (k, v) => (k.qualifier, realAlias(k, v)) } ++ fromTableAliases) )
+      (TableAliasMap -> tableAliasMap)
 
     // SELECT
     val ctxSelect = ctx + (SoqlPart -> SoqlSelect)
@@ -307,8 +348,9 @@ trait SoQLAnalysisSqlizer {
 
       val (tableName, joinOnParams) = join.from.subAnalysis match {
         case Right(SubAnalysis(analyses, alias)) =>
+          val repJoin = if (join.lateral) repFrom ++ rep else rep
           val joinTableLikeParamSql = Sqlizer.sql(
-            (analyses, joinTableNames, allColumnReps))(rep, typeRep, Seq.empty, ctxJoin, escape)
+            (analyses, joinTableNames, allColumnReps))(repJoin, typeRep, Seq.empty, ctxJoin, escape)
           val tn = "(" + joinTableLikeParamSql.sql.mkString + ") as " + alias
           (tn, setParamAcc ++ joinTableLikeParamSql.setParams)
         case Left(tableName) =>
@@ -319,7 +361,9 @@ trait SoQLAnalysisSqlizer {
           (tn, setParamAcc)
       }
 
-      val joinConditionParamSql = Sqlizer.sql(join.on)(repMinusComplexJoinTable, typeRep, joinOnParams, ctxSelectWithJoins + (SoqlPart -> SoqlJoin), escape)
+      val repJoin = if (join.lateral) repFrom ++ repMinusComplexJoinTable
+                    else repMinusComplexJoinTable
+      val joinConditionParamSql = Sqlizer.sql(join.on)(repJoin, typeRep, joinOnParams, ctxSelectWithJoins + (SoqlPart -> SoqlJoin), escape)
       val joinCondition = joinConditionParamSql.sql.mkString(" ")
       val lateral = if (join.lateral) "LATERAL " else ""
       (sqls :+ s" ${join.typ.toString} ${lateral}$tableName ON $joinCondition", joinConditionParamSql.setParams)
@@ -381,10 +425,10 @@ trait SoQLAnalysisSqlizer {
     }
     val setParamsOrderBy = orderBy._2
 
-    val tableName = fromTableName.getOrElse(TableName.PrimaryTable)
+    val tableName = analysis.from.orElse(fromTableName).getOrElse(TableName.PrimaryTable)
     val from =
       if (prevAna.isEmpty && fromTableName.isEmpty) ""
-      else s" FROM ${tableNames(tableName.copy(alias = None))}" + tableName.alias.map(a => s" as ${a}").getOrElse("")
+      else s" FROM ${tableNamesWithThis(tableName.copy(alias = None))}" + tableName.alias.map(a => s" as ${a}").getOrElse("")
 
     // COMPLETE SQL
     val selectOptionalDistinct = "SELECT " + (if (analysis.distinct) "DISTINCT " else "")

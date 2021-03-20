@@ -1,0 +1,8 @@
+[
+  {"name": "bird1", "breed": "hawk", "dog": "bird"},
+  {"name": "bird2", "breed": "pigeon", "dog": "bird"},
+  {"name": "bird3", "breed": "sparrow", "dog": "bird"},
+  {"name": "cat1", "breed": "persian", "dog": "dog"},
+  {"name": "cat2", "breed": "siamese", "dog": "dog"},
+  {"name": "cat3", "breed": "shorthair", "dog": "dog"}
+]
