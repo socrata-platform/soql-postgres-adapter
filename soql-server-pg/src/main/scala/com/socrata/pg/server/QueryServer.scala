@@ -411,13 +411,15 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
       )
       val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit)
 
+      val lma = analyses.leftMost.leaf
+
       for(readCtx <- pgu.datasetReader.openDataset(latestCopy)) {
         val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema
         val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
         val qrySchema = querySchema(pgu, analyses.outputSchemaLeaf, latestCopy)
         val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor)
         val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
-        val sqlReps = querier.getSqlReps(systemToUserColumnMap)
+        val sqlReps = querier.getSqlReps(readCtx.copyInfo.dataTableName, systemToUserColumnMap)
 
         // TODO: rethink how reps should be constructed and passed into each chained soql.
         val typeReps = analyses.seq.flatMap { analysis =>
@@ -426,16 +428,23 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
             columnInfo.typ -> pgu.commonSupport.repFor(columnInfo)
           }
         }.toMap
-        val joinCopiesMap = getJoinCopies(pgu, analysis, reqCopy)
-        val joinCopies = joinCopiesMap.values.toSeq
+
+        // rollups will cause querier's dataTableName to be different than the normal dataset tablename
+        val tableName = querier.sqlizer.dataTableName
+        val copyInfo = readCtx.copyInfo
+        val joinCopiesMap = getJoinCopies(pgu, analysis, reqCopy) ++ copyInfo.datasetInfo.resourceName.map(rn => Map(TableName(rn) -> copyInfo)).getOrElse(Map.empty)
 
         val sqlRepsWithJoin = joinCopiesMap.foldLeft(sqlReps) { (acc, joinCopy) =>
           val (tableName, copyInfo) = joinCopy
           acc ++ getJoinReps(pgu, copyInfo, tableName)
         }
 
-        // rollups will cause querier's dataTableName to be different than the normal dataset tablename
-        val tableName = querier.sqlizer.dataTableName
+        val thisTableNameMap = lma.from match {
+          case Some(tn@(TableName(name, _))) if name == TableName.This =>
+            Map(tn.copy(alias = None) -> tableName)
+          case _ =>
+            Map.empty
+        }
 
         if (explain) {
           val explain = querier.queryExplain(
@@ -455,12 +464,12 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
             context,
             analyses,
             (as: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]]) => {
-              val tableNameMap = getDatasetTablenameMap(joinCopiesMap) +
-                (TableName.PrimaryTable -> tableName) + (TableName(tableName) -> tableName)
+              val tableNameMap = getDatasetTablenameMap(joinCopiesMap) ++ thisTableNameMap +
+              (TableName.PrimaryTable -> tableName) + (TableName(tableName) -> tableName)
               Sqlizer.sql((as, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
             },
             (as: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]]) => {
-              val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> tableName) + (TableName(tableName) -> tableName)
+              val tableNameMap = getDatasetTablenameMap(joinCopiesMap) ++ thisTableNameMap + (TableName.PrimaryTable -> tableName) + (TableName(tableName) -> tableName)
               BinarySoQLAnalysisSqlizer.rowCountSql((as, tableNameMap, sqlReps.values.toSeq))(
                 sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
             },

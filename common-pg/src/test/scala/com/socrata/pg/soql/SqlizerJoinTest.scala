@@ -5,6 +5,22 @@ import SqlizerTest._
 // scalastyle:off null
 class SqlizerJoinTest  extends SqlizerTest {
 
+  test("join1") {
+    var soql = "select @t.id from @this as t"
+    soql = "select @t.id, @c.name from @this as t join (select name from @cat) as c on true"
+    soql = "select @t.id from @this as t |> select @tt.id from @this as tt"
+    soql = "select name from @cat |> select @tc.name from @this as tc"
+    soql = "select @t.id from @this as t join (select name from @cat |> select @tc.name from @this as tc ) as c on true"
+    soql = "select @t.id, @c.name3 from @this as t join (select name from @cat |> select @tc.name as name2 from @this as tc |> select @tc2.name2 as name3 from @this as tc2) as c on true"
+    soql = "select @t.id from @this as t join @dog as d on true join lateral (select name, @d.dog from @cat) as c on true"
+    //soql = "select @t.id from @this as t join lateral (select name from @cat |> select @tc.name, @t.id from @this as tc ) as c on true"
+    soql = "select @t.id from @this as t join lateral (select name, @t.id from @cat) as c on true"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    println(sql)
+    // SELECT _t.id,_c."name3" FROM t1 as _t JOIN (SELECT _tc2."name2" as "name3" FROM (SELECT _tc.name as "name2" FROM (SELECT t11.name as "name" FROM t11) as _tc) as _tc2) as _c ON ?
+    println(sql)
+  }
+
   test("join wo alias") {
     val soql = "select case_number, primary_type, @type.description join @type on primary_type = @type.primary_type"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)

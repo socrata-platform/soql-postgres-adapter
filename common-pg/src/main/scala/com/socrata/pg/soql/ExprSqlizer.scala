@@ -189,13 +189,13 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
 
     val useTypeRep = expr.qualifier match {
       case Some(qual) =>
-        !simpleJoinMap.contains(qual)
+        !simpleJoinMap.contains(qual) // && !tableMap.contains(qual)
       case None =>
         val chained = ctx(InnermostSoql) != true
         chained
     }
 
-    val ista = isTableAlias(expr.qualifier, simpleJoinMap)
+    val ista = isTableAlias(expr.qualifier, simpleJoinMap) // || isTableAlias(expr.qualifier, tableMap)
 
     reps.get(QualifiedUserColumnId(expr.qualifier, expr.column)) match {
       case Some(rep) if !useTypeRep =>
