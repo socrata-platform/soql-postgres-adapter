@@ -321,8 +321,7 @@ trait SoQLAnalysisSqlizer {
 
       val joinConditionParamSql = Sqlizer.sql(join.on)(repMinusComplexJoinTable, typeRep, joinOnParams, ctxSelectWithJoins + (SoqlPart -> SoqlJoin), escape)
       val joinCondition = joinConditionParamSql.sql.mkString(" ")
-      val lateral = if (join.lateral) "LATERAL " else ""
-      (sqls :+ s" ${join.typ.toString} ${lateral}$tableName ON $joinCondition", joinConditionParamSql.setParams)
+      (sqls :+ s" ${join.typ.toString} $tableName ON $joinCondition", joinConditionParamSql.setParams)
     }
 
     val setParamsSelectJoin = setParamsSelect ++ setParamsJoin
