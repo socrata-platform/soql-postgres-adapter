@@ -41,12 +41,13 @@ trait RowReaderQuerier[CT, CV] {
     sqlizerq.explainQuery(connection, context, analyses, toSql, queryTimeout, analyze)
   }
 
-  def getSqlReps(systemToUserColumnMap: Map[ColumnId, UserColumnId]): Map[QualifiedUserColumnId, SqlColumnRep[CT, CV]] = {
+  def getSqlReps(datatableName: String, systemToUserColumnMap: Map[ColumnId, UserColumnId]): Map[QualifiedUserColumnId, SqlColumnRep[CT, CV]] = {
     val sqlizerq = sqlizer.asInstanceOf[DataSqlizer[CT, CV] with DataSqlizerQuerier[CT, CV]]
     val userColumnIdRepMap = sqlizerq.repSchema.foldLeft(Map.empty[QualifiedUserColumnId, SqlColumnRep[CT, CV]]) {
       (map, colIdAndsqlRep) =>
         colIdAndsqlRep match {
-          case (columnId, sqlRep) => map + (QualifiedUserColumnId(None, systemToUserColumnMap(columnId)) -> sqlRep)
+          case (columnId, sqlRep) => map + (QualifiedUserColumnId(None, systemToUserColumnMap(columnId)) -> sqlRep) +
+            (QualifiedUserColumnId(Some(datatableName), systemToUserColumnMap(columnId)) -> sqlRep)
         }
     }
     userColumnIdRepMap

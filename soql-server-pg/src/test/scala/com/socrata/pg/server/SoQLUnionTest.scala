@@ -229,6 +229,17 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
     err.getMessage.contains("cat") should be(true)
   }
 
+  test("Union and lateral join with this") {
+    val soql =
+      """SELECT @c.name, @c.breed, @j.dog FROM @this as c
+           JOIN LATERAL (SELECT @d.name, @d.breed, @d.dog FROM @dog as d WHERE @d.year = @c.year) as j ON TRUE
+          UNION
+         SELECT name, breed, bird FROM @bird
+          |> SELECT name, breed, dog ORDER BY name, dog
+      """
+    compareSoqlResult(soql, "lateral-join-union-this.json", None, CaseSensitive, plainCtx, secDatasetId = secDatasetIdCat)
+  }
+
   def sqlizeTest(soql: String, expected: String, expectedParams: Seq[Any] = Seq.empty): Unit = {
     val ParametricSql(Seq(sql), setParams) = sqlize(soql,
                                             plainCtx,

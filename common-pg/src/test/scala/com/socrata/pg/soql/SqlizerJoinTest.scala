@@ -132,6 +132,51 @@ class SqlizerJoinTest  extends SqlizerTest {
     params should be (Seq(11, 1, 2, 3, 4, 12, 13).map(BigDecimal(_)))
   }
 
+  test("this alias") {
+    val soql = "SELECT @t.id FROM @this as t"
+    val expected = "SELECT _t.id FROM t1 as _t"
+    val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
+    sql should be (expected)
+  }
+
+  test("this alias in chained soql") {
+    val soql = "select id |> select @t.id from @this as t"
+    val expected = """SELECT _t.id FROM (SELECT t1.id as "id" FROM t1) as _t"""
+    val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
+    sql should be (expected)
+  }
+
+  test("join chained soql and multiple this's") {
+    val soql = "select @t.id from @this as t join (select name from @cat |> select @tc.name from @this as tc ) as c on true"
+    val expected = """SELECT _t.id FROM t1 as _t JOIN (SELECT _tc."name" as "name" FROM (SELECT "name_45" as "name" FROM t11) as _tc) as _c ON ?"""
+    val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
+    sql should be (expected)
+  }
+
+  test("lateral join and this") {
+    val soql = "select @t.id from @this as t join lateral (select name, @t.id from @cat) as c on true"
+    val expected = """SELECT _t.id FROM t1 as _t JOIN LATERAL (SELECT "name_45" as "name",_t.id as "id" FROM t11) as _c ON ?"""
+    val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
+    sql should be (expected)
+  }
+
+  test("lateral join chained soql and this") {
+    val soql = "select @t.id from @this as t join @dog as d on true join lateral (select name from @cat |> select name, @d.dog) as c on true"
+    val expected = """SELECT _t.id FROM t1 as _t JOIN t12 as _d ON ?  JOIN LATERAL (SELECT "name" as "name",_d."dog_58" as "dog" FROM (SELECT "name_45" as "name" FROM t11) AS x1) as _c ON ?"""
+    val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
+    sql should be (expected)
+  }
+
+  test("multiple unions and this's") {
+    val soql =
+      """SELECT @t.primary_type FROM @this as t UNION
+         (SELECT breed, cat FROM @cat |> SELECT @c.cat FROM @this as c) UNION
+         (SELECT breed, dog FROM @dog |> SELECT @d.dog FROM @this as d)"""
+    val expected = """SELECT _t.primary_type FROM t1 as _t UNION (SELECT _c."cat" FROM (SELECT "breed_46" as "breed","cat_48" as "cat" FROM t11) as _c) UNION (SELECT _d."dog" FROM (SELECT "breed_56" as "breed","dog_58" as "dog" FROM t12) as _d)"""
+    val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
+    sql should be (expected)
+  }
+
   private def collapseSpace(s: String): String = {
     s.replaceAll("\\s+", " ")
   }

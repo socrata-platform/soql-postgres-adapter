@@ -27,17 +27,29 @@ object SqlizerTest {
 
   val typeTable = TableName("_type", None)
   val yearTable = TableName("_year", Some("_y"))
+  val catTable = TableName("_cat", None)
+  val dogTable = TableName("_dog", None)
+  val birdTable = TableName("_bird", None)
+  val fishTable = TableName("_fish", None)
 
   def sqlize(soql: String, caseSensitivity: CaseSensitivity, useRepsWithId: Boolean = false, leadingSearch: Boolean = false): ParametricSql = {
     val allColumnReps = columnInfos.map(PostgresUniverseCommon.repForIndex(_))
     val allDatasetCtx = Map(TableName.PrimaryTable.qualifier -> datasetCtx,
                             typeTable.qualifier -> typeDatasetCtx,
                             yearTable.name -> yearDatasetCtx,
-                            yearTable.qualifier -> yearDatasetCtx)
+                            yearTable.qualifier -> yearDatasetCtx,
+                            catTable.qualifier -> catDatasetCtx,
+                            dogTable.qualifier -> dogDatasetCtx,
+                            birdTable.qualifier -> birdDatasetCtx,
+                            fishTable.qualifier -> fishDatasetCtx)
 
     val qualifiedUserIdColumnInfoMap: Map[QualifiedUserColumnId, ColumnInfo[SoQLType]] = qualifiedColumnIdToColumnInfos(TableName.PrimaryTable, columnMap) ++
       qualifiedColumnIdToColumnInfos(typeTable, typeTableColumnMap) ++
-      qualifiedColumnIdToColumnInfos(yearTable, yearTableColumnMap)
+      qualifiedColumnIdToColumnInfos(yearTable, yearTableColumnMap) ++
+      qualifiedColumnIdToColumnInfos(catTable, catTableColumnMap) ++
+      qualifiedColumnIdToColumnInfos(dogTable, dogTableColumnMap) ++
+      qualifiedColumnIdToColumnInfos(birdTable, birdTableColumnMap) ++
+      qualifiedColumnIdToColumnInfos(fishTable, fishTableColumnMap)
 
     val columnRepsWithId = qualifiedUserIdColumnInfoMap.mapValues { ci =>
       PostgresUniverseCommon.repForIndex(ci)
@@ -50,7 +62,8 @@ object SqlizerTest {
       }(collection.breakOut)
 
 
-    val tableMap = Map(TableName.PrimaryTable -> "t1", typeTable -> "t2", yearTable -> "t3", yearTable.copy(alias = None) -> "t3")
+    val tableMap = Map(TableName.PrimaryTable -> "t1", typeTable -> "t2", yearTable -> "t3", yearTable.copy(alias = None) -> "t3",
+      catTable -> "t11", dogTable -> "t12", birdTable -> "t13", fishTable -> "t14")
     BinarySoQLAnalysisSqlizer.sql((analyses, tableMap, allColumnReps))(
       if (useRepsWithId) columnRepsWithId else columnReps,
       typeReps,
@@ -107,11 +120,56 @@ object SqlizerTest {
     ColumnName("avg_temperature") -> ((36, SoQLNumber))
   )
 
-  private val allColumnMap = columnMap ++ typeTableColumnMap ++ yearTableColumnMap
+  private val catTableColumnMap = Map(
+    ColumnName(":id") -> ((41, SoQLID)),
+    ColumnName(":version") -> ((42, SoQLVersion)),
+    ColumnName(":created_at") -> ((43, SoQLFixedTimestamp)),
+    ColumnName(":updated_at") -> ((44, SoQLFixedTimestamp)),
+    ColumnName("name") -> ((45, SoQLText)),
+    ColumnName("breed") -> ((46, SoQLText)),
+    ColumnName("age") -> ((47, SoQLNumber)),
+    ColumnName("cat") -> ((48, SoQLText))
+  )
+
+  private val dogTableColumnMap = Map(
+    ColumnName(":id") -> ((51, SoQLID)),
+    ColumnName(":version") -> ((52, SoQLVersion)),
+    ColumnName(":created_at") -> ((53, SoQLFixedTimestamp)),
+    ColumnName(":updated_at") -> ((54, SoQLFixedTimestamp)),
+    ColumnName("name") -> ((55, SoQLText)),
+    ColumnName("breed") -> ((56, SoQLText)),
+    ColumnName("age") -> ((57, SoQLNumber)),
+    ColumnName("dog") -> ((58, SoQLText))
+  )
+
+  private val birdTableColumnMap = Map(
+    ColumnName(":id") -> ((61, SoQLID)),
+    ColumnName(":version") -> ((62, SoQLVersion)),
+    ColumnName(":created_at") -> ((63, SoQLFixedTimestamp)),
+    ColumnName(":updated_at") -> ((64, SoQLFixedTimestamp)),
+    ColumnName("name") -> ((65, SoQLText)),
+    ColumnName("breed") -> ((66, SoQLText)),
+    ColumnName("age") -> ((67, SoQLNumber)),
+    ColumnName("bird") -> ((68, SoQLText))
+  )
+
+  private val fishTableColumnMap = Map(
+    ColumnName(":id") -> ((61, SoQLID)),
+    ColumnName(":version") -> ((62, SoQLVersion)),
+    ColumnName(":created_at") -> ((63, SoQLFixedTimestamp)),
+    ColumnName(":updated_at") -> ((64, SoQLFixedTimestamp)),
+    ColumnName("name") -> ((65, SoQLText)),
+    ColumnName("breed") -> ((66, SoQLText)),
+    ColumnName("age") -> ((67, SoQLNumber)),
+    ColumnName("fish") -> ((68, SoQLText))
+  )
+
+  private val allColumnMap = columnMap ++ typeTableColumnMap ++ yearTableColumnMap ++
+    catTableColumnMap ++ dogTableColumnMap ++ birdTableColumnMap ++ fishTableColumnMap
 
   private val allColumnIdMap =
-    columnMap.map { case (k, v) =>
-      QualifiedColumnName(None, k) -> new UserColumnId(k.caseFolded)
+    columnMap.map { case (k, (id, typ)) =>
+      QualifiedColumnName(None, k) -> new UserColumnId(s"${k.caseFolded}")
     } ++
     typeTableColumnMap.map { case (k, v) =>
       QualifiedColumnName(Some(typeTable.qualifier), k) -> new UserColumnId(k.caseFolded)
@@ -121,6 +179,18 @@ object SqlizerTest {
     } ++
     yearTableColumnMap.map { case (k, v) =>
       QualifiedColumnName(Some(yearTable.qualifier), k) -> new UserColumnId(k.caseFolded)
+    } ++
+    catTableColumnMap.map { case (k, (id, typ)) =>
+      QualifiedColumnName(Some(catTable.qualifier), k) -> new UserColumnId(s"${k.caseFolded}_$id")
+    } ++
+    dogTableColumnMap.map { case (k, (id, typ)) =>
+      QualifiedColumnName(Some(dogTable.qualifier), k) -> new UserColumnId(s"${k.caseFolded}_$id")
+    } ++
+    birdTableColumnMap.map { case (k, (id, typ)) =>
+      QualifiedColumnName(Some(birdTable.qualifier), k) -> new UserColumnId(s"${k.caseFolded}_$id")
+    } ++
+    fishTableColumnMap.map { case (k, (id, typ)) =>
+      QualifiedColumnName(Some(fishTable.qualifier), k) -> new UserColumnId(s"${k.caseFolded}_$id")
     }
 
   private val columnInfos = allColumnMap.foldLeft(Seq.empty[ColumnInfo[SoQLType]]) { (acc, colNameAndType) =>
@@ -177,6 +247,22 @@ object SqlizerTest {
     val schema = new OrderedMap[ColumnName, SoQLType](yearTableColumnMap,  yearTableColumnMap.keys.toVector)
   }
 
+  private val catDatasetCtx: DatasetContext[SoQLType] = new DatasetContext[SoQLType] {
+    val schema = new OrderedMap[ColumnName, SoQLType](catTableColumnMap, catTableColumnMap.keys.toVector)
+  }
+
+  private val dogDatasetCtx: DatasetContext[SoQLType] = new DatasetContext[SoQLType] {
+    val schema = new OrderedMap[ColumnName, SoQLType](dogTableColumnMap, dogTableColumnMap.keys.toVector)
+  }
+
+  private val birdDatasetCtx: DatasetContext[SoQLType] = new DatasetContext[SoQLType] {
+    val schema = new OrderedMap[ColumnName, SoQLType](birdTableColumnMap, birdTableColumnMap.keys.toVector)
+  }
+
+  private val fishDatasetCtx: DatasetContext[SoQLType] = new DatasetContext[SoQLType] {
+    val schema = new OrderedMap[ColumnName, SoQLType](fishTableColumnMap, fishTableColumnMap.keys.toVector)
+  }
+
   private val columnReps = {
     columnMap.map { case (colName, (_, typ)) =>
       QualifiedUserColumnId(None, idMap(colName)) -> SoQLIndexableRep.sqlRep(typ, colName.name)
@@ -189,6 +275,18 @@ object SqlizerTest {
       } ++
       yearTableColumnMap.map { case (colName, (_, typ)) =>
         QualifiedUserColumnId(Some(yearTable.qualifier), idMap(colName)) -> SoQLIndexableRep.sqlRep(typ, colName.name)
+      } ++
+      catTableColumnMap.map { case (colName, (_, typ)) =>
+        QualifiedUserColumnId(Some(catTable.name), idMap(colName)) -> SoQLIndexableRep.sqlRep(typ, colName.name)
+      } ++
+      dogTableColumnMap.map { case (colName, (_, typ)) =>
+        QualifiedUserColumnId(Some(dogTable.name), idMap(colName)) -> SoQLIndexableRep.sqlRep(typ, colName.name)
+      } ++
+      birdTableColumnMap.map { case (colName, (_, typ)) =>
+        QualifiedUserColumnId(Some(birdTable.name), idMap(colName)) -> SoQLIndexableRep.sqlRep(typ, colName.name)
+      } ++
+      fishTableColumnMap.map { case (colName, (_, typ)) =>
+        QualifiedUserColumnId(Some(fishTable.name), idMap(colName)) -> SoQLIndexableRep.sqlRep(typ, colName.name)
       }
   }
 }
