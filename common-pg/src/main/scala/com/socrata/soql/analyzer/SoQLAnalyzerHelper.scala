@@ -59,7 +59,7 @@ object SoQLAnalyzerHelper {
         val prev = nl.outputSchema.leaf
         val ra = r.asLeaf.get
         val prevQueryAlias = ra.from match {
-          case Some(TableName(name, alias@Some(_))) if name == TableName.This =>
+          case Some(TableName(TableName.This, alias@Some(_))) =>
             alias
           case _ =>
             None
@@ -76,13 +76,13 @@ object SoQLAnalyzerHelper {
         Compound(op, la, ra)
       case Leaf(analysis) =>
         val newMappingThisAlias = analysis.from match {
-          case Some(tn@TableName(name, Some(alias))) if name == TableName.This =>
+          case Some(tn@TableName(TableName.This, Some(_))) =>
             newMapping.foldLeft(newMapping) { (acc, mapEntry) =>
               mapEntry match {
                 case ((columnName, None), userColumnId) =>
                   acc ++ Map((columnName, Some(tn.qualifier)) -> userColumnId,
-                             (columnName, Some(name)) -> userColumnId)
-                case x =>
+                             (columnName, Some(TableName.This)) -> userColumnId)
+                case _ =>
                   acc
               }
             }
