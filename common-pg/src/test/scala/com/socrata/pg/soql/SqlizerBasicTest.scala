@@ -448,8 +448,7 @@ class SqlizerBasicTest extends SqlizerTest {
     val encodedRowId = rep.apply(SoQLID(rowId))
     val soql = s"select id where :id = '$encodedRowId'"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    println(sql)
-    sql should be ("SELECT t1.id FROM t1 WHERE (t1.:id = (?))")
+    sql should be ("""SELECT t1.id FROM t1 WHERE (":id_1" = (?))""")
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq(rowId))
   }

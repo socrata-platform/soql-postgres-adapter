@@ -169,7 +169,11 @@ object SqlizerTest {
 
   private val allColumnIdMap =
     columnMap.map { case (k, (id, typ)) =>
-      QualifiedColumnName(None, k) -> new UserColumnId(s"${k.caseFolded}")
+      if (k.name == ":id") {
+        QualifiedColumnName(None, k) -> new UserColumnId(s"${k.caseFolded}_$id")
+      } else {
+        QualifiedColumnName(None, k) -> new UserColumnId(s"${k.caseFolded}")
+      }
     } ++
     typeTableColumnMap.map { case (k, v) =>
       QualifiedColumnName(Some(typeTable.qualifier), k) -> new UserColumnId(k.caseFolded)

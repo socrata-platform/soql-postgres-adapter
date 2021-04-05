@@ -141,7 +141,7 @@ class SqlizerJoinTest  extends SqlizerTest {
 
   test("this alias in chained soql") {
     val soql = "select id |> select @t.id from @this as t"
-    val expected = """SELECT _t.id FROM (SELECT t1.id as "id" FROM t1) as _t"""
+    val expected = """SELECT _t."id" FROM (SELECT t1.id as "id" FROM t1) as _t"""
     val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
     sql should be (expected)
   }
@@ -174,6 +174,14 @@ class SqlizerJoinTest  extends SqlizerTest {
          (SELECT breed, dog FROM @dog |> SELECT @d.dog FROM @this as d)"""
     val expected = """SELECT _t.primary_type FROM t1 as _t UNION (SELECT _c."cat" FROM (SELECT "breed_46" as "breed","cat_48" as "cat" FROM t11) as _c) UNION (SELECT _d."dog" FROM (SELECT "breed_56" as "breed","dog_58" as "dog" FROM t12) as _d)"""
     val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
+    sql should be (expected)
+  }
+
+  test("generate ':id' in system columns in the right side of a chained soql with this alias and join") {
+    val soql = "SELECT @t.:id FROM @this as t |> SELECT @t2.:id, @d.:id as id2 FROM @this as t2 JOIN @dog as d ON true"
+    val expected = """SELECT _t2.":id",_d.":id_51" FROM (SELECT _t.":id_1" as ":id" FROM t1 as _t) as _t2 JOIN t12 as _d ON ?"""
+    val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive, useRepsWithId = true)
+    println(sql)
     sql should be (expected)
   }
 
