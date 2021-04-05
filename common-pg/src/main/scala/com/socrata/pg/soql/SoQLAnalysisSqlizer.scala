@@ -213,8 +213,12 @@ trait SoQLAnalysisSqlizer {
 
     val simpleJoinMapAcc: Map[String, String] = parentSimpleJoinMap ++ (analysis.from match {
       case Some(TableName(TableName.This, Some(alias))) =>
-        val name = tableNames(TableName.PrimaryTable)
-        Map(alias -> name, name -> alias)
+        if (prevAna.isDefined) {
+          Map.empty
+        } else {
+          val name = tableNames(TableName.PrimaryTable)
+          Map(alias -> name, name -> alias)
+        }
       case Some(TableName(name, Some(alias))) =>
         Map(alias -> name, name -> alias)
       case Some(TableName(name, None)) =>
