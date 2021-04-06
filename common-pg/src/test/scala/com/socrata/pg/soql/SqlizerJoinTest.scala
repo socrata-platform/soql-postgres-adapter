@@ -177,6 +177,18 @@ class SqlizerJoinTest  extends SqlizerTest {
     sql should be (expected)
   }
 
+  test("all query ops") {
+    val soql =
+      """SELECT @t.primary_type FROM @this as t MiNuS
+         SELECT name FROM @cat intERSECT
+         SELECT name FROM @dog UNioN aLL
+         SELECT name FROM @bird UnioN
+         SELECT name FROM @fish"""
+    val expected = """SELECT _t.primary_type FROM t1 as _t EXCEPT SELECT "name_45" FROM t11 INTERSECT SELECT "name_55" FROM t12 UNION ALL SELECT "name_65" FROM t13 UNION SELECT "name_65" FROM t14"""
+    val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
+    sql should be (expected)
+  }
+
   test("generate ':id' in system columns in the right side of a chained soql with this alias and join") {
     val soql = "SELECT @t.:id FROM @this as t |> SELECT @t2.:id, @d.:id as id2 FROM @this as t2 JOIN @dog as d ON true"
     val expected = """SELECT _t2.":id",_d.":id_51" FROM (SELECT _t.":id_1" as ":id" FROM t1 as _t) as _t2 JOIN t12 as _d ON ?"""
