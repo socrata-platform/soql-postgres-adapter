@@ -3,8 +3,9 @@ package com.socrata.pg
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.pg.store.index.Indexable
+import com.socrata.soql.ast.TableName
 import com.socrata.soql.{BinaryTree, SoQLAnalysis}
-import com.socrata.soql.environment.{ColumnName, TableName}
+import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 
 package object soql {

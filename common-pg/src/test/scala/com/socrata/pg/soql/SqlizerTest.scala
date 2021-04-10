@@ -10,8 +10,9 @@ import com.socrata.pg.store.index.SoQLIndexableRep
 import com.socrata.pg.store.PostgresUniverseCommon
 import com.socrata.soql.analyzer.{QualifiedColumnName, SoQLAnalyzerHelper}
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
+import com.socrata.soql.environment.{ColumnName, DatasetContext}
 import com.socrata.soql.SoQLAnalysis
+import com.socrata.soql.ast.TableName
 import com.socrata.soql.types._
 import com.socrata.soql.types.obfuscation.CryptProvider
 

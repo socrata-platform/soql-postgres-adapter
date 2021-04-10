@@ -19,7 +19,7 @@ import com.socrata.pg.store.index.SoQLIndexableRep
 import com.socrata.soql.{BinaryTree, Leaf, SoQLAnalysis, SoQLAnalyzer}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
+import com.socrata.soql.environment.{ColumnName, DatasetContext}
 import com.socrata.soql.exceptions.{NoSuchColumn, SoQLException}
 import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLTypeInfo}
 import com.socrata.soql.parsing.standalone_exceptions.StandaloneLexerException
@@ -27,6 +27,7 @@ import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.scalalogging.Logger
 import RollupManager._
 import com.socrata.datacoordinator.util.{LoggedTimingReport, StackedTimingReport}
+import com.socrata.soql.ast.TableName
 import com.socrata.soql.typed.Qualifier
 
 // scalastyle:off multiple.string.literals

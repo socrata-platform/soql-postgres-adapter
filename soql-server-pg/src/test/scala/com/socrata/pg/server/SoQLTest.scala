@@ -6,8 +6,9 @@ import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.store.{PGSecondaryTestBase, PGSecondaryUniverse, PostgresUniverseCommon}
 import com.socrata.pg.store.PGSecondaryUtil._
 import com.socrata.pg.query.PGQueryTestBase
+import com.socrata.soql.ast.TableName
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
+import com.socrata.soql.environment.{ColumnName, DatasetContext}
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 
 

@@ -11,8 +11,9 @@ import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity}
 import com.socrata.pg.store._
 import com.socrata.soql.{BinaryTree, SoQLAnalysis}
 import com.socrata.soql.analyzer.{QualifiedColumnName, SoQLAnalyzerHelper}
+import com.socrata.soql.ast.TableName
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
+import com.socrata.soql.environment.{ColumnName, DatasetContext}
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import org.scalatest.matchers.{BeMatcher, MatchResult}
 

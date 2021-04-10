@@ -43,7 +43,7 @@ import com.socrata.pg.store._
 import com.socrata.soql.{BinaryTree, Compound, Leaf, SoQLAnalysis, typed}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName, ResourceName, TableName}
+import com.socrata.soql.environment.{ColumnName, ResourceName}
 import com.socrata.soql.typed.CoreExpr
 import com.socrata.soql.types.SoQLID.ClearNumberRep
 import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion}
@@ -51,6 +51,7 @@ import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.curator.{CuratorFromConfig, DiscoveryFromConfig}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.pg.server.CJSONWriter.utf8EncodingName
+import com.socrata.soql.ast.TableName
 import com.socrata.thirdparty.metrics.{MetricsReporter, SocrataHttpSupport}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.{Config, ConfigFactory}
@@ -440,7 +441,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
         }
 
         val thisTableNameMap = lma.from match {
-          case Some(tn@(TableName(name, _))) if name == TableName.This =>
+          case Some(tn@(TableName(name, _, _))) if name == TableName.This =>
             Map(tn.copy(alias = None) -> tableName)
           case _ =>
             Map.empty

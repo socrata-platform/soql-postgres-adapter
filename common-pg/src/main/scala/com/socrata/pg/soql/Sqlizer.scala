@@ -5,13 +5,14 @@ import java.sql.PreparedStatement
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.soql.SoQLAnalysis
-import com.socrata.soql.environment.{ResourceName, TableName}
+import com.socrata.soql.environment.ResourceName
 import com.socrata.soql.typed._
 import com.socrata.soql.types._
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
 import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
 import com.socrata.pg.soql.Sqlizer._
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
+import com.socrata.soql.ast.TableName
 
 case class ParametricSql(sql: Seq[String], setParams: Seq[SetParam]) {
   override def toString(): String = {

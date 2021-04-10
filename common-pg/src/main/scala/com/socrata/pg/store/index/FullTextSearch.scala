@@ -3,7 +3,7 @@ package com.socrata.pg.store.index
 import com.socrata.datacoordinator.truth.sql.SqlColumnCommonRep
 import com.socrata.pg.soql.Sqlizer._
 import com.socrata.pg.soql.SqlizerContext._
-import com.socrata.soql.environment.TableName
+import com.socrata.soql.ast.TableName
 
 
 trait FullTextSearch[CT] {

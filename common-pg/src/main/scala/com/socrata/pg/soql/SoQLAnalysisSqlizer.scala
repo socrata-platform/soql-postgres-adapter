@@ -3,9 +3,10 @@ package com.socrata.pg.soql
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.pg.store.PostgresUniverseCommon
+import com.socrata.soql.ast.TableName
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.{BinaryTree, Compound, Leaf, PipeQuery, SoQLAnalysis, SubAnalysis}
-import com.socrata.soql.environment.{ColumnName, TableName}
+import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.functions.SoQLFunctions
 import com.socrata.soql.typed._
 import com.socrata.soql.types._
@@ -97,7 +98,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
       case PipeQuery(l, Leaf(ra)) =>
         val (lpsql, _) = sql(l, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctx, escape, fromTableName)
         val (primaryTableName, chainedTableAlias) = ra.from match {
-            case Some(tn@TableName(name, Some(alias))) if name == TableName.This =>
+            case Some(tn@TableName(name, Some(alias), _)) if name == TableName.This =>
               (tn.copy(alias = None), alias)
             case _ =>
               (TableName.PrimaryTable, "x1")
@@ -183,7 +184,7 @@ trait SoQLAnalysisSqlizer {
       else tableNames + (TableName(TableName.This, None) -> tableNames(TableName.PrimaryTable))
 
     val rep = analysis.from match {
-      case Some(tn@TableName(name, Some(_))) if name == TableName.This =>
+      case Some(tn@TableName(name, Some(_), _)) if name == TableName.This =>
         rep0.flatMap {
           case (QualifiedUserColumnId(None, r), x) =>
             Map((QualifiedUserColumnId(None, r) -> x)) ++
@@ -220,16 +221,16 @@ trait SoQLAnalysisSqlizer {
     }
 
     val simpleJoinMapAcc: Map[String, String] = parentSimpleJoinMap ++ (analysis.from match {
-      case Some(TableName(TableName.This, Some(alias))) =>
+      case Some(TableName(TableName.This, Some(alias), _)) =>
         if (prevAna.isDefined) {
           Map.empty
         } else {
           val name = tableNames(TableName.PrimaryTable)
           Map(alias -> name, name -> alias)
         }
-      case Some(TableName(name, Some(alias))) =>
+      case Some(TableName(name, Some(alias), _)) =>
         Map(alias -> name, name -> alias)
-      case Some(TableName(name, None)) =>
+      case Some(TableName(name, None, _)) =>
         Map(name -> name)
       case _ =>
         Map.empty
@@ -237,9 +238,9 @@ trait SoQLAnalysisSqlizer {
 
     val simpleJoinMap = joins.foldLeft(simpleJoinMapAcc) { (acc, j) =>
       j.from.subAnalysis match {
-        case Left(TableName(name, Some(alias))) =>
+        case Left(TableName(name, Some(alias), _)) =>
           acc + (alias -> name) + (name -> alias)
-        case Left(TableName(name, None)) =>
+        case Left(TableName(name, None, _)) =>
           // simple join w/o alias does not need remap
           acc + (name -> name)
         case _ =>
@@ -273,9 +274,9 @@ trait SoQLAnalysisSqlizer {
 
     val joinTableAliases = joins.foldLeft(Map.empty[String, String]) { (acc, j) =>
       j.from.subAnalysis match {
-        case Left(TableName(name, None)) =>
+        case Left(TableName(name, None, _)) =>
           acc
-        case Left(TableName(name, alias)) =>
+        case Left(TableName(name, alias, _)) =>
           acc + (alias.getOrElse(name) -> name)
         case Right(SubAnalysis(analyses, alias)) =>
           acc + (alias -> alias)
@@ -285,13 +286,13 @@ trait SoQLAnalysisSqlizer {
     val repByQualifier = rep.groupBy(_._1.qualifier)
     val repFrom = analysis.from.foldLeft(Map.empty[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]]) { (acc, tableName) =>
       tableName match {
-        case TableName(name, a@Some(alias)) =>
+        case TableName(name, a@Some(alias), _) =>
           val joinRep = repByQualifier(Some(name))
           val newJoinRep = joinRep.map { case (QualifiedUserColumnId(qualifier, userColumnId), sqlColumnRep) =>
             (QualifiedUserColumnId(a, userColumnId), sqlColumnRep)
           }
           acc ++ newJoinRep
-        case TableName(name, None) =>
+        case TableName(name, None, _) =>
           repByQualifier.get(Some(name)) match {
             case Some(joinRep) =>
               val newJoinRep = joinRep.map { case (QualifiedUserColumnId(qualifier, userColumnId), sqlColumnRep) =>
@@ -306,7 +307,7 @@ trait SoQLAnalysisSqlizer {
 
     val repJoins = joins.foldLeft(repFrom) { (acc, join) =>
       join.from.subAnalysis match {
-        case Left(TableName(name, a@Some(alias))) =>
+        case Left(TableName(name, a@Some(alias), _)) =>
           val joinRep = repByQualifier(Some(name))
           val newJoinRep = joinRep.map { case (QualifiedUserColumnId(qualifier, userColumnId), sqlColumnRep) =>
             (QualifiedUserColumnId(a, userColumnId), sqlColumnRep)

@@ -4,6 +4,7 @@ import java.io.{InputStream, OutputStream}
 
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.soql._
+import com.socrata.soql.ast.TableName
 import com.socrata.soql.environment._
 import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLFunctions, SoQLTypeInfo}
 import com.socrata.soql.parsing.Parser
@@ -59,7 +60,7 @@ object SoQLAnalyzerHelper {
         val prev = nl.outputSchema.leaf
         val ra = r.asLeaf.get
         val prevQueryAlias = ra.from match {
-          case Some(TableName(TableName.This, alias@Some(_))) =>
+          case Some(TableName(TableName.This, alias@Some(_), _)) =>
             alias
           case _ =>
             None
@@ -76,7 +77,7 @@ object SoQLAnalyzerHelper {
         Compound(op, la, ra)
       case Leaf(analysis) =>
         val newMappingThisAlias = analysis.from match {
-          case Some(tn@TableName(TableName.This, Some(_))) =>
+          case Some(tn@TableName(TableName.This, Some(_), _)) =>
             newMapping.foldLeft(newMapping) { (acc, mapEntry) =>
               mapEntry match {
                 case ((columnName, None), userColumnId) =>

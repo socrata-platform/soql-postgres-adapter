@@ -9,8 +9,9 @@ import com.socrata.pg.query.PGQueryTestBase
 import com.socrata.pg.soql.SqlizerTest.sqlCtx
 import com.socrata.pg.soql.{BinarySoQLAnalysisSqlizer, CaseSensitive, ParametricSql, QualifiedUserColumnId, SqlColIdx, SqlizerContext}
 import com.socrata.soql.analyzer.{QualifiedColumnName, SoQLAnalyzerHelper}
+import com.socrata.soql.ast.TableName
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
+import com.socrata.soql.environment.{ColumnName, DatasetContext}
 import com.socrata.soql.exceptions.NoSuchColumn
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 

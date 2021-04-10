@@ -4,13 +4,13 @@ import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.soql.typed._
 import com.socrata.soql.types._
-import com.socrata.soql.environment.TableName
 import com.socrata.soql.exceptions.BadParse
 import java.sql.PreparedStatement
 
 import Sqlizer._
 import SqlizerContext._
 import com.socrata.pg.soql.SqlFunctions.{FunCall, windowOverInfo}
+import com.socrata.soql.ast.TableName
 
 
 object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
