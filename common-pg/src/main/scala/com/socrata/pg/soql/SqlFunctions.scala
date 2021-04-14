@@ -153,6 +153,9 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
     TextToBool -> formatCall("%s::boolean") _,
     BoolToText -> formatCall("%s::varchar") _,
+    TextToJson -> formatCall("%s::jsonb") _,
+    JsonToText -> formatCall("%s::text") _,
+    JsonToNumber -> formatCall("%s::numeric") _,
 
     Iif -> formatCall("case when %s then %s else %s end") _,
     Case -> caseCall _,
@@ -179,7 +182,10 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
     Count -> nary("count", Some("numeric")) _,
     CountStar -> formatCall("count(*)", typeCastIfNotWindowFn = Some("numeric")) _,
-    CountDistinct -> formatCall("count(distinct %s)", typeCastIfNotWindowFn = Some("numeric")) _
+    CountDistinct -> formatCall("count(distinct %s)", typeCastIfNotWindowFn = Some("numeric")) _,
+
+    JsonProp -> infix("->") _,
+    JsonIndex -> infix("->") _
     // TODO: Complete the function list.
   ) ++
     funGeometryMap ++
