@@ -15,13 +15,13 @@ class RowsChangedPreviewHandler(config: RowsChangedPreviewConfig) {
   def sufficientlyLarge(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                         truthCopyInfo: CopyInfo,
                         truncated: Boolean,
-                        totalRowsChanged: Long): Boolean = {
+                        inserted: Long,
+                        updated: Long,
+                        deleted: Long): Boolean = {
     val columnCount =  pgu.datasetMapReader.schema(truthCopyInfo).size
     if(truncated) {
       log.info("Dataset truncated; creating an indexless copy")
       true
-    } else if(totalRowsChanged < config.minRows(columnCount)) {
-      false
     } else {
       for {
         stmt <- managed(pgu.conn.prepareStatement("SELECT reltuples :: BIGINT FROM pg_class WHERE relname = ?")).
@@ -32,14 +32,9 @@ class RowsChangedPreviewHandler(config: RowsChangedPreviewConfig) {
           log.warn("Expected a row for reltuples on {} but got nothing", JString(truthCopyInfo.dataTableName))
           false
         } else {
-          val count = rs.getLong(1)
-          val wantToCopy = totalRowsChanged > config.fractionOf(columnCount) * count
-          if(wantToCopy) {
-            log.info("{} total rows changed in {} columns; PG estimates existing data is {} rows; creating an indexless copy",
-              totalRowsChanged.asInstanceOf[AnyRef],
-              columnCount.asInstanceOf[AnyRef],
-              count.asInstanceOf[AnyRef])
-          }
+          val estimatedRows = rs.getLong(1)
+          val wantToCopy = config.shouldCopy(inserted, updated, deleted, columnCount, estimatedRows)
+          log.info("{} inserted, {} updated, {} deleted rows in {} columns and {} estimated rows.  Want to make a copy?  {}", inserted.asInstanceOf[AnyRef], updated.asInstanceOf[AnyRef], deleted.asInstanceOf[AnyRef], columnCount.asInstanceOf[AnyRef], estimatedRows.asInstanceOf[AnyRef], wantToCopy.asInstanceOf[AnyRef])
           wantToCopy
         }
       }
@@ -53,7 +48,7 @@ class RowsChangedPreviewHandler(config: RowsChangedPreviewConfig) {
             inserted: Long,
             updated: Long,
             deleted: Long): Option[CopyInfo] = {
-    if(sufficientlyLarge(pgu, truthCopyInfo, truncated, inserted + updated + deleted)) {
+    if(sufficientlyLarge(pgu, truthCopyInfo, truncated, inserted, updated, deleted)) {
       val newTruthCopyInfo = pgu.datasetMapWriter.newTableModifier(truthCopyInfo)
 
       val start = System.nanoTime()
