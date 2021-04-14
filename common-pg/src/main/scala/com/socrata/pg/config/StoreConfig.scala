@@ -26,6 +26,8 @@ class StoreConfig(config: Config, root: String) extends ConfigClass(config, root
   }
 
   val secondaryMetrics = SecondaryMetricsConfig(config, path("secondary-metrics"))
+
+  val transparentCopyFunction = optionally(getString("transparent-copy-function"))
 }
 
 case class SecondaryMetricsConfig(config: Config, root: String) extends ConfigClass(config, root) {

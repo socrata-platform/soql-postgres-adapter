@@ -53,14 +53,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     client
   }
 
-  val rowsChangedPreviewConfig = curator match {
-    case Some(c) =>
-      val config = new RowsChangedPreviewConfig.ZKClojure(c, "/soql-postgres-secondary")
-      config.start()
-      config
-    case None =>
-      RowsChangedPreviewConfig.Default
-  }
+  val rowsChangedPreviewConfig =
+    new RowsChangedPreviewConfig.Clojure(storeConfig.transparentCopyFunction.getOrElse(RowsChangedPreviewConfig.default))
   private val rowsChangedPreviewHandler = new RowsChangedPreviewHandler(rowsChangedPreviewConfig)
 
   val postgresUniverseCommon = new PostgresUniverseCommon(TablespaceFunction(storeConfig.tablespace), dsInfo.copyIn)

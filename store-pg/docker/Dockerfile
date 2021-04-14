@@ -40,6 +40,13 @@ ENV PG_SECONDARY_WORK_MEM 768MB
 ENV PG_SECONDARY_TABLESPACE_FN nil
 ENV PG_SECONDARY_METRICS_ENABLED true
 
+# A clojure expression which will be evaluated for each upsert in a
+# context where the variables "inserts", "updates", "deletes",
+# "columns", and "estimated-rows" are defined.  If it returns true,
+# the secondary will make an indexless copy of the dataset, do the
+# upsert on that dataset, then rebuild the indexes afterward.
+ENV PG_SECONDARY_TRANSPARENT_COPY_FUNCTION (> (+ inserts updates deletes) (max 100000 (/ estimated-rows 3)))
+
 WORKDIR $SERVER_ROOT
 
 COPY ${SECONDARY_CONFIG}.j2 $SERVER_ROOT/
