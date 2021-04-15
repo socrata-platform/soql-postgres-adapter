@@ -155,7 +155,6 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     BoolToText -> formatCall("%s::varchar") _,
     TextToJson -> formatCall("%s::jsonb") _,
     JsonToText -> formatCall("%s::text") _,
-    JsonToNumber -> formatCall("%s::numeric") _,
 
     Iif -> formatCall("case when %s then %s else %s end") _,
     Case -> caseCall _,
