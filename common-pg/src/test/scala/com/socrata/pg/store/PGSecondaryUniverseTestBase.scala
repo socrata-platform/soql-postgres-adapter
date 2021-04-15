@@ -217,7 +217,6 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
           case SoQLPhone => SoQLPhone(Some("4251234567"), Some("Home"))
           case SoQLUrl => SoQLUrl(Some("http://www.socrata.com"), Some("Home Site"))
           case SoQLDocument => SoQLDocument(UUID.randomUUID().toString, Some("text/csv"), Some("document"))
-          case SoQLJson => SoQLJson(new JObject(Map("wow" -> JString("cool"))))
           case SoQLPhoto => SoQLPhoto(UUID.randomUUID().toString)
           case SoQLNull => SoQLNull
         }
