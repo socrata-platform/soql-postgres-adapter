@@ -70,6 +70,19 @@ object SoQLAnalyzerHelper {
         }
         val nr = r.asLeaf.get.mapColumnIds(prevQColumnIdToQColumnIdMap, toColumnNameJoinAlias, toUserColumnId, toUserColumnId)
         PipeQuery(nl, Leaf(nr))
+      case PivotQuery(l, r) =>
+        val la = remapAnalyses(columnIdMapping, l)
+        val columns = r.outputSchema.leaf.selection.values
+        val pivotColumnIdMap = columns.map { expr =>
+          expr match {
+            case c: ColumnRef[ColumnName, SoQLType] =>
+              (QualifiedColumnName(None, c.column) -> toUserColumnId(c.column))
+            case _ => // Should never happen
+              throw new Exception("pivot query must select from column")
+          }
+        }.toMap
+        val ra = remapAnalyses(pivotColumnIdMap, r)
+        PivotQuery(la, ra)
       case Compound(op, l, r) =>
         val la = remapAnalyses(columnIdMapping, l)
         val ra = remapAnalyses(columnIdMapping, r)

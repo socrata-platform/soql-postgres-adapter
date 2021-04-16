@@ -40,6 +40,9 @@ object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
       case Some(SoqlSelect) | Some(SoqlOrder) =>
         val v = toUpper(lit, quote(lit.value, escape), ctx) + selectAlias(lit)(ctx)
         ParametricSql(Seq(v), setParams)
+      case _ if ctx.contains(LeftOfPivot) =>
+        val v = toUpper(lit, quote(lit.value, escape), ctx)
+        ParametricSql(Seq(v), setParams)
       case _ =>
         // Append value as comment for debug
         // val comment = " /* %s */".format(lit.value)
@@ -60,7 +63,7 @@ object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
     Some(sqlTimestamp)
   }
 
-  private def quote(s: String, escape: Escape) = s"e'${escape(s)}'"
+  def quote(s: String, escape: Escape) = s"e'${escape(s)}'"
 
   private def toUpper(lit: StringLiteral[SoQLType], v: String, ctx: Context): String =
     if (useUpper(lit)(ctx)) v.toUpperCase else v
@@ -108,6 +111,8 @@ object NumberLiteralSqlizer extends Sqlizer[NumberLiteral[SoQLType]] {
         ParametricSql(Seq(cast(lit.value.bigDecimal.toPlainString)), setParams)
       case Some(SoqlSelect) | Some(SoqlOrder) =>
         ParametricSql(Seq(cast(lit.value.bigDecimal.toPlainString) + selectAlias(lit)(ctx)), setParams)
+      case _ if ctx.contains(LeftOfPivot) =>
+        ParametricSql(Seq(lit.value.bigDecimal.toPlainString), setParams)
       case _ =>
         val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
           stmt.foreach(setStmtParam(_, pos, lit))

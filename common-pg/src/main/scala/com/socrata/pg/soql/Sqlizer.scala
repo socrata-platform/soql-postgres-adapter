@@ -196,6 +196,7 @@ object SqlizerContext extends Enumeration {
 
   val TimestampLiteral = Value("timestamp-literal")
   val SoQLContext = Value("soql-context")
+  val LeftOfPivot = Value("left-of-pivot")
 }
 
 sealed trait CaseSensitivity
