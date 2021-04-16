@@ -27,6 +27,9 @@ object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
       case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(lit)(ctx) =>
         val v = toUpper(lit, quote(lit.value, escape), ctx)
         ParametricSql(Seq(v), setParams)
+      case _ if ctx.contains(LeftOfPivot) =>
+        val v = toUpper(lit, quote(lit.value, escape), ctx)
+        ParametricSql(Seq(v), setParams)
       case _ =>
         val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
           val maybeUpperLitVal = toUpper(lit, lit.value, ctx)
@@ -39,7 +42,7 @@ object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
     }
   }
 
-  private def quote(s: String, escape: Escape) = s"e'${escape(s)}'"
+  def quote(s: String, escape: Escape) = s"e'${escape(s)}'"
 
   private def toUpper(lit: StringLiteral[SoQLType], v: String, ctx: Context): String =
     if (useUpper(lit)(ctx)) v.toUpperCase else v
@@ -86,6 +89,8 @@ object NumberLiteralSqlizer extends Sqlizer[NumberLiteral[SoQLType]] {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
         ParametricSql(Seq(lit.value.bigDecimal.toPlainString), setParams)
       case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(lit)(ctx) =>
+        ParametricSql(Seq(lit.value.bigDecimal.toPlainString), setParams)
+      case _ if ctx.contains(LeftOfPivot) =>
         ParametricSql(Seq(lit.value.bigDecimal.toPlainString), setParams)
       case _ =>
         val setParam = (stmt: Option[PreparedStatement], pos: Int) => {

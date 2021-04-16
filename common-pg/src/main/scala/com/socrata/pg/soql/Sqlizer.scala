@@ -180,6 +180,7 @@ object SqlizerContext extends Enumeration {
   val NoWrappingParenInFunctionCall = Value("no-wrapping-paren-in-fc")
   val InsideWindowFn = Value("inside-window-fn")
   val LeadingSearch = Value("leading-search")
+  val LeftOfPivot = Value("left-of-pivot")
 }
 
 sealed trait CaseSensitivity

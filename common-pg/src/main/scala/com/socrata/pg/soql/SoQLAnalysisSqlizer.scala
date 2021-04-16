@@ -120,7 +120,8 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
         throw new Exception("right operand of pipe query cannot be recursive")
       case PivotQuery(l, r) =>
         println("xxxx")
-        val (lpsql, lpcts) = sql(l, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctx, escape, fromTableName)
+        val ctxPivot = ctx + (LeftOfPivot -> true)
+        val (lpsql, lpcts) = sql(l, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctxPivot, escape, fromTableName)
         val rleaf = r.outputSchema.leaf
         val pivotSql = toPivotSql(rleaf, lpsql, tableNames, allColumnReps, reqRowCount, rep, typeRep,
           setParams, ctx, escape, rleaf.from.orElse(fromTableName))
@@ -157,16 +158,19 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
 
     // select * from crosstab('sql') as ct(name text,  biology decimal, chemistry decimal, physics decimal)
     val p1 =  lpsql.sql.mkString("")
+    val p1b = StringLiteralSqlizer.quote(p1, escape)
+    println(p1)
+    println(p1b)
     val cols = analysis.selection.values.toList.map {
       case FunctionCall(function, Seq(StringLiteral(name, _)), _) =>
         val st = function.result
         s"${name} ${toDbType(st)}"
-      case _ =>
-        ???
+      case ColumnRef(_, column, st) =>
+        s"${column.underlying} ${toDbType(st)}"
     }
     val p2 = cols.mkString("as tt(", ",", ")")
 
-    val sql = s"SELECT * FROM crosstab('${p1}') ${p2}"
+    val sql = s"SELECT * FROM crosstab(${p1b}) ${p2}"
     lpsql.copy(sql = Seq(sql))
   }
 
