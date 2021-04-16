@@ -4,7 +4,7 @@ import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.pg.store.PostgresUniverseCommon
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.{BinaryTree, Compound, Leaf, PipeQuery, SoQLAnalysis, SubAnalysis}
+import com.socrata.soql.{BinaryTree, Compound, Leaf, PipeQuery, PivotQuery, SoQLAnalysis, SubAnalysis}
 import com.socrata.soql.environment.{ColumnName, TableName}
 import com.socrata.soql.functions.SoQLFunctions
 import com.socrata.soql.typed._
@@ -118,6 +118,14 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
         (rpsql.copy(setParams = setParamsAcc), rParamsCountInSelect)
       case PipeQuery(_, _) =>
         throw new Exception("right operand of pipe query cannot be recursive")
+      case PivotQuery(l, r) =>
+        println("xxxx")
+        val (lpsql, lpcts) = sql(l, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctx, escape, fromTableName)
+        val rleaf = r.outputSchema.leaf
+        val pivotSql = toPivotSql(rleaf, lpsql, tableNames, allColumnReps, reqRowCount, rep, typeRep,
+          setParams, ctx, escape, rleaf.from.orElse(fromTableName))
+        println(pivotSql.sql.mkString(""))
+        (pivotSql, lpcts)
       case Compound(op, l, r) =>
         val (lpsql, lpcts) = sql(l, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctx, escape, fromTableName)
         val (rpsql, rpcts) = sql(r, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctx, escape, fromTableName)
@@ -131,6 +139,42 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
       case Leaf(analysis) =>
         toSql(analysis, None, tableNames, allColumnReps, reqRowCount, rep, typeRep,
               setParams, ctx, escape, analysis.from.orElse(fromTableName))
+    }
+  }
+
+  def toPivotSql(
+              analysis: SoQLAnalysis[UserColumnId, SoQLType], // scalastyle:ignore method.length parameter.number
+              lpsql: ParametricSql,
+              tableNames: Map[TableName, String],
+              allColumnReps: Seq[SqlColumnRep[SoQLType, SoQLValue]],
+              reqRowCount: Boolean,
+              rep0: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+              typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+              setParams: Seq[SetParam],
+              context: Context,
+              escape: Escape,
+              fromTableName: Option[TableName] = None): ParametricSql = {
+
+    // select * from crosstab('sql') as ct(name text,  biology decimal, chemistry decimal, physics decimal)
+    val p1 =  lpsql.sql.mkString("")
+    val cols = analysis.selection.values.toList.map {
+      case FunctionCall(function, Seq(StringLiteral(name, _)), _) =>
+        val st = function.result
+        s"${name} ${toDbType(st)}"
+      case _ =>
+        ???
+    }
+    val p2 = cols.mkString("as tt(", ",", ")")
+
+    val sql = s"SELECT * FROM crosstab('${p1}') ${p2}"
+    lpsql.copy(sql = Seq(sql))
+  }
+
+
+  private def toDbType(st: SoQLType): String = {
+    st match {
+      case SoQLNumber => "decimal"
+      case _ => "text"
     }
   }
 
