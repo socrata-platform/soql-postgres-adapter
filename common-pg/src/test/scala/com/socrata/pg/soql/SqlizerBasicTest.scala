@@ -194,7 +194,7 @@ class SqlizerBasicTest extends SqlizerTest {
   test("search") {
     val soql = "select * search 'oNe Two'"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive, useRepsWithId = true)
-    sql should be ("""SELECT t1.array_12,t1.object_11,ST_AsBinary(t1.multipoint_18),t1.phone_20_number,t1.phone_20_type,t1.year_8,ST_AsBinary(t1.multiline_14),t1.arrest_9,ST_AsBinary(t1.multipolygon_15),ST_AsBinary(t1.polygon_16),t1.case_number_6,t1.updated_on_10,ST_AsBinary(t1.point_13),t1.id_5,t1.document_22,ST_AsBinary(t1.location_19_geom),t1.location_19_address,t1.primary_type_7,t1.url_21_url,t1.url_21_description,ST_AsBinary(t1.line_17) FROM t1 WHERE (to_tsvector('english', coalesce(t1.array_12,'') || ' ' || coalesce(t1.case_number_6,'') || ' ' || coalesce(t1.object_11,'') || ' ' || coalesce(t1.primary_type_7,'') || ' ' || coalesce(t1.url_21_description,'') || ' ' || coalesce(t1.url_21_url,'')) @@ plainto_tsquery('english', ?))""")
+    sql should be ("""SELECT t1.array_12,t1.object_11,ST_AsBinary(t1.multipoint_18),t1.phone_20_number,t1.phone_20_type,t1.year_8,ST_AsBinary(t1.multiline_14),t1.json_23,t1.arrest_9,ST_AsBinary(t1.multipolygon_15),ST_AsBinary(t1.polygon_16),t1.case_number_6,t1.updated_on_10,ST_AsBinary(t1.point_13),t1.id_5,t1.document_22,ST_AsBinary(t1.location_19_geom),t1.location_19_address,t1.primary_type_7,t1.url_21_url,t1.url_21_description,ST_AsBinary(t1.line_17) FROM t1 WHERE (to_tsvector('english', coalesce(t1.array_12,'') || ' ' || coalesce(t1.case_number_6,'') || ' ' || coalesce(t1.object_11,'') || ' ' || coalesce(t1.primary_type_7,'') || ' ' || coalesce(t1.url_21_description,'') || ' ' || coalesce(t1.url_21_url,'')) @@ plainto_tsquery('english', ?))""")
     setParams.length should be (1)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq("oNe Two"))
@@ -491,5 +491,14 @@ class SqlizerBasicTest extends SqlizerTest {
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     sql should be ("SELECT (avg(t1.year) over( partition by t1.primary_type,t1.year ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)) FROM t1")
     setParams.length should be (0)
+  }
+
+  test("json subscript") {
+    val soql = "select json.foo"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    sql should be ("SELECT (t1.json -> ?) FROM t1")
+    params should be (Seq("foo"))
+
   }
 }
