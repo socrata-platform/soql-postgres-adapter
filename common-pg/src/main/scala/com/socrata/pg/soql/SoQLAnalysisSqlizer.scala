@@ -24,7 +24,8 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
           setParams: Seq[SetParam],
           ctx: Context,
           escape: Escape): ParametricSql = {
-    val (analysis, tableNames, allColumnReps) = analysisTablesReps
+    val (analysis, tableNamesRaw, allColumnReps) = analysisTablesReps
+    val tableNames = tableNamesRaw + (TableName(TableName.SingleRow) -> "onerow")
     val primaryTable = tableNames(TableName.PrimaryTable)
     val analysisWithFrom = updateFrom(analysis, TableName(primaryTable))
     val tableNamesWithPrimaryTable = tableNames + (TableName(primaryTable) -> primaryTable)
@@ -322,8 +323,12 @@ trait SoQLAnalysisSqlizer {
       acc + (TableName.PrimaryTable -> from.qualifier)
     }
     val defaultTableAlias = analysis.from.foldLeft(Map.empty[String, String]) { (acc, from) =>
-      val qualifier = from.qualifier
-      acc + (TableName.PrimaryTable.qualifier -> tableAlias(qualifier))
+      from.qualifier match {
+        case TableName.SingleRow =>
+          acc + (TableName.SingleRow -> TableName.SingleRow)
+        case qualifier =>
+          acc + (TableName.PrimaryTable.qualifier -> tableAlias(qualifier))
+      }
     }
 
     val tableNamesWithJoins = ctx(TableMap).asInstanceOf[Map[TableName, String]] ++ joinTableNames ++ defaultTableName
@@ -439,7 +444,7 @@ trait SoQLAnalysisSqlizer {
 
     val tableName = analysis.from.orElse(fromTableName).getOrElse(TableName.PrimaryTable)
     val from =
-      if (prevAna.isEmpty && fromTableName.isEmpty) ""
+      if ((prevAna.isEmpty && fromTableName.isEmpty) || (fromTableName.map(_.name) == Some(TableName.SingleRow) && joinPhrase.isEmpty)) ""
       else s" FROM ${tableNamesWithThis(tableName.copy(alias = None))}" + tableName.alias.map(a => s" as ${a}").getOrElse("")
 
     // COMPLETE SQL
