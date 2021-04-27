@@ -501,4 +501,10 @@ class SqlizerBasicTest extends SqlizerTest {
     params should be (Seq("foo"))
 
   }
+
+  test("simple single row does not generate a from clause") {
+    val soql = "select 'bleh' from @single_row"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("SELECT ?")
+  }
 }
