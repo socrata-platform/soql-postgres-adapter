@@ -4,20 +4,20 @@
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
     http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
 
-    <changeSet author="robertm" id="20210420-create-onerow">
+    <changeSet author="robertm" id="20210420-create-single_row">
         <preConditions onFail="MARK_RAN">
             <not>
-                <tableExists tableName="onerow"/>
+                <tableExists tableName="single_row"/>
             </not>
         </preConditions>
         <sql>
-            CREATE TABLE onerow (col INT);
-            INSERT INTO onerow (col) VALUES (1);
-            ALTER TABLE onerow DROP COLUMN col;
+            CREATE TABLE single_row (col INT);
+            INSERT INTO single_row (col) VALUES (1);
+            ALTER TABLE single_row DROP COLUMN col;
         </sql>
         <rollback>
             <sql>
-                DROP TABLE onerow;
+                DROP TABLE single_row;
             </sql>
         </rollback>
     </changeSet>

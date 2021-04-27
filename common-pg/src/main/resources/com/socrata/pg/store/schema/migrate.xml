@@ -25,5 +25,5 @@
     <include file="com/socrata/pg/store/schema/20191224-add-some-dc-tables.xml"/>
     <include file="com/socrata/pg/store/schema/20200210-add-median-function.xml"/>
     <include file="com/socrata/pg/store/schema/20200901-create-index-directive-map.xml"/>
-    <include file="com/socrata/pg/store/schema/20210420-create-onerow.xml"/>
+    <include file="com/socrata/pg/store/schema/20210420-create-single_row.xml"/>
 </databaseChangeLog>

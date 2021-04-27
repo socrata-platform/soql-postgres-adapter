@@ -22,16 +22,16 @@ class SqlizerJoinTest  extends SqlizerTest {
   test("joined single row does generate a from clause") {
     val soql = "select 'bleh' from @single_row join @year as y on true"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT ? FROM onerow JOIN t3 as _y ON ?")
+    sql should be ("SELECT ? FROM single_row JOIN t3 as _y ON ?")
   }
 
-  test("join to singlerow") {
+  test("join to single_row") {
     val soql = "select 'bleh' join @single_row on true"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT ? FROM t1 JOIN onerow ON ?")
+    sql should be ("SELECT ? FROM t1 JOIN single_row ON ?")
   }
 
-  test("join to singlerow in subselect") {
+  test("join to single_row in subselect") {
     val soql = "select 'bleh' join (select 1, 2, 3 from @single_row) as vars on true"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT ? FROM t1 JOIN (SELECT ? as \"_1\",? as \"_2\",? as \"_3\") as _vars ON ?")
