@@ -94,6 +94,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     ModDoubleDouble -> infix("%") _,
     ModMoneyNum -> infix("%") _,
     ModMoneyMoney -> infix("%") _,
+    NaturalLog -> nary("ln") _,
     Absolute -> nary("abs") _,
     Ceiling -> nary("ceil") _,
     Floor -> nary("floor") _,
@@ -169,7 +170,10 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     StddevSamp -> nary("stddev_samp") _,
     Median -> medianContCall _,
     MedianDisc -> formatCall("percentile_disc(.50) within group (order by %s)") _,
-
+    RegrIntercept -> nary("regr_intercept") _,
+    RegrSlope -> nary("regr_slope") _,
+    RegrR2 -> nary("regr_r2") _,
+    
     RowNumber -> nary("row_number") _,
     Rank -> nary("rank") _,
     DenseRank -> nary("dense_rank") _,
