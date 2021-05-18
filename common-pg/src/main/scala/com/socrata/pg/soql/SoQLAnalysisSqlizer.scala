@@ -483,7 +483,6 @@ trait SoQLAnalysisSqlizer {
                                  setParamsGroupBy ++
                                  setParamsHaving ++
                                  setParamsHavingSearch ++
-                                 setParamsOrderBy ++
                                  setParamsOrderBy)
 
     (result, paramsCountInSelect)
