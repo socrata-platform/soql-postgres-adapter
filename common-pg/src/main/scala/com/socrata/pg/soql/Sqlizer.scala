@@ -19,6 +19,9 @@ case class ParametricSql(sql: Seq[String], setParams: Seq[SetParam]) {
     "sql: " + sql.mkString(";") +
     " params: " + params.mkString("\"", """","""", "\"")
   }
+
+  val paramsAsStrings: Seq[String] =
+    setParams.map { (setParam) => setParam(None, 0).get.toString }
 }
 
 // scalastyle:off import.grouping

@@ -21,38 +21,51 @@ class SqlizerJoinTest  extends SqlizerTest {
 
   test("single row joined to table on true moves the first join into from") {
     val soql = "select 'bleh' from @single_row join @year as y on true"
-    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    val psql@ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT ? FROM t3 as _y")
+    psql.paramsAsStrings should be (Seq("bleh"))
   }
 
   test("single row joined to subquery on true moves the first join into from") {
     val soql = "select 'bleh' from @single_row join (select * from @year) as y on true"
-    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    val psql@ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
     sql should be ("""SELECT ? FROM (SELECT t3.year as "year",t3.avg_temperature as "avg_temperature" FROM t3) as _y""")
+    psql.paramsAsStrings should be (Seq("bleh"))
+  }
+
+  test("single row joined to subquery on true moves the first join into from, with parameters in the subquery") {
+    val soql = "select 'bleh' from @single_row join (select *, 'a' from @year) as y on true"
+    val psql@ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
+    sql should be ("""SELECT ? FROM (SELECT t3.year as "year",t3.avg_temperature as "avg_temperature",? as "a" FROM t3) as _y""")
+    psql.paramsAsStrings should be (Seq("bleh", "a"))
   }
 
   test("single row join to table on anything other than true does generate a from clause") {
     val soql = "select 'bleh' from @single_row join @year as y on false"
-    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    val psql@ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT ? FROM single_row JOIN t3 as _y ON ?")
+    psql.paramsAsStrings should be (Seq("bleh", "false"))
   }
 
   test("single row join to subquery on anything other than true does generate a from clause") {
-    val soql = "select 'bleh' from @single_row join (select * from @year) as y on false"
-    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ? FROM single_row JOIN (SELECT t3.year as "year",t3.avg_temperature as "avg_temperature" FROM t3) as _y ON ?""")
+    val soql = "select 'bleh' from @single_row join (select *, 'a' from @year) as y on false"
+    val psql@ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
+    sql should be ("""SELECT ? FROM single_row JOIN (SELECT t3.year as "year",t3.avg_temperature as "avg_temperature",? as "a" FROM t3) as _y ON ?""")
+    psql.paramsAsStrings should be (Seq("bleh", "a", "false"))
   }
 
   test("join to single_row") {
     val soql = "select 'bleh' join @single_row on true"
-    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    val psql@ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT ? FROM t1 JOIN single_row ON ?")
+    psql.paramsAsStrings should be (Seq("bleh", "true"))
   }
 
   test("join to single_row in subselect") {
     val soql = "select 'bleh' join (select 1, 2, 3 from @single_row) as vars on true"
-    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    val psql@ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT ? FROM t1 JOIN (SELECT ? as \"_1\",? as \"_2\",? as \"_3\") as _vars ON ?")
+    psql.paramsAsStrings should be (Seq("bleh", "1", "2", "3", "true"))
   }
 
   test("join and chain") {
