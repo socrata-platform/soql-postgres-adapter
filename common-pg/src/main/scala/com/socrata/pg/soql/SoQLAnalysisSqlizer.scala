@@ -7,6 +7,7 @@ import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.{BinaryTree, Compound, Leaf, PipeQuery, SoQLAnalysis, SubAnalysis}
 import com.socrata.soql.environment.{ColumnName, TableName}
 import com.socrata.soql.functions.SoQLFunctions
+import com.socrata.soql.ast.InnerJoinType
 import com.socrata.soql.typed._
 import com.socrata.soql.types._
 
@@ -340,15 +341,21 @@ trait SoQLAnalysisSqlizer {
 
     val (selectPhrase, setParamsSelect) =
       if (reqRowCountFinal && analysis.groupBys.isEmpty && analysis.search.isEmpty) {
-        (List("count(*)"), setParams)
+        (List("count(*)"), Nil)
       } else {
-        select(analysis)(repMinusComplexJoinTable, typeRep, setParams, ctxSelectWithJoins, escape)
+        select(analysis)(repMinusComplexJoinTable, typeRep, Nil, ctxSelectWithJoins, escape)
       }
 
-    val paramsCountInSelect = setParamsSelect.size - setParams.size
+    val paramsCountInSelect = setParamsSelect.size
 
     // JOIN
-    val (joinPhrase, setParamsJoin) = joins.foldLeft((Seq.empty[String], Seq.empty[SetParam])) { case ((sqls, setParamAcc), join) =>
+    case class JoinSql(typ: String, lateral: Boolean, tableSql: String, joinCondition: String) {
+      override def toString = {
+        val lateralStr = if (lateral) "LATERAL " else ""
+        s" ${typ} ${lateralStr}$tableSql ON $joinCondition"
+      }
+    }
+    val (joinPhrase, setParamsJoin) = joins.foldLeft((Seq.empty[JoinSql], Seq.empty[SetParam])) { case ((sqls, setParamAcc), join) =>
       val fromTableName = join.from.subAnalysis match {
         case Right(SubAnalysis(analyses, alias)) =>
           analyses.seq.head.from.map(_.name).get
@@ -383,26 +390,25 @@ trait SoQLAnalysisSqlizer {
       val joinConditionParamSql = Sqlizer.sql(join.on)(repJoin, typeRep, joinOnParams, ctxSelectWithJoins + (SoqlPart -> SoqlJoin), escape)
       val joinCondition = joinConditionParamSql.sql.mkString(" ")
       val lateral = if (join.lateral) "LATERAL " else ""
-      (sqls :+ s" ${join.typ.toString} ${lateral}$tableName ON $joinCondition", joinConditionParamSql.setParams)
+      (sqls :+ JoinSql(join.typ.toString, join.lateral, tableName, joinCondition), joinConditionParamSql.setParams)
     }
 
-    val setParamsSelectJoin = setParamsSelect ++ setParamsJoin
     // WHERE
-    val where = ana.where.map(Sqlizer.sql(_)(repMinusComplexJoinTable, typeRep, setParamsSelectJoin, ctxSelectWithJoins + (SoqlPart -> SoqlWhere), escape))
-    val setParamsWhere = where.map(_.setParams).getOrElse(setParamsSelectJoin)
+    val where = ana.where.map(Sqlizer.sql(_)(repMinusComplexJoinTable, typeRep, Nil, ctxSelectWithJoins + (SoqlPart -> SoqlWhere), escape))
+    val setParamsWhere = where.map(_.setParams).getOrElse(Nil)
 
     // SEARCH in WHERE
     val ParametricSql(whereSearch, setParamsWhereSearch) = ana.search match {
       case Some(s) if (leadingSearch || !ana.isGrouped) =>
         val searchAna = if (leadingSearch) leadingSearchAnalysis(ana, prevAna, rep) else ana
-        sqlizeSearch(s, leadingSearch, searchAna)(repMinusComplexJoinTable, typeRep, setParamsWhere, ctxSelectWithJoins + (SoqlPart -> SoqlSearch), escape)
+        sqlizeSearch(s, leadingSearch, searchAna)(repMinusComplexJoinTable, typeRep, Nil, ctxSelectWithJoins + (SoqlPart -> SoqlSearch), escape)
       case _ =>
-        ParametricSql(Seq.empty[String], setParamsWhere)
+        ParametricSql(Seq.empty[String], Nil)
     }
 
     // GROUP BY
     val isGroupByAllConstants = !ana.groupBys.exists(!Sqlizer.isLiteral(_))
-    val groupBy = ana.groupBys.foldLeft((List.empty[String], setParamsWhereSearch)) { (t2, gb) =>
+    val groupBy = ana.groupBys.foldLeft((List.empty[String], Seq.empty[SetParam])) { (t2, gb) =>
       val ParametricSql(sqls, newSetParams) =
         if (Sqlizer.isLiteral(gb)) {
           if (isGroupByAllConstants) {
@@ -423,19 +429,19 @@ trait SoQLAnalysisSqlizer {
     val setParamsGroupBy = groupBy._2
 
     // HAVING
-    val having = ana.having.map(Sqlizer.sql(_)(repMinusComplexJoinTable, typeRep, setParamsGroupBy, ctxSelectWithJoins + (SoqlPart -> SoqlHaving), escape))
-    val setParamsHaving = having.map(_.setParams).getOrElse(setParamsGroupBy)
+    val having = ana.having.map(Sqlizer.sql(_)(repMinusComplexJoinTable, typeRep, Nil, ctxSelectWithJoins + (SoqlPart -> SoqlHaving), escape))
+    val setParamsHaving = having.map(_.setParams).getOrElse(Nil)
 
     // SEARCH in HAVING
     val ParametricSql(havingSearch, setParamsHavingSearch) = ana.search match {
       case Some(s) if (!leadingSearch && ana.isGrouped) =>
-        sqlizeSearch(s, leadingSearch, ana)(repMinusComplexJoinTable, typeRep, setParamsHaving, ctxSelectWithJoins + (SoqlPart -> SoqlSearch), escape)
+        sqlizeSearch(s, leadingSearch, ana)(repMinusComplexJoinTable, typeRep, Nil, ctxSelectWithJoins + (SoqlPart -> SoqlSearch), escape)
       case _ =>
-        ParametricSql(Seq.empty[String], setParamsHaving)
+        ParametricSql(Seq.empty[String], Nil)
     }
 
     // ORDER BY
-    val orderBy = ana.orderBys.foldLeft((Seq.empty[String], setParamsHavingSearch)) { (t2, ob) =>
+    val orderBy = ana.orderBys.foldLeft((Seq.empty[String], Seq.empty[SetParam])) { (t2, ob) =>
       val ParametricSql(sqls, newSetParams) =
         Sqlizer.sql(ob)(repMinusComplexJoinTable, typeRep, t2._2, ctxSelectWithJoins + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression), escape)
       (t2._1 ++ sqls, newSetParams)
@@ -443,15 +449,22 @@ trait SoQLAnalysisSqlizer {
     val setParamsOrderBy = orderBy._2
 
     val tableName = analysis.from.orElse(fromTableName).getOrElse(TableName.PrimaryTable)
-    val from =
-      if ((prevAna.isEmpty && fromTableName.isEmpty) || (fromTableName.map(_.name) == Some(TableName.SingleRow) && joinPhrase.isEmpty)) ""
-      else s" FROM ${tableNamesWithThis(tableName.copy(alias = None))}" + tableName.alias.map(a => s" as ${a}").getOrElse("")
+
+    // A few special cases here
+    // * select ... from single_row => select ...
+    // * select ... from single_row join other_table on true .. => select ... from other_table ...
+
+    val (from, finalJoinPhrase, finalSetParamsJoin) =
+      if ((prevAna.isEmpty && fromTableName.isEmpty) || (fromTableName.map(_.name) == Some(TableName.SingleRow) && joinPhrase.isEmpty)) ("", joinPhrase, setParamsJoin)
+      else if (fromTableName.map(_.name) == Some(TableName.SingleRow) && joins.head.typ == InnerJoinType && joins.head.on == BooleanLiteral(true, SoQLBoolean)(joins.head.on.position)) {
+        (s" FROM ${joinPhrase.head.tableSql}", joinPhrase.tail, setParamsJoin.tail)
+      } else (s" FROM ${tableNamesWithThis(tableName.copy(alias = None))}" + tableName.alias.map(a => s" as ${a}").getOrElse(""), joinPhrase, setParamsJoin)
 
     // COMPLETE SQL
     val selectOptionalDistinct = "SELECT " + (if (analysis.distinct) "DISTINCT " else "")
     val completeSql = selectPhrase.mkString(selectOptionalDistinct, ",", "") +
       from +
-      joinPhrase.mkString(" ") +
+      finalJoinPhrase.mkString(" ") +
       where.flatMap(_.sql.headOption.map(" WHERE " +  _)).getOrElse("") +
       whereSearch.mkString(" ") +
       (if (ana.groupBys.nonEmpty) groupBy._1.mkString(" GROUP BY ", ",", "") else "") +
@@ -461,7 +474,17 @@ trait SoQLAnalysisSqlizer {
       ana.limit.map(" LIMIT " + _.toString).getOrElse("") +
       ana.offset.map(" OFFSET " + _.toString).getOrElse("")
 
-    val result = ParametricSql(Seq(countBySubQuery(analysis)(reqRowCountFinal, completeSql)), setParamsOrderBy)
+    val result = ParametricSql(Seq(countBySubQuery(analysis)(reqRowCountFinal, completeSql)),
+                               setParams ++
+                                 setParamsSelect ++
+                                 finalSetParamsJoin ++
+                                 setParamsWhere ++
+                                 setParamsWhereSearch ++
+                                 setParamsGroupBy ++
+                                 setParamsHaving ++
+                                 setParamsHavingSearch ++
+                                 setParamsOrderBy)
+
     (result, paramsCountInSelect)
   }
 
