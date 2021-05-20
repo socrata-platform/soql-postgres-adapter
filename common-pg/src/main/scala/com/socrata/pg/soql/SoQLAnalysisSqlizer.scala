@@ -355,7 +355,7 @@ trait SoQLAnalysisSqlizer {
         s" ${typ} ${lateralStr}$tableSql ON $joinCondition"
       }
     }
-    val (joinPhrase, setParamsJoin) = joins.foldLeft((Seq.empty[JoinSql], Seq.empty[SetParam])) { case ((sqls, setParamAcc), join) =>
+    val joinPhrasesAndParams = joins.foldLeft((Seq.empty[(JoinSql, Seq[SetParam])])) { case ((joinAcc), join) =>
       val fromTableName = join.from.subAnalysis match {
         case Right(SubAnalysis(analyses, alias)) =>
           analyses.seq.head.from.map(_.name).get
@@ -376,13 +376,13 @@ trait SoQLAnalysisSqlizer {
           val joinTableLikeParamSql = Sqlizer.sql(
             (analyses, joinTableNames, allColumnReps))(repJoin, typeRep, Seq.empty, ctxJoin, escape)
           val tn = "(" + joinTableLikeParamSql.sql.mkString + ") as " + alias
-          (tn, setParamAcc ++ joinTableLikeParamSql.setParams)
+          (tn, joinTableLikeParamSql.setParams)
         case Left(tableName) =>
           val key = TableName(tableName.name, None)
           val realTableName = tableNames(key)
           val qualifier = tableName.qualifier
           val tn = if (tableName.alias.isEmpty) realTableName else s"$realTableName as $qualifier"
-          (tn, setParamAcc)
+          (tn, Nil)
       }
 
       val repJoin = if (join.lateral) repFrom ++ repMinusComplexJoinTable
@@ -390,7 +390,7 @@ trait SoQLAnalysisSqlizer {
       val joinConditionParamSql = Sqlizer.sql(join.on)(repJoin, typeRep, joinOnParams, ctxSelectWithJoins + (SoqlPart -> SoqlJoin), escape)
       val joinCondition = joinConditionParamSql.sql.mkString(" ")
       val lateral = if (join.lateral) "LATERAL " else ""
-      (sqls :+ JoinSql(join.typ.toString, join.lateral, tableName, joinCondition), joinConditionParamSql.setParams)
+      (joinAcc :+ (JoinSql(join.typ.toString, join.lateral, tableName, joinCondition), joinConditionParamSql.setParams))
     }
 
     // WHERE
@@ -454,17 +454,30 @@ trait SoQLAnalysisSqlizer {
     // * select ... from single_row => select ...
     // * select ... from single_row join other_table on true .. => select ... from other_table ...
 
-    val (from, finalJoinPhrase, finalSetParamsJoin) =
-      if ((prevAna.isEmpty && fromTableName.isEmpty) || (fromTableName.map(_.name) == Some(TableName.SingleRow) && joinPhrase.isEmpty)) ("", joinPhrase, setParamsJoin)
-      else if (fromTableName.map(_.name) == Some(TableName.SingleRow) && joins.head.typ == InnerJoinType && joins.head.on == BooleanLiteral(true, SoQLBoolean)(joins.head.on.position)) {
-        (s" FROM ${joinPhrase.head.tableSql}", joinPhrase.tail, setParamsJoin.tail)
-      } else (s" FROM ${tableNamesWithThis(tableName.copy(alias = None))}" + tableName.alias.map(a => s" as ${a}").getOrElse(""), joinPhrase, setParamsJoin)
+    val (from, fromParams, joinPhrase, setParamsJoin) =
+      if ((prevAna.isEmpty && fromTableName.isEmpty) || (fromTableName.map(_.name) == Some(TableName.SingleRow) && joinPhrasesAndParams.isEmpty)) {
+        val (joinPhrases, joinSetParamses) = joinPhrasesAndParams.unzip
+        ("", Nil,
+         joinPhrases, joinSetParamses.flatten)
+      } else if (fromTableName.map(_.name) == Some(TableName.SingleRow) && joins.head.typ == InnerJoinType && joins.head.on == BooleanLiteral(true, SoQLBoolean)(joins.head.on.position)) {
+        // we're joining single_row to a thing on true, so pop that
+        // first join off and make it our FROM instead.  We'll need to
+        // remove the last parameter from the set-params because the
+        // `ON ?` that injects the "true" goes away.
+        val (joinPhrases, joinSetParamses) = joinPhrasesAndParams.unzip
+        (s" FROM ${joinPhrases.head.tableSql}", joinSetParamses.head.dropRight(1),
+         joinPhrases.tail, joinSetParamses.tail.flatten)
+      } else {
+        val (joinPhrases, joinSetParamses) = joinPhrasesAndParams.unzip
+        (s" FROM ${tableNamesWithThis(tableName.copy(alias = None))}" + tableName.alias.map(a => s" as ${a}").getOrElse(""), Nil,
+         joinPhrases, joinSetParamses.flatten)
+      }
 
     // COMPLETE SQL
     val selectOptionalDistinct = "SELECT " + (if (analysis.distinct) "DISTINCT " else "")
     val completeSql = selectPhrase.mkString(selectOptionalDistinct, ",", "") +
       from +
-      finalJoinPhrase.mkString(" ") +
+      joinPhrase.mkString(" ") +
       where.flatMap(_.sql.headOption.map(" WHERE " +  _)).getOrElse("") +
       whereSearch.mkString(" ") +
       (if (ana.groupBys.nonEmpty) groupBy._1.mkString(" GROUP BY ", ",", "") else "") +
@@ -477,7 +490,8 @@ trait SoQLAnalysisSqlizer {
     val result = ParametricSql(Seq(countBySubQuery(analysis)(reqRowCountFinal, completeSql)),
                                setParams ++
                                  setParamsSelect ++
-                                 finalSetParamsJoin ++
+                                 fromParams ++
+                                 setParamsJoin ++
                                  setParamsWhere ++
                                  setParamsWhereSearch ++
                                  setParamsGroupBy ++
