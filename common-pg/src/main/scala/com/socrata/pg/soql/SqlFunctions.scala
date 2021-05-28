@@ -98,6 +98,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     Absolute -> nary("abs") _,
     Ceiling -> nary("ceil") _,
     Floor -> nary("floor") _,
+    Round -> formatCall("round(%s, CAST(%s as INT))") _,
 
     FloatingTimeStampTruncYmd -> formatCall("date_trunc('day', %s)") _,
     FloatingTimeStampTruncYm -> formatCall("date_trunc('month', %s)") _,
