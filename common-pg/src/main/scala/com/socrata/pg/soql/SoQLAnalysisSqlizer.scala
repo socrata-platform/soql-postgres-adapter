@@ -104,7 +104,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
             case _ =>
               (TableName.PrimaryTable, "x1")
           }
-        val subTableName = if (ra.from.isEmpty) "(%s) AS %s".format(lpsql.sql.head, chainedTableAlias)
+        val subTableName = if (ra.from.isEmpty) "(%s) AS \"%s\"".format(lpsql.sql.head, chainedTableAlias)
                            else "(%s)".format(lpsql.sql.head)
         val tableNamesSubTableNameReplace = tableNames + (primaryTableName -> subTableName)
         val primaryTableAlias = if (ra.joins.nonEmpty) Map((PrimaryTableAlias -> chainedTableAlias)) else Map.empty // REVISIT
@@ -375,13 +375,13 @@ trait SoQLAnalysisSqlizer {
           val repJoin = if (join.lateral) repFrom ++ rep else rep
           val joinTableLikeParamSql = Sqlizer.sql(
             (analyses, joinTableNames, allColumnReps))(repJoin, typeRep, Seq.empty, ctxJoin, escape)
-          val tn = "(" + joinTableLikeParamSql.sql.mkString + ") as " + alias
+          val tn = "(" + joinTableLikeParamSql.sql.mkString + ") as \"" + alias + "\""
           (tn, joinTableLikeParamSql.setParams)
         case Left(tableName) =>
           val key = TableName(tableName.name, None)
           val realTableName = tableNames(key)
           val qualifier = tableName.qualifier
-          val tn = if (tableName.alias.isEmpty) realTableName else s"$realTableName as $qualifier"
+          val tn = if (tableName.alias.isEmpty) realTableName else s"""$realTableName as "$qualifier""""
           (tn, Nil)
       }
 
@@ -469,7 +469,7 @@ trait SoQLAnalysisSqlizer {
          joinPhrases.tail, joinSetParamses.tail.flatten)
       } else {
         val (joinPhrases, joinSetParamses) = joinPhrasesAndParams.unzip
-        (s" FROM ${tableNamesWithThis(tableName.copy(alias = None))}" + tableName.alias.map(a => s" as ${a}").getOrElse(""), Nil,
+        (s" FROM ${tableNamesWithThis(tableName.copy(alias = None))}" + tableName.alias.map(a => s""" as "${a}"""").getOrElse(""), Nil,
          joinPhrases, joinSetParamses.flatten)
       }
 
