@@ -159,7 +159,7 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
 
   private def idQuote(s: String) = s""""$s"""" //   "\"" + s + "\""
 
-  private val qualifierRx = "^[_A-Za-z]+[_A-Za-z0-9]*$".r
+  private val qualifierRx = "^[_A-Za-z0-9-]+$".r
 
   private def qualifierFromAlias(expr: ColumnRef[UserColumnId, SoQLType], aliases: Map[String, String]): Qualifier = {
     expr.qualifier.map(aliases.get(_)).getOrElse(expr.qualifier)
@@ -205,7 +205,7 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           val qualifer = tableMap.get(expr.qualifier.getOrElse(TableName.PrimaryTable.qualifier))
           val maybeUpperPhysColumns =
             rep.physColumns.zip(rep.sqlTypes).map { case (physCol, sqlType) =>
-              toUpper(expr, sqlType)(qualifer.map(q => s"$q.$physCol").getOrElse(physCol), ctx)
+              toUpper(expr, sqlType)(qualifer.map(q => s""""$q".$physCol""").getOrElse(physCol), ctx)
             }
           val subColumns = rep.physColumns.map(pc => pc.replace(rep.base, ""))
           val physColumnsWithSubColumns = maybeUpperPhysColumns.zip(subColumns)
@@ -222,7 +222,7 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
               tableMap.get(TableName.PrimaryTable.qualifier)
           }
           qualifier.foreach(qualifierRx.findFirstMatchIn(_).orElse(throw BadParse("Invalid table alias", expr.position)))
-          val maybeUpperPhysColumns = rep.physColumns.map(c => toUpper(expr)(qualifier.map(q => s"$q.$c").getOrElse(c), ctx))
+          val maybeUpperPhysColumns = rep.physColumns.map(c => toUpper(expr)(qualifier.map(q => s""""$q".$c""").getOrElse(c), ctx))
           ParametricSql(maybeUpperPhysColumns.map(c => c + selectAlias(expr)(ctx)), setParams)
         }
       case _ => // rollups also flow here by not finding entries in reps
@@ -235,7 +235,7 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
               val c = idQuote(expr.column.underlying + subCol)
               expr.qualifier.foreach(qualifierRx.findFirstMatchIn(_).orElse(throw BadParse("Invalid table alias", expr.position)))
               val qualifier = expr.qualifier.orElse(ctx.get(PrimaryTableAlias).map(_.toString))
-              toUpper(expr)(qualifier.map(q => s"$q.$c").getOrElse(c), ctx) + selectAlias(expr, Some(subCol))(ctx)
+              toUpper(expr)(qualifier.map(q => s""""$q".$c""").getOrElse(c), ctx) + selectAlias(expr, Some(subCol))(ctx)
             }
             ParametricSql(sqls, setParams)
           case None =>

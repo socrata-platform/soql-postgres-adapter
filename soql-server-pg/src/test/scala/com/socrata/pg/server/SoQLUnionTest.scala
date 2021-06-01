@@ -200,20 +200,20 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
   }
 
   test("Sqlize - union no table alias") {
-    sqlizeTest(soqls("union no table alias"), """SELECT "name" FROM (SELECT t1.u_name_4 as "name" FROM t1 WHERE (? != ?) UNION SELECT t2.u_name_4 as "name" FROM t2 WHERE (t2.u_year_6 = ?)) AS x1 ORDER BY "name" nulls last""",
+    sqlizeTest(soqls("union no table alias"), """SELECT "name" FROM (SELECT "t1".u_name_4 as "name" FROM t1 WHERE (? != ?) UNION SELECT "t2".u_name_4 as "name" FROM t2 WHERE ("t2".u_year_6 = ?)) AS "x1" ORDER BY "name" nulls last""",
       Seq(3, 2, 1))
   }
 
   test("Sqlize - union table alias") {
-    sqlizeTest(soqls("union table alias"), """SELECT "name" FROM (SELECT t1.u_name_4 as "name" FROM t1 UNION SELECT _d1.u_name_4 as "name" FROM t2 as _d1 GROUP BY _d1.u_name_4) AS x1 ORDER BY "name" nulls last""")
+    sqlizeTest(soqls("union table alias"), """SELECT "name" FROM (SELECT "t1".u_name_4 as "name" FROM t1 UNION SELECT "_d1".u_name_4 as "name" FROM t2 as "_d1" GROUP BY "_d1".u_name_4) AS "x1" ORDER BY "name" nulls last""")
   }
 
   test("Sqlize - urls") {
-    sqlizeTest(soqls("urls"), """SELECT "url_url","url_description" FROM (SELECT t1.u_url_8_url as "url_url",t1.u_url_8_description as "url_description",t1.u_cat_7 as "cat" FROM t1 WHERE (t1.u_url_8_url is not null or t1.u_url_8_description is not null) UNION SELECT t2.u_url_8_url as "url_url",t2.u_url_8_description as "url_description",t2.u_dog_7 as "dog" FROM t2 WHERE (t2.u_url_8_url is not null or t2.u_url_8_description is not null)) AS x1 ORDER BY "cat" nulls last""")
+    sqlizeTest(soqls("urls"), """SELECT "url_url","url_description" FROM (SELECT "t1".u_url_8_url as "url_url","t1".u_url_8_description as "url_description","t1".u_cat_7 as "cat" FROM t1 WHERE ("t1".u_url_8_url is not null or "t1".u_url_8_description is not null) UNION SELECT "t2".u_url_8_url as "url_url","t2".u_url_8_description as "url_description","t2".u_dog_7 as "dog" FROM t2 WHERE ("t2".u_url_8_url is not null or "t2".u_url_8_description is not null)) AS "x1" ORDER BY "cat" nulls last""")
   }
 
   test("Sqlize - mixed and nested") {
-    sqlizeTest(soqls("mixed and nested"), """SELECT "name","breed","b3","bird" FROM (SELECT t1.u_name_4 as "name",_jd1."breed" as "breed",_jd1."dog" as "dog",t2.u_breed_5 as "b2",_jb1."breed" as "b3",_jb1."bird" as "bird" FROM t1 JOIN (SELECT t2.u_breed_5 as "breed",t2.u_dog_7 as "dog",t2.u_year_6 as "year" FROM t2) as _jd1 ON (_jd1."year" = t1.u_year_6)  JOIN t2 ON (t2.u_year_6 = t1.u_year_6)  JOIN (SELECT t3.u_breed_5 as "breed",t3.u_bird_8 as "bird",t3.u_year_6 as "year" FROM t3 WHERE ((t3.u_year_6 = ?) and ((t3.u_year_6 + ?) = ?)) UNION (SELECT t4.u_breed_5 as "breed",t4.u_fish_8 as "fish",? as "_1" FROM t4 WHERE (t4.u_year_6 = ?) GROUP BY t4.u_breed_5,t4.u_fish_8 UNION SELECT _jb1.u_breed_5 as "breed",t3.u_bird_8 as "bird",? as "_1" FROM t3 JOIN t3 as _jb1 ON (t3.u_year_6 = _jb1.u_year_6) WHERE (t3.u_year_6 = ?))) as _jb1 ON (_jb1."year" = t1.u_year_6) WHERE (t1.u_year_6 = ?)) AS x1 ORDER BY "b3" nulls last,"bird" nulls last LIMIT 5""",
+    sqlizeTest(soqls("mixed and nested"), """SELECT "name","breed","b3","bird" FROM (SELECT "t1".u_name_4 as "name","_jd1"."breed" as "breed","_jd1"."dog" as "dog","t2".u_breed_5 as "b2","_jb1"."breed" as "b3","_jb1"."bird" as "bird" FROM t1 JOIN (SELECT "t2".u_breed_5 as "breed","t2".u_dog_7 as "dog","t2".u_year_6 as "year" FROM t2) as "_jd1" ON ("_jd1"."year" = "t1".u_year_6)  JOIN t2 ON ("t2".u_year_6 = "t1".u_year_6)  JOIN (SELECT "t3".u_breed_5 as "breed","t3".u_bird_8 as "bird","t3".u_year_6 as "year" FROM t3 WHERE (("t3".u_year_6 = ?) and (("t3".u_year_6 + ?) = ?)) UNION (SELECT "t4".u_breed_5 as "breed","t4".u_fish_8 as "fish",? as "_1" FROM t4 WHERE ("t4".u_year_6 = ?) GROUP BY "t4".u_breed_5,"t4".u_fish_8 UNION SELECT "_jb1".u_breed_5 as "breed","t3".u_bird_8 as "bird",? as "_1" FROM t3 JOIN t3 as "_jb1" ON ("t3".u_year_6 = "_jb1".u_year_6) WHERE ("t3".u_year_6 = ?))) as "_jb1" ON ("_jb1"."year" = "t1".u_year_6) WHERE ("t1".u_year_6 = ?)) AS "x1" ORDER BY "b3" nulls last,"bird" nulls last LIMIT 5""",
       Seq(1, 1, 2, 1, 2, 1, 3, 1))
   }
 
