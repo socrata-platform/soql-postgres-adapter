@@ -197,7 +197,14 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
 
     val ista = isTableAlias(expr.qualifier, simpleJoinMap)
 
-    reps.get(QualifiedUserColumnId(expr.qualifier, expr.column)) match {
+    val maybeRep: Option[SqlColumnRep[SoQLType, SoQLValue]] =
+      reps.get(QualifiedUserColumnId(expr.qualifier, expr.column)) match {
+      case x@Some(_) => x
+      case None =>
+        reps.get(QualifiedUserColumnId(expr.qualifier.flatMap(simpleJoinMap.get(_)), expr.column))
+    }
+
+    maybeRep match {
       case Some(rep) if !useTypeRep =>
         if (complexTypes.contains(expr.typ) &&
           ctx.get(SoqlPart).exists(_ == SoqlSelect) &&
