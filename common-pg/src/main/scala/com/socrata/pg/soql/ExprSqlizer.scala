@@ -132,7 +132,7 @@ object NullLiteralSqlizer extends Sqlizer[NullLiteral[SoQLType]] {
 object FunctionCallSqlizer extends Sqlizer[FunctionCall[UserColumnId, SoQLType]] {
 
   private def windowFnCtx(fn: FunCall, ctx: Sqlizer.Context): Sqlizer.Context = {
-    if (fn.window.nonEmpty) ctx + (SqlizerContext.NoWrappingParenInFunctionCall -> true) + (SqlizerContext.InsideWindowFn -> true)
+    if (fn.window.nonEmpty) ctx + (SqlizerContext.InsideWindowFn -> true)
     else ctx
   }
 
@@ -147,11 +147,7 @@ object FunctionCallSqlizer extends Sqlizer[FunctionCall[UserColumnId, SoQLType]]
     // SoQL parsing bakes parenthesis into the ast tree without explicitly spitting out parenthesis.
     // We add parenthesis to every function call to preserve semantics.
     val ParametricSql(sqls, fnSetParams) = windowOverInfo(pSql, expr, rep, typeRep, pSql.setParams, ctx, escape)
-    if (ctx.keySet.contains(NoWrappingParenInFunctionCall)) {
-      ParametricSql(sqls.map(s => s"$s" + selectAlias(expr)(ctx)), fnSetParams)
-    } else {
-      ParametricSql(sqls.map(s => s"($s)" + selectAlias(expr)(ctx)), fnSetParams)
-    }
+    ParametricSql(sqls.map(s => s"($s)" + selectAlias(expr)(ctx)), fnSetParams)
   }
 }
 
