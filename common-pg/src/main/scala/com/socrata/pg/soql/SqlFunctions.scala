@@ -174,15 +174,12 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     RegrIntercept -> nary("regr_intercept") _,
     RegrSlope -> nary("regr_slope") _,
     RegrR2 -> nary("regr_r2") _,
-    
+
     RowNumber -> nary("row_number") _,
     Rank -> nary("rank") _,
     DenseRank -> nary("dense_rank") _,
     FirstValue -> nary("first_value") _,
     LastValue -> nary("last_value") _,
-
-    // TODO: old style - to be deleted
-    WindowFunctionOver -> windowOverCall _, //  naryish("over", Some("partition by ")) _,
 
     Count -> nary("count", Some("numeric")) _,
     CountStar -> formatCall("count(*)", typeCastIfNotWindowFn = Some("numeric")) _,
@@ -336,7 +333,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                       ctx: Sqlizer.Context,
                       escape: Escape): ParametricSql = {
 
-    val ParametricSql(Seq(head), setParamsHead) = Sqlizer.sql(fn.parameters.head)(rep, typeRep, setParams, ctx + (SqlizerContext.NoWrappingParenInFunctionCall -> true), escape)
+    val ParametricSql(Seq(head), setParamsHead) = Sqlizer.sql(fn.parameters.head)(rep, typeRep, setParams, ctx, escape)
 
     val sqlFragsAndParams = fn.parameters.tail.foldLeft(Tuple2(Seq.empty[String], setParamsHead)) { (acc, param) =>
       val ParametricSql(Seq(sql), newSetParams) = Sqlizer.sql(param)(rep, typeRep, acc._2, ctx, escape)
@@ -435,36 +432,6 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
       case None =>
         pSql
     }
-  }
-
-  private def windowOverCall(fn: FunCall,
-                             rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
-                             typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
-                             setParams: Seq[SetParam],
-                             ctx: Sqlizer.Context,
-                             escape: Escape): ParametricSql = {
-
-    val ctxInsideWindowFn = ctx + (SqlizerContext.NoWrappingParenInFunctionCall -> true) + (SqlizerContext.InsideWindowFn -> true)
-    val ParametricSql(Seq(head), setParamsHead) = Sqlizer.sql(fn.parameters.head)(rep, typeRep, setParams, ctxInsideWindowFn, escape)
-
-    var prefixComma = false
-    val (sqls: Seq[String], params: Seq[SetParam]) = fn.parameters.tail.foldLeft(Tuple2(Seq.empty[String], setParamsHead)) { (acc, param) =>
-      val ParametricSql(sqls, p) = param match {
-        case strLit@StringLiteral(value: String, _) if value == "partition_by" || value == "order_by" =>
-          prefixComma = false
-          ParametricSql(Seq(" " + value.replace("_", " ")), acc._2)
-        case _ =>
-          val prefix = if (prefixComma) "," else " "
-          prefixComma = true
-          val psql = Sqlizer.sql(param)(rep, typeRep, acc._2, ctx, escape)
-          psql.copy(sql = psql.sql.map(prefix + _))
-      }
-      (acc._1 ++ sqls, p)
-    }
-
-    val sql = sqls.mkString(head + " over(", "", ")")
-
-    ParametricSql(Seq(sql), params)
   }
 
   private def medianContCall(fn: FunCall,
