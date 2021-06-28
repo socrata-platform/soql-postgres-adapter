@@ -104,9 +104,7 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
                   stmt.execute(sql)
                   // can't use a prepared statement parameter here, but the
                   // tag is just a hex string so...
-                  using(conn.createStatement()) { stmt =>
-                    stmt.execute(s"COMMENT ON INDEX $idxname is '$tag'")
-                  }
+                  stmt.execute(s"COMMENT ON INDEX $idxname is '$tag'")
                 }
               }
             }
