@@ -60,9 +60,9 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
     // index.
     //
     // Postgresql does give a way to get SQL for the index in the
-    // pg_indexes table, but it's beenñ normalized and it would
-    // be silly to fight with PG implementation details to figure out
-    // if our sql is identical to that SQL.
+    // pg_indexes table, but it's been normalized and it would be
+    // silly to fight with PG implementation details to figure out if
+    // our sql is identical to that SQL.
     //
     // This mainly matters so that the optimize call done before
     // publishing does not have all its hard work on the index thrown
