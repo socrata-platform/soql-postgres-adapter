@@ -9,6 +9,8 @@ import com.socrata.pg.store.index.{FullTextSearch, Indexable}
 import com.socrata.pg.error.{SqlErrorHandler, SqlErrorHelper, SqlErrorPattern}
 import com.typesafe.scalalogging.{Logger => SLogger}
 import java.sql.{Connection, PreparedStatement, Statement}
+import java.security.MessageDigest
+import java.nio.charset.StandardCharsets
 
 import com.rojoma.json.v3.ast.{JBoolean, JObject}
 import com.rojoma.json.v3.util.JsonUtil
@@ -48,26 +50,81 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
   }
 
   def createFullTextSearchIndex(columnInfos: Iterable[ColumnInfo[CT]]): Unit = {
+    // Bit of a dance here because we only want to create the index if
+    // it isn't already what it's supposed to be, and "what it's
+    // supposed to be" is more complicated than for individual column
+    // indices (e.g., if a new column is created, this index needs to
+    // be recreated if it already exists).  In order to find out if we
+    // need to do this, we'll use postgresql's comment facility to tag
+    // the index with a hash of the SQL we're using to define the
+    // index.
+    //
+    // Postgresql does give a way to get SQL for the index in the
+    // pg_indexes table, but it's beenñ normalized and it would
+    // be silly to fight with PG implementation details to figure out
+    // if our sql is identical to that SQL.
+    //
+    // This mainly matters so that the optimize call done before
+    // publishing does not have all its hard work on the index thrown
+    // away by the publish.
     if (columnInfos.nonEmpty) {
-      dropFullTextSearchIndex(columnInfos)
       val table = tableName(columnInfos)
-      val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
-        throw new Exception(table + " does not exist when creating search index.")))
-      logger.info("creating fts index")
-      fullTextSearch.searchVector(columnInfos.map(repFor).toSeq, None) match {
-        case None => // nothing to do
-        case Some(allColumnsVector) =>
-          using(conn.createStatement(), conn.prepareStatement(directivesSql)) { (stmt: Statement, directivesStmt) =>
+      val idxname = s"idx_search_${table}"
+
+      val sql = {
+        val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
+          throw new Exception(table + " does not exist when creating search index.")))
+        fullTextSearch.searchVector(columnInfos.map(repFor).toSeq, None).flatMap { allColumnsVector =>
+          using(conn.prepareStatement(directivesSql)) { (directivesStmt) =>
             val column = columnInfos.find(_.userColumnId.underlying == ":id")
             val shouldCreateSearchIndex = column.map(c => shouldCreateIndex(directivesStmt, c)).getOrElse(true)
             if (shouldCreateSearchIndex) {
+              Some(s"CREATE INDEX ${idxname} on ${table} USING GIN ($allColumnsVector) $tablespace")
+            } else {
+              None
+            }
+          }
+        }
+      }
+
+      sql match {
+        case None =>
+          dropFullTextSearchIndex(columnInfos)
+        case Some(sql) =>
+          val md = MessageDigest.getInstance("SHA-256")
+          md.update(sql.getBytes(StandardCharsets.UTF_8))
+          val tag = md.digest().iterator.map { b => "%02x".format(b & 0xff) }.mkString("")
+
+          if(indexDefinitionHasChanged(idxname, tag)) {
+            logger.info("creating fts index")
+            dropFullTextSearchIndex(columnInfos)
+            using(conn.createStatement()) { stmt =>
               time("create-search-index", "table" -> table) {
                 SecondarySchemaLoader.fullTextIndexCreateSqlErrorHandler.guard(stmt) {
-                  stmt.execute(s"CREATE INDEX idx_search_${table} on ${table} USING GIN ($allColumnsVector) $tablespace")
+                  stmt.execute(sql)
                 }
               }
             }
+            // can't use a prepared statement parameter here, but the
+            // tag is just a hex string so...
+            using(conn.createStatement()) { stmt =>
+              stmt.execute(s"COMMENT ON INDEX $idxname is '$tag'")
+            }
           }
+      }
+    }
+  }
+
+  def indexDefinitionHasChanged(indexName: String, tag: String): Boolean = {
+    // relam is the oid of the index's access method; it will be 0 for non-indexes
+    using(conn.prepareStatement("select obj_description(oid, 'pg_class') from pg_class where relname = ? and relam <> 0")) { stmt =>
+      stmt.setString(1, indexName)
+      using(stmt.executeQuery()) { rs =>
+        if(rs.next()) {
+          Option(rs.getString(1)) != Some(tag)
+        } else {
+          true
+        }
       }
     }
   }
