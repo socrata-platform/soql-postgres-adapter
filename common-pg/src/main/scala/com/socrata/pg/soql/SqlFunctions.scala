@@ -64,6 +64,9 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
     Lower -> nary("lower") _,
     Upper -> nary("upper") _,
+    Length -> nary("length") _,
+    SplitPart -> formatCall("split_part(%s, %s, %s)") _,
+    Substring -> nary("substring") _,
 
     GetContext -> formatCall("current_setting('user_variables.' || md5(%s), true)") _,
 
