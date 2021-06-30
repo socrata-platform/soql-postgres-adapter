@@ -196,7 +196,7 @@ class SqlizerBasicTest extends SqlizerTest {
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     sql should be ("""SELECT (substring("t1".case_number,?)) FROM t1""")
     val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq(1, 2))
+    params should be (Seq(1))
   }
 
   test("substring two parameters") {
