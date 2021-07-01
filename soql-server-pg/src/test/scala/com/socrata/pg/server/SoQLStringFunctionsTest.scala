@@ -46,4 +46,9 @@ class SoQLStringFunctionsTest extends SoQLTest {
   test("contains(c, x)") {
     compareSoqlResult("select make, name where contains(name, 'arm') order by name", "where-str-contains.json")
   }
+
+  test("substring, length, split_part") {
+    compareSoqlResult("select make, name, substring(make, 3, 2) as substr, length(make) as len, split_part(name, ' ', 2) as split_part, length(make)=4 as len_eq_4 where len >=4 order by make, name limit 5",
+        "substring.json")
+  }
 }

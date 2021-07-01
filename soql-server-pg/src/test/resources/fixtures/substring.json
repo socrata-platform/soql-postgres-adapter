@@ -1,0 +1,6 @@
+[{"make":"APCO","name":"Karma","substr": "CO", "len": 4, "split_part": "", "len_eq_4": true}
+,{"make":"APCO","name":"Karma SP","substr": "CO", "len": 4, "split_part": "SP", "len_eq_4": true}
+,{"make":"APCO","name":"Vista II SP","substr": "CO", "len": 4, "split_part": "II", "len_eq_4": true}
+,{"make":"APCO","name":"Zefira","substr": "CO", "len": 4, "split_part": "", "len_eq_4": true}
+,{"make":"ATHING","name":"Richard M. Stallman","substr": "HI", "len": 6, "split_part": "M.", "len_eq_4": false}
+]
