@@ -194,7 +194,7 @@ class SqlizerBasicTest extends SqlizerTest {
   test("substring start parameter only") {
     val soql = "select substring(case_number, 1)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT (substring("t1".case_number,?)) FROM t1""")
+    sql should be ("""SELECT (substring("t1".case_number, ?::int)) FROM t1""")
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq(1))
   }
@@ -202,7 +202,7 @@ class SqlizerBasicTest extends SqlizerTest {
   test("substring two parameters") {
     val soql = "select substring(case_number, 1, 2)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT (substring("t1".case_number,?,?)) FROM t1""")
+    sql should be ("""SELECT (substring("t1".case_number, ?::int, ?::int)) FROM t1""")
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq(1, 2))
   }

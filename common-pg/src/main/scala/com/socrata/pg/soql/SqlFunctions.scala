@@ -65,8 +65,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     Lower -> nary("lower") _,
     Upper -> nary("upper") _,
     Length -> nary("length") _,
-    SplitPart -> formatCall("split_part(%s, %s, %s)") _,
-    Substring -> nary("substring") _,
+    SplitPart -> formatCall("split_part(%s, %s, %s::int)") _,
+    Substring -> substring _,
 
     GetContext -> formatCall("current_setting('user_variables.' || md5(%s), true)") _,
 
@@ -383,6 +383,19 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     }
     val sql = sqls.mkString("coalesce(", ",", ")")
     ParametricSql(Seq(sql), params)
+  }
+
+  private def substring(fn: FunCall,
+                        rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                        typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                        setParams: Seq[SetParam],
+                        ctx: Sqlizer.Context,
+                        escape: Escape): ParametricSql = {
+    if (fn.parameters.isDefinedAt(2)) {
+      formatCall("substring(%s, %s::int, %s::int)")(fn, rep, typeRep, setParams, ctx, escape)
+    } else {
+      formatCall("substring(%s, %s::int)")(fn, rep, typeRep, setParams, ctx, escape)
+    }
   }
 
   def windowOverInfo(pSql: ParametricSql,
