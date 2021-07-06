@@ -67,6 +67,13 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     Length -> nary("length") _,
     SplitPart -> formatCall("split_part(%s, %s, %s::int)") _,
     Substring -> substring _,
+    Chr -> formatCall("chr(%s::int)") _,
+    Replace -> nary("replace") _,
+    TrimLeading -> nary("ltrim") _,
+    TrimTrailing -> nary("rtrim") _,
+    Trim -> nary("trim") _,
+    LeftPad -> formatCall("lpad(%s, %s::int, %s)") _,
+    RightPad -> formatCall("rpad(%s, %s::int, %s)") _,
 
     GetContext -> formatCall("current_setting('user_variables.' || md5(%s), true)") _,
 
