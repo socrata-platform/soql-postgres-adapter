@@ -139,6 +139,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
   private def toSqlQueryOp(soqlQueryOp: String): String = {
     soqlQueryOp match {
       case "MINUS" => "EXCEPT"
+      case "MINUS ALL" => "EXCEPT ALL"
       case op => op
     }
   }
