@@ -146,14 +146,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
         val setParamsAcc = lpsql.setParams ++ rpsql.setParams
         val sqlQueryOp = toSqlQueryOp(op)
         val unionSql = lpsql.sql.zip(rpsql.sql).map { case (ls, rs) =>
-          val lsql = l match {
-            case Compound(lop, _, _) if op != lop =>
-              s"($ls)"
-            case _ =>
-              ls
-          }
-          if (r.asLeaf.nonEmpty) s"${lsql} $sqlQueryOp ${rs}"
-          else s"${lsql} $sqlQueryOp (${rs})"
+          s"(${ls}) $sqlQueryOp (${rs})"
         }
         (ParametricSql(unionSql, setParamsAcc), lpcts + rpcts)
       case Leaf(analysis) =>
