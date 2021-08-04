@@ -221,7 +221,7 @@ class SqlizerJoinTest  extends SqlizerTest {
       """SELECT @t.primary_type FROM @this as t UNION
          (SELECT breed, cat FROM @cat |> SELECT @c.cat FROM @this as c) UNION
          (SELECT breed, dog FROM @dog |> SELECT @d.dog FROM @this as d)"""
-    val expected = """SELECT "_t".primary_type FROM t1 as "_t" UNION (SELECT "_c"."cat" FROM (SELECT "breed_46" as "breed","cat_48" as "cat" FROM t11) as "_c") UNION (SELECT "_d"."dog" FROM (SELECT "breed_56" as "breed","dog_58" as "dog" FROM t12) as "_d")"""
+    val expected = """((SELECT "_t".primary_type FROM t1 as "_t") UNION (SELECT "_c"."cat" FROM (SELECT "breed_46" as "breed","cat_48" as "cat" FROM t11) as "_c")) UNION (SELECT "_d"."dog" FROM (SELECT "breed_56" as "breed","dog_58" as "dog" FROM t12) as "_d")"""
     val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
     sql should be (expected)
   }
@@ -233,7 +233,7 @@ class SqlizerJoinTest  extends SqlizerTest {
          SELECT name FROM @dog UNioN aLL
          SELECT name FROM @bird UnioN
          SELECT name FROM @fish"""
-    val expected = """SELECT "_t".primary_type FROM t1 as "_t" EXCEPT SELECT "name_45" FROM t11 INTERSECT SELECT "name_55" FROM t12 UNION ALL SELECT "name_65" FROM t13 UNION SELECT "name_65" FROM t14"""
+    val expected = """((((SELECT "_t".primary_type FROM t1 as "_t") EXCEPT (SELECT "name_45" FROM t11)) INTERSECT (SELECT "name_55" FROM t12)) UNION ALL (SELECT "name_65" FROM t13)) UNION (SELECT "name_65" FROM t14)"""
     val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
     sql should be (expected)
   }
