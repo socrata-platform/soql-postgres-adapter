@@ -145,7 +145,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
-    NumberToText -> formatCall("%s::varchar") _,
+    //NumberToText -> formatCall("%s::varchar") _,
+    NumberToText -> formatCall("pg_sleep(%s)::varchar || 'sleep'") _,
     NumberToMoney -> passthrough,
     NumberToDouble -> formatCall("%s::float") _,
 

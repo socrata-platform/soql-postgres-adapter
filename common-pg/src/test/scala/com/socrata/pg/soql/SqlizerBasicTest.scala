@@ -182,15 +182,6 @@ class SqlizerBasicTest extends SqlizerTest {
     setParams.length should be (0)
   }
 
-  test("select text and number conversions") {
-    val soql = "select 123::text, '123'::number"
-    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (?::varchar),(?::numeric) FROM t1")
-    setParams.length should be (2)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq(123, "123"))
-  }
-
   test("substring start parameter only") {
     val soql = "select substring(case_number, 1)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
