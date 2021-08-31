@@ -207,6 +207,14 @@ class SqlizerBasicTest extends SqlizerTest {
     params should be (Seq(1, 2))
   }
 
+  test("order by literal is skipped") {
+    val soql = "select 'aa' || 'bb' as aabb, case_number order by aabb, case_number"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("""SELECT (? || ?),"t1".case_number FROM t1 ORDER BY "t1".case_number nulls last""")
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq("aa", "bb"))
+  }
+
   test("search") {
     val soql = "select * search 'oNe Two'"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive, useRepsWithId = true)

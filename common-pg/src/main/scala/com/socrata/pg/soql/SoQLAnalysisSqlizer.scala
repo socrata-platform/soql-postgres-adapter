@@ -443,9 +443,15 @@ trait SoQLAnalysisSqlizer {
 
     // ORDER BY
     val orderBy = ana.orderBys.foldLeft((Seq.empty[String], Seq.empty[SetParam])) { (t2, ob) =>
-      val ParametricSql(sqls, newSetParams) =
-        Sqlizer.sql(ob)(repMinusComplexJoinTable, typeRep, t2._2, ctxSelectWithJoins + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression), escape)
-      (t2._1 ++ sqls, newSetParams)
+      if (Sqlizer.isLiteral(ob.expression)) {
+        // order by literal has no effect
+        t2
+      } else {
+        val ParametricSql(sqls, newSetParams) = {
+          Sqlizer.sql(ob)(repMinusComplexJoinTable, typeRep, t2._2, ctxSelectWithJoins + (SoqlPart -> SoqlOrder) + (RootExpr -> ob.expression), escape)
+        }
+        (t2._1 ++ sqls, newSetParams)
+      }
     }
     val setParamsOrderBy = orderBy._2
 
