@@ -208,11 +208,29 @@ class SqlizerBasicTest extends SqlizerTest {
   }
 
   test("order by literal is skipped") {
-    val soql = "select 'aa' || 'bb' as aabb, case_number order by aabb, case_number"
+    val soql = "SELECT 'aa' || 'bb' as aabb, case_number ORDER BY aabb, case_number"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     sql should be ("""SELECT (? || ?),"t1".case_number FROM t1 ORDER BY "t1".case_number nulls last""")
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq("aa", "bb"))
+  }
+
+  test("order by literal is skipped and no incomplete order by") {
+    val soql = "SELECT 'aa' || 'bb' as aabb, case_number ORDER BY aabb"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("""SELECT (? || ?),"t1".case_number FROM t1""")
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq("aa", "bb"))
+  }
+
+  test("count(*) is non-literal and kept in order by") {
+    val soqls = Seq("SELECT case_number, count(*) GROUP BY case_number ORDER BY count(*)",
+                    "SELECT case_number, count(*) as ct GROUP BY case_number ORDER BY ct")
+    soqls.foreach { soql =>
+      val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+      sql should be("""SELECT "t1".case_number,(count(*)::numeric) FROM t1 GROUP BY "t1".case_number ORDER BY (count(*)::numeric) nulls last""")
+      setParams.length should be(0)
+    }
   }
 
   test("search") {

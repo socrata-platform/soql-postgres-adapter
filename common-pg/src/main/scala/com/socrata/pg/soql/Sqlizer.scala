@@ -145,7 +145,10 @@ object Sqlizer {
     expr match {
       case cr: ColumnRef[UserColumnId, SoQLType] => false
       case lit: TypedLiteral[SoQLType] => true
-      case fc: FunctionCall[UserColumnId, SoQLType] => fc.parameters.forall(x => isLiteral(x))
+      case fc: FunctionCall[UserColumnId, SoQLType] =>
+        !fc.function.isAggregate &&
+          fc.parameters.nonEmpty && // kinda questionable
+          fc.parameters.forall(x => isLiteral(x))
     }
   }
 }
