@@ -487,10 +487,10 @@ trait SoQLAnalysisSqlizer {
       joinPhrase.mkString(" ") +
       where.flatMap(_.sql.headOption.map(" WHERE " +  _)).getOrElse("") +
       whereSearch.mkString(" ") +
-      (if (ana.groupBys.nonEmpty) groupBy._1.mkString(" GROUP BY ", ",", "") else "") +
+      (if (groupBy._1.nonEmpty) groupBy._1.mkString(" GROUP BY ", ",", "") else "") +
       having.flatMap(_.sql.headOption.map(" HAVING " + _)).getOrElse("") +
       havingSearch.mkString(" ") +
-      (if (ana.orderBys.nonEmpty) orderBy._1.mkString(" ORDER BY ", ",", "") else "") +
+      (if (orderBy._1.nonEmpty) orderBy._1.mkString(" ORDER BY ", ",", "") else "") +
       ana.limit.map(" LIMIT " + _.toString).getOrElse("") +
       ana.offset.map(" OFFSET " + _.toString).getOrElse("")
 
