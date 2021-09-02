@@ -233,6 +233,14 @@ class SqlizerBasicTest extends SqlizerTest {
     }
   }
 
+  test("select literal and group by has aliases") {
+    val soql = "SELECT 'one' as one, max('two') as two GROUP BY one |> SELECT one, two"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("""SELECT "one","two" FROM (SELECT e'one' as "one",(max(?)) as "two" FROM t1 GROUP BY 1) AS "x1"""")
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq("two"))
+  }
+
   test("search") {
     val soql = "select * search 'oNe Two'"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive, useRepsWithId = true)
