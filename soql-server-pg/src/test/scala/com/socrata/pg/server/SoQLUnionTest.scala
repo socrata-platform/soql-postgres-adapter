@@ -165,6 +165,7 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
     "union no table alias" -> "SELECT name WHERE 3 <> 2 UNION select name FROM @dog WHERE year=1 |> SELECT name order by name",
     "union table alias" -> "SELECT name UNION select @d1.name FROM @dog as d1 group by @d1.name |> SELECT name order by name",
     "urls" -> "SELECT url, cat WHERE url is not null UNION SELECT url, dog FROM @dog WHERE url is not null |> SELECT url ORDER BY cat",
+    "join and urls" -> "SELECT url as curl, @d.url as durl JOIN @dog as d ON year=@d.year WHERE url IS NOT NULL",
     "mixed and nested" ->
       """
       SELECT name, @jd1.breed, @jd1.dog, @dog.breed as b2, @jb1.breed as b3, @jb1.bird
@@ -192,6 +193,11 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
   test("Result set union urls") {
     val soql = soqls("urls")
     compareSoqlResult(soql, "union-urls.json", None, CaseSensitive, plainCtx, secDatasetId = secDatasetIdCat)
+  }
+
+  test("Result set join urls") {
+    val soql = soqls("join and urls")
+    compareSoqlResult(soql, "join-urls.json", None, CaseSensitive, plainCtx, secDatasetId = secDatasetIdCat)
   }
 
   test("Result set mixed and nested") {
