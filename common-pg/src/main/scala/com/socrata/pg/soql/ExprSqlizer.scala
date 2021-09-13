@@ -193,6 +193,16 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
 
     val ista = isTableAlias(expr.qualifier, simpleJoinMap)
 
+    def getQualifier(): Option[String] = {
+      expr.qualifier match {
+        case Some(x) =>
+          if (ista) expr.qualifier
+          else Some(tableMap(x))
+        case None =>
+          tableMap.get(TableName.PrimaryTable.qualifier)
+      }
+    }
+
     val maybeRep: Option[SqlColumnRep[SoQLType, SoQLValue]] =
       reps.get(QualifiedUserColumnId(expr.qualifier, expr.column)) match {
       case x@Some(_) => x
@@ -205,7 +215,7 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
         if (complexTypes.contains(expr.typ) &&
           ctx.get(SoqlPart).exists(_ == SoqlSelect) &&
           ctx.get(RootExpr).exists(_ == expr)) {
-          val qualifer = tableMap.get(expr.qualifier.getOrElse(TableName.PrimaryTable.qualifier))
+          val qualifer = getQualifier()
           val maybeUpperPhysColumns =
             rep.physColumns.zip(rep.sqlTypes).map { case (physCol, sqlType) =>
               toUpper(expr, sqlType)(qualifer.map(q => s""""$q".$physCol""").getOrElse(physCol), ctx)
@@ -217,13 +227,7 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           }
           ParametricSql(columnsWithAlias, setParams)
         } else {
-          val qualifier = expr.qualifier match {
-            case Some(x) =>
-              if (ista) expr.qualifier
-              else Some(tableMap(x))
-            case None =>
-              tableMap.get(TableName.PrimaryTable.qualifier)
-          }
+          val qualifier = getQualifier()
           qualifier.foreach(qualifierRx.findFirstMatchIn(_).orElse(throw BadParse("Invalid table alias", expr.position)))
           val maybeUpperPhysColumns = rep.physColumns.map(c => toUpper(expr)(qualifier.map(q => s""""$q".$c""").getOrElse(c), ctx))
           ParametricSql(maybeUpperPhysColumns.map(c => c + selectAlias(expr)(ctx)), setParams)
