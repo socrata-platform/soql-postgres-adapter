@@ -63,12 +63,12 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
 
   private def rowCountAnalysis(analysis: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]]): BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] = {
     analysis match {
-      case PipeQuery(_, _) =>
+      case PipeQuery(_, _, _) =>
         analysis
-      case Compound(_, _, _) =>
+      case c@Compound(_, _, _) =>
         val selection = OrderedMap(com.socrata.soql.environment.ColumnName("count") -> (FunctionCall(SoQLFunctions.CountStar.monomorphic.get, Seq.empty, None)(NoPosition, NoPosition)))
         val countAnalysis = SoQLAnalysis[UserColumnId, SoQLType](false, false, selection, None, Seq.empty, None, Seq.empty, None, Seq.empty, None, None, None)
-        PipeQuery(analysis, Leaf(countAnalysis))
+        PipeQuery(analysis, Leaf(countAnalysis), c.inParen)
       case _ =>
         analysis
     }
@@ -76,10 +76,10 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
 
   private def updateFrom(analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]], tableName: TableName): BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] = {
     analyses match {
-      case Compound(op, left, right) =>
-        Compound(op, updateFrom(left, tableName), right)
-      case leaf@Leaf(analysis) =>
-        if (analysis.from.isEmpty) Leaf(analysis.copy(from = Some(tableName)))
+      case c@Compound(op, left, right) =>
+        Compound(op, updateFrom(left, tableName), right, c.inParen)
+      case leaf@Leaf(analysis, inParen) =>
+        if (analysis.from.isEmpty) Leaf(analysis.copy(from = Some(tableName)), inParen)
         else leaf
     }
   }
@@ -96,7 +96,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
                   fromTableName: Option[TableName] = None): (ParametricSql, /* params count in select, excluding where, group by... */ Int) = {
 
     analyses match {
-      case PipeQuery(l, Leaf(ra)) =>
+      case PipeQuery(l, Leaf(ra, _), inParen) =>
         val (lpsql, _) = sql(l, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctx, escape, fromTableName)
         val (primaryTableName, chainedTableAlias) = ra.from match {
             case Some(tn@TableName(name, Some(alias))) if name == TableName.This =>
@@ -117,22 +117,29 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
         // query parameters in the other phrases - where, group by, order by, etc come after those in the sub-query.
         val (setParamsBefore, setParamsAfter) = rpsql.setParams.splitAt(rParamsCountInSelect)
         val setParamsAcc = setParamsBefore ++ lpsql.setParams ++ setParamsAfter
-        (rpsql.copy(setParams = setParamsAcc), rParamsCountInSelect)
-      case PipeQuery(_, _) =>
+        val rpsqlp = if (inParen) rpsql.sql.map(s => s"($s)") else rpsql.sql
+        (rpsql.copy(setParams = setParamsAcc, sql = rpsqlp), rParamsCountInSelect)
+      case PipeQuery(_, _, _) =>
         throw new Exception("right operand of pipe query cannot be recursive")
-      case Compound(op, l, r) =>
+      case c@Compound(op, l, r) =>
         val (lpsql, lpcts) = sql(l, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctx, escape, fromTableName)
         val (rpsql, rpcts) = sql(r, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctx, escape, fromTableName)
         val setParamsAcc = lpsql.setParams ++ rpsql.setParams
         val sqlQueryOp = toSqlQueryOp(op)
         val unionSql = lpsql.sql.zip(rpsql.sql).map { case (ls, rs) =>
-          if (r.asLeaf.nonEmpty) s"${ls} $sqlQueryOp ${rs}"
-          else s"${ls} $sqlQueryOp (${rs})"
+          val cs = if (r.asLeaf.nonEmpty || r.inParen) s"${ls} $sqlQueryOp ${rs}"
+                   else s"${ls} $sqlQueryOp (${rs})"
+          if (c.inParen) s"($cs)" else cs
         }
         (ParametricSql(unionSql, setParamsAcc), lpcts + rpcts)
-      case Leaf(analysis) =>
-        toSql(analysis, None, tableNames, allColumnReps, reqRowCount, rep, typeRep,
-              setParams, ctx, escape, analysis.from.orElse(fromTableName))
+      case Leaf(analysis, inParen) =>
+        val result = toSql(analysis, None, tableNames, allColumnReps, reqRowCount, rep, typeRep,
+                           setParams, ctx, escape, analysis.from.orElse(fromTableName))
+        if (inParen) {
+          (result._1.copy(sql = result._1.sql.map(s => s"($s)")), result._2)
+        } else {
+          result
+        }
     }
   }
 
@@ -147,11 +154,11 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
   def outerMostAnalyses(analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]], set: Set[SoQLAnalysis[UserColumnId, SoQLType]] = Set.empty):
     Set[SoQLAnalysis[UserColumnId, SoQLType]] = {
     analyses match {
-      case PipeQuery(_, r) =>
+      case PipeQuery(_, r, _) =>
         outerMostAnalyses(r, set)
       case Compound(_, l, r) =>
         outerMostAnalyses(l, set) ++ outerMostAnalyses(r, set)
-      case Leaf(analysis) =>
+      case Leaf(analysis, _) =>
         set + analysis
     }
   }
@@ -376,7 +383,8 @@ trait SoQLAnalysisSqlizer {
           val repJoin = if (join.lateral) repFrom ++ rep else rep
           val joinTableLikeParamSql = Sqlizer.sql(
             (analyses, joinTableNames, allColumnReps))(repJoin, typeRep, Seq.empty, ctxJoin, escape)
-          val tn = "(" + joinTableLikeParamSql.sql.mkString + ") as \"" + alias + "\""
+          val tn = if (analyses.inParen) joinTableLikeParamSql.sql.mkString + " as \"" + alias + "\""
+                   else "(" + joinTableLikeParamSql.sql.mkString + ") as \"" + alias + "\""
           (tn, joinTableLikeParamSql.setParams)
         case Left(tableName) =>
           val key = TableName(tableName.name, None)
@@ -390,7 +398,6 @@ trait SoQLAnalysisSqlizer {
                     else repMinusComplexJoinTable
       val joinConditionParamSql = Sqlizer.sql(join.on)(repJoin, typeRep, joinOnParams, ctxSelectWithJoins + (SoqlPart -> SoqlJoin), escape)
       val joinCondition = joinConditionParamSql.sql.mkString(" ")
-      val lateral = if (join.lateral) "LATERAL " else ""
       (joinAcc :+ (JoinSql(join.typ.toString, join.lateral, tableName, joinCondition), joinConditionParamSql.setParams))
     }
 

@@ -195,7 +195,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     val etag = analyses match {
       case Compound(op, l, r) =>
         createEtagFromAnalysis(l, fromTable, Map.empty) + op + createEtagFromAnalysis(r, fromTable, Map.empty)
-      case Leaf(analysis) =>
+      case Leaf(analysis, _) =>
         if (analysis.from.isDefined) analysis.toString()
         else analysis.toStringWithFrom(TableName(fromTable))
     }

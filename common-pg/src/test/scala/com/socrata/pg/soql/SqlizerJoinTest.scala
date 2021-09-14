@@ -242,7 +242,27 @@ class SqlizerJoinTest  extends SqlizerTest {
     val soql = "SELECT @t.:id FROM @this as t |> SELECT @t2.:id, @d.:id as id2 FROM @this as t2 JOIN @dog as d ON true"
     val expected = """SELECT "_t2".":id","_d".":id_51" FROM (SELECT "_t".":id_1" as ":id" FROM t1 as "_t") as "_t2" JOIN t12 as "_d" ON ?"""
     val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive, useRepsWithId = true)
-    println(sql)
+    sql should be (expected)
+  }
+
+  test("parentheses on the left are preserved") {
+    val soql = "(SELECT primary_type UNION SELECT name FROM @dog) INTERSECT SELECT name FROM @bird"
+    val expected = """(SELECT "t1".primary_type_7 FROM t1 UNION SELECT "name_55" FROM t12) INTERSECT SELECT "name_65" FROM t13"""
+    val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive, useRepsWithId = true)
+    sql should be (expected)
+  }
+
+  test("parentheses in leaves are preserved") {
+    val soql = "(SELECT primary_type ORDER BY case_number) UNION (SELECT name FROM @dog)"
+    val expected = """(SELECT "t1".primary_type_7 FROM t1 ORDER BY "t1".case_number_6 nulls last) UNION (SELECT "name_55" FROM t12)"""
+    val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive, useRepsWithId = true)
+    sql should be (expected)
+  }
+
+  test("standalone parentheses are preserved") {
+    val soql = "(SELECT primary_type ORDER BY case_number)"
+    val expected = """(SELECT "t1".primary_type_7 FROM t1 ORDER BY "t1".case_number_6 nulls last)"""
+    val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive, useRepsWithId = true)
     sql should be (expected)
   }
 
