@@ -96,8 +96,14 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
                   fromTableName: Option[TableName] = None): (ParametricSql, /* params count in select, excluding where, group by... */ Int) = {
 
     analyses match {
-      case PipeQuery(l, Leaf(ra)) =>
-        val (lpsql, _) = sql(l, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctx, escape, fromTableName)
+      case pq@PipeQuery(l, Leaf(ra)) =>
+        val (lpsql0, _) = sql(l, tableNames, allColumnReps, reqRowCount, rep, typeRep, setParams, ctx, escape, fromTableName)
+        val lpsql = l match {
+          case Compound(lop, _, _) if pq.op != lop =>
+            lpsql0.copy(sql = lpsql0.sql.map(s => s"($s)"))
+          case _ =>
+            lpsql0
+        }
         val (primaryTableName, chainedTableAlias) = ra.from match {
             case Some(tn@TableName(name, Some(alias))) if name == TableName.This =>
               (tn.copy(alias = None), alias)
@@ -126,8 +132,15 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
         val setParamsAcc = lpsql.setParams ++ rpsql.setParams
         val sqlQueryOp = toSqlQueryOp(op)
         val unionSql = lpsql.sql.zip(rpsql.sql).map { case (ls, rs) =>
-          if (r.asLeaf.nonEmpty) s"${ls} $sqlQueryOp ${rs}"
-          else s"${ls} $sqlQueryOp (${rs})"
+          val lsql = l match {
+            case Compound(lop, _, _) if op != lop =>
+              s"($ls)"
+            case _ =>
+              ls
+          }
+          val sql = if (r.asLeaf.nonEmpty) s"${lsql} $sqlQueryOp ${rs}"
+                    else s"${lsql} $sqlQueryOp (${rs})"
+          s"$sql"
         }
         (ParametricSql(unionSql, setParamsAcc), lpcts + rpcts)
       case Leaf(analysis) =>
