@@ -138,9 +138,8 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
             case _ =>
               ls
           }
-          val sql = if (r.asLeaf.nonEmpty) s"${lsql} $sqlQueryOp ${rs}"
-                    else s"${lsql} $sqlQueryOp (${rs})"
-          s"$sql"
+          if (r.asLeaf.nonEmpty) s"${lsql} $sqlQueryOp ${rs}"
+          else s"${lsql} $sqlQueryOp (${rs})"
         }
         (ParametricSql(unionSql, setParamsAcc), lpcts + rpcts)
       case Leaf(analysis) =>
