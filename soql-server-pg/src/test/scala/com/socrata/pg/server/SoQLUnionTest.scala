@@ -206,16 +206,16 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
   }
 
   test("Sqlize - union no table alias") {
-    sqlizeTest(soqls("union no table alias"), """SELECT "name" FROM (SELECT "t1".u_name_4 as "name" FROM t1 WHERE (? != ?) UNION SELECT "t2".u_name_4 as "name" FROM t2 WHERE ("t2".u_year_6 = ?)) AS "x1" ORDER BY "name" nulls last""",
+    sqlizeTest(soqls("union no table alias"), """SELECT "name" FROM ((SELECT "t1".u_name_4 as "name" FROM t1 WHERE (? != ?) UNION SELECT "t2".u_name_4 as "name" FROM t2 WHERE ("t2".u_year_6 = ?))) AS "x1" ORDER BY "name" nulls last""",
       Seq(3, 2, 1))
   }
 
   test("Sqlize - union table alias") {
-    sqlizeTest(soqls("union table alias"), """SELECT "name" FROM (SELECT "t1".u_name_4 as "name" FROM t1 UNION SELECT "_d1".u_name_4 as "name" FROM t2 as "_d1" GROUP BY "_d1".u_name_4) AS "x1" ORDER BY "name" nulls last""")
+    sqlizeTest(soqls("union table alias"), """SELECT "name" FROM ((SELECT "t1".u_name_4 as "name" FROM t1 UNION SELECT "_d1".u_name_4 as "name" FROM t2 as "_d1" GROUP BY "_d1".u_name_4)) AS "x1" ORDER BY "name" nulls last""")
   }
 
   test("Sqlize - urls") {
-    sqlizeTest(soqls("urls"), """SELECT "url_url","url_description" FROM (SELECT "t1".u_url_8_url as "url_url","t1".u_url_8_description as "url_description","t1".u_cat_7 as "cat" FROM t1 WHERE ("t1".u_url_8_url is not null or "t1".u_url_8_description is not null) UNION SELECT "t2".u_url_8_url as "url_url","t2".u_url_8_description as "url_description","t2".u_dog_7 as "dog" FROM t2 WHERE ("t2".u_url_8_url is not null or "t2".u_url_8_description is not null)) AS "x1" ORDER BY "cat" nulls last""")
+    sqlizeTest(soqls("urls"), """SELECT "url_url","url_description" FROM ((SELECT "t1".u_url_8_url as "url_url","t1".u_url_8_description as "url_description","t1".u_cat_7 as "cat" FROM t1 WHERE ("t1".u_url_8_url is not null or "t1".u_url_8_description is not null) UNION SELECT "t2".u_url_8_url as "url_url","t2".u_url_8_description as "url_description","t2".u_dog_7 as "dog" FROM t2 WHERE ("t2".u_url_8_url is not null or "t2".u_url_8_description is not null))) AS "x1" ORDER BY "cat" nulls last""")
   }
 
   test("Sqlize - mixed and nested") {
