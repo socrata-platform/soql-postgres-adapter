@@ -42,6 +42,8 @@ trait SqlFunctionsGeometry {
     ConcaveHull -> formatCall("ST_Multi(ST_ConcaveHull(ST_Union(%s), %s))") _,
     ConvexHull -> formatCall("ST_Multi(ST_ConvexHull(ST_Union(%s)))"),
     Intersects -> formatCall("ST_Intersects(%s, %s)") _,
+    Crosses -> formatCall("ST_Crosses(%s, %s)") _,
+    Overlaps -> formatCall("ST_Overlaps(%s, %s)") _,
     DistanceInMeters -> formatCall("ST_Distance(%s::geography, %s::geography)") _,
     GeoMakeValid -> formatValidate("ST_MakeValid(%s)") _,
     GeoMultiPolygonFromMultiPolygon -> formatCall("ST_Multi(%s)") _,
