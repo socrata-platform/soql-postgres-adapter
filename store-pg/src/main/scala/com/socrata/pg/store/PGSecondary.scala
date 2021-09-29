@@ -8,7 +8,7 @@ import com.socrata.pg.BuildInfo
 import com.mchange.v2.c3p0.DataSources
 import com.rojoma.json.v3.ast.JObject
 import com.rojoma.simplearm.v2._
-import com.socrata.datacoordinator.common.DataSourceConfig
+import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.secondary.Secondary.Cookie
 import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo, CopyInfo => SecondaryCopyInfo, _}
@@ -42,7 +42,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   val storeConfig = new StoreConfig(config, "")
   override val dsConfig =  storeConfig.database
 
-  private val dsInfo = dataSourceFromConfig(dsConfig)
+  private val dsInfo = DataSourceFromConfig.unmanaged(dsConfig)
   private val finished = new CountDownLatch(1)
   private val tableDropper = startTableDropper()
   private val resyncBatchSize = storeConfig.resyncBatchSize
@@ -673,28 +673,6 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
     tableDropper.start()
     tableDropper
-  }
-
-  private def dataSourceFromConfig(config: DataSourceConfig): DSInfo with Closeable = {
-    val dataSource = new PGSimpleDataSource
-    dataSource.setServerName(config.host)
-    dataSource.setPortNumber(config.port)
-    dataSource.setDatabaseName(config.database)
-    dataSource.setUser(config.username)
-    dataSource.setPassword(config.password)
-    dataSource.setApplicationName(config.applicationName)
-    config.poolOptions match {
-      case Some(poolOptions) =>
-        val overrideProps = C3P0Propertizer("", poolOptions)
-        val pooled = DataSources.pooledDataSource(dataSource, null, overrideProps) // scalastyle:ignore null
-        new DSInfo(pooled, C3P0WrappedPostgresCopyIn) with Closeable {
-          def close(): Unit = DataSources.destroy(pooled)
-        }
-      case None =>
-        new DSInfo(dataSource, PostgresCopyIn) with Closeable {
-          def close(): Unit = {}
-        }
-    }
   }
 
   override def metric(datasetInternalName: String, cookie: Cookie): Option[SecondaryMetric] = {
