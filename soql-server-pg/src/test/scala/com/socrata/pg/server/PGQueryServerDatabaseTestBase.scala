@@ -1,7 +1,8 @@
 package com.socrata.pg.server
 
 
-import com.rojoma.json.v3.ast.{JArray, JNumber, JObject, JValue}
+import com.rojoma.json.v3.ast.{JArray, JNumber, JObject, JValue, JString}
+import com.rojoma.json.v3.util.{SimpleHierarchyDecodeBuilder, InternalTag, AutomaticJsonDecodeBuilder}
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.datacoordinator.id.{DatasetId, UserColumnId}
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
@@ -104,11 +105,35 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
     }
   }
 
+  private abstract class ExpectedSpec {
+    def accept(v: JValue): Boolean
+  }
+
+  private case class ExpectBase64() extends ExpectedSpec {
+    def accept(v: JValue) =
+      v match {
+        case JString(s) => """^[a-zA-Z0-9/+]+=*$""".r.findAllIn(s).hasNext
+        case _ => false
+      }
+  }
+  private implicit val expectBase64 = AutomaticJsonDecodeBuilder[ExpectBase64]
+
+  private object ExpectedSpec {
+    val decoder = SimpleHierarchyDecodeBuilder[ExpectedSpec](InternalTag("expectation")).
+      branch[ExpectBase64]("base64").
+      build
+
+    def unapply(v: JValue): Option[ExpectedSpec] =
+      decoder.decode(v).toOption
+  }
+
   def approximatelyTheSameAs(expected: JValue) = new BeMatcher[JValue] {
     override def apply(got: JValue): MatchResult =
       MatchResult(approximatelyEqual(got, expected), got + " did not (approximately) equal " + expected, got + " (approximately) equalled " + expected)
 
     private def approximatelyEqual(got: JValue, expected: JValue): Boolean = (got, expected) match {
+      case (got: JValue, ExpectedSpec(expectedSpec)) =>
+        expectedSpec.accept(got)
       case (gotN: JNumber, expectedN: JNumber) =>
         // ok, here's the special case.  We don't want to be sensitive to changes in floating point
         // values (this has happened before when PostGIS changed its distance algorithm) so, since

@@ -15,6 +15,7 @@ instances {
         login-timeout = 10s
         connect-timeout = 10s
         cancel-signal-timeout = 10s
+        tcp-keep-alive = true
 
         c3p0 {
           maxPoolSize = {{ PG_SECONDARY_NUM_WORKERS|int + 1 }} # one connection per worker plus one for the table dropper
