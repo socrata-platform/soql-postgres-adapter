@@ -337,42 +337,42 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
 
     // no rebuild index and no rows loader.
-    val startCtx = (false, initialTruthCopyInfo, Option.empty[SqlPrevettedLoader[SoQLType, SoQLValue]])
-    val (rebuildIndex, finalTruthCopyInfo, _) = remainingEvents.foldLeft(startCtx) { (ctx, e) =>
+    case class Ctx(rebuildIndex: Boolean, truthCopyInfo: TruthCopyInfo, dataLoader: Option[SqlPrevettedLoader[SoQLType, SoQLValue]], rowDataProgress: RowDataUpdatedHandler.Progress)
+    val startCtx = Ctx(false, initialTruthCopyInfo, None, RowDataUpdatedHandler.Progress())
+    val endCtx = remainingEvents.foldLeft(startCtx) { (ctx, e) =>
       logger.debug("got event: {}", e)
-      val (rebuildIndex, truthCopyInfo, dataLoader) = ctx
       e match {
         case Truncated =>
-          TruncateHandler(pgu, truthCopyInfo)
-          (rebuildIndex, truthCopyInfo, dataLoader)
+          TruncateHandler(pgu, ctx.truthCopyInfo)
+          ctx
         case ColumnCreated(secondaryColInfo) =>
-          ColumnCreatedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          (rebuildIndex, truthCopyInfo, None)
+          ColumnCreatedHandler(pgu, ctx.truthCopyInfo, secondaryColInfo)
+          ctx.copy(dataLoader = None)
         case ColumnRemoved(secondaryColInfo) =>
-          ColumnRemovedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          (rebuildIndex, truthCopyInfo, None)
+          ColumnRemovedHandler(pgu, ctx.truthCopyInfo, secondaryColInfo)
+          ctx.copy(dataLoader = None)
         case FieldNameUpdated(secondaryColInfo) =>
-          FieldNameUpdatedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          (rebuildIndex,  truthCopyInfo, None)
+          FieldNameUpdatedHandler(pgu, ctx.truthCopyInfo, secondaryColInfo)
+          ctx.copy(dataLoader = None)
         case RowIdentifierSet(info) =>  // no-op
-          (rebuildIndex, truthCopyInfo, dataLoader)
+          ctx
         case RowIdentifierCleared(info) =>  // no-op
-          (rebuildIndex, truthCopyInfo, dataLoader)
+          ctx
         case SystemRowIdentifierChanged(secondaryColInfo) =>
-          SystemRowIdentifierChangedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          (rebuildIndex, truthCopyInfo, dataLoader)
+          SystemRowIdentifierChangedHandler(pgu, ctx.truthCopyInfo, secondaryColInfo)
+          ctx
         case VersionColumnChanged(secondaryColInfo) =>
-          VersionColumnChangedHandler(pgu, truthCopyInfo, secondaryColInfo)
-          (rebuildIndex, truthCopyInfo, dataLoader)
+          VersionColumnChangedHandler(pgu, ctx.truthCopyInfo, secondaryColInfo)
+          ctx
         // TODO when dealing with dropped, figure out what version we have to updated afterwards and how that works...
         // maybe workingcopydropped is guaranteed to be the last event in a batch, and then we can skip updating the
         // version anywhere... ?
         case WorkingCopyDropped =>
           WorkingCopyDroppedHandler(pgu, truthDatasetInfo)
-          (rebuildIndex, truthCopyInfo, None)
+          ctx.copy(dataLoader = None)
         case DataCopied =>
-          DataCopiedHandler(pgu, truthDatasetInfo, truthCopyInfo)
-          (rebuildIndex, truthCopyInfo, dataLoader)
+          DataCopiedHandler(pgu, truthDatasetInfo, ctx.truthCopyInfo)
+          ctx
         case SnapshotDropped(info) =>
           logger.info("drop snapshot system id - {}, copy number - {}",
             info.systemId.toString(), info.copyNumber.toString)
@@ -382,53 +382,58 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
             case None =>
               throw new Exception("cannot find copy to drop")
           }
-          (rebuildIndex, truthCopyInfo, None)
+          ctx.copy(dataLoader = None)
         case WorkingCopyPublished =>
-          WorkingCopyPublishedHandler(pgu, truthCopyInfo)
-          (true, truthCopyInfo, dataLoader)
+          WorkingCopyPublishedHandler(pgu, ctx.truthCopyInfo)
+          ctx.copy(rebuildIndex = true)
         case RowDataUpdated(ops) =>
-          val loader = dataLoader.getOrElse(prevettedLoader(pgu, truthCopyInfo))
-          RowDataUpdatedHandler(loader, ops)
-          (rebuildIndex, truthCopyInfo, Some(loader))
+          val loader = ctx.dataLoader.getOrElse(prevettedLoader(pgu, ctx.truthCopyInfo))
+          val rdp = RowDataUpdatedHandler(loader, ops, ctx.rowDataProgress)
+          ctx.copy(dataLoader = Some(loader), rowDataProgress = rdp)
         case LastModifiedChanged(lastModified) =>
-          pgu.datasetMapWriter.updateLastModified(truthCopyInfo, lastModified)
-          (rebuildIndex, truthCopyInfo, dataLoader)
+          pgu.datasetMapWriter.updateLastModified(ctx.truthCopyInfo, lastModified)
+          ctx
         case RollupCreatedOrUpdated(rollupInfo) =>
-          RollupCreatedOrUpdatedHandler(pgu, truthCopyInfo, rollupInfo)
-          (rebuildIndex, truthCopyInfo, dataLoader)
+          RollupCreatedOrUpdatedHandler(pgu, ctx.truthCopyInfo, rollupInfo)
+          ctx
         case RollupDropped(rollupInfo) =>
-          RollupDroppedHandler(pgu, truthCopyInfo, rollupInfo)
-          (rebuildIndex, truthCopyInfo, dataLoader)
+          RollupDroppedHandler(pgu, ctx.truthCopyInfo, rollupInfo)
+          ctx
         case ComputationStrategyCreated(_) => // no op
-          (rebuildIndex, truthCopyInfo, dataLoader)
+          ctx
         case ComputationStrategyRemoved(_) => // no op
-          (rebuildIndex, truthCopyInfo, dataLoader)
+          ctx
         case RowsChangedPreview(inserted, updated, deleted, truncated) =>
-          rowsChangedPreviewHandler(pgu, truthDatasetInfo, truthCopyInfo, truncated, inserted, updated, deleted) match {
-            case Some(nci) =>
-              val isPublished = nci.lifecycleStage == TruthLifecycleStage.Published
-              (isPublished, nci, None)
-            case None =>
-              (rebuildIndex, truthCopyInfo, dataLoader)
-          }
+          val updatedCtx =
+            rowsChangedPreviewHandler(pgu, truthDatasetInfo, ctx.truthCopyInfo, truncated, inserted, updated, deleted) match {
+              case Some(nci) =>
+                val isPublished = nci.lifecycleStage == TruthLifecycleStage.Published
+                ctx.copy(rebuildIndex = isPublished, truthCopyInfo = nci, dataLoader = None)
+              case None =>
+                ctx
+            }
+          val rdp = updatedCtx.rowDataProgress
+          updatedCtx.copy(
+            rowDataProgress = rdp.copy(expectedOps = rdp.expectedOps + inserted + updated + deleted)
+          )
         case SecondaryReindex =>
-          (true, truthCopyInfo, dataLoader)
+          ctx.copy(rebuildIndex = true)
         case IndexDirectiveCreatedOrUpdated(secondaryColInfo, directive) =>
-          IndexDirectiveCreatedOrUpdatedHandler(pgu, truthColumnInfo(pgu, truthCopyInfo, secondaryColInfo), directive)
-          (true, truthCopyInfo, dataLoader)
+          IndexDirectiveCreatedOrUpdatedHandler(pgu, truthColumnInfo(pgu, ctx.truthCopyInfo, secondaryColInfo), directive)
+          ctx.copy(rebuildIndex = true)
         case IndexDirectiveDropped(secondaryColInfo) =>
-          IndexDirectiveDroppedHandler(pgu, truthColumnInfo(pgu, truthCopyInfo, secondaryColInfo))
-          (true, truthCopyInfo, dataLoader)
+          IndexDirectiveDroppedHandler(pgu, truthColumnInfo(pgu, ctx.truthCopyInfo, secondaryColInfo))
+          ctx.copy(rebuildIndex = true)
         case otherOps: Event[SoQLType,SoQLValue] =>
           throw new UnsupportedOperationException(s"Unexpected operation $otherOps")
       }
     }
 
-    pgu.datasetMapWriter.updateDataVersion(finalTruthCopyInfo, finalDataVersion)
+    pgu.datasetMapWriter.updateDataVersion(endCtx.truthCopyInfo, finalDataVersion)
 
     def maybeLogTime[T](label: String)(f: => T): T = {
       val startedAt =
-        if(finalTruthCopyInfo.tableModifier != initialTruthCopyInfo.tableModifier) {
+        if(endCtx.truthCopyInfo.tableModifier != initialTruthCopyInfo.tableModifier) {
           Some(System.nanoTime())
         } else {
           None
@@ -441,13 +446,13 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       result
     }
 
-    if (rebuildIndex) {
+    if (endCtx.rebuildIndex) {
       maybeLogTime("Rebuilding indexes") {
-        val schema = pgu.datasetMapReader.schema(finalTruthCopyInfo)
+        val schema = pgu.datasetMapReader.schema(endCtx.truthCopyInfo)
         val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
         sLoader.createIndexes(schema.values)
         sLoader.createFullTextSearchIndex(schema.values)
-        pgu.analyzer.analyze(finalTruthCopyInfo)
+        pgu.analyzer.analyze(endCtx.truthCopyInfo)
       }
     }
 
