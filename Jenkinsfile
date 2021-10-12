@@ -11,7 +11,7 @@ def project_wd_secondary = "store-pg"
 //def project_name_secondary = "storePG"
 def deploy_service_pattern_secondary = "secondary-watcher-pg*"
 def deploy_environment = "staging"
-def default_branch_specifier = "origin/master"
+def default_branch_specifier = "origin/main"
 
 def service_sha = env.GIT_COMMIT
 
@@ -77,7 +77,7 @@ pipeline {
           else if (env.CHANGE_ID != null) { // we're running a PR builder
             stage_build = true
           }
-          else if (BRANCH_NAME == "master") { // we're running a build on master branch to deploy to staging
+          else if (BRANCH_NAME == "main") { // we're running a build on main branch to deploy to staging
             stage_build = true
             stage_dockerize = true
             stage_deploy = true
@@ -119,8 +119,8 @@ pipeline {
             sh(returnStdout: true, script: "git config user.email \'test-infrastructure-l@socrata.com\'")
             sh(returnStdout: true, script: "#!/bin/sh -e\ngit config remote.origin.url \"https://${GITHUB_API_TOKEN}@github.com/socrata-platform/soql-postgres-adapter.git\"")
             sh(returnStdout: true, script: "git config remote.origin.fetch +refs/heads/*:refs/remotes/origin/*")
-            sh(returnStdout: true, script: "git config branch.master.remote origin")
-            sh(returnStdout: true, script: "git config branch.master.merge refs/heads/master")
+            sh(returnStdout: true, script: "git config branch.main.remote origin")
+            sh(returnStdout: true, script: "git config branch.main.merge refs/heads/main")
 
             echo sh(returnStdout: true, script: "echo y | sbt \"release with-defaults\"")
 

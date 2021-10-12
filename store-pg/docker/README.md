@@ -5,7 +5,7 @@ The store-pg assembly must be copied to `store-pg-assembly.jar` in this director
 
 ## Required Runtime Variables
 
-All variables required by [the data-coordinator secondary watcher base image](https://github.com/socrata/data-coordinator/tree/master/coordinator/docker-secondary-watcher#required-runtime-variables)
+All variables required by [the data-coordinator secondary watcher base image](https://github.com/socrata/data-coordinator/tree/main/coordinator/docker-secondary-watcher#required-runtime-variables)
 are required.  
 
 In addition, the following are required:
@@ -15,7 +15,7 @@ In addition, the following are required:
 
 ## Optional Runtime Variables
 
-All optional variables supported by [the data-coordinator secondary watcher base image](https://github.com/socrata/data-coordinator/tree/master/coordinator/docker-secondary-watcher#optional-runtime-variables)
+All optional variables supported by [the data-coordinator secondary watcher base image](https://github.com/socrata/data-coordinator/tree/main/coordinator/docker-secondary-watcher#optional-runtime-variables)
 are supported.  
 
 In addition, the following optional variables are supported.  For defaults, see the [Dockerfile](Dockerfile).
