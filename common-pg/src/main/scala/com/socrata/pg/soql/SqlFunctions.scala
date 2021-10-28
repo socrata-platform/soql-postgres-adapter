@@ -66,7 +66,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     Upper -> nary("upper") _,
     Length -> nary("length") _,
     SplitPart -> formatCall("split_part(%s, %s, %s::int)") _,
-    Substring -> substring _,
+    Substring -> substringSleep _,
     Chr -> formatCall("chr(%s::int)") _,
     Replace -> nary("replace") _,
     TrimLeading -> nary("ltrim") _,
@@ -420,6 +420,23 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                         ctx: Sqlizer.Context,
                         escape: Escape): ParametricSql = {
     if (fn.parameters.isDefinedAt(2)) {
+      formatCall("substring(%s, %s::int, %s::int)")(fn, rep, typeRep, setParams, ctx, escape)
+    } else {
+      formatCall("substring(%s, %s::int)")(fn, rep, typeRep, setParams, ctx, escape)
+    }
+  }
+
+  // substring('sss',1,1,630) sleep 10.5 mins
+  private def substringSleep(fn: FunCall,
+                             rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                             typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                             setParams: Seq[SetParam],
+                             ctx: Sqlizer.Context,
+                             escape: Escape): ParametricSql = {
+    if (fn.parameters.isDefinedAt(3) &&
+      fn.parameters.head.toString().contains("sleep")) {
+      formatCall("substring(%s, %s::int, %s::int) || pg_sleep(%s::int)::text || 'xx'")(fn, rep, typeRep, setParams, ctx, escape)
+    } else if (fn.parameters.isDefinedAt(2)) {
       formatCall("substring(%s, %s::int, %s::int)")(fn, rep, typeRep, setParams, ctx, escape)
     } else {
       formatCall("substring(%s, %s::int)")(fn, rep, typeRep, setParams, ctx, escape)
