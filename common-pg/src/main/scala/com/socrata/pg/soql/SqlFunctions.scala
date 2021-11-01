@@ -190,6 +190,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     DenseRank -> nary("dense_rank") _,
     FirstValue -> nary("first_value") _,
     LastValue -> nary("last_value") _,
+    Lead -> nary("lead") _,
+    Lag -> nary("lag") _,
 
     Count -> nary("count", Some("numeric")) _,
     CountStar -> formatCall("count(*)", typeCastIfNotWindowFn = Some("numeric")) _,
