@@ -15,7 +15,7 @@ import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.soql.environment.{ColumnName, TypeName}
 import com.socrata.soql.types._
 import com.typesafe.config.Config
-import org.joda.time.{DateTime, LocalDate, LocalDateTime, LocalTime}
+import org.joda.time.{DateTime, LocalDate, LocalDateTime, LocalTime, Period}
 import org.scalatest.{BeforeAndAfterAll, FunSuiteLike, Matchers}
 
 // scalastyle:off null cyclomatic.complexity
@@ -199,6 +199,7 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
           case SoQLFloatingTimestamp => SoQLFloatingTimestamp(new LocalDateTime())
           case SoQLDate => SoQLDate(new LocalDate())
           case SoQLTime => SoQLTime(new LocalTime())
+          case SoQLInterval => SoQLInterval(Period.hours(1))
           case SoQLObject => SoQLObject(new JObject(Map("hi" -> JString("there"))))
           case SoQLArray => SoQLArray(new JArray(Seq(JString("there"))))
           case SoQLJson => SoQLJson(new JArray(Seq(JString("there"))))

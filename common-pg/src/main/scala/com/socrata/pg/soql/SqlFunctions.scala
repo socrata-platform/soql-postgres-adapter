@@ -12,7 +12,8 @@ import Sqlizer._
 import SoQLFunctions._
 import com.socrata.pg.soql.SqlizerContext.{RootExpr, SoqlPart}
 import com.socrata.soql.exceptions.BadParse
-import org.joda.time.{DateTime, LocalDateTime}
+import org.joda.time.format.{PeriodFormatter, PeriodFormatterBuilder}
+import org.joda.time.{DateTime, LocalDateTime, Period}
 
 // scalastyle:off magic.number multiple.string.literals
 object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with SqlFunctionsComplexType {
@@ -139,6 +140,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     FixedTimeStampTruncYAtTimeZone -> formatCall("date_trunc('year', %s at time zone %s)") _,
 
     TimeStampDiffD -> formatCall("trunc((extract(epoch from %s) - extract(epoch from %s))::numeric / 86400)") _,
+    TimeStampAdd -> infix("+") _,
+    TimeStampPlus -> infix("+") _,
 
     // Translate a fixed timestamp to a given time zone and convert it to a floating timestamp.
     ToFloatingTimestamp -> formatCall("%s at time zone %s") _,
@@ -159,6 +162,10 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                  ((SoQLFloatingTimestamp.StringRep.unapply _): String => Option[LocalDateTime]) andThen
                  ((x: Option[LocalDateTime]) => x.get) andThen
                  SoQLFloatingTimestamp.StringRep.apply) _,
+    TextToInterval -> textToType("%s::interval",
+                                 ((SoQLInterval.StringRep.unapply _): String => Option[Period]) andThen
+                                 ((x: Option[Period]) => x.get) andThen
+                                 periodPrint) _,
     TextToMoney -> formatCall("%s::numeric") _,
     TextToBlob -> passthrough,
     TextToPhoto -> passthrough,
@@ -603,6 +610,26 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     ParametricSql(Seq(foldedSql), setParamsLR)
   }
   // scalastyle:on parameter.number
+
+  val periodFormatter: PeriodFormatter = new PeriodFormatterBuilder()
+    .appendYears().appendSuffix(" year", " years")
+    .appendSeparatorIfFieldsAfter(" ")
+    .appendMonths().appendSuffix(" month", " months")
+    .appendSeparatorIfFieldsAfter(" ")
+    .appendDays().appendSuffix(" day", " days")
+    .appendSeparatorIfFieldsAfter(" ")
+    .appendHours().appendSuffix(" hour", " hours")
+    .appendSeparatorIfFieldsAfter(" ")
+    .appendMinutes().appendSuffix(" minute", " minutes")
+    .appendSeparatorIfFieldsAfter(" ")
+    .appendSecondsWithMillis().appendSuffix(" second", " seconds")
+    .toFormatter()
+
+  def periodPrint(period: Period): String = {
+    val sb = new StringBuffer()
+    periodFormatter.printTo(sb, period)
+    sb.toString.trim
+  }
 }
 
 object SqlFragments {
