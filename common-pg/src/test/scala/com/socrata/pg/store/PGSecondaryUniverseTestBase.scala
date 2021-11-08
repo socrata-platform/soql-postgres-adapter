@@ -59,8 +59,7 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
     // Setup the data columns
     val cols = SoQLType.typesByName.filterKeys(t => !UnsupportedTypes.contains(t) &&
                                                     t != SoQLID.name && // These types are specially added.
-                                                    t != SoQLVersion.name &&
-                                                    t != SoQLInterval.name)
+                                                    t != SoQLVersion.name)
                                    .map {
       case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo,
                                                     new UserColumnId(n + "_USERNAME"),
