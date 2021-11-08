@@ -315,6 +315,14 @@ class SqlizerBasicTest extends SqlizerTest {
     setParams.length should be (0)
   }
 
+  test("date_add") {
+    val soql = "select date_add(updated_on, 'P1DT1H') as d1, date_add(updated_on, 'PT86401S') as d2, updated_on + 'P1D' as d3"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("""SELECT ("t1".updated_on + (?::interval)),("t1".updated_on + (?::interval)),("t1".updated_on + (?::interval)) FROM t1""")
+    val params = setParams.map { setParam => setParam(None, 0).get }
+    params should be(Seq("1 day 1 hour", "86401.000 seconds", "1 day"))
+  }
+
   test("to_floating_timestamp") {
     val soql = "select date_trunc_ymd(to_floating_timestamp(:created_at, 'PST'))"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)

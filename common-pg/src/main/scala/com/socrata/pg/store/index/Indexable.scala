@@ -190,6 +190,7 @@ object SoQLIndexableRep {
     SoQLFloatingTimestamp -> ((base, _) => new FloatingTimestampRep(base) with TimestampLikeIndexable[SoQLType]),
     SoQLDate -> ((base, _) => new DateRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
     SoQLTime -> ((base, _) => new TimeRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
+    SoQLInterval -> ((base, _) => new ObjectRep(base) with NoIndex[SoQLType]),
     SoQLDouble -> ((base, _) => new DoubleRep(base) with NumberLikeIndexable[SoQLType]),
     SoQLObject -> ((base, _) => new ObjectRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
     SoQLArray -> ((base, _) => new ArrayRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
