@@ -347,6 +347,13 @@ class SqlizerBasicTest extends SqlizerTest {
     params should be (Seq("default"))
   }
 
+  test("nullif") {
+    val soql = "select nullif(case_number, primary_type)"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("""SELECT (nullif("t1".case_number,"t1".primary_type)) FROM t1""")
+    setParams.size should be (0)
+  }
+
   test("coalesce parameters must have the same type") {
     val soql = "select coalesce(primary_type, 123)"
     val ex = intercept[TypecheckException] {
