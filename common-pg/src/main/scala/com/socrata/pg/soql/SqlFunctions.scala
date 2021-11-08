@@ -142,6 +142,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     TimeStampDiffD -> formatCall("trunc((extract(epoch from %s) - extract(epoch from %s))::numeric / 86400)") _,
     TimeStampAdd -> infix("+") _,
     TimeStampPlus -> infix("+") _,
+    TimeStampMinus -> infix("-") _,
 
     // Translate a fixed timestamp to a given time zone and convert it to a floating timestamp.
     ToFloatingTimestamp -> formatCall("%s at time zone %s") _,
@@ -178,6 +179,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     Iif -> formatCall("case when %s then %s else %s end") _,
     Case -> caseCall _,
     Coalesce -> coalesceCall _,
+    Nullif -> nary("nullif") _,
 
     // aggregate functions
     Avg -> nary("avg") _,
