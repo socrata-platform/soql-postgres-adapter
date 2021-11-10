@@ -45,5 +45,7 @@ com.socrata.soql-server-pg {
     log4j.rootLogger = [ {{ LOG_LEVEL }}, console ]
   }
 
+  max-concurrent-requests-per-dataset = {{ MAX_CONCURRENT_REQUESTS_PER_DATASET }}
+
   instance = {{ PG_SECONDARY_INSTANCE }}
 }
