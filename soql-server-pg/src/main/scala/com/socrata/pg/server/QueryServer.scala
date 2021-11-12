@@ -56,7 +56,6 @@ import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.Logger
 import org.apache.commons.codec.binary.Base64
-import org.apache.commons.io.IOUtils
 import org.apache.curator.x.discovery.ServiceInstanceBuilder
 import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
@@ -243,15 +242,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
 
   private def query(explain: Boolean)(req: HttpRequest)(resp: HttpServletResponse): Unit =  {
     val servReq = req.servletRequest
-
     val datasetId = servReq.getParameter("dataset")
-    val analysisParam = servReq.getMethod match {
-      case "POST" =>
-        IOUtils.toString(servReq.getInputStream, StandardCharsets.UTF_8.name)
-      case _ =>
-        servReq.getParameter("query")
-    }
-
+    val analysisParam = servReq.getParameter("query")
     val analysisStream = new ByteArrayInputStream(analysisParam.getBytes(StandardCharsets.ISO_8859_1))
     val analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] = SoQLAnalyzerHelper.deserialize(analysisStream)
     val contextVars = Option(servReq.getParameter("context")).fold(Map.empty[String, String]) { contextStr =>
