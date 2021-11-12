@@ -247,7 +247,9 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     val analysisParam = Option(servReq.getParameter("query")) match {
       case Some(q) => q
       case _ =>
-        IOUtils.toString(servReq.getInputStream, StandardCharsets.UTF_8.name)
+        using(servReq.getInputStream) { ins =>
+          IOUtils.toString(ins, StandardCharsets.UTF_8.name)
+        }
     }
 
     val analysisStream = new ByteArrayInputStream(analysisParam.getBytes(StandardCharsets.ISO_8859_1))
