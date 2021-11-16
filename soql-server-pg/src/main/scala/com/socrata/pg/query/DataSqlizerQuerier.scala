@@ -13,9 +13,9 @@ import com.socrata.soql.{BinaryTree, SoQLAnalysis}
 
 import scala.concurrent.duration.Duration
 import com.typesafe.scalalogging.Logger
-import java.sql.{Connection, ResultSet, SQLException, PreparedStatement}
 
-import com.socrata.pg.server.QueryServer.ExplainInfo
+import java.sql.{Connection, PreparedStatement, ResultSet, SQLException}
+import com.socrata.pg.server.QueryServer.{ExplainInfo, QueryRuntimeError}
 
 object DataSqlizerQuerier {
   private val logger = Logger[DataSqlizerQuerier[_, _]]
@@ -179,7 +179,12 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
       stmt.executeQuery()
     } catch {
       case ex: SQLException =>
-        logger.error(s"SQL Exception (${ex.getSQLState}) with timeout=$timeout on $pSql", ex)
+        QueryRuntimeError(ex) match {
+          case None =>
+            logger.error(s"SQL Exception (${ex.getSQLState}) with timeout=$timeout on $pSql", ex)
+          case Some(e) =>
+            logger.info(s"SQL Exception ${e.getClass.getSimpleName} (${ex.getSQLState}) with timeout=$timeout on $pSql")
+        }
         throw ex
     }
   }
