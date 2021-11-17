@@ -3,9 +3,8 @@ package com.socrata.pg.server
 import java.io.{ByteArrayInputStream, OutputStreamWriter}
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
-import java.sql.Connection
+import java.sql.{Connection, SQLException}
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
-
 import javax.servlet.http.HttpServletResponse
 import com.socrata.pg.BuildInfo
 import com.rojoma.json.v3.ast.{JObject, JString}
@@ -51,6 +50,7 @@ import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.curator.{CuratorFromConfig, DiscoveryFromConfig}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.pg.server.CJSONWriter.utf8EncodingName
+import com.socrata.pg.server.QueryServer.QueryRuntimeError.validErrorCodes
 import com.socrata.thirdparty.metrics.{MetricsReporter, SocrataHttpSupport}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.{Config, ConfigFactory}
@@ -60,7 +60,6 @@ import org.apache.commons.io.IOUtils
 import org.apache.curator.x.discovery.ServiceInstanceBuilder
 import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
-import org.postgresql.util.PSQLException
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
@@ -320,6 +319,13 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
             case Some(datasetInfo) =>
               def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
               def requestTimeout(timeout: Option[Duration]) = responses.RequestTimeout ~> Json(Map("timeout" -> timeout.toString))
+              def invalidRequest(qre: QueryRuntimeError) = {
+                  responses.BadRequest ~> Json(JObject(
+                    Map("errorCode" -> JString("400"),
+                        "description" -> JString(qre.error.getMessage),
+                        "data" -> JObject(Map("source" -> JString("soql-server"))))
+                       ))
+              }
               execQuery(
                 pgu = pgu,
                 context = context,
@@ -364,6 +370,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                   JsonUtil.writeJson(writer, Array(explainInfo))
                   writer.flush()
                   writer.close()
+                case e: QueryRuntimeError =>
+                  invalidRequest(e)(resp)
               }
           }
       }
@@ -517,10 +525,12 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                   InfoSuccess(copy.copyNumber, dataVersion, explainInfo)
               }
             } catch {
-              // ick, but user-canceled requests also fall under this code and those are fine
-              case ex: PSQLException if "57014".equals(ex.getSQLState) &&
-                  "ERROR: canceling statement due to statement timeout".equals(ex.getMessage) =>
-                RequestTimedOut(queryTimeout)
+              case ex: SQLException => {
+                QueryRuntimeError(ex) match {
+                  case Some(error) => error
+                  case None => throw ex
+                }
+              }
             }
         }
       case FailedBecauseMatch(etags) =>
@@ -770,6 +780,26 @@ object QueryServer extends DynamicPortMap {
   case class NotModified(etags: Seq[EntityTag]) extends QueryResult
   case object PreconditionFailed extends QueryResult
   case class RequestTimedOut(timeout: Option[Duration]) extends QueryResult
+  class QueryRuntimeError(val error: SQLException) extends QueryResult
+  object QueryRuntimeError {
+    val validErrorCodes = Set(
+      "22003", // value overflows numeric format, 1000000000000 ^ 1000000000000000000
+      "22012", // divide by zero, 1/0
+      "22008" // timestamp out of range, timestamp - 'P500000Y'
+    )
+
+    def apply(error: SQLException, timeout: Option[Duration] = None): Option[QueryResult] = {
+      error.getSQLState match {
+        // ick, but user-canceled requests also fall under this code and those are fine
+        case "57014" if "ERROR: canceling statement due to statement timeout".equals(error.getMessage) =>
+          Some(RequestTimedOut(timeout))
+        case state if validErrorCodes.contains(state) =>
+          Some(new QueryRuntimeError(error))
+        case _ =>
+          None
+      }
+    }
+  }
   case class Success(
     qrySchema: OrderedMap[ColumnId, ColumnInfo[SoQLType]],
     copyNumber: Long,
