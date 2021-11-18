@@ -319,12 +319,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
             case Some(datasetInfo) =>
               def notModified(etags: Seq[EntityTag]) = responses.NotModified ~> ETags(etags)
               def requestTimeout(timeout: Option[Duration]) = responses.RequestTimeout ~> Json(Map("timeout" -> timeout.toString))
-              def invalidRequest(qre: QueryRuntimeError) = {
-                  responses.BadRequest ~> Json(JObject(
-                    Map("errorCode" -> JString("400"),
-                        "description" -> JString(qre.error.getMessage),
-                        "data" -> JObject(Map("source" -> JString("soql-server"))))
-                       ))
+              def invalidRequest(e: QueryError) = {
+                responses.BadRequest ~> Json(QCRequestError(e.description))
               }
               execQuery(
                 pgu = pgu,
@@ -370,7 +366,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                   JsonUtil.writeJson(writer, Array(explainInfo))
                   writer.flush()
                   writer.close()
-                case e: QueryRuntimeError =>
+                case e: QueryError =>
                   invalidRequest(e)(resp)
               }
           }
@@ -525,12 +521,13 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                   InfoSuccess(copy.copyNumber, dataVersion, explainInfo)
               }
             } catch {
-              case ex: SQLException => {
+              case ex: SQLException =>
                 QueryRuntimeError(ex) match {
                   case Some(error) => error
                   case None => throw ex
                 }
-              }
+              case ex: SqlizeError =>
+                QueryError(ex.getMessage)
             }
         }
       case FailedBecauseMatch(etags) =>
@@ -780,12 +777,14 @@ object QueryServer extends DynamicPortMap {
   case class NotModified(etags: Seq[EntityTag]) extends QueryResult
   case object PreconditionFailed extends QueryResult
   case class RequestTimedOut(timeout: Option[Duration]) extends QueryResult
-  class QueryRuntimeError(val error: SQLException) extends QueryResult
+  case class QueryError(description: String) extends QueryResult
+  class QueryRuntimeError(val error: SQLException) extends QueryError(error.getMessage)
   object QueryRuntimeError {
     val validErrorCodes = Set(
       "22003", // value overflows numeric format, 1000000000000 ^ 1000000000000000000
       "22012", // divide by zero, 1/0
-      "22008" // timestamp out of range, timestamp - 'P500000Y'
+      "22008", // timestamp out of range, timestamp - 'P500000Y'
+      "22P02" // invalid input syntax for type boolean|numeric:, 'tr2ue'::boolean 'tr2ue'::number
     )
 
     def apply(error: SQLException, timeout: Option[Duration] = None): Option[QueryResult] = {

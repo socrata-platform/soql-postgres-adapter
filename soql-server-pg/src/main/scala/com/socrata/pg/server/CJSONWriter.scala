@@ -12,7 +12,6 @@ import com.socrata.pg.store.PostgresUniverseCommon
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.types._
 import com.typesafe.scalalogging.Logger
-import org.slf4j.LoggerFactory
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
 import java.io.{OutputStreamWriter, Writer}
@@ -75,14 +74,6 @@ object CJSONWriter {
     }
 
     using(new OutputStreamWriter(os, utf8EncodingName)) { (writer: OutputStreamWriter) =>
-      writer.write("[{")
-      rowCount.foreach { rc =>
-        writer.write("\"approximate_row_count\": %s\n,".format(JNumber(rc).toString()))
-      }
-      writer.write("\"data_version\":%d\n,".format(dataVersion))
-      writer.write("\"last_modified\":\"%s\"\n,".format(dateTimeFormat.print(lastModified)))
-      writer.write("\"locale\":\"%s\"".format(locale))
-
       // CJSON in the original definition is sorted by field name.
       // But here cjson is used as an intermediary tool to serve csv, json etc where following SELECT order is human friendly.
       // Upstream service like soda-fountain may re-sort cjson output.
@@ -91,23 +82,47 @@ object CJSONWriter {
         val (cid, cInfo) = entry
         map + (cInfo.userColumnId -> cid)
       }
-      val reps = cjsonSortedSchema.map { cinfo => jsonReps(cinfo.typ) }.toArray
-      val cids = cjsonSortedSchema.map { cinfo => qryColumnIdToUserColumnIdMap(cinfo.userColumnId) }.toArray
-
-      writeSchema(cjsonSortedSchema, writer)
-      writer.write("\n }")
-
-      for { row <- rows } {
-        assert(row.size == cids.length)
-        val result = new Array[JValue](row.size)
-
-        for (i <- 0 until result.length) {
-          result(i) = reps(i).toJValue(row(cids(i)))
-        }
-        writer.write("\n,")
-        CompactJsonWriter.toWriter(writer, JArray(result))
+      val repsResult = try {
+        Right(cjsonSortedSchema.map { cinfo => jsonReps(cinfo.typ) }.toArray)
+      } catch {
+        case ex: NoSuchElementException =>
+          r.setStatus(HttpServletResponse.SC_BAD_REQUEST)
+          JsonUtil.writeJson(
+            writer,
+            QCRequestError(s"""Datatype ${ex.getMessage.split(" ").last} does not support output""")
+          )
+          Left(ex)
       }
-      writer.write("\n]\n")
+
+      repsResult match {
+        case Right(reps) =>
+
+          val cids = cjsonSortedSchema.map { cinfo => qryColumnIdToUserColumnIdMap(cinfo.userColumnId) }.toArray
+
+          writer.write("[{")
+          rowCount.foreach { rc =>
+            writer.write("\"approximate_row_count\": %s\n,".format(JNumber(rc).toString()))
+          }
+          writer.write("\"data_version\":%d\n,".format(dataVersion))
+          writer.write("\"last_modified\":\"%s\"\n,".format(dateTimeFormat.print(lastModified)))
+          writer.write("\"locale\":\"%s\"".format(locale))
+
+          writeSchema(cjsonSortedSchema, writer)
+          writer.write("\n }")
+
+          for {row <- rows} {
+            assert(row.size == cids.length)
+            val result = new Array[JValue](row.size)
+
+            for (i <- 0 until result.length) {
+              result(i) = reps(i).toJValue(row(cids(i)))
+            }
+            writer.write("\n,")
+            CompactJsonWriter.toWriter(writer, JArray(result))
+          }
+          writer.write("\n]\n")
+        case Left(_) =>
+      }
       writer.flush()
     }
   }
