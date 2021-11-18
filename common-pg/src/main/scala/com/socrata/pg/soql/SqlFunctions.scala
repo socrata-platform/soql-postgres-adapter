@@ -155,15 +155,18 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
     TextToNumber -> formatCall("%s::numeric") _,
     TextToFixedTimestamp -> textToType("%s::timestamp with time zone",
+                                       SoQLFixedTimestamp,
                                        ((SoQLFixedTimestamp.StringRep.unapply _): String => Option[DateTime]) andThen
                                        ((x: Option[DateTime]) => x.get) andThen
                                        SoQLFixedTimestamp.StringRep.apply) _,
     TextToFloatingTimestamp ->
       textToType("%s::timestamp", // without time zone
+                 SoQLFloatingTimestamp,
                  ((SoQLFloatingTimestamp.StringRep.unapply _): String => Option[LocalDateTime]) andThen
                  ((x: Option[LocalDateTime]) => x.get) andThen
                  SoQLFloatingTimestamp.StringRep.apply) _,
     TextToInterval -> textToType("%s::interval",
+                                 SoQLInterval,
                                  ((SoQLInterval.StringRep.unapply _): String => Option[Period]) andThen
                                  ((x: Option[Period]) => x.get) andThen
                                  periodPrint) _,
@@ -576,7 +579,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     ParametricSql(Seq(sqlFragsAndParams._1.mkString(",")), sqlFragsAndParams._2)
   }
 
-  private def textToType(template: String, conversion: String => String)
+  private def textToType(template: String, soqlType: SoQLType, conversion: String => String)
                         (fn: FunCall,
                          rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                          typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
@@ -584,7 +587,13 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                          ctx: Sqlizer.Context,
                          escape: Escape): ParametricSql = {
     val convertedParams = fn.parameters.map {
-      case strLit@StringLiteral(value: String, _) => strLit.copy(value = conversion(value))
+      case strLit@StringLiteral(value: String, _) =>
+        try {
+          strLit.copy(value = conversion(value))
+        } catch {
+          case _: Exception =>
+            throw InvalidConversion(soqlType, value)
+        }
       case x => x
     }
 
