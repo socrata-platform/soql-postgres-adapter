@@ -44,6 +44,8 @@ trait SqlFunctionsGeometry {
     Intersects -> formatCall("ST_Intersects(%s, %s)") _,
     Crosses -> formatCall("ST_Crosses(%s, %s)") _,
     Overlaps -> formatCall("ST_Overlaps(%s, %s)") _,
+    Intersection -> formatCall("ST_Multi(ST_Buffer(ST_Intersection(%s, %s),0.0))") _,
+    Area -> formatCall("ST_Area(%s :: geography)") _,
     DistanceInMeters -> formatCall("ST_Distance(%s::geography, %s::geography)") _,
     GeoMakeValid -> formatValidate("ST_MakeValid(%s)") _,
     GeoMultiPolygonFromMultiPolygon -> formatCall("ST_Multi(%s)") _,

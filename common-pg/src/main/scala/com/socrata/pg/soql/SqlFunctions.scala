@@ -193,6 +193,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     StddevSamp -> nary("stddev_samp") _,
     Median -> medianContCall _,
     MedianDisc -> formatCall("percentile_disc(.50) within group (order by %s)") _,
+    Ntile -> formatCall("ntile(%s::int)") _,
     RegrIntercept -> nary("regr_intercept") _,
     RegrSlope -> nary("regr_slope") _,
     RegrR2 -> nary("regr_r2") _,
