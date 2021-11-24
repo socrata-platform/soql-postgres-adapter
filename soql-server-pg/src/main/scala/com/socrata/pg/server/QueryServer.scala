@@ -428,7 +428,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
       for(readCtx <- pgu.datasetReader.openDataset(latestCopy)) {
         val baseSchema: ColumnIdMap[ColumnInfo[SoQLType]] = readCtx.schema
         val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
-        val qrySchema = querySchema(pgu, analyses.outputSchemaLeaf, latestCopy)
+        val qrySchema = querySchema(pgu, analyses.outputSchema.leaf, latestCopy)
         val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor)
         val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
         val sqlReps = querier.getSqlReps(readCtx.copyInfo.dataTableName, systemToUserColumnMap)
