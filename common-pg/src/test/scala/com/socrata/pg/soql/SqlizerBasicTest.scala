@@ -558,6 +558,14 @@ class SqlizerBasicTest extends SqlizerTest {
     setParams.length should be (0)
   }
 
+  test("filter + window function") {
+    val soql = "select avg(year) filter (where year = year and true) over(partition by primary_type, year)"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    sql should be ("""SELECT (avg("t1".year) filter(where (("t1".year = "t1".year) and ?) ) over( partition by "t1".primary_type,"t1".year)) FROM t1""")
+    params should be (Seq(true))
+  }
+
   test("json subscript") {
     val soql = "select json.foo"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
