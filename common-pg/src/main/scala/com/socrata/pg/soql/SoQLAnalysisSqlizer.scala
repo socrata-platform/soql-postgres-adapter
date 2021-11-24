@@ -115,7 +115,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
         val tableNamesSubTableNameReplace = tableNames + (primaryTableName -> subTableName)
         val primaryTableAlias = if (ra.joins.nonEmpty) Map((PrimaryTableAlias -> chainedTableAlias)) else Map.empty // REVISIT
         val subCtx = ctx ++ primaryTableAlias
-        val prevAna = l.outputSchemaLeaf
+        val prevAna = l.outputSchema.leaf
         val (rpsql, rParamsCountInSelect) =
           toSql(ra, Option(prevAna), tableNamesSubTableNameReplace, allColumnReps, reqRowCount, rep, typeRep,
                 setParams, subCtx, escape, fromTableName)
