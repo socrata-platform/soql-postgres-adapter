@@ -781,10 +781,11 @@ object QueryServer extends DynamicPortMap {
   class QueryRuntimeError(val error: SQLException) extends QueryError(error.getMessage)
   object QueryRuntimeError {
     val validErrorCodes = Set(
-      "22003", // value overflows numeric format, 1000000000000 ^ 1000000000000000000
-      "22012", // divide by zero, 1/0
-      "22008", // timestamp out of range, timestamp - 'P500000Y'
-      "22P02" // invalid input syntax for type boolean|numeric:, 'tr2ue'::boolean 'tr2ue'::number
+      "22003",    // value overflows numeric format, 1000000000000 ^ 1000000000000000000
+      "22012",    // divide by zero, 1/0
+      "22008",    // timestamp out of range, timestamp - 'P500000Y'
+      "22P02",    // invalid input syntax for type boolean|numeric:, 'tr2ue'::boolean 'tr2ue'::number
+      "XX000"     // invalid geometry, POINT(1,2)::point -- no comma between lon lat, POLYGON((0 0,1 1,1 0))::polygon
     )
 
     def apply(error: SQLException, timeout: Option[Duration] = None): Option[QueryResult] = {
