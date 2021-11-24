@@ -79,7 +79,7 @@ class SqlizerBasicTest extends SqlizerTest {
   test("distance in meters") {
     val soql = "select distance_in_meters(point, 'POINT(0 0)')"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT (ST_Distance("t1".point::geography, (ST_GeomFromText(?, 4326))::geography)) FROM t1""")
+    sql should be ("""SELECT (ST_Distance("t1".point::geography, (ST_GeomFromText(?, 4326))::geography)::numeric) FROM t1""")
     setParams.length should be (1)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq("POINT(0 0)"))
