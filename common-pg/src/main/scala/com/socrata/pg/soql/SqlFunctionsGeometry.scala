@@ -48,8 +48,8 @@ trait SqlFunctionsGeometry {
     // that any non-polygon intersections in the GeoCollection return are removed and only
     // the multipolygon intersection is returned
     Intersection -> formatCall("ST_Multi(ST_Buffer(ST_Intersection(%s, %s),0.0))") _,
-    Area -> formatCall("ST_Area(%s :: geography)") _,
-    DistanceInMeters -> formatCall("ST_Distance(%s::geography, %s::geography)") _,
+    Area -> formatCall("ST_Area(%s :: geography)::numeric") _,
+    DistanceInMeters -> formatCall("ST_Distance(%s::geography, %s::geography)::numeric") _,
     GeoMakeValid -> formatValidate("ST_MakeValid(%s)") _,
     GeoMultiPolygonFromMultiPolygon -> formatCall("ST_Multi(%s)") _,
     GeoMultiLineFromMultiLine -> formatCall("ST_Multi(%s)") _,
