@@ -558,6 +558,22 @@ class SqlizerBasicTest extends SqlizerTest {
     setParams.length should be (0)
   }
 
+  test("count(column) filter has proper numeric cast") {
+    val soql = "select count(year) filter (where year = year and true)"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    sql should be ("""SELECT (count("t1".year) filter(where (("t1".year = "t1".year) and ?) )::numeric) FROM t1""")
+    params should be (Seq(true))
+  }
+
+  test("count(*) filter + window function has proper numeric cast") {
+    val soql = "select count(*) filter (where year = year and true) over(partition by primary_type, year)"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    sql should be ("""SELECT (count(*) filter(where (("t1".year = "t1".year) and ?) ) over( partition by "t1".primary_type,"t1".year)::numeric) FROM t1""")
+    params should be (Seq(true))
+  }
+
   test("filter + window function") {
     val soql = "select avg(year) filter (where year = year and true) over(partition by primary_type, year)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)

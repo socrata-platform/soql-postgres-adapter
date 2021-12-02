@@ -538,7 +538,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                  ctx: Sqlizer.Context,
                  escape: Escape): ParametricSql = {
 
-    val templateTypeCast = if (fn.window.isEmpty && typeCastIfNotWindowFn.isDefined) template + typeCastIfNotWindowFn.map("::" + _).get
+    val templateTypeCast = if (fn.window.isEmpty && fn.filter.isEmpty && typeCastIfNotWindowFn.isDefined) template + typeCastIfNotWindowFn.map("::" + _).get
                            else template // when window option is used, typecast is done higher up
     val fnParams = paramPosition match {
       case Some(pos) =>
