@@ -286,7 +286,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                                            ctx: Sqlizer.Context,
                                            escape: Escape): ParametricSql = {
     val optimized = fn.parameters(0) match {
-      case FunctionCall(MonomorphicFunction(jsonbFieldKey, _), Seq(field), fn.window) if jsonbFields.contains(jsonbFieldKey) =>
+      case FunctionCall(MonomorphicFunction(jsonbFieldKey, _), Seq(field), fn.filter, fn.window) if jsonbFields.contains(jsonbFieldKey) =>
         fn.parameters(1) match {
           case strLit@StringLiteral(value: String, _) =>
             val ParametricSql(ls, setParamsL) = Sqlizer.sql(field)(rep, typeRep, setParams, ctx, escape)
@@ -329,7 +329,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     }
 
     val sqlNaryFunctionCall = sqlFragsAndParams._1.mkString(fnName + "(", ",", ")")
-    val typeCast = if (fn.window.isDefined) None else returnTypeCast
+    val typeCast = if (fn.window.isDefined || fn.filter.isDefined) None else returnTypeCast
     val sqlNaryFunctionCallWithTypeCast = typeCast.map(typ => s"($sqlNaryFunctionCall)::$typ" ).getOrElse(sqlNaryFunctionCall)
     ParametricSql(Seq(sqlNaryFunctionCallWithTypeCast), sqlFragsAndParams._2)
   }
@@ -341,9 +341,9 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
           case Seq(ColumnRef(_, _, typ)) if typ == SoQLUrl.t =>
             // Only if we have chosen jsonb in UrlRep, this would not be necessary
             // only counting url.url - ignoring url.description
-            val coalesceArgs = Seq(FunctionCall(UrlToUrl.monomorphic.get, fn.parameters, fn.window)(fn.position, fn.functionNamePosition),
-                                   FunctionCall(UrlToDescription.monomorphic.get, fn.parameters, fn.window)(fn.position, fn.functionNamePosition))
-            Seq(FunctionCall(coalesceText, coalesceArgs, fn.window)(fn.position, fn.functionNamePosition))
+            val coalesceArgs = Seq(FunctionCall(UrlToUrl.monomorphic.get, fn.parameters, fn.filter, fn.window)(fn.position, fn.functionNamePosition),
+                                   FunctionCall(UrlToDescription.monomorphic.get, fn.parameters, fn.filter, fn.window)(fn.position, fn.functionNamePosition))
+            Seq(FunctionCall(coalesceText, coalesceArgs, fn.filter, fn.window)(fn.position, fn.functionNamePosition))
           case _ => fn.parameters
         }
       case _ => fn.parameters
@@ -420,6 +420,23 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     }
   }
 
+  def aggFnFilter(pSql: ParametricSql,
+                  fn: FunCall,
+                  rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                  typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                  setParams: Seq[SetParam],
+                  ctx: Sqlizer.Context,
+                  escape: Escape): ParametricSql = {
+    fn.filter match {
+      case Some(filter) =>
+        val ParametricSql(sqlFilter, setParamsFilter) = Sqlizer.sql(filter)(rep, typeRep, setParams, ctx, escape)
+        val sql = s"${pSql.sql.mkString} filter(where ${sqlFilter.mkString} )"
+        ParametricSql(Seq(sql), setParamsFilter)
+      case None =>
+        pSql
+    }
+  }
+
   def windowOverInfo(pSql: ParametricSql,
                      fn: FunCall,
                      rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
@@ -427,6 +444,11 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                      setParams: Seq[SetParam],
                      ctx: Sqlizer.Context,
                      escape: Escape): ParametricSql = {
+
+    val typeCast = fn.function.function match {
+      case SoQLFunctions.Count | SoQLFunctions.CountDistinct | SoQLFunctions.CountStar => "::numeric"
+      case _ => ""
+    }
 
     fn.window match {
       case Some(windowFunctionInfo) =>
@@ -455,11 +477,6 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
         val sqlOrderingsPreamble = if (windowFunctionInfo.orderings.isEmpty) "" else " order by "
         val sqlFramesPreamble = if (windowFunctionInfo.frames.isEmpty) "" else " "
 
-        val typeCast = fn.function.function match {
-          case SoQLFunctions.Count | SoQLFunctions.CountDistinct | SoQLFunctions.CountStar => "::numeric"
-          case _ => ""
-        }
-
         val sql = pSql.sql.mkString +
                     " over(" +
                     sqlPartitions._1.mkString(sqlPartitionsPreamble, ",", "") +
@@ -467,8 +484,11 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                     sqlFrames._1.mkString(sqlFramesPreamble, " ", "") +
                     ")" + typeCast
         ParametricSql(Seq(sql), sqlFrames._2)
-      case None =>
+      case None if fn.filter.isEmpty =>
         pSql
+      case None /* filter is defined */ =>
+        val sql = pSql.sql.mkString + typeCast
+        pSql.copy(sql = Seq(sql))
     }
   }
 
@@ -612,9 +632,9 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                                   escape: Escape): ParametricSql = {
     val ParametricSql(ls, setParamsL) = Sqlizer.sql(fn.parameters(0))(rep, typeRep, setParams, ctx, escape)
     val params = Seq(fn.parameters(1), wildcard)
-    val suffix = FunctionCall(suffixWildcard, params, fn.window)(fn.position, fn.functionNamePosition)
+    val suffix = FunctionCall(suffixWildcard, params, fn.filter, fn.window)(fn.position, fn.functionNamePosition)
     val wildcardCall =
-      if (prefix) { FunctionCall(suffixWildcard, Seq(wildcard, suffix), fn.window)(fn.position, fn.functionNamePosition) }
+      if (prefix) { FunctionCall(suffixWildcard, Seq(wildcard, suffix), fn.filter, fn.window)(fn.position, fn.functionNamePosition) }
       else { suffix }
     val ParametricSql(rs, setParamsLR) = Sqlizer.sql(wildcardCall)(rep, typeRep, setParamsL, ctx, escape)
     val lrs = ls.zip(rs).map { case (l, r) => s"$l $fnName $r" }

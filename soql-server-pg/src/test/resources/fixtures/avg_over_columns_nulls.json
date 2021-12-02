@@ -1,0 +1,10 @@
+[ { "code": "00000", "make": "APCO", "avg_v_max_over_partition_by_make": null },
+  { "code": "14200", "make": "APCO", "avg_v_max_over_partition_by_make": null },
+  { "code": "14210", "make": "APCO", "avg_v_max_over_partition_by_make": null },
+  { "code": "18520", "make": "APCO", "avg_v_max_over_partition_by_make": null },
+  { "code": "BUZZ-Z4", "make": "OZONE", "avg_v_max_over_partition_by_make": null },
+  { "code": "CHILI3", "make": "Skywalk", "avg_v_max_over_partition_by_make": null },
+  { "code": "MESCAL4", "make": "Skywalk", "avg_v_max_over_partition_by_make": null },
+  { "code": "RUSH-3", "make": "OZONE", "avg_v_max_over_partition_by_make": null },
+  { "code": "TEQUILA3", "make": "Skywalk", "avg_v_max_over_partition_by_make": null }
+]

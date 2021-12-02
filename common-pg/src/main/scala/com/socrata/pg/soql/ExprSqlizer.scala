@@ -1,17 +1,17 @@
 package com.socrata.pg.soql
 
+import java.sql.PreparedStatement
+
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.soql.typed._
 import com.socrata.soql.types._
 import com.socrata.soql.environment.TableName
 import com.socrata.soql.exceptions.BadParse
-import java.sql.PreparedStatement
+import com.socrata.pg.soql.SqlFunctions.{FunCall, aggFnFilter, windowOverInfo}
 
 import Sqlizer._
 import SqlizerContext._
-import com.socrata.pg.soql.SqlFunctions.{FunCall, windowOverInfo}
-
 
 object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
   def sql(lit: StringLiteral[SoQLType])
@@ -144,9 +144,10 @@ object FunctionCallSqlizer extends Sqlizer[FunctionCall[UserColumnId, SoQLType]]
           escape: Escape): ParametricSql = {
     val fn = SqlFunctions(expr.function.function)
     val pSql = fn(expr, rep, typeRep, setParams, windowFnCtx(expr, ctx), escape)
+    val pSqlFilter = aggFnFilter(pSql, expr, rep, typeRep, pSql.setParams, ctx, escape)
     // SoQL parsing bakes parenthesis into the ast tree without explicitly spitting out parenthesis.
     // We add parenthesis to every function call to preserve semantics.
-    val ParametricSql(sqls, fnSetParams) = windowOverInfo(pSql, expr, rep, typeRep, pSql.setParams, ctx, escape)
+    val ParametricSql(sqls, fnSetParams) = windowOverInfo(pSqlFilter, expr, rep, typeRep, pSqlFilter.setParams, ctx, escape)
     ParametricSql(sqls.map(s => s"($s)" + selectAlias(expr)(ctx)), fnSetParams)
   }
 }

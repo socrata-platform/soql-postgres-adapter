@@ -126,12 +126,12 @@ trait SqlFunctionsLocation {
                                            ctx: Sqlizer.Context,
                                            escape: Escape): ParametricSql = {
         val toPointFn = MonomorphicFunction(SoQLFunctions.LocationToPoint, Map.empty)
-        val toPointCall = FunctionCall(toPointFn, fn.parameters.take(1), fn.window)(NoPosition, NoPosition)
+        val toPointCall = FunctionCall(toPointFn, fn.parameters.take(1), fn.filter, fn.window)(NoPosition, NoPosition)
         val ParametricSql(sqls, params) = Sqlizer.sql(toPointCall)(rep, typeRep, setParams, ctx, escape)
         val (bindName, bindType) = fn.function.bindings.head
         val geomFn = MonomorphicFunction(geomFunction, Map(bindName -> SoQLPoint, "b" -> bindType))
         val geomParams = toPointCall +: fn.parameters.drop(1)
-        val geomCall = FunctionCall(geomFn, geomParams, fn.window)(NoPosition, NoPosition)
+        val geomCall = FunctionCall(geomFn, geomParams, fn.filter, fn.window)(NoPosition, NoPosition)
         Sqlizer.sql(geomCall)(rep, typeRep, setParams, ctx, escape)
   }
 }

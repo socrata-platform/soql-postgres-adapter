@@ -5,7 +5,9 @@ import com.socrata.pg.soql.CaseInsensitive
 class SoQLGroupTest extends SoQLTest {
 
   test("group by text") {
-    compareSoqlResult("select upper(make) as umake, count(name) group by upper(make) order by upper(make)", "group-text.json")
+    Seq("", " FILTER (WHERE TRUE)").foreach { filter =>
+      compareSoqlResult(s"select upper(make) as umake, count(name)${filter} as count_name group by upper(make) order by upper(make)", "group-text.json")
+    }
   }
 
   test("group by text ci") {
