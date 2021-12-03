@@ -207,8 +207,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     Lag -> nary("lag") _,
 
     Count -> nary("count", Some("numeric")) _,
-    CountStar -> formatCall("count(*)", typeCastIfPlainFunction = Some("numeric")) _,
-    CountDistinct -> formatCall("count(distinct %s)", typeCastIfPlainFunction = Some("numeric")) _,
+    CountStar -> formatCall("count(*)", typeCastIfPlainFunctionCall = Some("numeric")) _,
+    CountDistinct -> formatCall("count(distinct %s)", typeCastIfPlainFunctionCall = Some("numeric")) _,
 
     JsonProp -> infix("->") _,
     JsonIndex -> infix("->") _
@@ -530,7 +530,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
   def formatCall(template: String, // scalastyle:ignore parameter.number
                  foldOp: Option[String] = None,
                  paramPosition: Option[Seq[Int]] = None,
-                 typeCastIfPlainFunction: Option[String] = None) // plain means a function without filter, window
+                 typeCastIfPlainFunctionCall: Option[String] = None) // plain means a function without filter, window
                 (fn: FunCall,
                  rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                  typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
@@ -538,7 +538,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                  ctx: Sqlizer.Context,
                  escape: Escape): ParametricSql = {
 
-    val templateTypeCast = if (fn.window.isEmpty && fn.filter.isEmpty && typeCastIfPlainFunction.isDefined) template + typeCastIfPlainFunction.map("::" + _).get
+    val templateTypeCast = if (fn.window.isEmpty && fn.filter.isEmpty && typeCastIfPlainFunctionCall.isDefined) template + typeCastIfPlainFunctionCall.map("::" + _).get
                            else template // when window option is used, typecast is done higher up
     val fnParams = paramPosition match {
       case Some(pos) =>
