@@ -49,6 +49,7 @@ import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.curator.{CuratorFromConfig, DiscoveryFromConfig}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
+import com.socrata.http.common.util.HttpUtils
 import com.socrata.pg.server.CJSONWriter.utf8EncodingName
 import com.socrata.pg.server.QueryServer.QueryRuntimeError.validErrorCodes
 import com.socrata.thirdparty.metrics.{MetricsReporter, SocrataHttpSupport}
@@ -283,6 +284,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
         obfuscateId = obfuscateId,
         precondition = req.precondition,
         ifModifiedSince = req.dateTimeHeader("If-Modified-Since"),
+        givenLastModified = req.dateTimeHeader("X-Socrata-Last-Modified"),
         etagInfo = Option(createEtagFromAnalysis(analyses, datasetId, contextVars)),
         queryTimeout = queryTimeout,
         debug = debug,
@@ -300,6 +302,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     obfuscateId: Boolean,
     precondition: Precondition,
     ifModifiedSince: Option[DateTime],
+    givenLastModified: Option[DateTime],
     etagInfo: Option[String],
     queryTimeout: Option[Duration],
     debug: Boolean,
@@ -334,6 +337,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                 obfuscateId = obfuscateId,
                 precondition = precondition,
                 ifModifiedSince = ifModifiedSince,
+                givenLastModified = givenLastModified,
                 etagInfo = etagInfo,
                 queryTimeout = queryTimeout,
                 debug = debug,
@@ -397,6 +401,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     obfuscateId: Boolean,
     precondition: Precondition,
     ifModifiedSince: Option[DateTime],
+    givenLastModified: Option[DateTime],
     etagInfo: Option[String],
     queryTimeout: Option[Duration],
     debug: Boolean,
@@ -503,7 +508,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     }
     val etag = etagFromCopy(datasetInternalName, copy, etagInfo, debug)
     if(debug) logger.info(s"Generated etag: ${etag.asBytes.mkString(",")}")
-    val lastModified = copy.lastModified
+    val lastModified = givenLastModified match {
+      case None => copy.lastModified
+      case Some(d) => if (d.isAfter(copy.lastModified)) d else copy.lastModified
+    }
 
     // Conditional GET handling
     precondition.check(Some(etag), sideEffectFree = true) match {
@@ -784,6 +792,7 @@ object QueryServer extends DynamicPortMap {
       "22003",    // value overflows numeric format, 1000000000000 ^ 1000000000000000000
       "22012",    // divide by zero, 1/0
       "22008",    // timestamp out of range, timestamp - 'P500000Y'
+      "22023",    // time zone not recognized
       "22P02",    // invalid input syntax for type boolean|numeric:, 'tr2ue'::boolean 'tr2ue'::number
       "XX000"     // invalid geometry, POINT(1,2)::point -- no comma between lon lat, POLYGON((0 0,1 1,1 0))::polygon
     )

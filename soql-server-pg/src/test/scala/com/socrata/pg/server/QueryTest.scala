@@ -66,7 +66,7 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase w
           ds.run { dsInfo =>
             val qs = new QueryServer(dsInfo, CaseSensitive, leadingSearch = true)
             qs.execQuery(pgu, Map.empty, "someDatasetInternalName", copyInfo.datasetInfo, analyses, false, None, None, true,
-              NoPrecondition, None, None, None, false, false, false) match {
+              NoPrecondition, None, None, None, None, false, false, false) match {
               case QueryServer.Success(schema, _, version, results, etag, lastModified) =>
                 (schema, version, results)
               case queryFail: QueryServer.QueryResult =>

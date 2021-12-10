@@ -147,6 +147,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     // Translate a fixed timestamp to a given time zone and convert it to a floating timestamp.
     ToFloatingTimestamp -> formatCall("%s at time zone %s") _,
 
+    GetUtcDate -> formatCall("date_trunc('s',now())") _,
+
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
     NumberToText -> formatCall("%s::varchar") _,
