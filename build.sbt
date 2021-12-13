@@ -1,10 +1,12 @@
-ThisBuild / fork in Test := true
+ThisBuild / Test / fork := true
 
 ThisBuild / scalacOptions ++= Seq("-deprecation", "-feature", "-Xfatal-warnings")
 
 ThisBuild / organization := "com.socrata"
 
 ThisBuild / resolvers += "socrata" at "https://repo.socrata.com/artifactory/libs-release"
+
+ThisBuild / evictionErrorLevel := Level.Warn
 
 val commonPG = project in file("common-pg")
 
