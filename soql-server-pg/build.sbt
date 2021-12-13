@@ -7,6 +7,6 @@ libraryDependencies ++= Seq(
   socrataHttpCuratorBroker
 )
 
-test in assembly := {}
+assembly/test := {}
 
 mainClass := Some("com.socrata.pg.server.QueryServer")

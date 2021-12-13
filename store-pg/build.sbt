@@ -8,4 +8,4 @@ libraryDependencies ++= Seq(
   coordinator % "test"
 )
 
-test in assembly := {}
+assembly/test := {}
