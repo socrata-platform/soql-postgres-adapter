@@ -67,7 +67,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
         analysis
       case Compound(_, _, _) =>
         val selection = OrderedMap(com.socrata.soql.environment.ColumnName("count") -> (FunctionCall(SoQLFunctions.CountStar.monomorphic.get, Seq.empty, None, None)(NoPosition, NoPosition)))
-        val countAnalysis = SoQLAnalysis[UserColumnId, SoQLType](false, false, selection, None, Seq.empty, None, Seq.empty, None, Seq.empty, None, None, None)
+        val countAnalysis = SoQLAnalysis[UserColumnId, SoQLType](false, false, selection, None, Seq.empty, None, Seq.empty, None, Seq.empty, None, None, None, Seq.empty)
         PipeQuery(analysis, Leaf(countAnalysis))
       case _ =>
         analysis
@@ -110,20 +110,29 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
             case _ =>
               (TableName.PrimaryTable, "x1")
           }
+        val useCte = Hints.shouldMaterialized(ra.hints) // use common table expression or sub-query
         val subTableName = if (ra.from.isEmpty) "(%s) AS \"%s\"".format(lpsql.sql.head, chainedTableAlias)
                            else "(%s)".format(lpsql.sql.head)
-        val tableNamesSubTableNameReplace = tableNames + (primaryTableName -> subTableName)
+        val cte = "WITH \"%s\" AS MATERIALIZED (%s)\n".format(chainedTableAlias, lpsql.sql.head)
+        val tableSubTable = if (useCte) chainedTableAlias else subTableName
+        val tableNamesSubTableNameReplace = tableNames + (primaryTableName -> tableSubTable)
         val primaryTableAlias = if (ra.joins.nonEmpty) Map((PrimaryTableAlias -> chainedTableAlias)) else Map.empty // REVISIT
         val subCtx = ctx ++ primaryTableAlias
         val prevAna = l.outputSchema.leaf
         val (rpsql, rParamsCountInSelect) =
           toSql(ra, Option(prevAna), tableNamesSubTableNameReplace, allColumnReps, reqRowCount, rep, typeRep,
                 Seq.empty, subCtx, escape, fromTableName)
-        // query parameters in the select phrase come before those in the sub-query.
-        // query parameters in the other phrases - where, group by, order by, etc come after those in the sub-query.
-        val (setParamsBefore, setParamsAfter) = rpsql.setParams.splitAt(rParamsCountInSelect)
-        val setParamsAcc = setParamsBefore ++ lpsql.setParams ++ setParamsAfter
-        (rpsql.copy(setParams = setParamsAcc), rParamsCountInSelect)
+        if (useCte) {
+          val sql = cte + rpsql.sql.mkString("\n")
+          (ParametricSql(Seq(cte + rpsql.sql.mkString("\n")), lpsql.setParams ++ rpsql.setParams),
+           rParamsCountInSelect)
+        } else {
+          // query parameters in the select phrase come before those in the sub-query.
+          // query parameters in the other phrases - where, group by, order by, etc come after those in the sub-query.
+          val (setParamsBefore, setParamsAfter) = rpsql.setParams.splitAt(rParamsCountInSelect)
+          val setParamsAcc = setParamsBefore ++ lpsql.setParams ++ setParamsAfter
+          (rpsql.copy(setParams = setParamsAcc), rParamsCountInSelect)
+        }
       case PipeQuery(_, _) =>
         throw new Exception("right operand of pipe query cannot be recursive")
       case Compound(op, l, r) =>

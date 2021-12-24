@@ -25,6 +25,8 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
 
   protected lazy val ds = DataSourceFromConfig(datasourceConfig)
 
+  implicit val materialized: Boolean = false
+
   def compareSoqlResult(soql: String,
                         expectedFixture: String,
                         expectedRowCount: Option[Long] = None,
@@ -32,7 +34,9 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
                         joinDatasetCtx: Map[String, DatasetContext[SoQLType]] = Map.empty,
                         leadingSearch: Boolean = true,
                         context: Map[String, String] = Map.empty,
-                        secDatasetId: DatasetId = secDatasetId): Unit = {
+                        secDatasetId: DatasetId = secDatasetId)
+                       (implicit materialized: Boolean): Unit = {
+    val soqlh = if (materialized) soql.replace("/*hint*/", "HINT(materialized)") else soql
     withDb() { conn =>
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon)
       val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secDatasetId).get)
@@ -65,7 +69,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
         }
 
         val analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] =
-          SoQLAnalyzerHelper.analyzeSoQL(soql, allDatasetCtx, primaryTableColumnNameIdMap ++ joinTableColumnNameIdMap)
+          SoQLAnalyzerHelper.analyzeSoQL(soqlh, allDatasetCtx, primaryTableColumnNameIdMap ++ joinTableColumnNameIdMap)
 
         val (qrySchema, dataVersion, mresult) =
           ds.run { dsInfo =>
