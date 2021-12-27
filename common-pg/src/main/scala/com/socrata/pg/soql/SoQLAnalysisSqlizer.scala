@@ -118,7 +118,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
         val prevAna = l.outputSchema.leaf
         val (rpsql, rParamsCountInSelect) =
           toSql(ra, Option(prevAna), tableNamesSubTableNameReplace, allColumnReps, reqRowCount, rep, typeRep,
-                setParams, subCtx, escape, fromTableName)
+                Seq.empty, subCtx, escape, fromTableName)
         // query parameters in the select phrase come before those in the sub-query.
         // query parameters in the other phrases - where, group by, order by, etc come after those in the sub-query.
         val (setParamsBefore, setParamsAfter) = rpsql.setParams.splitAt(rParamsCountInSelect)
