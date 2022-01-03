@@ -233,14 +233,6 @@ class SqlizerBasicTest extends SqlizerTest {
     }
   }
 
-  test("select literal and group by has aliases") {
-    val soql = "SELECT 'one' as one, max('two') as two GROUP BY one |> SELECT one, two"
-    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT "one","two" FROM (SELECT e'one' as "one",(max(?)) as "two" FROM t1 GROUP BY 1) AS "x1"""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("two"))
-  }
-
   test("search") {
     val soql = "select * search 'oNe Two'"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive, useRepsWithId = true)
@@ -414,75 +406,6 @@ class SqlizerBasicTest extends SqlizerTest {
     setParams.length should be (1)
   }
 
-  test("chained soql set params positions match place holder positions in sql") {
-    val soql =
-      """SELECT 'aa' as aa WHERE primary_type !='00' |>
-        |SELECT aa || 'b' as bb WHERE aa !='11'""".stripMargin
-    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ("aa" || ?) FROM (SELECT ? as "aa" FROM t1 WHERE ("t1".primary_type != ?)) AS "x1" WHERE ("aa" != ?)""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be(Seq("b", "aa", "00", "11"))
-  }
-
-  test("chained (x3) soql set params positions match place holder positions in sql") {
-    val soql =
-      """SELECT 'aa' as aa WHERE primary_type !='00' |>
-        |SELECT aa || 'b' as bb WHERE aa !='11' |>
-        |SELECT bb || 'c' as cc WHERE bb !='22'""".stripMargin
-    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ("bb" || ?) FROM (SELECT ("aa" || ?) as "bb" FROM (SELECT ? as "aa" FROM t1 WHERE ("t1".primary_type != ?)) AS "x1" WHERE ("aa" != ?)) AS "x1" WHERE ("bb" != ?)""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be(Seq("c", "b", "aa", "00", "11", "22"))
-  }
-
-  test("chained soql only adds ST_AsBinary in the outermost sql") {
-    val soql = "select point, object |> select point where within_box(point, 1, 2, 3, 4)"
-    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ST_AsBinary("point") AS point FROM (SELECT "t1".point as "point","t1".object as "object" FROM t1) AS "x1" WHERE (ST_MakeEnvelope(?, ?, ?, ?, 4326) ~ "point")""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be(Seq(2, 3, 4, 1).map(BigDecimal(_)))
-  }
-
-  test("chained soql only adds ST_AsBinary - location in the outermost sql") {
-    val soql = "select location, object |> select location::point where within_box(location::point, 1, 2, 3, 4)"
-    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ST_AsBinary(("location_geom")) AS location_point FROM (SELECT "t1".location_geom as "location_geom","t1".location_address as "location_address","t1".object as "object" FROM t1) AS "x1" WHERE (ST_MakeEnvelope(?, ?, ?, ?, 4326) ~ ("location_geom"))""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be(Seq(2, 3, 4, 1).map(BigDecimal(_)))
-  }
-
-  test("chained search scope is limited to the previous result") {
-    val soql = "select case_number, primary_type search 'oNe' |> select * search 'tWo'"
-
-    // search before select, filter, grouping, join
-    val ParametricSql(Seq(sqlLeadingSearch), setParamsLeadingSearch) = sqlize(soql, CaseSensitive, useRepsWithId = true, leadingSearch = true)
-    val expectedSqlLeadingSearch = """SELECT "case_number","primary_type" FROM (SELECT "t1".case_number_6 as "case_number","t1".primary_type_7 as "primary_type" FROM t1 WHERE (to_tsvector('english', coalesce("t1".array_12,'') || ' ' || coalesce("t1".case_number_6,'') || ' ' || coalesce("t1".object_11,'') || ' ' || coalesce("t1".primary_type_7,'') || ' ' || coalesce("t1".url_21_description,'') || ' ' || coalesce("t1".url_21_url,'')) @@ plainto_tsquery('english', ?))) AS "x1" WHERE (to_tsvector('english', coalesce("case_number",'') || ' ' || coalesce("primary_type",'')) @@ plainto_tsquery('english', ?))"""
-    sqlLeadingSearch should be (expectedSqlLeadingSearch)
-    val paramsLeadingSearch = setParamsLeadingSearch.map { (setParam) => setParam(None, 0).get }
-    paramsLeadingSearch should be(Seq("oNe", "tWo"))
-
-    // search after select, filter, grouping, join
-    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive, useRepsWithId = true, leadingSearch = false)
-    sql should be ("""SELECT "case_number","primary_type" FROM (SELECT "t1".case_number_6 as "case_number","t1".primary_type_7 as "primary_type" FROM t1 WHERE (to_tsvector('english', coalesce("t1".case_number_6,'') || ' ' || coalesce("t1".primary_type_7,'')) @@ plainto_tsquery('english', ?))) AS "x1" WHERE (to_tsvector('english', coalesce("case_number",'') || ' ' || coalesce("primary_type",'')) @@ plainto_tsquery('english', ?))""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be(Seq("oNe", "tWo"))
-  }
-
-  test("chained search scope is limited to the previous result and no searchable types is converted to false") {
-    val soql = "select id search 'oNe' |> select * search 'tWo'"
-
-    // search before select, filter, grouping, join
-    val ParametricSql(Seq(sqlLeadingSearch), setParamsLeadingSearch) = sqlize(soql, CaseSensitive, useRepsWithId = true, leadingSearch = true)
-    sqlLeadingSearch should be ("""SELECT "id" FROM (SELECT "t1".id_5 as "id" FROM t1 WHERE (to_tsvector('english', coalesce("t1".array_12,'') || ' ' || coalesce("t1".case_number_6,'') || ' ' || coalesce("t1".object_11,'') || ' ' || coalesce("t1".primary_type_7,'') || ' ' || coalesce("t1".url_21_description,'') || ' ' || coalesce("t1".url_21_url,'')) @@ plainto_tsquery('english', ?))) AS "x1" WHERE (false)""")
-    val paramsLeadingSearch = setParamsLeadingSearch.map { (setParam) => setParam(None, 0).get }
-    paramsLeadingSearch should be(Seq("oNe"))
-
-    // search after select, filter, grouping, join
-    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive, useRepsWithId = true, leadingSearch = false)
-    sql should be ("""SELECT "id" FROM (SELECT "t1".id_5 as "id" FROM t1 WHERE (false)) AS "x1" WHERE (false)""")
-    setParams.length should be (0)
-  }
-
   test("group by literals with constants removed") {
     val soql = "select id, 'stRing' as a, 5 as b, 2*3 as c group by id, a, b, c"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
@@ -532,14 +455,6 @@ class SqlizerBasicTest extends SqlizerTest {
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     sql should be ("""SELECT (avg("t1".year) over()) FROM t1""")
     setParams.length should be (0)
-  }
-
-  test("window function row_number") {
-    val soql = "select row_number() over(partition by primary_type, year order by primary_type, year) as rn |> select * where rn < 2"
-    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    sql should be ("""SELECT "rn" FROM (SELECT (row_number() over( partition by "t1".primary_type,"t1".year order by "t1".primary_type nulls last,"t1".year nulls last)) as "rn" FROM t1) AS "x1" WHERE ("rn" < ?)""")
-    params should be(Seq(2))
   }
 
   test("window function rank over") {

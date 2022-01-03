@@ -20,6 +20,9 @@ class SqlizerTest extends FunSuite with Matchers
 
 object SqlizerTest {
   private val cryptProvider = new CryptProvider(CryptProvider.generateKey())
+
+  implicit val materialized: Boolean = false
+
   val sqlCtx = Map[SqlizerContext, Any](
     SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
     SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider)
@@ -32,7 +35,11 @@ object SqlizerTest {
   val birdTable = TableName("_bird", None)
   val fishTable = TableName("_fish", None)
 
-  def sqlize(soql: String, caseSensitivity: CaseSensitivity, useRepsWithId: Boolean = false, leadingSearch: Boolean = false): ParametricSql = {
+  def sqlize(soql: String, caseSensitivity: CaseSensitivity, useRepsWithId: Boolean = false, leadingSearch: Boolean = false)
+            (implicit materialized: Boolean): ParametricSql = {
+
+    val soqlh = if (materialized) soql.replace("/*hint*/", "HINT(materialized)") else soql
+
     val allColumnReps = columnInfos.map(PostgresUniverseCommon.repForIndex(_))
     val allDatasetCtx = Map(TableName.PrimaryTable.qualifier -> datasetCtx,
                             typeTable.qualifier -> typeDatasetCtx,
@@ -55,7 +62,7 @@ object SqlizerTest {
       PostgresUniverseCommon.repForIndex(ci)
     }
 
-    val analyses = SoQLAnalyzerHelper.analyzeSoQL(soql, allDatasetCtx, allColumnIdMap)
+    val analyses = SoQLAnalyzerHelper.analyzeSoQL(soqlh, allDatasetCtx, allColumnIdMap)
     val typeReps: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]] =
       columnInfos.map { colInfo  =>
         (colInfo.typ -> SoQLRep.sqlRep(colInfo))
