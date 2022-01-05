@@ -3,6 +3,9 @@ package com.socrata.pg.soql
 import SqlizerTest._
 import com.socrata.soql.exceptions.TypecheckException
 import com.socrata.soql.types.SoQLID
+import org.joda.time.{DateTime, DateTimeZone}
+
+import java.sql.Timestamp
 
 // scalastyle:off null
 class SqlizerBasicTest extends SqlizerTest {
@@ -510,5 +513,35 @@ class SqlizerBasicTest extends SqlizerTest {
     val soql = "select 'bleh' from @single_row"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     sql should be ("SELECT ?")
+  }
+
+  test("timestamp literals use timestamp parameters") {
+    val soql = "select '2021-12-25T01:02:03'::floating_timestamp, '2021-12-25T01:02:03z'::fixed_timestamp, '2021-12-25T01:02:03-08:00'::fixed_timestamp from @single_row"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    val dt1 = new DateTime(2021, 12, 25, 1, 2, 3, 0)
+    val dt2 = DateTime.parse("2021-12-25T01:02:03z")
+    val dt3 = DateTime.parse("2021-12-25T01:02:03-08:00")
+    val ts1 = new Timestamp(dt1.getMillis)
+    val ts2 = new Timestamp(dt2.getMillis)
+    val ts3 = new Timestamp(dt3.getMillis)
+    params should be (Seq(ts1, ts2, ts3))
+    sql should be ("SELECT (?::timestamp),(?::timestamp with time zone),(?::timestamp with time zone)")
+  }
+
+  test("timestamp literals use timestamp parameters in date_diff_d") {
+    val soql = "select date_diff_d('2021-12-25T01:02:03'::floating_timestamp, '2021-12-24T01:02:03'::floating_timestamp) as d1, date_diff_d('2021-12-25T01:02:03z'::fixed_timestamp, '2021-12-24T01:02:03z'::fixed_timestamp) as d2 from @single_row"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    val dt1 = new DateTime(2021, 12, 25, 1, 2, 3, 0)
+    val dt2 = dt1.minusDays(1)
+    val dt3 = DateTime.parse("2021-12-25T01:02:03z")
+    val dt4 = dt3.minusDays(1)
+    val ts1 = new Timestamp(dt1.getMillis)
+    val ts2 = new Timestamp(dt2.getMillis)
+    val ts3 = new Timestamp(dt3.getMillis)
+    val ts4 = new Timestamp(dt4.getMillis)
+    params should be (Seq(ts1, ts2, ts3, ts4))
+    sql should be ("SELECT (trunc((extract(epoch from (?::timestamp)) - extract(epoch from (?::timestamp)))::numeric / 86400)),(trunc((extract(epoch from (?::timestamp with time zone)) - extract(epoch from (?::timestamp with time zone)))::numeric / 86400))")
   }
 }

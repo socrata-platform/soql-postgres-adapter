@@ -10,7 +10,6 @@ import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
 import com.socrata.soql.types._
 import Sqlizer._
 import SoQLFunctions._
-import com.socrata.pg.soql.SqlizerContext.{RootExpr, SoqlPart}
 import com.socrata.soql.exceptions.BadParse
 import org.joda.time.format.{PeriodFormatter, PeriodFormatterBuilder}
 import org.joda.time.{DateTime, LocalDateTime, Period}
@@ -611,11 +610,19 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                          escape: Escape): ParametricSql = {
     val convertedParams = fn.parameters.map {
       case strLit@StringLiteral(value: String, _) =>
-        try {
-          strLit.copy(value = conversion(value))
-        } catch {
-          case _: Exception =>
-            throw InvalidConversion(soqlType, value)
+        val convertedStrLit =
+          try {
+            strLit.copy(value = conversion(value))
+          } catch {
+            case _: Exception =>
+              throw InvalidConversion(soqlType, value)
+          }
+        soqlType match {
+          case SoQLFloatingTimestamp | SoQLFixedTimestamp =>
+            val timestampPSql = StringLiteralSqlizer.sqlTimestamp(convertedStrLit)(rep, typeRep, setParams, ctx, escape)
+            return timestampPSql.copy(sql = Seq(template.format(timestampPSql.sql:_*)))
+          case _ =>
+            convertedStrLit
         }
       case x => x
     }

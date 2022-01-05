@@ -1,6 +1,6 @@
 package com.socrata.pg.soql
 
-import java.sql.PreparedStatement
+import java.sql.{PreparedStatement, Timestamp}
 
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
@@ -12,9 +12,19 @@ import com.socrata.pg.soql.SqlFunctions.{FunCall, aggFnFilter, windowOverInfo}
 
 import Sqlizer._
 import SqlizerContext._
+import org.joda.time.DateTime
 
 object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
   def sql(lit: StringLiteral[SoQLType])
+         (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+          typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+          setParams: Seq[SetParam],
+          ctx: Context,
+          escape: Escape): ParametricSql = {
+    sql(lit, setTextParam(lit, ctx))(rep, typeRep, setParams, ctx, escape)
+  }
+
+  def sql(lit: StringLiteral[SoQLType], setParam: SetParam)
          (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
           typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
@@ -28,15 +38,32 @@ object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
         val v = toUpper(lit, quote(lit.value, escape), ctx) + selectAlias(lit)(ctx)
         ParametricSql(Seq(v), setParams)
       case _ =>
-        val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
-          val maybeUpperLitVal = toUpper(lit, lit.value, ctx)
-          stmt.foreach(_.setString(pos, maybeUpperLitVal))
-          Some(maybeUpperLitVal)
-        }
         // Append value as comment for debug
         // val comment = " /* %s */".format(lit.value)
         ParametricSql(Seq(ParamPlaceHolder + selectAlias(lit)(ctx) /* + comment */), setParams :+ setParam)
     }
+  }
+
+  def sqlTimestamp(lit: StringLiteral[SoQLType])
+                  (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                   typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                   setParams: Seq[SetParam],
+                   ctx: Context,
+                   escape: Escape): ParametricSql = {
+    sql(lit, setTimestampParam(lit, ctx))(rep, typeRep, setParams, ctx, escape)
+  }
+
+  private def setTextParam(lit: StringLiteral[SoQLType], ctx: Context)(stmt: Option[PreparedStatement], pos: Int): Option[Any] = {
+    val maybeUpperLitVal = toUpper(lit, lit.value, ctx)
+    stmt.foreach(_.setString(pos, maybeUpperLitVal))
+    Some(maybeUpperLitVal)
+  }
+
+  private def setTimestampParam(lit: StringLiteral[SoQLType], ctx: Context)(stmt: Option[PreparedStatement], pos: Int): Option[Any] = {
+    val datetime = DateTime.parse(lit.value)
+    val sqlTimestamp = new Timestamp(datetime.getMillis)
+    stmt.foreach(_.setTimestamp(pos, sqlTimestamp))
+    Some(sqlTimestamp)
   }
 
   private def quote(s: String, escape: Escape) = s"e'${escape(s)}'"
