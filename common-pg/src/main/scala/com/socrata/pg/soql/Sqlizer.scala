@@ -20,7 +20,7 @@ case class ParametricSql(sql: Seq[String], setParams: Seq[SetParam]) {
     " params: " + params.mkString("\"", """","""", "\"")
   }
 
-  val paramsAsStrings: Seq[String] =
+  def paramsAsStrings: Seq[String] =
     setParams.map { (setParam) => setParam(None, 0).get.toString }
 }
 
