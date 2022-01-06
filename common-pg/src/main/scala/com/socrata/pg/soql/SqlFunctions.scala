@@ -10,7 +10,6 @@ import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
 import com.socrata.soql.types._
 import Sqlizer._
 import SoQLFunctions._
-import com.socrata.pg.soql.SqlizerContext.{RootExpr, SoqlPart}
 import com.socrata.soql.exceptions.BadParse
 import org.joda.time.format.{PeriodFormatter, PeriodFormatterBuilder}
 import org.joda.time.{DateTime, LocalDateTime, Period}
@@ -620,8 +619,14 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
       case x => x
     }
 
+    val litCtx = soqlType match {
+      case SoQLFloatingTimestamp | SoQLFixedTimestamp =>
+        ctx + (SqlizerContext.TimestampLiteral -> true)
+      case _ =>
+        ctx
+    }
     val fnWithConvertedParams = fn.copy(parameters = convertedParams, window = fn.window)
-    formatCall(template, None, None)(fnWithConvertedParams, rep, typeRep, setParams, ctx, escape)
+    formatCall(template, None, None)(fnWithConvertedParams, rep, typeRep, setParams, litCtx, escape)
   }
 
   // scalastyle:off parameter.number
