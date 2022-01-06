@@ -21,15 +21,18 @@ object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
           setParams: Seq[SetParam],
           ctx: Context,
           escape: Escape): ParametricSql = {
-    sql(lit, setTextParam(lit, ctx))(rep, typeRep, setParams, ctx, escape)
-  }
 
-  def sql(lit: StringLiteral[SoQLType], setParam: SetParam)
-         (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
-          typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
-          setParams: Seq[SetParam],
-          ctx: Context,
-          escape: Escape): ParametricSql = {
+    // using text for timestamp will work but it is less efficient.
+    // postgresql will do
+    //   text -> cstring -> timestamp
+    //   vs
+    //   sql timestamp -> timstamp
+    // It is trivial if postgres evaluates literal expression only once.
+    // Unfortunately, postgres appears to evaluate literal expressions as many times as there are rows.
+    // This code might be cleaner without relying on Context if analysis produces TimestampLiteral
+    val setParam = if (ctx.contains(TimestampLiteral)) setTimestampParam _
+                   else setTextParam _
+
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
         val v = toUpper(lit, quote(lit.value, escape), ctx)
@@ -40,17 +43,8 @@ object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
       case _ =>
         // Append value as comment for debug
         // val comment = " /* %s */".format(lit.value)
-        ParametricSql(Seq(ParamPlaceHolder + selectAlias(lit)(ctx) /* + comment */), setParams :+ setParam)
+        ParametricSql(Seq(ParamPlaceHolder + selectAlias(lit)(ctx) /* + comment */), setParams :+ setParam(lit, ctx))
     }
-  }
-
-  def sqlTimestamp(lit: StringLiteral[SoQLType])
-                  (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
-                   typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
-                   setParams: Seq[SetParam],
-                   ctx: Context,
-                   escape: Escape): ParametricSql = {
-    sql(lit, setTimestampParam(lit, ctx))(rep, typeRep, setParams, ctx, escape)
   }
 
   private def setTextParam(lit: StringLiteral[SoQLType], ctx: Context)(stmt: Option[PreparedStatement], pos: Int): Option[Any] = {

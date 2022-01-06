@@ -185,6 +185,8 @@ object SqlizerContext extends Enumeration {
   val IsSubQuery = Value("is-sub-query")
   val InsideWindowFn = Value("inside-window-fn")
   val LeadingSearch = Value("leading-search")
+
+  val TimestampLiteral = Value("timestamp-literal")
 }
 
 sealed trait CaseSensitivity

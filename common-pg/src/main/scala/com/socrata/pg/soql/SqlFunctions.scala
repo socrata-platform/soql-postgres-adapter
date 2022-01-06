@@ -610,25 +610,23 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                          escape: Escape): ParametricSql = {
     val convertedParams = fn.parameters.map {
       case strLit@StringLiteral(value: String, _) =>
-        val convertedStrLit =
-          try {
-            strLit.copy(value = conversion(value))
-          } catch {
-            case _: Exception =>
-              throw InvalidConversion(soqlType, value)
-          }
-        soqlType match {
-          case SoQLFloatingTimestamp | SoQLFixedTimestamp =>
-            val timestampPSql = StringLiteralSqlizer.sqlTimestamp(convertedStrLit)(rep, typeRep, setParams, ctx, escape)
-            return timestampPSql.copy(sql = Seq(template.format(timestampPSql.sql:_*)))
-          case _ =>
-            convertedStrLit
+        try {
+          strLit.copy(value = conversion(value))
+        } catch {
+          case _: Exception =>
+            throw InvalidConversion(soqlType, value)
         }
       case x => x
     }
 
+    val litCtx = soqlType match {
+      case SoQLFloatingTimestamp | SoQLFixedTimestamp =>
+        ctx + (SqlizerContext.TimestampLiteral -> true)
+      case _ =>
+        ctx
+    }
     val fnWithConvertedParams = fn.copy(parameters = convertedParams, window = fn.window)
-    formatCall(template, None, None)(fnWithConvertedParams, rep, typeRep, setParams, ctx, escape)
+    formatCall(template, None, None)(fnWithConvertedParams, rep, typeRep, setParams, litCtx, escape)
   }
 
   // scalastyle:off parameter.number
