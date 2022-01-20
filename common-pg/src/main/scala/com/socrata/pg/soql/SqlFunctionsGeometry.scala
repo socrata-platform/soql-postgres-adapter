@@ -68,6 +68,7 @@ trait SqlFunctionsGeometry {
     SimplifyPreserveTopology -> formatSimplify("ST_SimplifyPreserveTopology(%s, %s)") _,
     SnapToGrid -> formatSimplify("ST_SnapToGrid(%s, %s)") _,
     SnapForZoom -> snapForZoom _,
+    Reproject -> formatCall("ST_Transform(%s, %s, %s)") _,
     PointToLatitude -> formatCall("ST_Y(%s)::numeric") _,
     PointToLongitude -> formatCall("ST_X(%s)::numeric") _,
     VisibleAt -> visibleAt,
