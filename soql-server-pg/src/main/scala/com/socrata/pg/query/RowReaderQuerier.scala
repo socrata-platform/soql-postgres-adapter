@@ -10,13 +10,14 @@ import com.socrata.pg.soql.{ParametricSql, QualifiedUserColumnId}
 import com.socrata.pg.store.PGSecondaryRowReader
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.{BinaryTree, SoQLAnalysis}
+import com.socrata.soql.stdlib.{Context => SoQLContext}
 
 import scala.concurrent.duration.Duration
 
 trait RowReaderQuerier[CT, CV] {
   this: PGSecondaryRowReader[CT, CV] => ()
 
-  def query(context: Map[String, String],
+  def query(context: SoQLContext,
             analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
             toSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]]) => ParametricSql,
             toRowCountSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]]) => ParametricSql,
@@ -30,7 +31,7 @@ trait RowReaderQuerier[CT, CV] {
     managed(resultIter)
   }
 
-  def queryExplain(context: Map[String, String],
+  def queryExplain(context: SoQLContext,
             analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
             toSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]]) => ParametricSql,
             queryTimeout: Option[Duration],

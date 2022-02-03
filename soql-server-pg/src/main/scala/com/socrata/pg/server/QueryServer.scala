@@ -43,6 +43,7 @@ import com.socrata.soql.{BinaryTree, Compound, Leaf, SoQLAnalysis, typed}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, ResourceName, TableName}
+import com.socrata.soql.stdlib.{Context => SoQLContext}
 import com.socrata.soql.typed.CoreExpr
 import com.socrata.soql.types.SoQLID.ClearNumberRep
 import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion}
@@ -184,10 +185,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     StrongEntityTag(etagContents.getBytes(StandardCharsets.UTF_8))
   }
 
-  def createEtagFromAnalysis(analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]], fromTable: String, contextVars: Map[String, String]): String = {
+  def createEtagFromAnalysis(analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]], fromTable: String, contextVars: SoQLContext): String = {
     val suffix =
       if(contextVars.nonEmpty) {
-        CompactJsonWriter.toString(JObject(SortedMap(contextVars.toSeq : _*).mapValues(JString)))
+        JsonUtil.renderJson(contextVars.canonicalized, pretty = false)
       } else {
         ""
       }
@@ -195,7 +196,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     // Strictly speaking this table name is incorrect, but it's _consistently_ incorrect
     val etag = analyses match {
       case Compound(op, l, r) =>
-        createEtagFromAnalysis(l, fromTable, Map.empty) + op + createEtagFromAnalysis(r, fromTable, Map.empty)
+        createEtagFromAnalysis(l, fromTable, SoQLContext.empty) + op + createEtagFromAnalysis(r, fromTable, SoQLContext.empty)
       case Leaf(analysis) =>
         if (analysis.from.isDefined) analysis.toString()
         else analysis.toStringWithFrom(TableName(fromTable))
@@ -254,8 +255,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
 
     val analysisStream = new ByteArrayInputStream(analysisParam.getBytes(StandardCharsets.ISO_8859_1))
     val analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] = SoQLAnalyzerHelper.deserialize(analysisStream)
-    val contextVars = Option(servReq.getParameter("context")).fold(Map.empty[String, String]) { contextStr =>
-      JsonUtil.parseJson[Map[String,String]](contextStr) match {
+    val contextVars = Option(servReq.getParameter("context")).fold(SoQLContext.empty) { contextStr =>
+      JsonUtil.parseJson[SoQLContext](contextStr) match {
         case Right(m) =>
           m
         case Left(_) =>
@@ -294,7 +295,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
 
   def streamQueryResults( // scalastyle:ignore parameter.number
     analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]],
-    context: Map[String, String],
+    context: SoQLContext,
     datasetId: String,
     reqRowCount: Boolean,
     copy: Option[String],
@@ -391,7 +392,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
 
   def execQuery( // scalastyle:ignore method.length parameter.number cyclomatic.complexity
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-    context: Map[String, String],
+    context: SoQLContext,
     datasetInternalName: String,
     datasetInfo: DatasetInfo,
     analysis: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]],
@@ -410,7 +411,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
   ): QueryResult = {
 
     def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                 context: Map[String, String],
+                 context: SoQLContext,
                  latestCopy: CopyInfo,
                  analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]],
                  rowCount: Boolean,

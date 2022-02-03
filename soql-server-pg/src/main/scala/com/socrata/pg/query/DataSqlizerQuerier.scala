@@ -10,6 +10,8 @@ import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.pg.soql.ParametricSql
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.{BinaryTree, SoQLAnalysis}
+import com.socrata.soql.stdlib.{Context => SoQLContext, UserContext}
+import com.socrata.soql.types.{SoQLFloatingTimestamp, SoQLFixedTimestamp}
 
 import scala.concurrent.duration.Duration
 import com.typesafe.scalalogging.Logger
@@ -37,7 +39,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
     */
   private val sqlFetchSize = 1025
 
-  def query(conn: Connection, context: Map[String, String], analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
+  def query(conn: Connection, context: SoQLContext, analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
             toSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]]) => ParametricSql,
             toRowCountSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]]) => ParametricSql,
             reqRowCount: Boolean,
@@ -111,7 +113,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
   def setTimeout(timeoutMs: String) = s"SET LOCAL statement_timeout TO $timeoutMs"
   def resetTimeout = "SET LOCAL statement_timeout TO DEFAULT"
 
-  def setContext(conn: Connection, context: Map[String, String]) {
+  def setContext(conn: Connection, context: SoQLContext) {
     if(context.nonEmpty) {
       // Although in my experiments it looks like an arbitrary string
       // works fine for the variable name, I'm md5ing it because I'm
@@ -123,43 +125,55 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
       // not going to care overmuch about the values' trustworthiness.
       // This is mostly to prevent hypothetical attacks via the
       // get_context function.
-      using(new ResourceScope) { rs =>
-        // Can't just use statement batching with SELECTs, so we'll
-        // have to do it ourselves.
-        val BatchSize = 5
-        var fullStmt = Option.empty[PreparedStatement]
 
-        def sql(n: Int) =
-          Iterator.fill(n) { "set_config('user_variables.' || md5(?), ?, true)" }.
-            mkString("SELECT ", ", ", "")
+      def assign[T](tag: String, vars: Map[String, T])(convert: T => String) = {
+        using(new ResourceScope) { rs =>
+          // Can't just use statement batching with SELECTs, so we'll
+          // have to do it ourselves.
+          val BatchSize = 5
+          var fullStmt = Option.empty[PreparedStatement]
 
-        for(group <- context.iterator.grouped(BatchSize)) {
-          val stmt =
-            group.length match {
-              case BatchSize =>
-                fullStmt match {
-                  case None =>
-                    val stmt = rs.open(conn.prepareStatement(sql(BatchSize)))
-                    fullStmt = Some(stmt)
-                    stmt
-                  case Some(stmt) =>
-                    stmt
-                }
-              case n =>
-                rs.open(conn.prepareStatement(sql(n)))
+          def sql(n: Int) =
+            Iterator.fill(n) { s"set_config('socrata_${tag}.' || md5(?), ?, true)" }.
+              mkString("SELECT ", ", ", "")
+
+          for(group <- vars.iterator.grouped(BatchSize)) {
+            val stmt =
+              group.length match {
+                case BatchSize =>
+                  fullStmt match {
+                    case None =>
+                      val stmt = rs.open(conn.prepareStatement(sql(BatchSize)))
+                      fullStmt = Some(stmt)
+                      stmt
+                    case Some(stmt) =>
+                      stmt
+                  }
+                case n =>
+                  rs.open(conn.prepareStatement(sql(n)))
+              }
+            for(((varName, varValue), i) <- group.iterator.zipWithIndex) {
+              val converted = convert(varValue)
+              logger.debug("Setting context variable {} to {}", JString(varName), JString(converted))
+              stmt.setString(1 + 2*i, varName)
+              stmt.setString(2 + 2*i, converted)
             }
-          for(((varName, varValue), i) <- group.iterator.zipWithIndex) {
-            logger.debug("Setting context variable {} to {}", JString(varName), JString(varValue))
-            stmt.setString(1 + 2*i, varName)
-            stmt.setString(2 + 2*i, varValue)
+            stmt.executeQuery().close()
           }
-          stmt.executeQuery().close()
         }
       }
+
+      val SoQLContext(system, UserContext(text, bool, num, float, fixed)) = context;
+      assign("system", system)(identity)
+      assign("text", text)(_.value)
+      assign("bool", bool) { b => if(b.value) "true" else "false" }
+      assign("num", num)(_.value.toString)
+      assign("float", float) { f => SoQLFloatingTimestamp.StringRep(f.value) }
+      assign("fixed", fixed) { f => SoQLFixedTimestamp.StringRep(f.value) }
     }
   }
 
-  private def executeSql(conn: Connection, context: Map[String, String], pSql: ParametricSql, timeout: Option[Duration], fetchSize: Integer, debug: Boolean): ResultSet = {
+  private def executeSql(conn: Connection, context: SoQLContext, pSql: ParametricSql, timeout: Option[Duration], fetchSize: Integer, debug: Boolean): ResultSet = {
     try {
       if (timeout.isDefined && timeout.get.isFinite()) {
         val ms = timeout.get.toMillis.min(Int.MaxValue).max(1).toInt.toString
@@ -189,7 +203,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
     }
   }
 
-  def explainQuery(conn: Connection, context: Map[String, String], analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
+  def explainQuery(conn: Connection, context: SoQLContext, analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
                    toSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]]) => ParametricSql,
                    queryTimeout: Option[Duration],
                    analyze: Boolean):
