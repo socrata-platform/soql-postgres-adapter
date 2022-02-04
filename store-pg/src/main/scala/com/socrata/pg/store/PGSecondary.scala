@@ -2,7 +2,6 @@ package com.socrata.pg.store
 
 import java.io.Closeable
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-
 import com.socrata.curator.CuratorFromConfig
 import com.socrata.pg.BuildInfo
 import com.mchange.v2.c3p0.DataSources
@@ -29,6 +28,16 @@ import org.postgresql.ds.PGSimpleDataSource
 
 object PGSecondary {
   private val logger = Logger[PGSecondary]
+}
+
+case class RollupDirty(affectAll: Boolean, update: Set[RollupInfo] = Set.empty, delete: Set[RollupInfo] = Set.empty) {
+  def add(ru: RollupInfo): RollupDirty = {
+    this.copy(update = update + ru)
+  }
+
+  def delete(ru: RollupInfo): RollupDirty = {
+    this.copy(delete = update + ru)
+  }
 }
 
 /**
@@ -337,23 +346,23 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
 
     // no rebuild index and no rows loader.
-    case class Ctx(rebuildIndex: Boolean, truthCopyInfo: TruthCopyInfo, dataLoader: Option[SqlPrevettedLoader[SoQLType, SoQLValue]], rowDataProgress: RowDataUpdatedHandler.Progress)
-    val startCtx = Ctx(false, initialTruthCopyInfo, None, RowDataUpdatedHandler.Progress())
+    case class Ctx(rebuildIndex: Boolean, rebuildRollup: RollupDirty, truthCopyInfo: TruthCopyInfo, dataLoader: Option[SqlPrevettedLoader[SoQLType, SoQLValue]], rowDataProgress: RowDataUpdatedHandler.Progress)
+    val startCtx = Ctx(false, RollupDirty(false), initialTruthCopyInfo, None, RowDataUpdatedHandler.Progress())
     val endCtx = remainingEvents.foldLeft(startCtx) { (ctx, e) =>
       logger.debug("got event: {}", e)
       e match {
         case Truncated =>
           TruncateHandler(pgu, ctx.truthCopyInfo)
-          ctx
+          ctx.copy(rebuildRollup = RollupDirty(true))
         case ColumnCreated(secondaryColInfo) =>
           ColumnCreatedHandler(pgu, ctx.truthCopyInfo, secondaryColInfo)
-          ctx.copy(dataLoader = None)
+          ctx.copy(dataLoader = None, rebuildRollup = RollupDirty(true))
         case ColumnRemoved(secondaryColInfo) =>
           ColumnRemovedHandler(pgu, ctx.truthCopyInfo, secondaryColInfo)
-          ctx.copy(dataLoader = None)
+          ctx.copy(dataLoader = None, rebuildRollup = RollupDirty(true))
         case FieldNameUpdated(secondaryColInfo) =>
           FieldNameUpdatedHandler(pgu, ctx.truthCopyInfo, secondaryColInfo)
-          ctx.copy(dataLoader = None)
+          ctx.copy(dataLoader = None, rebuildRollup = RollupDirty(true))
         case RowIdentifierSet(info) =>  // no-op
           ctx
         case RowIdentifierCleared(info) =>  // no-op
@@ -369,10 +378,10 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         // version anywhere... ?
         case WorkingCopyDropped =>
           WorkingCopyDroppedHandler(pgu, truthDatasetInfo)
-          ctx.copy(dataLoader = None)
+          ctx.copy(dataLoader = None, rebuildRollup = RollupDirty(true) /* TODO: optimize rollup rebuild */ )
         case DataCopied =>
           DataCopiedHandler(pgu, truthDatasetInfo, ctx.truthCopyInfo)
-          ctx
+          ctx.copy(rebuildRollup = RollupDirty(true))
         case SnapshotDropped(info) =>
           logger.info("drop snapshot system id - {}, copy number - {}",
             info.systemId.toString(), info.copyNumber.toString)
@@ -385,20 +394,20 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           ctx.copy(dataLoader = None)
         case WorkingCopyPublished =>
           WorkingCopyPublishedHandler(pgu, ctx.truthCopyInfo)
-          ctx.copy(rebuildIndex = true)
+          ctx.copy(rebuildIndex = true, rebuildRollup = RollupDirty(true))
         case RowDataUpdated(ops) =>
           val loader = ctx.dataLoader.getOrElse(prevettedLoader(pgu, ctx.truthCopyInfo))
           val rdp = RowDataUpdatedHandler(loader, ops, ctx.rowDataProgress)
-          ctx.copy(dataLoader = Some(loader), rowDataProgress = rdp)
+          ctx.copy(dataLoader = Some(loader), rowDataProgress = rdp, rebuildRollup = RollupDirty(true))
         case LastModifiedChanged(lastModified) =>
           pgu.datasetMapWriter.updateLastModified(ctx.truthCopyInfo, lastModified)
           ctx
         case RollupCreatedOrUpdated(rollupInfo) =>
           RollupCreatedOrUpdatedHandler(pgu, ctx.truthCopyInfo, rollupInfo)
-          ctx
+          ctx.copy(rebuildRollup = ctx.rebuildRollup.add(rollupInfo))
         case RollupDropped(rollupInfo) =>
           RollupDroppedHandler(pgu, ctx.truthCopyInfo, rollupInfo)
-          ctx
+          ctx.copy(rebuildRollup = ctx.rebuildRollup.delete(rollupInfo))
         case ComputationStrategyCreated(_) => // no op
           ctx
         case ComputationStrategyRemoved(_) => // no op
@@ -462,7 +471,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       maybeLogTime("Refreshing rollups") {
         updateRollups(pgu,
                       previouslyPublishedTruthCopyInfo,
-                      postUpdateTruthCopyInfo)
+                      postUpdateTruthCopyInfo,
+                      endCtx.rebuildRollup)
       }
     }
 
@@ -618,7 +628,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
     // re-create rollup tables.  We don't need to pass in an old truth
     // because we just dropped any existing rollups above.
-    updateRollups(pgu, None, postUpdateTruthCopyInfo)
+    updateRollups(pgu, None, postUpdateTruthCopyInfo, RollupDirty(true))
 
     pgu.datasetMapWriter.enableDataset(truthCopyInfo.datasetInfo.systemId) // re-enable soql reads
     cookie
@@ -645,11 +655,39 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
   private def updateRollups(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                             originalCopyInfo: Option[TruthCopyInfo],
-                            copyInfo: TruthCopyInfo) = {
+                            copyInfo: TruthCopyInfo,
+                            rollupDirty: RollupDirty) = {
     val rm = new RollupManager(pgu, copyInfo)
-    rm.dropRollups(immediate = true)
-    pgu.datasetMapReader.rollups(copyInfo).foreach { ri =>
-      rm.updateRollup(ri, originalCopyInfo, copyInfo.dataVersion)
+    if (rollupDirty.affectAll || originalCopyInfo.isEmpty) {
+      rm.dropRollups(immediate = true)
+      pgu.datasetMapReader.rollups(copyInfo).foreach { ri =>
+        rm.updateRollup(ri, originalCopyInfo, copyInfo.dataVersion)
+      }
+    } else {
+      val rollups = pgu.datasetMapReader.rollups(copyInfo).foldLeft(Map.empty[String, com.socrata.datacoordinator.truth.metadata.RollupInfo]) { (acc, ri) =>
+        acc + (ri.name.underlying -> ri)
+      }
+      rollupDirty.update.foreach { ri =>
+        rollups.get(ri.name) match {
+          case Some(r) =>
+            rm.dropRollup(r, true)
+            rm.updateRollup(r, originalCopyInfo, copyInfo.dataVersion)
+          case None =>
+            logger.warn(s"cannot find rollup ${ri.name} - ${copyInfo.datasetInfo.systemId}")
+        }
+      }
+      rollupDirty.delete.foreach { ri =>
+        rollups.get(ri.name) match {
+          case Some(r) =>
+            rm.dropRollup(r, true)
+          case None =>
+            logger.warn(s"cannot find rollup ${ri.name} - ${copyInfo.datasetInfo.systemId}")
+        }
+      }
+      val unchanged = rollups -- rollupDirty.update.map(_.name) -- rollupDirty.delete.map(_.name)
+      unchanged.values.foreach { ri =>
+        rm.bumpVersionRollup(ri, originalCopyInfo, copyInfo.dataVersion)
+      }
     }
   }
 
