@@ -75,7 +75,12 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     LeftPad -> formatCall("lpad(%s, %s::int, %s)") _,
     RightPad -> formatCall("rpad(%s, %s::int, %s)") _,
 
-    GetContext -> formatCall("current_setting('user_variables.' || md5(%s), true)") _,
+    GetContext -> formatCall("current_setting('socrata_system.' || md5(%s), true)") _,
+    GetParameterText -> formatCall("current_setting('socrata_text.' || md5(%s), true)") _,
+    GetParameterBoolean -> formatCall("(current_setting('socrata_bool.' || md5(%s), true)::bool)") _,
+    GetParameterNumber -> formatCall("(current_setting('socrata_num.' || md5(%s), true)::numeric)") _,
+    GetParameterFloatingTimestamp -> formatCall("(current_setting('socrata_float.' || md5(%s), true)::timestamp without time zone)") _,
+    GetParameterFixedTimestamp -> formatCall("(current_setting('socrata_fixed.' || md5(%s), true)::timestamp with time zone)") _,
 
     // Number
     // http://beta.dev.socrata.com/docs/datatypes/numeric.html

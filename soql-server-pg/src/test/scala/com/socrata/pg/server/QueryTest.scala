@@ -9,6 +9,7 @@ import com.socrata.soql.types.{SoQLID, SoQLType}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.socrata.soql.{BinaryTree, SoQLAnalysis}
+import com.socrata.soql.stdlib.{Context => SoQLContext}
 import java.sql.Connection
 
 import org.apache.log4j.PropertyConfigurator
@@ -65,7 +66,7 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase w
         val (requestColumns, version, mresult) =
           ds.run { dsInfo =>
             val qs = new QueryServer(dsInfo, CaseSensitive, leadingSearch = true)
-            qs.execQuery(pgu, Map.empty, "someDatasetInternalName", copyInfo.datasetInfo, analyses, false, None, None, true,
+            qs.execQuery(pgu, SoQLContext.empty, "someDatasetInternalName", copyInfo.datasetInfo, analyses, false, None, None, true,
               NoPrecondition, None, None, None, None, false, false, false) match {
               case QueryServer.Success(schema, _, version, results, etag, lastModified) =>
                 (schema, version, results)

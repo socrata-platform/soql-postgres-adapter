@@ -14,6 +14,7 @@ import com.socrata.soql.{BinaryTree, SoQLAnalysis}
 import com.socrata.soql.analyzer.{QualifiedColumnName, SoQLAnalyzerHelper}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
+import com.socrata.soql.stdlib.{Context => SoQLContext}
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import org.scalatest.matchers.{BeMatcher, MatchResult}
 
@@ -33,7 +34,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
                         caseSensitivity: CaseSensitivity = CaseSensitive,
                         joinDatasetCtx: Map[String, DatasetContext[SoQLType]] = Map.empty,
                         leadingSearch: Boolean = true,
-                        context: Map[String, String] = Map.empty,
+                        context: SoQLContext = SoQLContext.empty,
                         secDatasetId: DatasetId = secDatasetId)
                        (implicit materialized: Boolean): Unit = {
     val soqlh = if (materialized) soql.replace("/*hint*/", "HINT(materialized)") else soql
