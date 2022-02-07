@@ -749,12 +749,19 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         }
       }
 
-      using(pgu.conn.createStatement()) { stmt =>
-        val sql = bulkBumpVersionSqls.mkString(";")
-        // timeout in 60 seconds and fallback to the slow rollup update
-        stmt.execute("SET LOCAL statement_timeout TO 60000")
-        stmt.execute(sql)
-      }
+      runFastTimeoutFallback(
+        pgu,
+        s"rename_rollup_${copyInfo.datasetInfo.systemId}",
+        using(pgu.conn.createStatement()) { stmt =>
+          val sql = bulkBumpVersionSqls.mkString(";")
+          // timeout in 5 seconds and fallback to the slower copy table w/o expensive group by query
+          stmt.execute("SET LOCAL statement_timeout TO 5000")
+          stmt.execute(sql)
+        },
+        unchanged.values.foreach { ri =>
+          rm.bumpVersionRollupByCopyTable(ri, originalCopyInfo, copyInfo.dataVersion)
+        },
+        s"fast rename rollup timeout ${copyInfo.datasetInfo.systemId}")
     }
   }
 

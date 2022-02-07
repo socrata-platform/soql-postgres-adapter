@@ -148,6 +148,19 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       }
   }
 
+  def bumpVersionRollupByCopyTable(rollupInfo: RollupInfo, oldCopyInfo: Option[CopyInfo], newDataVersion: Long): Unit = {
+    val newTableName = rollupTableName(rollupInfo, newDataVersion)
+    oldCopyInfo.filter(_.copyNumber == rollupInfo.copyInfo.copyNumber).map { ci =>
+      val oldTableName = rollupTableName(rollupInfo, ci.dataVersion)
+      using(pgu.conn.createStatement()) { stmt =>
+        val sql = s"CREATE TABLE ${newTableName} (LIKE ${oldTableName} including all); INSERT INTO ${newTableName} SELECT * FROM ${oldTableName};"
+        logger.info(sql)
+        stmt.execute(sql)
+      }
+      scheduleRollupTablesForDropping(oldTableName)
+    }
+  }
+
   private def dropRollupInfo(rollupInfo: RollupInfo) {
     for { ri <- pgu.datasetMapReader.rollup(copyInfo, rollupInfo.name) } {
       dropRollup(ri, immediate = true)
