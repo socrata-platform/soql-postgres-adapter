@@ -140,15 +140,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     }
   }
 
-  def bumpVersionRollupSql(rollupInfo: RollupInfo, oldCopyInfo: Option[CopyInfo], newDataVersion: Long): Option[String] = {
-      val newTableName = rollupTableName(rollupInfo, newDataVersion)
-      oldCopyInfo.filter(_.copyNumber == rollupInfo.copyInfo.copyNumber).map { ci =>
-        val oldTableName = rollupTableName(rollupInfo, ci.dataVersion)
-        s"ALTER TABLE ${oldTableName} RENAME TO ${newTableName}"
-      }
-  }
-
-  def bumpVersionRollupByCopyTable(rollupInfo: RollupInfo, oldCopyInfo: Option[CopyInfo], newDataVersion: Long): Unit = {
+  def bumpRollupVersionByCopyTable(rollupInfo: RollupInfo, oldCopyInfo: Option[CopyInfo], newDataVersion: Long): Unit = {
     val newTableName = rollupTableName(rollupInfo, newDataVersion)
     oldCopyInfo.filter(_.copyNumber == rollupInfo.copyInfo.copyNumber).map { ci =>
       val oldTableName = rollupTableName(rollupInfo, ci.dataVersion)

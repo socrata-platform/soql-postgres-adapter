@@ -662,37 +662,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     if (rollupDirty.affectAll || originalCopyInfo.isEmpty) {
       updateRollupsSlow(pgu, originalCopyInfo, copyInfo, rollupDirty)
     } else {
-      runFastTimeoutFallback(
-        pgu,
-       s"bulk_rollup_bump_${copyInfo.datasetInfo.systemId}",
-        updateRollupsFast(pgu, originalCopyInfo, copyInfo, rollupDirty),
-        updateRollupsSlow(pgu, originalCopyInfo, copyInfo, rollupDirty),
-        s"Fallback to slow rollup rebuild due to timeout ${copyInfo.datasetInfo.systemId}")
-    }
-  }
-
-  /**
-   * Run the preferred block.  If there is a SQL timeout error, run the fallback block.
-   */
-  private def runFastTimeoutFallback(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                                     savePointName: String,
-                                     preferred: => Unit,
-                                     fallback: => Unit,
-                                     failedMessage: String): Unit = {
-    val savePoint = pgu.conn.setSavepoint(savePointName)
-    try {
-      preferred
-    } catch {
-      case ex: SQLException =>
-        ex.getSQLState match {
-          // ick, but user-canceled requests also fall under this code and those are fine
-          case "57014" if "ERROR: canceling statement due to statement timeout".equals(ex.getMessage) =>
-            logger.warn(failedMessage)
-            pgu.conn.rollback(savePoint)
-            fallback
-          case _ =>
-            throw ex
-        }
+      updateRollupsFast(pgu, originalCopyInfo, copyInfo, rollupDirty),
     }
   }
 
@@ -723,11 +693,18 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
 
     val unchanged = rollups -- rollupDirty.update.map(_.name) -- rollupDirty.delete.map(_.name)
-    val bulkBumpVersionSqls = unchanged.values.flatMap { ri =>
-      rm.bumpVersionRollupSql(ri, originalCopyInfo, copyInfo.dataVersion).toSeq
+
+    val allCopyNumbersMatch = originalCopyInfo match {
+      case Some(oldCopyInfo) =>
+        unchanged.values.forall { ri =>
+          oldCopyInfo.copyNumber == ri.copyInfo.copyNumber
+        }
+      case None =>
+        false
     }
 
-    if (bulkBumpVersionSqls.size != unchanged.size) {
+
+    if (!allCopyNumbersMatch) {
       updateRollupsSlow(pgu, originalCopyInfo, copyInfo, rollupDirty);
     } else {
       rollupDirty.update.foreach { ri =>
@@ -749,19 +726,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         }
       }
 
-      runFastTimeoutFallback(
-        pgu,
-        s"rename_rollup_${copyInfo.datasetInfo.systemId}",
-        using(pgu.conn.createStatement()) { stmt =>
-          val sql = bulkBumpVersionSqls.mkString(";")
-          // timeout in 5 seconds and fallback to the slower copy table w/o expensive group by query
-          stmt.execute("SET LOCAL statement_timeout TO 5000")
-          stmt.execute(sql)
-        },
-        unchanged.values.foreach { ri =>
-          rm.bumpVersionRollupByCopyTable(ri, originalCopyInfo, copyInfo.dataVersion)
-        },
-        s"fast rename rollup timeout ${copyInfo.datasetInfo.systemId}")
+      unchanged.values.foreach { ri =>
+        rm.bumpRollupVersionByCopyTable(ri, originalCopyInfo, copyInfo.dataVersion)
+      }
     }
   }
 
