@@ -1,7 +1,0 @@
-{
-  "aliases": [ "sw-pg-charlie", "sw-pg-c" ],
-  "image_name": "secondary-watcher-pg",
-  "start_container": "bin/start_secondary_watcher_pg_docker_charlie.sh",
-  "start_process": "bin/start_secondary_watcher_pg_charlie.sh",
-  "register_by_default": false
-}

@@ -1,7 +1,0 @@
-{
-  "aliases": [ "sw-pg-alpha", "sw-pg-a" ],
-  "image_name": "secondary-watcher-pg",
-  "start_container": "bin/start_secondary_watcher_pg_docker_alpha.sh",
-  "start_process": "bin/start_secondary_watcher_pg_alpha.sh",
-  "register_by_default": false
-}

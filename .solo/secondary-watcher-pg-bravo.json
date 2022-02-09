@@ -1,7 +1,0 @@
-{
-  "aliases": [ "sw-pg-bravo", "sw-pg-b" ],
-  "image_name": "secondary-watcher-pg",
-  "start_container": "bin/start_secondary_watcher_pg_docker_bravo.sh",
-  "start_process": "bin/start_secondary_watcher_pg_bravo.sh",
-  "register_by_default": false
-}
