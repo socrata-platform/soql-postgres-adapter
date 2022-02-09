@@ -67,65 +67,11 @@ trait SqlFunctionsGeometry {
     Simplify -> formatSimplify("ST_Simplify(%s, %s)") _,
     SimplifyPreserveTopology -> formatSimplify("ST_SimplifyPreserveTopology(%s, %s)") _,
     SnapToGrid -> formatSimplify("ST_SnapToGrid(%s, %s)") _,
-    SnapForZoom -> snapForZoom _,
     PointToLatitude -> formatCall("ST_Y(%s)::numeric") _,
     PointToLongitude -> formatCall("ST_X(%s)::numeric") _,
     VisibleAt -> visibleAt,
     IsEmpty -> isEmpty
   )
-
-  def resolutionForZoom(level: Int) = {
-    val size = 256
-    val sizeZoomed: Int = size * (1 << level)
-    val r2d = 180 / Pi
-
-
-    def lat(y: Int): Double = {
-      val g = (Pi * (2 * -y + sizeZoomed)) / sizeZoomed
-
-      -1 * r2d * (2 * atan(exp(g)) - 0.5 * Pi)
-    }
-
-    (lat(size) - lat(0)) / size
-  }
-
-  private def snapForZoom(fn: FunCall,
-                          rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
-                          typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
-                          setParams: Seq[SetParam],
-                          ctx: Sqlizer.Context,
-                          escape: Escape): ParametricSql = {
-    // Create a funcall with only one parameter.
-    fn.parameters match {
-      case Seq(id, zoom@NumberLiteral(rawLevel, _)) =>
-        val level = rawLevel.intValue
-        val resolution = resolutionForZoom(level)
-        val zoomedRep = rep.mapValues {
-          case g: GeometryLikeRep[_] => g.forZoom(level)
-          case o => o
-        }
-        val zoomedTypeRep = typeRep.mapValues {
-          case g: GeometryLikeRep[_] => g.forZoom(level)
-          case o => o
-        }
-
-        val zoomedFn = fn.copy(parameters = Seq(id, zoom.copy(value=resolution)), window = fn.window)
-
-        val geoReps: Iterable[GeometryLikeRep[_]] = rep.collect {
-          case (_, g: GeometryLikeRep[_]) => g
-        }
-
-        // Don't snap if we're sure this is already simplified!
-        if (geoReps.size == 1 && geoReps.head.presimplifiedZoomLevels.contains(level)) {
-          formatCall("%s")(zoomedFn, zoomedRep, zoomedTypeRep, setParams, ctx, escape)
-        } else {
-          formatSimplify(s"ST_SnapToGrid(%s, %s)")(zoomedFn, zoomedRep, zoomedTypeRep, setParams, ctx, escape)
-        }
-
-        formatSimplify(s"ST_SnapToGrid(%s, %s)")(zoomedFn, zoomedRep, zoomedTypeRep, setParams, ctx, escape)
-      case _ => throw new Exception("Should never get anything but a number for zoom! Oh no!")
-    }
-  }
 
   private def formatSimplify(template: String, paramPosition: Option[Seq[Int]] = None)
                             (fn: FunCall,
