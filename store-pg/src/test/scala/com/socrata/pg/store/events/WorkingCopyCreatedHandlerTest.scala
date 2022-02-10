@@ -13,14 +13,14 @@ class WorkingCopyCreatedHandlerTest extends PGSecondaryTestBase with PGSecondary
 
   val datasetInfo = SecondaryDatasetInfo(testInternalName, localeName, obfuscationKey, None)
   val dataVersion = 0L
-  val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
+  val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, dataVersion, new DateTime())
 
   test("can handle working copy event") {
     withPgu() { pgu =>
       val datasetInfo = SecondaryDatasetInfo(testInternalName, localeName, obfuscationKey, None)
       val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(testInternalName)
       val dataVersion = 0L
-      val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
+      val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, dataVersion, new DateTime())
       WorkingCopyCreatedHandler(pgu, datasetId, datasetInfo, copyInfo)
 
       val truthCopyInfo = getTruthCopyInfo(pgu, datasetInfo)
@@ -35,7 +35,7 @@ class WorkingCopyCreatedHandlerTest extends PGSecondaryTestBase with PGSecondary
       val dataVersion = 0L
       val copyId = new CopyId(100)
 
-      val copyInfo = CopyInfo(copyId, 1, LifecycleStage.Published, dataVersion, new DateTime())
+      val copyInfo = CopyInfo(copyId, 1, LifecycleStage.Published, dataVersion, dataVersion, new DateTime())
 
       WorkingCopyCreatedHandler(pgu, None, datasetInfo, copyInfo)
       val firstCopy = getTruthCopyInfo(pgu, datasetInfo)
@@ -48,7 +48,7 @@ class WorkingCopyCreatedHandlerTest extends PGSecondaryTestBase with PGSecondary
       val firstCopyPublished = getTruthCopyInfo(pgu, datasetInfo)
       firstCopyPublished.lifecycleStage should be (metadata.LifecycleStage.Published)
 
-      val secondCopyInfo = CopyInfo(copyId, 2, LifecycleStage.Unpublished, dataVersion, new DateTime())
+      val secondCopyInfo = CopyInfo(copyId, 2, LifecycleStage.Unpublished, dataVersion, dataVersion, new DateTime())
       WorkingCopyCreatedHandler(pgu, datasetId, datasetInfo, secondCopyInfo)
       val secondCopy = getTruthCopyInfo(pgu, datasetInfo)
       secondCopy.lifecycleStage should be (metadata.LifecycleStage.Unpublished)

@@ -106,7 +106,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val dataVersion = 0L
       val copyId = new CopyId(100)
 
-      val copyInfo = CopyInfo(copyId, 1, LifecycleStage.Published, dataVersion, new DateTime())
+      val copyInfo = CopyInfo(copyId, 1, LifecycleStage.Published, dataVersion, dataVersion, new DateTime())
 
       WorkingCopyCreatedHandler(pgu, None, datasetInfo, copyInfo)
 
@@ -135,7 +135,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       jdbcColumnCount(pgu.conn, tableNameFirstCopy) should be (1)
       jdbcRowCount(pgu.conn, tableNameFirstCopy) should be (1)
 
-      val secondCopyInfo = CopyInfo(copyId, 2, LifecycleStage.Unpublished, dataVersion, new DateTime())
+      val secondCopyInfo = CopyInfo(copyId, 2, LifecycleStage.Unpublished, dataVersion, dataVersion, new DateTime())
       WorkingCopyCreatedHandler(pgu, datasetId, datasetInfo, secondCopyInfo)
       val secondCopy = getTruthCopyInfo(pgu, datasetInfo)
       secondCopy.lifecycleStage should be (metadata.LifecycleStage.Unpublished)
@@ -168,7 +168,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
     withPgu() { pgu =>
       val pgs = new PGSecondary(config)
       val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, None)
-      val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55, new DateTime())
+      val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55, 55, new DateTime())
       val cookie = Option("monkey")
 
       val newSchema = ColumnIdMap[ColumnInfo[SoQLType]](
@@ -240,7 +240,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val dataVersion = 0L
       val copyId = new CopyId(100)
 
-      val copyInfo = CopyInfo(copyId, 1, LifecycleStage.Published, dataVersion, new DateTime())
+      val copyInfo = CopyInfo(copyId, 1, LifecycleStage.Published, dataVersion, dataVersion, new DateTime())
 
       WorkingCopyCreatedHandler(pgu, None, datasetInfo, copyInfo)
 
@@ -269,7 +269,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       jdbcColumnCount(pgu.conn, tableNameFirstCopy) should be (1)
       jdbcRowCount(pgu.conn, tableNameFirstCopy) should be (1)
 
-      val secondCopyInfo = CopyInfo(copyId, 2, LifecycleStage.Unpublished, dataVersion, new DateTime())
+      val secondCopyInfo = CopyInfo(copyId, 2, LifecycleStage.Unpublished, dataVersion, dataVersion, new DateTime())
       WorkingCopyCreatedHandler(pgu, datasetId, datasetInfo, secondCopyInfo)
       val secondCopy = getTruthCopyInfo(pgu, datasetInfo)
       secondCopy.lifecycleStage should be (metadata.LifecycleStage.Unpublished)

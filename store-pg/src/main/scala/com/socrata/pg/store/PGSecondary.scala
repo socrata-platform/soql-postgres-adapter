@@ -197,6 +197,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
                 // create the `copy_map` entry
                 pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, copyInfo.systemId, copyInfo.copyNumber,
                   TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
+                  secondaryCopyInfo.dataVersion,
                   secondaryCopyInfo.dataVersion)
               }
             case None =>
@@ -207,6 +208,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
                 pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, secCopyId,
                   secondaryCopyInfo.copyNumber,
                   TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
+                  secondaryCopyInfo.dataVersion,
                   secondaryCopyInfo.dataVersion)
               }
           }
@@ -429,7 +431,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       }
     }
 
-    pgu.datasetMapWriter.updateDataVersion(endCtx.truthCopyInfo, finalDataVersion)
+    pgu.datasetMapWriter.updateDataVersion(endCtx.truthCopyInfo, finalDataVersion, true)
 
     def maybeLogTime[T](label: String)(f: => T): T = {
       val startedAt =
@@ -525,6 +527,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         pgu.datasetMapWriter.unsafeCreateCopy(newDatasetInfo, secCopyId,
           secondaryCopyInfo.copyNumber,
           TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
+          secondaryCopyInfo.dataVersion,
           secondaryCopyInfo.dataVersion)
       case Some(dsId) =>
         // Find the very top record - dataset_internal_name_map.
@@ -552,12 +555,14 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
               pgu.secondaryDatasetMapWriter.deleteCopy(copyInfo)
               pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, copyInfo.systemId, copyInfo.copyNumber,
                 TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
+                secondaryCopyInfo.dataVersion,
                 secondaryCopyInfo.dataVersion)
             case None =>
               val secCopyId = pgu.secondaryDatasetMapWriter.allocateCopyId()
               pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, secCopyId,
                 secondaryCopyInfo.copyNumber,
                 TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
+                secondaryCopyInfo.dataVersion,
                 secondaryCopyInfo.dataVersion)
           }
         }.getOrElse(throw new Exception(
@@ -603,7 +608,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
 
     if (truthCopyInfo.dataVersion != secondaryCopyInfo.dataVersion) {
-      pgu.datasetMapWriter.updateDataVersion(truthCopyInfo, secondaryCopyInfo.dataVersion)
+      pgu.datasetMapWriter.updateDataVersion(truthCopyInfo, secondaryCopyInfo.dataVersion, true)
     }
     pgu.datasetMapWriter.updateLastModified(truthCopyInfo, secondaryCopyInfo.lastModified)
 
