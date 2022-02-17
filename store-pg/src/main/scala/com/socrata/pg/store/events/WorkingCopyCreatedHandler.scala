@@ -40,6 +40,7 @@ case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
           copyIdFromSequence,
           copyNumBeyondOne,
           com.socrata.datacoordinator.truth.metadata.LifecycleStage.valueOf(copyInfo.lifecycleStage.toString),
+          copyInfo.dataVersion,
           copyInfo.dataVersion)
         val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
         sLoader.create(newCopyInfo)

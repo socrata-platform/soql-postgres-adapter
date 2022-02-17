@@ -19,7 +19,7 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
     withPgu() { pgu =>
       val pgs = new PGSecondary(config)
       val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, None)
-      val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55, new DateTime())
+      val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55, 55, new DateTime())
       val cookie = Option("monkey")
 
       val newSchema = ColumnIdMap[ColumnInfo[SoQLType]](
@@ -74,10 +74,10 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
       val pgs = new PGSecondary(config)
       val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, None)
 
-      val snapshottedCopy = CopyInfo(new CopyId(123), 1, LifecycleStage.Snapshotted, 24, new DateTime())
-      val publishedCopy = CopyInfo(new CopyId(123), 2, LifecycleStage.Published, 55, new DateTime())
-      val unpublishedCopy = CopyInfo(new CopyId(123), 3, LifecycleStage.Unpublished, 57, new DateTime())
-      val discardedCopy = CopyInfo(new CopyId(123), 3, LifecycleStage.Discarded, 58, new DateTime())
+      val snapshottedCopy = CopyInfo(new CopyId(123), 1, LifecycleStage.Snapshotted, 24, 24, new DateTime())
+      val publishedCopy = CopyInfo(new CopyId(123), 2, LifecycleStage.Published, 55, 55, new DateTime())
+      val unpublishedCopy = CopyInfo(new CopyId(123), 3, LifecycleStage.Unpublished, 57, 57, new DateTime())
+      val discardedCopy = CopyInfo(new CopyId(123), 3, LifecycleStage.Discarded, 58, 58, new DateTime())
 
       val cookie = Option("monkey")
 

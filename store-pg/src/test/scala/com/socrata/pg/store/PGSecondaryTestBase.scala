@@ -31,7 +31,7 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
   def workingCopyCreatedFixture = new { // scalastyle:ignore
     val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, None)
     val dataVersion = 0L
-    val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
+    val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, dataVersion, new DateTime())
     val pgs = new PGSecondary(config)
     val events = Seq(
       WorkingCopyCreated(copyInfo)
@@ -41,7 +41,7 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
   def columnsCreatedFixture = new { // scalastyle:ignore
     val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, None)
     val dataVersion = 0L
-    val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
+    val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, dataVersion, new DateTime())
     val pgs = new PGSecondary(config)
     val events = Seq(
       WorkingCopyCreated(copyInfo),
@@ -55,7 +55,7 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
   def publishedDatasetFixture = new { // scalastyle:ignore
     val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, None)
     val dataVersion = 0L
-    val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
+    val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, dataVersion, new DateTime())
     val pgs = new PGSecondary(config)
     val events = Seq(
       WorkingCopyCreated(copyInfo),
@@ -70,7 +70,7 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
   def columnsRemovedFixture = new { // scalastyle:ignore
     val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, None)
     val dataVersion = 0L
-    val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
+    val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, dataVersion, new DateTime())
     val pgs = new PGSecondary(config)
     val testColInfo = ColumnInfo(new ColumnId(9126), new UserColumnId("mycolumn"), Some(ColumnName("my_column")), SoQLText, false, false, false, None)
     val events = Seq(
@@ -86,7 +86,7 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
   def fieldNameUpdatedFixture = new { // scalastyle:ignore
   val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, None)
     val dataVersion = 0L
-    val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, new DateTime())
+    val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, dataVersion, new DateTime())
     val pgs = new PGSecondary(config)
     val testColInfo = ColumnInfo(new ColumnId(9126), new UserColumnId("mycolumn"), Some(ColumnName("my_column")), SoQLText, false, false, false, None)
     val events = Seq(
