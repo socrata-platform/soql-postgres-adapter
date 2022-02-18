@@ -270,18 +270,20 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
     val hasWccEvents = wccEvents.hasNext
 
-    val dsId = pgu.datasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName).getOrElse(
-      throw new ResyncSecondaryException(
-        s"Couldn't find mapping for datasetInternalName ${secondaryDatasetInfo.internalName}"
-      )
-    )
-
     if (wccEvents.hasNext) {
       val e = wccEvents.next()
+      logger.debug("got working copy event: {}", e)
+
+      val existingDataset =
+        for {
+          datasetId <- pgu.datasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName)
+          datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
+        } yield {
+          datasetInfo
+        }
 
       e match {
         case WorkingCopyCreated(copyInfo) =>
-          val existingDataset = pgu.datasetMapReader.datasetInfo(dsId)
           val theCopy = existingDataset.flatMap { dsInfo =>
             val allCopies = pgu.datasetMapReader.allCopies(dsInfo)
             // Either this copy or some newer copy
@@ -306,6 +308,11 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
     // now that we have working copy creation out of the way, we can load our
     // secondaryCopyInfo with assurance that it is there unless we are out of sync
+    val dsId = pgu.datasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName).getOrElse(
+      throw new ResyncSecondaryException(
+        s"Couldn't find mapping for datasetInternalName ${secondaryDatasetInfo.internalName}"
+      )
+    )
 
     val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(dsId).get
     val initialTruthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
