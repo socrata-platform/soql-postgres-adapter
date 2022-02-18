@@ -1,11 +1,11 @@
 package com.socrata.pg.store
 
 import com.rojoma.simplearm.v2._
-import com.socrata.datacoordinator.id.{CopyId, DatasetId}
+import com.socrata.datacoordinator.id.{CopyId, DatasetId, RollupName}
 import com.socrata.datacoordinator.id.sql._
 import com.socrata.datacoordinator.truth.DatabaseInReadOnlyMode
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo, DatasetInfo, TypeNamespace}
-import com.socrata.datacoordinator.truth.metadata.sql.PostgresDatasetMapWriter
+import com.socrata.datacoordinator.truth.metadata.sql.{PostgresDatasetMapWriter, BasePostgresDatasetMapReader}
 import com.socrata.datacoordinator.util.TimingReport
 import com.typesafe.scalalogging.Logger
 import java.sql.{Connection, Timestamp}
@@ -22,7 +22,7 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
                                       override val obfuscationKeyGenerator: () => Array[Byte],
                                       override val initialCounterValue: Long,
                                       val initialVersion: Long) extends
-  PostgresDatasetMapWriter(conn, tns, timingReport, obfuscationKeyGenerator, initialCounterValue, initialVersion) {
+  PostgresDatasetMapWriter(conn, tns, timingReport, obfuscationKeyGenerator, initialCounterValue, initialVersion) with LocalRollupReaderOverride[CT] {
   import PGSecondaryDatasetMapWriter.logger
 
   private val createQueryInternalNameMap =
@@ -145,5 +145,61 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
         throw new Exception("cannot get new copy id from sequence")
       }
     }
+  }
+
+  def insertLocalRollupQuery = "INSERT INTO rollup_map (name, copy_system_id, soql, table_name) VALUES (?, ?, ?, ?)"
+  def updateLocalRollupQuery = "UPDATE rollup_map SET soql = ?, table_name = ? WHERE name = ? AND copy_system_id = ?"
+  override def createOrUpdateRollup(copyInfo: CopyInfo, name: RollupName, soql: String): LocalRollupInfo = {
+    val tableName = LocalRollupInfo.tableName(copyInfo, name)
+    rollup(copyInfo, name) match {
+      case Some(_) =>
+        using(conn.prepareStatement(updateLocalRollupQuery)) { stmt =>
+          stmt.setString(1, soql)
+          stmt.setString(2, tableName)
+          stmt.setString(3, name.underlying)
+          stmt.setLong(4, copyInfo.systemId.underlying)
+          t("create-or-update-rollup", "action" -> "update", "copy-id" -> copyInfo.systemId, "name" -> name)(stmt.executeUpdate())
+        }
+      case None =>
+        using(conn.prepareStatement(insertLocalRollupQuery)) { stmt =>
+          stmt.setString(1, name.underlying)
+          stmt.setLong(2, copyInfo.systemId.underlying)
+          stmt.setString(3, soql)
+          stmt.setString(4, tableName)
+          t("create-or-update-rollup", "action" -> "insert", "copy-id" -> copyInfo.systemId, "name" -> name)(stmt.executeUpdate())
+        }
+    }
+    new LocalRollupInfo(copyInfo, name, soql, tableName)
+  }
+
+  def transferLocalRollupsQuery = "UPDATE rollup_map SET copy_system_id = ? WHERE copy_system_id = ? and name = ?"
+  def transferRollup(from: LocalRollupInfo, to: CopyInfo) {
+    if(from.copyInfo.systemId != to.systemId) {
+      using(conn.prepareStatement(transferLocalRollupsQuery)) { stmt =>
+        stmt.setLong(1, from.copyInfo.systemId.underlying)
+        stmt.setLong(2, to.systemId.underlying)
+        stmt.setString(3, from.name.underlying)
+        if(t("transfer-rollups", "from" -> from.copyInfo.systemId, "to" -> to.systemId, "name" -> from.name)(stmt.executeUpdate()) != 1) {
+          throw new Exception(s"Told to transfer a rollup that doesn't seem to exist: ${from.copyInfo}")
+        }
+      }
+    }
+  }
+
+  def changeRollupTableNameQuery = "UPDATE rollup_map SET table_name = ? WHERE copy_system_id = ? and name = ?"
+  def changeRollupTableName(ri: LocalRollupInfo, name: String): LocalRollupInfo = {
+    using(conn.prepareStatement(changeRollupTableNameQuery)) { stmt =>
+      stmt.setString(1, name)
+      stmt.setLong(2, ri.copyInfo.systemId.underlying)
+      stmt.setString(3, ri.name.underlying)
+      if(t("change-rollup-table-name", "copy-id" -> ri.copyInfo.systemId, "name" -> ri.name, "new-table" -> name)(stmt.executeUpdate()) != 1) {
+        throw new Exception(s"Told to change a rollup's table name that doesn't seem to exist: ${ri.copyInfo.systemId} ${ri.name}")
+      }
+      ri.updateName(name)
+    }
+  }
+
+  def dropRollup(ri: LocalRollupInfo) {
+    dropRollup(ri.copyInfo, Some(ri.name))
   }
 }

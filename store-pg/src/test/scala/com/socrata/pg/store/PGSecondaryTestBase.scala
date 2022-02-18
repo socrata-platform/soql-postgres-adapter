@@ -101,7 +101,7 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
 
   def getTruthDatasetInfo(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                           secondaryDatasetInfo: SecondaryDatasetInfo): TruthDatasetInfo = {
-    val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName).getOrElse(
+    val datasetId = pgu.datasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName).getOrElse(
       throw new ResyncSecondaryException(s"Couldn't find mapping for datasetInternalName ${secondaryDatasetInfo.internalName}")
     )
     pgu.datasetMapReader.datasetInfo(datasetId).get

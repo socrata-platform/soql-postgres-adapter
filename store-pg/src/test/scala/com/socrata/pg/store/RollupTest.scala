@@ -31,9 +31,9 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
         "select * (EXCEPT _point, _multipolygon, _location, _phone)")
 
       val rm = new RollupManager(pgu, copyInfo)
-      rm.updateRollup(rollupInfo, None, copyInfo.dataVersion)
+      rm.updateRollup(rollupInfo, None, false)
 
-      val tableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
+      val tableName = rollupInfo.tableName
 
       jdbcColumnCount(pgu.conn, tableName) should be (24)
       jdbcRowCount(pgu.conn,tableName) should be (totalRows)
@@ -50,9 +50,9 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"), "select _point, _multipolygon, _polygon, _line, _multipoint")
 
       val rm = new RollupManager(pgu, copyInfo)
-      rm.updateRollup(rollupInfo, None, copyInfo.dataVersion)
+      rm.updateRollup(rollupInfo, None, false)
 
-      val tableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
+      val tableName = rollupInfo.tableName
 
       jdbcColumnCount(pgu.conn, tableName) should be (5)
       jdbcRowCount(pgu.conn,tableName) should be (totalRows)
@@ -71,9 +71,9 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
         "select _make, avg(_aspect_ratio) AS _avg_asp WHERE _v_min >20 GROUP BY _make HAVING _avg_asp > 4 ORDER BY _make limit 100 offset 1")
 
       val rm = new RollupManager(pgu, copyInfo)
-      rm.updateRollup(rollupInfo, None, copyInfo.dataVersion)
+      rm.updateRollup(rollupInfo, None, false)
 
-      val tableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
+      val tableName = rollupInfo.tableName
       jdbcColumnCount(pgu.conn, tableName) should be (2)
       jdbcRowCount(pgu.conn,tableName) should be (2)
       secondary.shutdown()
@@ -91,9 +91,9 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
         "select I am a monkey GROUP BY monkeyland")
 
       val rm = new RollupManager(pgu, copyInfo)
-      rm.updateRollup(rollupInfo, None, copyInfo.dataVersion)
+      rm.updateRollup(rollupInfo, None, false)
 
-      val tableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
+      val tableName = rollupInfo.tableName
       jdbcColumnCount(pgu.conn, tableName) should be (0)
       secondary.shutdown()
     }
@@ -114,7 +114,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       firstCopy.lifecycleStage should be (metadata.LifecycleStage.Unpublished)
       firstCopy.copyNumber should be (1L)
 
-      val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetInfo.internalName)
+      val datasetId = pgu.datasetMapReader.datasetIdForInternalName(datasetInfo.internalName)
       datasetId.isDefined should be (true)
       WorkingCopyPublishedHandler(pgu, firstCopy)
       val firstCopyPublished: TruthCopyInfo = getTruthCopyInfo(pgu, datasetInfo)
@@ -129,9 +129,9 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       RollupManager.makeSecondaryRollupInfo(rollupInFirstCopy) should be (rollup)
 
       // create the rollup table
-      (new RollupManager(pgu, firstCopyPublished)).updateRollup(rollupInFirstCopy, None, firstCopy.dataVersion)
+      (new RollupManager(pgu, firstCopyPublished)).updateRollup(rollupInFirstCopy, None, false)
 
-      val tableNameFirstCopy = RollupManager.rollupTableName(rollupInFirstCopy, firstCopy.dataVersion)
+      val tableNameFirstCopy = rollupInFirstCopy.tableName
       jdbcColumnCount(pgu.conn, tableNameFirstCopy) should be (1)
       jdbcRowCount(pgu.conn, tableNameFirstCopy) should be (1)
 
@@ -149,10 +149,10 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val rollupsInSecondCopy = pgu.datasetMapReader.rollups(secondCopyPublished)
       rollupsInSecondCopy.size should be (1)
       val rollupInSecondCopy = rollupsInSecondCopy.head
-      (new RollupManager(pgu, secondCopyPublished)).updateRollup(rollupInSecondCopy, Some(secondCopy), secondCopyPublished.dataVersion)
+      (new RollupManager(pgu, secondCopyPublished)).updateRollup(rollupInSecondCopy, Some(secondCopy), true)
       RollupManager.makeSecondaryRollupInfo(rollupInSecondCopy) should be (rollup)
 
-      val tableNameSecondCopy = RollupManager.rollupTableName(rollupInSecondCopy, secondCopy.dataVersion)
+      val tableNameSecondCopy = rollupInSecondCopy.tableName
       jdbcColumnCount(pgu.conn, tableNameSecondCopy) should be (1)
       jdbcRowCount(pgu.conn, tableNameSecondCopy) should be (1)
 
@@ -203,7 +203,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       RollupCreatedOrUpdatedHandler(pgu, truthCopyInfo, rollup)
       val rm = new RollupManager(pgu, truthCopyInfo)
       pgu.datasetMapReader.rollups(truthCopyInfo).foreach { ru =>
-        rm.updateRollup(ru, None, truthCopyInfo.dataVersion)
+        rm.updateRollup(ru, None, true)
       }
 
       val rows2 = rows :+
@@ -220,7 +220,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val rollups = pgu.datasetMapReader.rollups(truthCopyInfoAfterResync)
       rollups.size shouldEqual 1
       rollups.foreach { ru =>
-        val rollupTableName = RollupManager.rollupTableName(ru, truthCopyInfoAfterResync.dataVersion)
+        val rollupTableName = ru.tableName
         jdbcColumnCount(pgu.conn, rollupTableName) should be (1)
         jdbcRowCount(pgu.conn, rollupTableName) should be (rows2.size)
       }
@@ -248,7 +248,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       firstCopy.lifecycleStage should be (metadata.LifecycleStage.Unpublished)
       firstCopy.copyNumber should be (1L)
 
-      val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetInfo.internalName)
+      val datasetId = pgu.datasetMapReader.datasetIdForInternalName(datasetInfo.internalName)
       datasetId.isDefined should be (true)
       WorkingCopyPublishedHandler(pgu, firstCopy)
       val firstCopyPublished: TruthCopyInfo = getTruthCopyInfo(pgu, datasetInfo)
@@ -263,9 +263,9 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       RollupManager.makeSecondaryRollupInfo(rollupInFirstCopy) should be (rollup)
 
       // create the rollup table
-      (new RollupManager(pgu, firstCopyPublished)).updateRollup(rollupInFirstCopy, None, firstCopy.dataVersion)
+      (new RollupManager(pgu, firstCopyPublished)).updateRollup(rollupInFirstCopy, None, true)
 
-      val tableNameFirstCopy = RollupManager.rollupTableName(rollupInFirstCopy, firstCopy.dataVersion)
+      val tableNameFirstCopy = rollupInFirstCopy.tableName
       jdbcColumnCount(pgu.conn, tableNameFirstCopy) should be (1)
       jdbcRowCount(pgu.conn, tableNameFirstCopy) should be (1)
 
@@ -284,7 +284,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       previousRollups.size should be (1)
       val previousRollup = previousRollups.head
 
-      val tableNamePreviousRollup = RollupManager.rollupTableName(previousRollup, previousCopy.dataVersion)
+      val tableNamePreviousRollup = previousRollup.tableName
       jdbcColumnCount(pgu.conn, tableNamePreviousRollup) should be (1)
       jdbcRowCount(pgu.conn, tableNamePreviousRollup) should be (1)
     }
@@ -301,9 +301,9 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
         "select _make, avg(_aspect_ratio) over(partition by _make)  AS _avg_asp")
 
       val rm = new RollupManager(pgu, copyInfo)
-      rm.updateRollup(rollupInfo, None, copyInfo.dataVersion)
+      rm.updateRollup(rollupInfo, None, true)
 
-      val tableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
+      val tableName = rollupInfo.tableName
       jdbcColumnCount(pgu.conn, tableName) should be (2)
       jdbcRowCount(pgu.conn,tableName) should be (18)
       secondary.shutdown()

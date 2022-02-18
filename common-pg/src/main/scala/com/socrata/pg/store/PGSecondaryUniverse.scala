@@ -93,12 +93,8 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
     new PGSecondaryDatasetMapWriter(conn, typeContext.typeNamespace,
       timingReport, obfuscationKeyGenerator, initialCounterValue, commonSupport.initialLatestDataVersion)
 
-  lazy val datasetMapReader: DatasetMapReader[SoQLType] =
-    new PostgresDatasetMapReader(conn, typeContext.typeNamespace, timingReport)
-
-  lazy val secondaryDatasetMapReader = new PGSecondaryDatasetMapReader(conn)
-
-  lazy val secondaryDatasetMapWriter = datasetMapWriter // TODO: remove this alias
+  lazy val datasetMapReader: PGSecondaryDatasetMapReader[SoQLType] =
+    new PGSecondaryDatasetMapReader(conn, typeContext.typeNamespace, timingReport)
 
   lazy val datasetReader = DatasetReader(lowLevelDatabaseReader)
 

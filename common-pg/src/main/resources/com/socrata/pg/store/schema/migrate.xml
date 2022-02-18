@@ -27,4 +27,5 @@
     <include file="com/socrata/pg/store/schema/20200901-create-index-directive-map.xml"/>
     <include file="com/socrata/pg/store/schema/20210420-create-single_row.xml"/>
     <include file="com/socrata/pg/store/schema/20220208-add-data-shape-version.xml"/>
+    <include file="com/socrata/pg/store/schema/20220218-add-rollup-table-name.xml"/>
 </databaseChangeLog>

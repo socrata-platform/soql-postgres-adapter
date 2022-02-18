@@ -77,7 +77,7 @@ class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBas
 
   private def rollupTableExists(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo): Unit = {
     val rollupTableName = pgu.datasetMapReader.rollups(copyInfo).map { rollupInfo =>
-      val rollupTableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
+      val rollupTableName = rollupInfo.tableName
       val materialized = RollupManager.shouldMaterializeRollups(copyInfo.lifecycleStage)
       val expectedTable = if (materialized) 1 else 0
       jdbcColumnCount(pgu.conn, rollupTableName) should be (expectedTable)

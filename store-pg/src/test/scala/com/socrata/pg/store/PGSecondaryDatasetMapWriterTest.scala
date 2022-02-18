@@ -41,21 +41,18 @@ class PGSecondaryDatasetMapWriterTest extends PGSecondaryTestBase with PGSeconda
   }
 
   test("Can create internal name mapping") {
-    withDb() {
-      conn => {
-        createSchema(conn)
-        val datasetMapWriter = new PGSecondaryDatasetMapWriter(conn, PostgresUniverseCommon.typeContext.typeNamespace, PostgresUniverseCommon.timingReport, noopKeyGen, ZeroID, ZeroVersion)
-        datasetMapWriter.createInternalNameMapping("Dataset Name", new DatasetId(123))
-        val datasetId: DatasetId = new PGSecondaryDatasetMapReader(conn).datasetIdForInternalName("Dataset Name").get
-        datasetId shouldEqual new DatasetId(123)
-      }
+    withPgu() { pgu =>
+      createSchema(pgu.conn)
+      pgu.datasetMapWriter.createInternalNameMapping("Dataset Name", new DatasetId(123))
+      val datasetId: DatasetId = pgu.datasetMapReader.datasetIdForInternalName("Dataset Name").get
+      datasetId shouldEqual new DatasetId(123)
     }
   }
 
   test("Can create dataset only") {
     withPgu() { pgu =>
       createSchema(pgu.conn)
-      val datasetId = pgu.secondaryDatasetMapWriter.createDatasetOnly("locale")
+      val datasetId = pgu.datasetMapWriter.createDatasetOnly("locale")
 
       val dataSetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
       pgu.datasetMapReader.allCopies(dataSetInfo) shouldBe empty
@@ -74,7 +71,7 @@ class PGSecondaryDatasetMapWriterTest extends PGSecondaryTestBase with PGSeconda
 
       pgu.conn.getMetaData().getTables(null, null, tableName, null).next() should be (true)
 
-      pgu.secondaryDatasetMapWriter.deleteCopy(truthCopyInfo)
+      pgu.datasetMapWriter.deleteCopy(truthCopyInfo)
 
       an [Exception] should be thrownBy getTruthCopyInfo(pgu, f.datasetInfo) // scalastyle:ignore
 

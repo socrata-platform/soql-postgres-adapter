@@ -311,7 +311,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     analyze: Boolean
   ) (resp:HttpServletResponse): Unit = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
-      pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetId, checkDisabled = true) match {
+      pgu.datasetMapReader.datasetIdForInternalName(datasetId, checkDisabled = true) match {
         case None =>
           logger.info(s"Tried to perform query on dataset $datasetId")
           NotFound(resp)
@@ -558,7 +558,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
         val rollupInfo = pgu.datasetMapReader.rollup(copyCtx.copyInfo, r).getOrElse {
           throw new RuntimeException(s"Rollup ${rollupName} not found for copy ${copyCtx.copyInfo} ")
         }
-        RollupManager.rollupTableName(rollupInfo, copyCtx.copyInfo.dataVersion)
+        rollupInfo.tableName
       case None =>
         copyCtx.copyInfo.dataTableName
     }
@@ -616,7 +616,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
   def getSchema(ds: String, reqCopy: Option[String]): Option[Schema] = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       for {
-        datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds)
+        datasetId <- pgu.datasetMapReader.datasetIdForInternalName(ds)
         datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
       } yield {
         val copy = getCopy(pgu, datasetInfo, reqCopy)
@@ -652,7 +652,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
       // get dataset by either id or resource name
       val datasetIdOption = dsOrRn match {
         case Left(ds) =>
-          pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds, checkDisabled = true)
+          pgu.datasetMapReader.datasetIdForInternalName(ds, checkDisabled = true)
         case Right(rn) =>
           val datasetInfo = pgu.datasetMapReader.datasetInfoByResourceName(ResourceName(rn))
           datasetInfo.map(_.systemId)
@@ -686,7 +686,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
   private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], ds: String, reqCopy: Option[String])
                       : Option[CopyInfo] = {
     for {
-      datasetId <- pgu.secondaryDatasetMapReader.datasetIdForInternalName(ds, checkDisabled = true)
+      datasetId <- pgu.datasetMapReader.datasetIdForInternalName(ds, checkDisabled = true)
       datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
     } yield {
       getCopy(pgu, datasetInfo, reqCopy)
