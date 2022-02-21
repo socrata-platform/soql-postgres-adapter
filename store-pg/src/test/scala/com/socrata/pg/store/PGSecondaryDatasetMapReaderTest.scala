@@ -46,18 +46,18 @@ class PGSecondaryDatasetMapReaderTest extends FunSuite with Matchers with Before
   }
 
   test("Reader can determine the DatasetId from a given Dataset Internal Name") {
-    withDb() { conn => {
-      createSchema(conn)
-      val datasetId: DatasetId = new PGSecondaryDatasetMapReader(conn).datasetIdForInternalName("Dataset Name").get
+    withPgu() { pgu =>
+      createSchema(pgu.conn)
+      val datasetId: DatasetId = pgu.datasetMapReader.datasetIdForInternalName("Dataset Name").get
       datasetId shouldEqual new DatasetId(123)
-    }}
+    }
   }
 
   test("Reader does not raise when Dataset Internal Name cannot be found") {
-    withDb() { conn => {
-      createSchema(conn)
-      new PGSecondaryDatasetMapReader(conn).datasetIdForInternalName("I do not exist")
+    withPgu() { pgu =>
+      createSchema(pgu.conn)
+      pgu.datasetMapReader.datasetIdForInternalName("I do not exist")
       // TODO Show Randy how to deal with the "None" case return value from the above method
-    }}
+    }
   }
 }

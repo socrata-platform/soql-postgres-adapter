@@ -18,7 +18,7 @@ class WorkingCopyCreatedHandlerTest extends PGSecondaryTestBase with PGSecondary
   test("can handle working copy event") {
     withPgu() { pgu =>
       val datasetInfo = SecondaryDatasetInfo(testInternalName, localeName, obfuscationKey, None)
-      val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(testInternalName)
+      val datasetId = pgu.datasetMapReader.datasetIdForInternalName(testInternalName)
       val dataVersion = 0L
       val copyInfo = CopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, dataVersion, new DateTime())
       WorkingCopyCreatedHandler(pgu, datasetId, datasetInfo, copyInfo)
@@ -42,7 +42,7 @@ class WorkingCopyCreatedHandlerTest extends PGSecondaryTestBase with PGSecondary
       firstCopy.lifecycleStage should be (metadata.LifecycleStage.Unpublished)
       firstCopy.copyNumber should be (1L)
 
-      val datasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(datasetInfo.internalName)
+      val datasetId = pgu.datasetMapReader.datasetIdForInternalName(datasetInfo.internalName)
       datasetId.isDefined should be (true)
       WorkingCopyPublishedHandler(pgu, firstCopy)
       val firstCopyPublished = getTruthCopyInfo(pgu, datasetInfo)

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+    <changeSet author="robertm" id="20220218-add-rollup-table-name">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="rollup_map" columnName="table_name"/>
+            </not>
+        </preConditions>
+        <sql>
+          create extension if not exists pgcrypto; <!-- for "digest" -->
+          alter table rollup_map add column table_name text null;
+
+          update rollup_map
+          set
+            table_name = (
+              select
+               't' || cm.dataset_system_id || '_' || cm.copy_number || coalesce('_' || cmtm.table_modifier, '') || '_r_' || cm.data_version || '_' || substring(encode(digest(rollup_map.name, 'sha1'), 'hex'), 1, 16)
+              from
+                copy_map cm
+                left outer join copy_map_table_modifiers cmtm on cmtm.copy_system_id = cm.system_id
+              where cm.system_id = rollup_map.copy_system_id
+            );
+
+          alter table rollup_map alter column table_name set not null;
+        </sql>
+        <rollback>
+          <sql>
+            alter table rollup_map drop column table_name;
+          </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

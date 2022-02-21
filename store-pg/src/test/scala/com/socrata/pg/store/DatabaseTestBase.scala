@@ -104,7 +104,7 @@ trait DatabaseTestBase {
       truthDatasetId = datasetId
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon)
       val dsName = s"$dcInstance.${datasetId.underlying}"
-      secDatasetId = pgu.secondaryDatasetMapReader.datasetIdForInternalName(s"$dsName").getOrElse(
+      secDatasetId = pgu.datasetMapReader.datasetIdForInternalName(s"$dsName").getOrElse(
         throw new Exception("Fail to get secondary database id"))
       pgu.datasetMapReader.datasetInfo(secDatasetId).getOrElse(throw new Exception("fail to get dataset from secondary"))
       (truthDatasetId, secDatasetId)
@@ -114,10 +114,9 @@ trait DatabaseTestBase {
   def createRollup(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo): String = {
     val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"), "select 'x'")
     val rm = new RollupManager(pgu, copyInfo)
-    rm.updateRollup(rollupInfo, None, copyInfo.dataVersion)
-    val rollupTableName = RollupManager.rollupTableName(rollupInfo, copyInfo.dataVersion)
+    rm.updateRollup(rollupInfo, None, false)
     pgu.commit()
-    rollupTableName
+    rollupInfo.tableName
   }
 
   def fixtureRows(name: String): Iterator[JValue] = {

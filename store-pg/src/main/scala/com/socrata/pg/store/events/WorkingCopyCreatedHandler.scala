@@ -24,7 +24,7 @@ case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
     case 1 =>
       logger.info(s"create first copy {}", datasetInfo.internalName)
       val (copyInfoSecondary: TruthCopyInfo, sLoader) = createDataset(pgu, datasetInfo.localeName, datasetInfo.resourceName)
-      pgu.secondaryDatasetMapWriter.createInternalNameMapping(
+      pgu.datasetMapWriter.createInternalNameMapping(
         datasetInfo.internalName,
         copyInfoSecondary.datasetInfo.systemId
       )
@@ -33,8 +33,8 @@ case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
       pgu.datasetMapReader.datasetInfo(datasetId.get).map { truthDatasetInfo =>
         logger.info("create working copy {} {} {}",
           datasetInfo.internalName, truthDatasetInfo.toString, copyNumBeyondOne.toString)
-        val truthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
-        val copyIdFromSequence = pgu.secondaryDatasetMapWriter.allocateCopyId()
+        val oldCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
+        val copyIdFromSequence = pgu.datasetMapWriter.allocateCopyId()
         val newCopyInfo = pgu.datasetMapWriter.unsafeCreateCopy(
           truthDatasetInfo,
           copyIdFromSequence,
@@ -47,12 +47,12 @@ case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
 
         // Copy rollups
         val rm = new RollupManager(pgu, newCopyInfo)
-        pgu.datasetMapReader.rollups(truthCopyInfo).foreach { ru =>
+        pgu.datasetMapReader.rollups(oldCopyInfo).foreach { ru =>
           val sru = RollupManager.makeSecondaryRollupInfo(ru)
           RollupCreatedOrUpdatedHandler(pgu, newCopyInfo, sru)
         }
         pgu.datasetMapReader.rollups(newCopyInfo).foreach { ru =>
-          rm.updateRollup(ru, Some(truthCopyInfo), newCopyInfo.dataVersion)
+          rm.updateRollup(ru, Some(oldCopyInfo), false)
         }
       }
   }

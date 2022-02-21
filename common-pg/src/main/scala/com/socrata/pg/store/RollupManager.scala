@@ -9,7 +9,7 @@ import com.rojoma.simplearm.v2.using
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.secondary.{RollupInfo => SecondaryRollupInfo}
 import com.socrata.datacoordinator.truth.loader.sql.{ChangeOwner, SqlTableDropper}
-import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, LifecycleStage, RollupInfo}
+import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, LifecycleStage}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
@@ -80,67 +80,106 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    * @param newDataVersion The version of the dataset that will be current after the current
    *                       transaction completes.
    */
-  def updateRollup(rollupInfo: RollupInfo, oldCopyInfo: Option[CopyInfo], newDataVersion: Long): Unit =
-    // Working copies do not materialize rollups.
-    if (shouldMaterializeRollups(copyInfo.lifecycleStage)) doUpdateRollup(rollupInfo, oldCopyInfo, newDataVersion)
-
-  private def doUpdateRollup(rollupInfo: RollupInfo, oldCopyInfo: Option[CopyInfo], newDataVersion: Long): Unit = {
+  def updateRollup(originalRollupInfo: LocalRollupInfo, oldCopyInfo: Option[CopyInfo], tryToMove: Boolean, force: Boolean = false): Unit = {
+    var rollupInfo = originalRollupInfo
     logger.info(s"Updating copy $copyInfo, rollup $rollupInfo")
     time("update-rollup", "dataset_id" -> copyInfo.datasetInfo.systemId, "rollupName" -> rollupInfo.name) {
+      val oldRollup = oldCopyInfo.flatMap(pgu.datasetMapReader.rollup(_, rollupInfo.name))
+      var oldRollupTransferred = false
 
-      val newTableName = rollupTableName(rollupInfo, newDataVersion)
-      val oldTableName = oldCopyInfo.filter(_.copyNumber == rollupInfo.copyInfo.copyNumber).map { ci =>
-        rollupTableName(rollupInfo, ci.dataVersion)
+      // Wrinkle: in unpublished mode, rollups _usually_ don't
+      // exist.  We want to update it only if we're forced, in the
+      // right lifecycle stage, or we're not changing copy and the
+      // table exists.
+      lazy val oldRollupExists = oldRollup.exists(rollupTableExists)
+      val actuallyUpdateTheTable =
+        force ||
+          shouldMaterializeRollups(copyInfo.lifecycleStage) ||
+          ((oldCopyInfo.map(_.systemId) == Some(copyInfo.systemId)) && oldRollupExists)
+
+      if(actuallyUpdateTheTable) {
+        val analyzer = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
+
+        val prefixedDsContext = Map(TableName.PrimaryTable.qualifier -> new DatasetContext[SoQLType] {
+          val schema: OrderedMap[ColumnName, SoQLType] =
+            OrderedMap(dsSchema.values.map(x => (columnIdToPrefixNameMap(x.userColumnId), x.typ)).toSeq.sortBy(_._1): _*)
+        })
+
+        // In most of the secondary update code, if something unexpectedly blows up we just blow up, roll back
+        // the whole transaction, and mark the dataset as broken so we can investigate.  For doing the soql
+        // analysis, however, an failure can be caused by user actions, even though the rollup soql is initially
+        // validated by soda fountain.  eg. define rollup successfully, then remove a column used in the rollup.
+        // We don't want to disable the rollup entirely since it could become valid again, eg. if they then add
+        // the column back.  It would be ideal if we had a better way to communicate this failure upwards through
+        // the stack.
+        val prefixedRollupAnalyses: Try[BinaryTree[SoQLAnalysis[ColumnName, SoQLType]]] =
+          Try { analyzer.analyzeFullQueryBinary(rollupInfo.soql)(prefixedDsContext) }
+
+        prefixedRollupAnalyses match {
+          case Success(pra) =>
+            val rollupAnalyses = pra.flatMap(a => Leaf(a.mapColumnIds(columnNameRemovePrefixMap)))
+            // We are naming columns simply c1 .. c<n> based on the order they are in to avoid having
+            // to maintain a mapping or deal with edge cases such as length and :system columns.
+            val rollupReps = rollupAnalyses.last.selection.values.zipWithIndex.map { case (colRep, idx) =>
+              SoQLIndexableRep.sqlRep(colRep.typ, "c" + (idx + 1))
+            }.toSeq
+
+            oldRollup match {
+              case Some(or) if tryToMove && or.soql == rollupInfo.soql && oldRollupExists =>
+                logger.info("Transferring preexisting rollup table rather than rebuilding it")
+                pgu.datasetMapWriter.transferRollup(or, rollupInfo.copyInfo)
+                oldRollupTransferred = true
+              case _ =>
+                // ok, we're going to be making a table.  Which means
+                // we don't actually care about the old table and _can
+                // change its name_.
+                rollupInfo = pgu.datasetMapWriter.changeRollupTableName(rollupInfo, LocalRollupInfo.tableName(rollupInfo.copyInfo, rollupInfo.name))
+
+                for(or <- oldRollup) {
+                  if(or.tableName == rollupInfo.tableName && oldRollupExists) {
+                    // This shouldn't happen anymore?  We're mixing in
+                    // the data version
+                    logger.info("Dropping old rollup with the same name as the new rollup: {}", or.tableName)
+                    dropRollup(or, immediate = true) // ick
+                  }
+                }
+                createRollupTable(rollupReps, rollupInfo)
+                populateRollupTable(rollupInfo, rollupAnalyses, rollupReps)
+                createIndexes(rollupInfo, rollupReps)
+            }
+          case Failure(e) =>
+            e match {
+              case e: NoSuchColumn =>
+                logger.info(s"drop rollup ${rollupInfo.name.underlying} on ${copyInfo} because ${e.getMessage}")
+                dropRollupInfo(rollupInfo)
+              case e @ (_:SoQLException | _:StandaloneLexerException) =>
+                logger.warn(s"Error updating ${copyInfo}, ${rollupInfo}, skipping building rollup", e)
+              case _ =>
+                throw e
+            }
+        }
+
+        // drop the old rollup regardless so it doesn't leak, because we have no way to use or track old rollups at
+        // this point.
+        oldRollup.foreach { or =>
+          if(or.tableName != rollupInfo.tableName) scheduleRollupTablesForDropping(or.tableName)
+          if(or.copyInfo.systemId != rollupInfo.copyInfo.systemId) pgu.datasetMapWriter.dropRollup(or)
+        }
       }
-
-      val analyzer = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
-
-      val prefixedDsContext = Map(TableName.PrimaryTable.qualifier -> new DatasetContext[SoQLType] {
-        val schema: OrderedMap[ColumnName, SoQLType] =
-          OrderedMap(dsSchema.values.map(x => (columnIdToPrefixNameMap(x.userColumnId), x.typ)).toSeq.sortBy(_._1): _*)
-      })
-
-      // In most of the secondary update code, if something unexpectedly blows up we just blow up, roll back
-      // the whole transaction, and mark the dataset as broken so we can investigate.  For doing the soql
-      // analysis, however, an failure can be caused by user actions, even though the rollup soql is initially
-      // validated by soda fountain.  eg. define rollup successfully, then remove a column used in the rollup.
-      // We don't want to disable the rollup entirely since it could become valid again, eg. if they then add
-      // the column back.  It would be ideal if we had a better way to communicate this failure upwards through
-      // the stack.
-      val prefixedRollupAnalyses: Try[BinaryTree[SoQLAnalysis[ColumnName, SoQLType]]] =
-        Try { analyzer.analyzeFullQueryBinary(rollupInfo.soql)(prefixedDsContext) }
-
-      prefixedRollupAnalyses match {
-        case Success(pra) =>
-          val rollupAnalyses = pra.flatMap(a => Leaf(a.mapColumnIds(columnNameRemovePrefixMap)))
-          // We are naming columns simply c1 .. c<n> based on the order they are in to avoid having
-          // to maintain a mapping or deal with edge cases such as length and :system columns.
-          val rollupReps = rollupAnalyses.last.selection.values.zipWithIndex.map { case (colRep, idx) =>
-            SoQLIndexableRep.sqlRep(colRep.typ, "c" + (idx + 1))
-          }.toSeq
-
-          createRollupTable(rollupReps, newTableName, rollupInfo)
-          populateRollupTable(newTableName, rollupInfo, rollupAnalyses, rollupReps)
-          createIndexes(newTableName, rollupInfo, rollupReps)
-        case Failure(e) =>
-          e match {
-            case e: NoSuchColumn =>
-              logger.info(s"drop rollup ${rollupInfo.name.underlying} on ${copyInfo} because ${e.getMessage}")
-              dropRollupInfo(rollupInfo)
-            case e @ (_:SoQLException | _:StandaloneLexerException) =>
-              logger.warn(s"Error updating ${copyInfo}, ${rollupInfo}, skipping building rollup", e)
-            case _ =>
-              throw e
-          }
-      }
-
-      // drop the old rollup regardless so it doesn't leak, because we have no way to use or track old rollups at
-      // this point.
-      oldTableName.foreach(scheduleRollupTablesForDropping(_))
     }
   }
 
-  private def dropRollupInfo(rollupInfo: RollupInfo) {
+  private def rollupTableExists(ri: LocalRollupInfo): Boolean = {
+    using(pgu.conn.prepareStatement("SELECT count(*) AS c FROM pg_tables WHERE tablename = ?")) { stmt =>
+      stmt.setString(1, ri.tableName)
+      using(stmt.executeQuery()) { rs =>
+        if(!rs.next()) throw new Exception("SELECT count(*) didn't return any rows???")
+        rs.getLong("c") == 1
+      }
+    }
+  }
+
+  private def dropRollupInfo(rollupInfo: LocalRollupInfo) {
     for { ri <- pgu.datasetMapReader.rollup(copyInfo, rollupInfo.name) } {
       dropRollup(ri, immediate = true)
       pgu.datasetMapWriter.dropRollup(copyInfo, Some(rollupInfo.name))
@@ -162,16 +201,15 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    * Does not update the rollup_map metadata.  The copyInfo passed in
    * must match with the currently created version number of the rollup table.
    */
-  def dropRollup(ri: RollupInfo, immediate: Boolean): Unit = {
-    val tableName = rollupTableName(ri, copyInfo.dataVersion)
+  def dropRollup(ri: LocalRollupInfo, immediate: Boolean): Unit = {
     if (immediate) {
       using(pgu.conn.createStatement()) { stmt =>
-        val sql = s"DROP TABLE IF EXISTS ${tableName}"
+        val sql = s"DROP TABLE IF EXISTS ${ri.tableName}"
         logger.info(sql)
         stmt.execute(sql)
       }
     } else {
-      scheduleRollupTablesForDropping(tableName)
+      scheduleRollupTablesForDropping(ri.tableName)
     }
   }
 
@@ -181,7 +219,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    * column types match what the soql type is and so we can control that, instead of having
    * postgres infer what type to use using its type system.
    */
-  private def createRollupTable(rollupReps: Seq[SqlCol], tableName: String, rollupInfo: RollupInfo): Unit = {
+  private def createRollupTable(rollupReps: Seq[SqlCol], rollupInfo: LocalRollupInfo): Unit = {
     time("create-rollup-table",
       "dataset_id" -> copyInfo.datasetInfo.systemId.underlying,
       "rollupName" -> rollupInfo.name.underlying) {
@@ -193,13 +231,13 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       } yield s"${colName} ${colType} NULL"
 
       using(pgu.conn.createStatement()) { stmt =>
-        val createSql = s"CREATE TABLE ${tableName} (${colDdls.mkString(", ")} )${tablespaceSql};"
+        val createSql = s"CREATE TABLE ${rollupInfo.tableName} (${colDdls.mkString(", ")} )${tablespaceSql};"
 
-        logger.info(s"Creating rollup table ${tableName} for ${copyInfo} / ${rollupInfo} using sql: ${createSql}")
-        stmt.execute(createSql + ChangeOwner.sql(pgu.conn, tableName))
+        logger.info(s"Creating rollup table ${rollupInfo.tableName} for ${copyInfo} / ${rollupInfo} using sql: ${createSql}")
+        stmt.execute(createSql + ChangeOwner.sql(pgu.conn, rollupInfo.tableName))
 
         // sadly the COMMENT statement can't use prepared statement params...
-        val commentSql = s"COMMENT ON TABLE ${tableName} IS '" +
+        val commentSql = s"COMMENT ON TABLE ${rollupInfo.tableName} IS '" +
           SqlUtils.escapeString(pgu.conn, rollupInfo.name.underlying + " = " + rollupInfo.soql) + "'"
         stmt.execute(commentSql)
       }
@@ -216,8 +254,8 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     }
   }
 
-  private def populateRollupTable(tableName: String,
-      rollupInfo: RollupInfo,
+  private def populateRollupTable(
+      rollupInfo: LocalRollupInfo,
       rollupAnalyses: BinaryTree[SoQLAnalysis[ColumnName, SoQLType]],
       rollupReps: Seq[SqlColumnRep[SoQLType, SoQLValue]]): Unit = {
     time("populate-rollup-table",
@@ -240,25 +278,25 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
         ctx = sqlCtx,
         stringLit => SqlUtils.escapeString(pgu.conn, stringLit))
 
-      val insertParamSql = selectParamSql.copy(sql = Seq(s"INSERT INTO ${tableName} ( ${selectParamSql.sql.head} )"))
+      val insertParamSql = selectParamSql.copy(sql = Seq(s"INSERT INTO ${rollupInfo.tableName} ( ${selectParamSql.sql.head} )"))
 
-      logger.info(s"Populating rollup table ${tableName} for ${copyInfo} / ${rollupInfo} using sql: ${insertParamSql}")
+      logger.info(s"Populating rollup table ${rollupInfo.tableName} for ${copyInfo} / ${rollupInfo} using sql: ${insertParamSql}")
       executeParamSqlUpdate(pgu.conn, insertParamSql)
     }
   }
 
-  private def createIndexes(tableName: String, rollupInfo: RollupInfo, rollupReps: Seq[SqlColIdx]) = {
+  private def createIndexes(rollupInfo: LocalRollupInfo, rollupReps: Seq[SqlColIdx]) = {
     time("create-indexes",
       "dataset_id" -> copyInfo.datasetInfo.systemId.underlying,
       "rollupName" -> rollupInfo.name.underlying) {
       using(pgu.conn.createStatement()) { stmt =>
         for {
           rep <- rollupReps
-          createIndexSql <- rep.createRollupIndex(tableName, tablespaceSql)
+          createIndexSql <- rep.createRollupIndex(rollupInfo.tableName, tablespaceSql)
         } {
           // Currently we aren't using any SqlErrorHandlers here, because as of this
           // time none of the existing ones are appropriate.
-          logger.trace(s"Creating index on ${tableName} for ${copyInfo} / ${rollupInfo} using sql: ${createIndexSql}")
+          logger.trace(s"Creating index on ${rollupInfo.tableName} for ${copyInfo} / ${rollupInfo} using sql: ${createIndexSql}")
           RowSizeBufferSqlErrorContinue.guard(pgu.conn) {
             stmt.execute(createIndexSql)
           }
@@ -295,17 +333,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 object RollupManager {
   private val logger = Logger[RollupManager]
 
-  def rollupTableName(rollupInfo: RollupInfo, dataVersion: Long): String = {
-    val sha1 = MessageDigest.getInstance("SHA-1")
-    // we have a 63 char limit on table names, so just taking a prefix.  It only has to be
-    // unique within a single dataset copy.
-    val bytes = 8
-    val nameHash = sha1.digest(rollupInfo.name.underlying.getBytes("UTF-8")).take(bytes).map("%02x" format _).mkString
-
-    rollupInfo.copyInfo.dataTableName + "_r_" + dataVersion + "_" + nameHash
-  }
-
-  def makeSecondaryRollupInfo(rollupInfo: RollupInfo): SecondaryRollupInfo =
+  def makeSecondaryRollupInfo(rollupInfo: LocalRollupInfo): SecondaryRollupInfo =
      SecondaryRollupInfo(rollupInfo.name.underlying, rollupInfo.soql)
 
   def shouldMaterializeRollups(stage: LifecycleStage): Boolean = stage == LifecycleStage.Published
