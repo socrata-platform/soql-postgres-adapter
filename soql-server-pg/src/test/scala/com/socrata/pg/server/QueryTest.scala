@@ -10,14 +10,14 @@ import com.socrata.soql.collection.OrderedMap
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.socrata.soql.{BinaryTree, SoQLAnalysis}
 import com.socrata.soql.stdlib.{Context => SoQLContext}
-import java.sql.Connection
 
+import java.sql.Connection
 import org.apache.log4j.PropertyConfigurator
 
 import scala.language.existentials
 import com.socrata.pg.soql.CaseSensitive
 import com.socrata.http.server.util.NoPrecondition
-import com.socrata.pg.query.PGQueryTestBase
+import com.socrata.pg.query.{PGQueryTestBase, QueryResult}
 
 class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase with PGQueryTestBase {
 
@@ -68,9 +68,9 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase w
             val qs = new QueryServer(dsInfo, CaseSensitive, leadingSearch = true)
             qs.execQuery(pgu, SoQLContext.empty, "someDatasetInternalName", copyInfo.datasetInfo, analyses, false, None, None, true,
               NoPrecondition, None, None, None, None, false, false, false) match {
-              case QueryServer.Success(schema, _, version, results, etag, lastModified) =>
+              case QueryResult.Success(schema, _, version, results, etag, lastModified) =>
                 (schema, version, results)
-              case queryFail: QueryServer.QueryResult =>
+              case queryFail: QueryResult =>
                 throw new Exception(s"Query Fail ${queryFail.getClass.getName}")
             }
           }

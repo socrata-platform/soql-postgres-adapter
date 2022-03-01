@@ -7,7 +7,7 @@ import com.socrata.datacoordinator.truth.metadata
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, LifecycleStage => TruthLifecycleStage}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.store.PGSecondaryUtil._
-import com.socrata.pg.store.events.{RollupCreatedOrUpdatedHandler, WorkingCopyCreatedHandler, WorkingCopyPublishedHandler}
+import com.socrata.pg.store.events.{ColumnCreatedHandler, RollupCreatedOrUpdatedHandler, WorkingCopyCreatedHandler, WorkingCopyPublishedHandler}
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.types._
 import org.joda.time.DateTime
@@ -111,6 +111,8 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       WorkingCopyCreatedHandler(pgu, None, datasetInfo, copyInfo)
 
       val firstCopy = getTruthCopyInfo(pgu, datasetInfo)
+      createSystemColumns(pgu, firstCopy, 100)
+
       firstCopy.lifecycleStage should be (metadata.LifecycleStage.Unpublished)
       firstCopy.copyNumber should be (1L)
 
@@ -140,7 +142,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val secondCopy = getTruthCopyInfo(pgu, datasetInfo)
       secondCopy.lifecycleStage should be (metadata.LifecycleStage.Unpublished)
       secondCopy.copyNumber should be (2L)
-
+      createSystemColumns(pgu, secondCopy, 200)
       // Publish the 2nd copy
       WorkingCopyPublishedHandler(pgu, secondCopy)
 
@@ -250,6 +252,8 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
 
       val datasetId = pgu.datasetMapReader.datasetIdForInternalName(datasetInfo.internalName)
       datasetId.isDefined should be (true)
+      createSystemColumns(pgu, firstCopy, 300)
+
       WorkingCopyPublishedHandler(pgu, firstCopy)
       val firstCopyPublished: TruthCopyInfo = getTruthCopyInfo(pgu, datasetInfo)
       firstCopyPublished.lifecycleStage should be (metadata.LifecycleStage.Published)
@@ -274,6 +278,8 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val secondCopy = getTruthCopyInfo(pgu, datasetInfo)
       secondCopy.lifecycleStage should be (metadata.LifecycleStage.Unpublished)
       secondCopy.copyNumber should be (2L)
+
+      createSystemColumns(pgu, secondCopy, 400)
 
       val pgs = new PGSecondary(config)
       pgs.doVersion(pgu, datasetInfo, secondCopy.dataVersion + 1, secondCopy.dataVersion + 1, None, Iterator(WorkingCopyDropped))
@@ -308,5 +314,19 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       jdbcRowCount(pgu.conn,tableName) should be (18)
       secondary.shutdown()
     }
+  }
+
+  /**
+   * Rollups need system columns to process queries
+   */
+  private def createSystemColumns(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copy: TruthCopyInfo, baseId: Int) {
+    val col1 = com.socrata.datacoordinator.secondary.ColumnInfo[SoQLType](
+      new ColumnId(baseId), new UserColumnId(":id"), None, SoQLID, true, false, false, None
+    )
+    val col2 = com.socrata.datacoordinator.secondary.ColumnInfo[SoQLType](
+      new ColumnId(baseId + 1), new UserColumnId(":version"), None, SoQLVersion, false, false, true, None
+    )
+    ColumnCreatedHandler(pgu, copy, col1)
+    ColumnCreatedHandler(pgu, copy, col2)
   }
 }

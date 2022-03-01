@@ -7,17 +7,17 @@ import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.loader.sql.AbstractRepBasedDataSqlizer
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.CloseableIterator
+import com.socrata.pg.query.QueryResult.QueryRuntimeError
 import com.socrata.pg.soql.ParametricSql
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.{BinaryTree, SoQLAnalysis}
-import com.socrata.soql.stdlib.{Context => SoQLContext, UserContext}
-import com.socrata.soql.types.{SoQLFloatingTimestamp, SoQLFixedTimestamp}
+import com.socrata.soql.stdlib.{UserContext, Context => SoQLContext}
+import com.socrata.soql.types.{SoQLFixedTimestamp, SoQLFloatingTimestamp}
 
 import scala.concurrent.duration.Duration
 import com.typesafe.scalalogging.Logger
 
 import java.sql.{Connection, PreparedStatement, ResultSet, SQLException}
-import com.socrata.pg.server.QueryServer.{ExplainInfo, QueryRuntimeError}
 
 object DataSqlizerQuerier {
   private val logger = Logger[DataSqlizerQuerier[_, _]]
