@@ -34,7 +34,7 @@ import com.socrata.http.server.util.RequestId.ReqIdHeader
 import com.socrata.http.server.util.handlers.{LoggingOptions, NewLoggingHandler, ThreadRenamingHandler}
 import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, StrongEntityTag}
 import com.socrata.pg.SecondaryBase
-import com.socrata.pg.query.{DataSqlizerQuerier, RowCount, RowReaderQuerier}
+import com.socrata.pg.query.{DataSqlizerQuerier, ExplainInfo, QueryResult, RowCount, RowReaderQuerier}
 import com.socrata.pg.server.config.{DynamicPortMap, QueryServerConfig}
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.soql._
@@ -52,7 +52,6 @@ import com.socrata.curator.{CuratorFromConfig, DiscoveryFromConfig}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.http.common.util.HttpUtils
 import com.socrata.pg.server.CJSONWriter.utf8EncodingName
-import com.socrata.pg.server.QueryServer.QueryRuntimeError.validErrorCodes
 import com.socrata.thirdparty.metrics.{MetricsReporter, SocrataHttpSupport}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.{Config, ConfigFactory}
@@ -70,6 +69,7 @@ import scala.language.existentials
 
 class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val leadingSearch: Boolean = true) extends SecondaryBase {
   import QueryServer._ // scalastyle:ignore import.grouping
+  import com.socrata.pg.query.QueryResult._
 
   val dsConfig: DataSourceConfig = null // scalastyle:ignore null // unused
 
@@ -781,50 +781,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
 
 object QueryServer extends DynamicPortMap {
   private val logger = Logger[QueryServer]
-
-  sealed abstract class QueryResult
-  case class NotModified(etags: Seq[EntityTag]) extends QueryResult
-  case object PreconditionFailed extends QueryResult
-  case class RequestTimedOut(timeout: Option[Duration]) extends QueryResult
-  case class QueryError(description: String) extends QueryResult
-  class QueryRuntimeError(val error: SQLException) extends QueryError(error.getMessage)
-  object QueryRuntimeError {
-    val validErrorCodes = Set(
-      "22003",    // value overflows numeric format, 1000000000000 ^ 1000000000000000000
-      "22012",    // divide by zero, 1/0
-      "22008",    // timestamp out of range, timestamp - 'P500000Y'
-      "22023",    // time zone not recognized
-      "22P02",    // invalid input syntax for type boolean|numeric:, 'tr2ue'::boolean 'tr2ue'::number
-      "XX000"     // invalid geometry, POINT(1,2)::point -- no comma between lon lat, POLYGON((0 0,1 1,1 0))::polygon
-    )
-
-    def apply(error: SQLException, timeout: Option[Duration] = None): Option[QueryResult] = {
-      error.getSQLState match {
-        // ick, but user-canceled requests also fall under this code and those are fine
-        case "57014" if "ERROR: canceling statement due to statement timeout".equals(error.getMessage) =>
-          Some(RequestTimedOut(timeout))
-        case state if validErrorCodes.contains(state) =>
-          Some(new QueryRuntimeError(error))
-        case _ =>
-          None
-      }
-    }
-  }
-  case class Success(
-    qrySchema: OrderedMap[ColumnId, ColumnInfo[SoQLType]],
-    copyNumber: Long,
-    dataVersion: Long,
-    results: Managed[CloseableIterator[Row[SoQLValue]] with RowCount],
-    etag: EntityTag,
-    lastModified: DateTime
-  ) extends QueryResult
-  case class InfoSuccess(
-    copyNumber: Long,
-    dataVersion: Long,
-    explainBlob: ExplainInfo
-  ) extends QueryResult
-
-  case class ExplainInfo(query: String, explainPlan: String)
 
   def withDefaultAddress(config: Config): Config = {
     val ifaces = ServiceInstanceBuilder.getAllLocalIPs
