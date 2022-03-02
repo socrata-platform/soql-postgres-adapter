@@ -3,6 +3,7 @@ package com.socrata.pg.store
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.security.MessageDigest
 import java.sql.{Connection, SQLException}
+
 import scala.util.{Failure, Success, Try}
 import com.rojoma.simplearm.v2.using
 import com.socrata.datacoordinator.id.UserColumnId
@@ -15,10 +16,10 @@ import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
 import com.socrata.pg.soql._
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.store.index.SoQLIndexableRep
-import com.socrata.soql.{BinaryTree, Compound, Leaf, SoQLAnalysis, SoQLAnalyzer}
+import com.socrata.soql.{BinaryTree, Leaf, SoQLAnalysis, SoQLAnalyzer}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName, DatasetContext, ResourceName, TableName}
+import com.socrata.soql.environment.{ColumnName, DatasetContext, TableName}
 import com.socrata.soql.exceptions.{NoSuchColumn, SoQLException}
 import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLTypeInfo}
 import com.socrata.soql.parsing.standalone_exceptions.StandaloneLexerException
@@ -26,8 +27,6 @@ import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.scalalogging.Logger
 import RollupManager._
 import com.socrata.datacoordinator.util.{LoggedTimingReport, StackedTimingReport}
-import com.socrata.soql.ast.{JoinFunc, JoinQuery, JoinTable, Select}
-import com.socrata.soql.parsing.StandaloneParser
 import com.socrata.soql.typed.Qualifier
 
 // scalastyle:off multiple.string.literals
@@ -41,25 +40,6 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     for(readCtx <- pgu.datasetReader.openDataset(copyInfo)) {
       readCtx.schema
     }
-
-  private def getDsSchema(resourceName: ResourceName): ColumnIdMap[ColumnInfo[SoQLType]] = {
-    val dsInfo = pgu.datasetMapReader.datasetInfoByResourceName(resourceName).get
-    val copyInfo = pgu.datasetMapReader.latest(dsInfo)
-    for (readCtx <- pgu.datasetReader.openDataset(copyInfo)) {
-      readCtx.schema
-    }
-  }
-
-  private def getDsContext(resourceName: ResourceName) = new DatasetContext[SoQLType] {
-    val dsSchemaX = getDsSchema(resourceName)
-
-    // we are sorting by the column name for consistency with query coordinator and how we build
-    // schema hashes, it may not matter here though.  Column id to name mapping is 1:1 in our case
-    // since our rollup query is pre-mapped.
-    val schema: OrderedMap[ColumnName, SoQLType] =
-    OrderedMap(dsSchemaX.values.map(x => (columnIdToPrefixNameMap(x.userColumnId), x.typ)).toSeq.sortBy(_._1): _*)
-  }
-
 
   private val dsContext = new DatasetContext[SoQLType] {
     // we are sorting by the column name for consistency with query coordinator and how we build
@@ -125,14 +105,6 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
             OrderedMap(dsSchema.values.map(x => (columnIdToPrefixNameMap(x.userColumnId), x.typ)).toSeq.sortBy(_._1): _*)
         })
 
-        val selects = new StandaloneParser().binaryTreeSelect(rollupInfo.soql)
-        val tableNames = collectTableNames(selects)
-        val prefixedDsContextXX = tableNames.foldLeft(prefixedDsContext) { (acc, tableName) =>
-          val resourceName = ResourceName(tableName)
-          val dsctx = getDsContext(resourceName)
-          acc + (tableName -> dsctx)
-        }
-
         // In most of the secondary update code, if something unexpectedly blows up we just blow up, roll back
         // the whole transaction, and mark the dataset as broken so we can investigate.  For doing the soql
         // analysis, however, an failure can be caused by user actions, even though the rollup soql is initially
@@ -140,13 +112,9 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
         // We don't want to disable the rollup entirely since it could become valid again, eg. if they then add
         // the column back.  It would be ideal if we had a better way to communicate this failure upwards through
         // the stack.
-        val prefixedRollupAnalyses = Try { analyzer.analyzeBinary(selects)(prefixedDsContextXX) }
-//        val prefixedRollupAnalyses: Try[BinaryTree[SoQLAnalysis[ColumnName, SoQLType]]] =
-//          Try { analyzer.analyzeFullQueryBinary(rollupInfo.soql)(prefixedDsContext) }
+        val prefixedRollupAnalyses: Try[BinaryTree[SoQLAnalysis[ColumnName, SoQLType]]] =
+          Try { analyzer.analyzeFullQueryBinary(rollupInfo.soql)(prefixedDsContext) }
 
-        if (prefixedRollupAnalyses.isFailure) {
-          throw new Exception("INTENTIONAL CRASH")
-        }
         prefixedRollupAnalyses match {
           case Success(pra) =>
             val rollupAnalyses = pra.flatMap(a => Leaf(a.mapColumnIds(columnNameRemovePrefixMap)))
@@ -176,7 +144,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
                   }
                 }
                 createRollupTable(rollupReps, rollupInfo)
-                populateRollupTable(rollupInfo, rollupAnalyses, rollupReps, tableNames)
+                populateRollupTable(rollupInfo, rollupAnalyses, rollupReps)
                 createIndexes(rollupInfo, rollupReps)
             }
           case Failure(e) =>
@@ -289,8 +257,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
   private def populateRollupTable(
       rollupInfo: LocalRollupInfo,
       rollupAnalyses: BinaryTree[SoQLAnalysis[ColumnName, SoQLType]],
-      rollupReps: Seq[SqlColumnRep[SoQLType, SoQLValue]],
-      tableNames: Set[String]): Unit = {
+      rollupReps: Seq[SqlColumnRep[SoQLType, SoQLValue]]): Unit = {
     time("populate-rollup-table",
       "dataset_id" -> copyInfo.datasetInfo.systemId.underlying,
       "rollupName" -> rollupInfo.name.underlying) {
@@ -300,22 +267,10 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
         SqlizerContext.LeaveGeomAsIs -> true
       )
 
-      val tableMapMore = tableNames.foldLeft(Map.empty[TableName, String]) { (acc, tn ) =>
-        val resourceName = ResourceName(tn)
-        val tableName = TableName(tn)
-        val dsInfo = pgu.datasetMapReader.datasetInfoByResourceName(resourceName).get
-        val copyInfo = pgu.datasetMapReader.latest(dsInfo)
-        acc + (tableName -> copyInfo.dataTableName)
-      }
-
-
       val dsRepMap: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]] =
         dsSchema.values.map(ci => QualifiedUserColumnId(None, ci.userColumnId) -> SoQLIndexableRep.sqlRep(ci)).toMap
 
-      val tableMap = tableMapMore ++ Map(TableName.PrimaryTable -> copyInfo.dataTableName) // TODO: FIX ME
-
-
-
+      val tableMap = Map(TableName.PrimaryTable -> copyInfo.dataTableName) // TODO: FIX ME
       val selectParamSql = Sqlizer.sql(Tuple3(soqlAnalysis, tableMap, rollupReps))(
         rep = dsRepMap,
         Map.empty,
@@ -382,22 +337,4 @@ object RollupManager {
      SecondaryRollupInfo(rollupInfo.name.underlying, rollupInfo.soql)
 
   def shouldMaterializeRollups(stage: LifecycleStage): Boolean = stage == LifecycleStage.Published
-
-  def collectTableNames(selects: BinaryTree[Select]): Set[String] = {
-    selects match {
-      case Compound(_, l, r) =>
-        collectTableNames(l) ++ collectTableNames(r)
-      case Leaf(select) =>
-        select.joins.foldLeft(select.from.map(_.name).filter(_ != TableName.This).toSet) { (acc, join) =>
-          join.from match {
-            case JoinTable(TableName(name, _)) =>
-              acc + name
-            case JoinQuery(selects, _) =>
-              acc ++ collectTableNames(selects)
-            case JoinFunc(_, _) =>
-              throw new Exception("Unexpected join function")
-          }
-        }
-    }
-  }
 }
