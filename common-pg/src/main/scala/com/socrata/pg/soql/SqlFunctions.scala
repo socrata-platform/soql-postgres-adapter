@@ -625,7 +625,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     }
 
     val litCtx = soqlType match {
-      case SoQLFloatingTimestamp | SoQLFixedTimestamp =>
+      case SoQLFloatingTimestamp | SoQLFixedTimestamp if isImmediateLiteral(fn.parameters.head) =>
         ctx + (SqlizerContext.TimestampLiteral -> true)
       case _ =>
         ctx

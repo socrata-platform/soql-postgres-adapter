@@ -544,4 +544,12 @@ class SqlizerBasicTest extends SqlizerTest {
     params should be (Seq(ts1, ts2, ts3, ts4))
     sql should be ("SELECT (trunc((extract(epoch from (?::timestamp)) - extract(epoch from (?::timestamp)))::numeric / 86400)),(trunc((extract(epoch from (?::timestamp with time zone)) - extract(epoch from (?::timestamp with time zone)))::numeric / 86400))")
   }
+
+  test("indirect literals should not generate timestamp parameters") {
+    val soql = "select ('2021-12-' || '25')::floating_timestamp from @single_row"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq("2021-12-", "25")) // all parameters are text, no Timestamps
+    sql should be ("SELECT ((? || ?)::timestamp)")
+  }
 }

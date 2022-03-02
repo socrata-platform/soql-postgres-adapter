@@ -151,6 +151,13 @@ object Sqlizer {
           fc.parameters.forall(x => isLiteral(x))
     }
   }
+
+  def isImmediateLiteral(expr: CoreExpr[UserColumnId, SoQLType]): Boolean = {
+    expr match {
+      case lit: TypedLiteral[SoQLType] => true
+      case _ => false
+    }
+  }
 }
 
 object SqlizerContext extends Enumeration {
