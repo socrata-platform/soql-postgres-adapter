@@ -48,7 +48,8 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
                   setParams: Seq[SetParam],
                   ctx: Context,
                   escape: Escape): ParametricSql = {
-    val (analysis, tableNames, allColumnReps) = analysisTablesReps
+    val (analysis, tableNamesRaw, allColumnReps) = analysisTablesReps
+    val tableNames = tableNamesRaw + (TableName(TableName.SingleRow) -> "single_row")
     val primaryTable = tableNames(TableName.PrimaryTable)
     val analysisWithFrom = updateFrom(analysis, TableName(primaryTable))
     val rcAnalysis = rowCountAnalysis(analysisWithFrom)
