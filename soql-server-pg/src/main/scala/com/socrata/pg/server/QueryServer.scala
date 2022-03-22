@@ -34,7 +34,7 @@ import com.socrata.http.server.util.RequestId.ReqIdHeader
 import com.socrata.http.server.util.handlers.{LoggingOptions, NewLoggingHandler, ThreadRenamingHandler}
 import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, StrongEntityTag}
 import com.socrata.pg.SecondaryBase
-import com.socrata.pg.query.{DataSqlizerQuerier, ExplainInfo, QueryResult, RowCount, RowReaderQuerier}
+import com.socrata.pg.query.{DataSqlizerQuerier, ExplainInfo, QueryResult, QueryServerHelper, RowCount, RowReaderQuerier}
 import com.socrata.pg.server.config.{DynamicPortMap, QueryServerConfig}
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.soql._
@@ -418,6 +418,18 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                  queryTimeout: Option[Duration],
                  explain: Boolean,
                  analyze: Boolean): QueryResultBall = {
+
+      val selectParamSql2 = QueryServerHelper.sqlize(// scalastyle:ignore method.length parameter.number cyclomatic.complexity
+        pgu,
+        latestCopy.datasetInfo,
+        analyses,
+        // false, // rowCount: Boolean,
+        None, //reqCopy: Option[String],
+        None, //rollupName: Option[RollupName],
+        false, // obfuscateId: Boolean,
+        CaseSensitive,
+        true)
+
       val cryptProvider = new CryptProvider(latestCopy.datasetInfo.obfuscationKey)
 
       val sqlCtx = Map[SqlizerContext, Any](
@@ -465,20 +477,43 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
         }
 
         if (explain) {
-          val explain = querier.queryExplain(
+          ???
+//          val explain = querier.queryExplain(
+//            context,
+//            analyses,
+//            (as: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]]) => {
+//              val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> tableName)
+//              Sqlizer.sql((as, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
+//            },
+//            queryTimeout,
+//            debug,
+//            analyze)
+//
+//          InfoQueryResult(latestCopy.dataVersion, explain)
+        } else {
+
+          val selectParamSql = QueryServerHelper.sqlize(// scalastyle:ignore method.length parameter.number cyclomatic.complexity
+            pgu,
+            copyInfo.datasetInfo,
+            analyses,
+            // false, // rowCount: Boolean,
+            None, //reqCopy: Option[String],
+            None, //rollupName: Option[RollupName],
+            false, // obfuscateId: Boolean,
+            CaseSensitive,
+            true)
+
+          val results = querier.querySim(
             context,
             analyses,
-            (as: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]]) => {
-              val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> tableName)
-              Sqlizer.sql((as, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
-            },
+            selectParamSql,
+            selectParamSql,
+            rowCount,
+            qryReps,
             queryTimeout,
-            debug,
-            analyze)
+            debug)
 
-          InfoQueryResult(latestCopy.dataVersion, explain)
-        } else {
-          val results = querier.query(
+          val resultsOld = querier.query(
             context,
             analyses,
             (as: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]]) => {

@@ -30,6 +30,20 @@ trait RowReaderQuerier[CT, CV] {
     managed(resultIter)
   }
 
+  def querySim(context: SoQLContext,
+            analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
+               sql: ParametricSql,
+               rowCountSql: ParametricSql,
+            reqRowCount: Boolean,
+            querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
+            queryTimeout: Option[Duration],
+            debug: Boolean):
+  Managed[CloseableIterator[com.socrata.datacoordinator.Row[CV]] with RowCount] = {
+    val sqlizerq = sqlizer.asInstanceOf[DataSqlizer[CT, CV] with DataSqlizerQuerier[CT, CV]]
+    val resultIter = sqlizerq.querySim(connection, context, analyses, sql, rowCountSql, reqRowCount, querySchema, queryTimeout, debug)
+    managed(resultIter)
+  }
+
   def queryExplain(context: SoQLContext,
                    analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
                    toSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]]) => ParametricSql,

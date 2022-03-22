@@ -92,6 +92,57 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
     new ResultSetIt(rowCount, rs, decodeRow(decoders))
   }
 
+  def querySim(conn: Connection, context: SoQLContext, analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
+             sql: ParametricSql,
+             rowCountSql: ParametricSql,
+            reqRowCount: Boolean,
+            querySchema: OrderedMap[ColumnId, SqlColumnRep[CT, CV]],
+            queryTimeout: Option[Duration],
+            debug: Boolean):
+  CloseableIterator[Row[CV]] with RowCount = {
+
+    // get row count
+    val rowCount: Option[Long] =
+      if (reqRowCount) {
+        // We know this will only return one row, so fetchsize of 0 is ok
+        using(executeSql(conn, context, rowCountSql, queryTimeout, 0, debug)) { rs =>
+          try {
+            rs.next()
+            Some(rs.getLong(1))
+          } finally {
+            rs.getStatement.close()
+          }
+        }
+      } else {
+        None
+      }
+
+    // For some weird reason, when you iterate over the querySchema, a new Rep is created from scratch
+    // every time, which is very expensive.  Move that out of the inner loop of decodeRow.
+    // Also, the orderedMap is extremely inefficient and very complex to debug.
+    // TODO: refactor PG server not to use Ordered Map.
+    val decoders = querySchema.map { case (cid, rep) =>
+      (cid, rep.fromResultSet _, rep.physColumns.length)
+    }.toArray
+
+    /*
+     * We need to set a fetchSize on the statement to limit the amount of data we are buffering in memory at
+     * once.  Unfortunately, this currently prevents parallel query execution in postgres because it uses cursors.
+     * Since the major benefit of parallel queries is for queries that take a lot of rows and reduce them to a small number,
+     * if we can tell from the query that it can't return more than sqlFetchSize rows, we can safely set the fetchsize
+     * to 0 and get the benefits of parallel queries.
+     */
+    val fetchSize = analyses.last.limit match {
+      case Some(n) if (n <= sqlFetchSize) => 0
+      case _ => sqlFetchSize
+    }
+
+    // get rows
+    val rs = executeSql(conn, context, sql, queryTimeout, fetchSize, debug)
+    // Statement and resultset are closed by the iterator.
+    new ResultSetIt(rowCount, rs, decodeRow(decoders))
+  }
+
   def decodeRow(decoders: Array[(ColumnId, (ResultSet, Int) => CV, Int)])(rs: ResultSet): Row[CV] = {
     val row = new MutableRow[CV]
     var i = 1

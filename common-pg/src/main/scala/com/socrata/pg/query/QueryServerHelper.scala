@@ -77,6 +77,8 @@ object QueryServerHelper {
           Map.empty
       }
 
+
+
       val tableNameMap = getDatasetTablenameMap(joinCopiesMap) ++ thisTableNameMap +
         (TableName.PrimaryTable -> tableName) + (TableName(tableName) -> tableName)
       val parametricSql = Sqlizer.sql((analyses, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
