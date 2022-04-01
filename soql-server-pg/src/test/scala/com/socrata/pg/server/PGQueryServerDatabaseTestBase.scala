@@ -1,13 +1,14 @@
 package com.socrata.pg.server
 
 
-import com.rojoma.json.v3.ast.{JArray, JNumber, JObject, JValue, JString}
-import com.rojoma.json.v3.util.{SimpleHierarchyDecodeBuilder, InternalTag, AutomaticJsonDecodeBuilder}
+import com.rojoma.json.v3.ast.{JArray, JNumber, JObject, JString, JValue}
+import com.rojoma.json.v3.util.{AutomaticJsonDecodeBuilder, InternalTag, SimpleHierarchyDecodeBuilder}
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.datacoordinator.id.{DatasetId, UserColumnId}
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.http.server.util.NoPrecondition
+import com.socrata.pg.query.QueryResult
 import com.socrata.pg.soql.{CaseSensitive, CaseSensitivity}
 import com.socrata.pg.store._
 import com.socrata.soql.{BinaryTree, SoQLAnalysis}
@@ -77,9 +78,9 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
             val qs = new QueryServer(dsInfo, caseSensitivity, leadingSearch)
             qs.execQuery(pgu, context, "someDatasetInternalName", copyInfo.datasetInfo, analyses, expectedRowCount.isDefined, None, None, true,
               NoPrecondition, None, None, None, None, false, false, false) match {
-              case QueryServer.Success(schema, _, version, results, etag, lastModified) =>
+              case QueryResult.Success(schema, _, version, results, etag, lastModified) =>
                 (schema, version, results)
-              case queryFail: QueryServer.QueryResult =>
+              case queryFail: QueryResult =>
                 throw new Exception(s"Query Fail ${queryFail.getClass.getName}")
             }
           }

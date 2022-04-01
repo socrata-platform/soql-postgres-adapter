@@ -34,7 +34,7 @@ import com.socrata.http.server.util.RequestId.ReqIdHeader
 import com.socrata.http.server.util.handlers.{LoggingOptions, NewLoggingHandler, ThreadRenamingHandler}
 import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, StrongEntityTag}
 import com.socrata.pg.SecondaryBase
-import com.socrata.pg.query.{DataSqlizerQuerier, RowCount, RowReaderQuerier}
+import com.socrata.pg.query.{DataSqlizerQuerier, ExplainInfo, QueryResult, QueryServerHelper, RowCount, RowReaderQuerier}
 import com.socrata.pg.server.config.{DynamicPortMap, QueryServerConfig}
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.soql._
@@ -52,7 +52,6 @@ import com.socrata.curator.{CuratorFromConfig, DiscoveryFromConfig}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.http.common.util.HttpUtils
 import com.socrata.pg.server.CJSONWriter.utf8EncodingName
-import com.socrata.pg.server.QueryServer.QueryRuntimeError.validErrorCodes
 import com.socrata.thirdparty.metrics.{MetricsReporter, SocrataHttpSupport}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.typesafe.config.{Config, ConfigFactory}
@@ -70,6 +69,8 @@ import scala.language.existentials
 
 class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val leadingSearch: Boolean = true) extends SecondaryBase {
   import QueryServer._ // scalastyle:ignore import.grouping
+  import QueryServerHelper._
+  import com.socrata.pg.query.QueryResult._
 
   val dsConfig: DataSourceConfig = null // scalastyle:ignore null // unused
 
@@ -410,6 +411,9 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     analyze: Boolean
   ): QueryResult = {
 
+    /**
+     * TODO: Refactor QueryServer.runQuery to use QueryServerHelper.sqlize
+     */
     def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                  context: SoQLContext,
                  latestCopy: CopyInfo,
@@ -436,7 +440,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
         val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
         val qrySchema = querySchema(pgu, analyses.outputSchema.leaf, latestCopy)
         val qryReps = qrySchema.mapValues(pgu.commonSupport.repFor)
-        val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
+        val querier = readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
         val sqlReps = querier.getSqlReps(readCtx.copyInfo.dataTableName, systemToUserColumnMap)
 
         // TODO: rethink how reps should be constructed and passed into each chained soql.
@@ -546,68 +550,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     }
   }
 
-  private def readerWithQuery[SoQLType, SoQLValue](conn: Connection,
-                                                   pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                                                   copyCtx: DatasetCopyContext[SoQLType],
-                                                   schema: ColumnIdMap[ColumnInfo[SoQLType]],
-                                                   rollupName: Option[RollupName]):
-    PGSecondaryRowReader[SoQLType, SoQLValue] with RowReaderQuerier[SoQLType, SoQLValue] = {
-
-    val tableName = rollupName match {
-      case Some(r) =>
-        val rollupInfo = pgu.datasetMapReader.rollup(copyCtx.copyInfo, r).getOrElse {
-          throw new RuntimeException(s"Rollup ${rollupName} not found for copy ${copyCtx.copyInfo} ")
-        }
-        rollupInfo.tableName
-      case None =>
-        copyCtx.copyInfo.dataTableName
-    }
-
-    new PGSecondaryRowReader[SoQLType, SoQLValue] (
-      conn,
-      new PostgresRepBasedDataSqlizer(
-        tableName,
-        pgu.datasetContextFactory(schema),
-        pgu.commonSupport.copyInProvider
-      ) with DataSqlizerQuerier[SoQLType, SoQLValue],
-      pgu.commonSupport.timingReport
-    ) with RowReaderQuerier[SoQLType, SoQLValue]
-  }
-
-  /**
-   * @param pgu
-   * @param analysis parsed soql
-   * @param latest
-   * @return a schema for the selected columns
-   */
-  // TODO: Handle expressions and column aliases.
-  private def querySchema(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                          analysis: SoQLAnalysis[UserColumnId, SoQLType],
-                          latest: CopyInfo):
-      OrderedMap[ColumnId, ColumnInfo[pgu.CT]] = {
-
-    analysis.selection.foldLeft(OrderedMap.empty[ColumnId, ColumnInfo[pgu.CT]]) { (map, entry) =>
-      entry match {
-        case (columnName: ColumnName, coreExpr: CoreExpr[UserColumnId, SoQLType]) =>
-          val cid = new ColumnId(map.size + 1)
-          val cinfo = new ColumnInfo[pgu.CT](
-            latest,
-            cid,
-            new UserColumnId(columnName.name),
-            None, // field name
-            coreExpr.typ,
-            columnName.name,
-            coreExpr.typ == SoQLID,
-            false, // isUserKey
-            coreExpr.typ == SoQLVersion,
-            None, // computation strategy we aren't actually storing...
-            Seq.empty
-          )(SoQLTypeContext.typeNamespace, null) // scalastyle:ignore null
-          map + (cid -> cinfo)
-      }
-    }
-  }
-
   /**
    * Get lastest schema
    * @param ds Data coordinator dataset id
@@ -683,43 +625,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     pgu.datasetReader.openDataset(copy).run(readCtx => pgu.schemaFinder.getSchemaWithFieldName(readCtx.copyCtx))
   }
 
-  private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], ds: String, reqCopy: Option[String])
-                      : Option[CopyInfo] = {
-    for {
-      datasetId <- pgu.datasetMapReader.datasetIdForInternalName(ds, checkDisabled = true)
-      datasetInfo <- pgu.datasetMapReader.datasetInfo(datasetId)
-    } yield {
-      getCopy(pgu, datasetInfo, reqCopy)
-    }
-  }
-
-  private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                      datasetInfo: DatasetInfo,
-                      reqCopy: Option[String]): CopyInfo = {
-    val intRx = "^[0-9]+$".r
-    val rd = pgu.datasetMapReader
-    reqCopy match {
-      case Some("latest") =>
-        rd.latest(datasetInfo)
-      case Some("published") | None =>
-        rd.published(datasetInfo).getOrElse(rd.latest(datasetInfo))
-      case Some("unpublished") | None =>
-        rd.unpublished(datasetInfo).getOrElse(rd.latest(datasetInfo))
-      case Some(intRx(num)) =>
-        rd.copyNumber(datasetInfo, num.toLong).getOrElse(rd.latest(datasetInfo))
-      case Some(unknown) =>
-        throw new IllegalArgumentException(s"invalid copy value $unknown")
-    }
-  }
-
-  private def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], resourceName: ResourceName, reqCopy: Option[String]): Option[CopyInfo] = {
-    for {
-      datasetInfo <- pgu.datasetMapReader.datasetInfoByResourceName(resourceName)
-    } yield {
-      getCopy(pgu, datasetInfo, reqCopy)
-    }
-  }
-
   private def copyInfoHeaderForSchema(copyNumber: Long, dataVersion: Long, lastModified: DateTime) = {
     copyInfoHeader("Last-Modified")(copyNumber, dataVersion, lastModified)
   }
@@ -735,96 +640,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
       Header("X-SODA2-CopyNumber", copyNumber.toString) ~>
       Header("X-SODA2-DataVersion", dataVersion.toString)
   }
-
-  private def getJoinCopies(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                            analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]],
-                            reqCopy: Option[String]): Map[TableName, CopyInfo] = {
-    val joins = typed.Join.expandJoins(analyses.seq)
-    val froms = analyses.seq.flatMap(x => x.from.toSeq)
-    val joinTables = joins.flatMap(x => x.from.fromTables) ++ froms
-    val joinTableMap = joinTables.flatMap { resourceName =>
-      getCopy(pgu, new ResourceName(resourceName.name), reqCopy).map(copy => (resourceName, copy))
-    }.toMap
-
-    val allMap = joinTableMap
-    val allMapNoAliases = allMap.map {
-      case (tableName, copy) =>
-        (tableName.copy(alias = None), copy)
-    }
-
-    allMapNoAliases
-  }
-
-  private def getDatasetTablenameMap(copies: Map[TableName, CopyInfo]): Map[TableName, String] = {
-    copies.mapValues { copy =>
-       copy.dataTableName
-    }
-  }
-
-  private def getJoinReps(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                          copy: CopyInfo,
-                          tableName: TableName)
-    : Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]] = {
-    for(readCtx <- pgu.datasetReader.openDataset(copy)) {
-      val schema = readCtx.schema
-      val columnIdUserColumnIdMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
-      val columnIdReps = schema.mapValuesStrict(pgu.commonSupport.repFor)
-      columnIdReps.keys.map { columnId =>
-        val userColumnId: UserColumnId = columnIdUserColumnIdMap(columnId)
-        val qualifier = tableName.alias.orElse(copy.datasetInfo.resourceName)
-        val qualifiedUserColumnId = new QualifiedUserColumnId(qualifier, userColumnId)
-        qualifiedUserColumnId -> columnIdReps(columnId)
-      }.toMap
-    }
-  }
 }
 
 object QueryServer extends DynamicPortMap {
   private val logger = Logger[QueryServer]
-
-  sealed abstract class QueryResult
-  case class NotModified(etags: Seq[EntityTag]) extends QueryResult
-  case object PreconditionFailed extends QueryResult
-  case class RequestTimedOut(timeout: Option[Duration]) extends QueryResult
-  case class QueryError(description: String) extends QueryResult
-  class QueryRuntimeError(val error: SQLException) extends QueryError(error.getMessage)
-  object QueryRuntimeError {
-    val validErrorCodes = Set(
-      "22003",    // value overflows numeric format, 1000000000000 ^ 1000000000000000000
-      "22012",    // divide by zero, 1/0
-      "22008",    // timestamp out of range, timestamp - 'P500000Y'
-      "22023",    // time zone not recognized
-      "22P02",    // invalid input syntax for type boolean|numeric:, 'tr2ue'::boolean 'tr2ue'::number
-      "XX000"     // invalid geometry, POINT(1,2)::point -- no comma between lon lat, POLYGON((0 0,1 1,1 0))::polygon
-    )
-
-    def apply(error: SQLException, timeout: Option[Duration] = None): Option[QueryResult] = {
-      error.getSQLState match {
-        // ick, but user-canceled requests also fall under this code and those are fine
-        case "57014" if "ERROR: canceling statement due to statement timeout".equals(error.getMessage) =>
-          Some(RequestTimedOut(timeout))
-        case state if validErrorCodes.contains(state) =>
-          Some(new QueryRuntimeError(error))
-        case _ =>
-          None
-      }
-    }
-  }
-  case class Success(
-    qrySchema: OrderedMap[ColumnId, ColumnInfo[SoQLType]],
-    copyNumber: Long,
-    dataVersion: Long,
-    results: Managed[CloseableIterator[Row[SoQLValue]] with RowCount],
-    etag: EntityTag,
-    lastModified: DateTime
-  ) extends QueryResult
-  case class InfoSuccess(
-    copyNumber: Long,
-    dataVersion: Long,
-    explainBlob: ExplainInfo
-  ) extends QueryResult
-
-  case class ExplainInfo(query: String, explainPlan: String)
 
   def withDefaultAddress(config: Config): Config = {
     val ifaces = ServiceInstanceBuilder.getAllLocalIPs

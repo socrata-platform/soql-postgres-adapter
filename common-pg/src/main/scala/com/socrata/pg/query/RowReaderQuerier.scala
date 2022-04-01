@@ -5,7 +5,6 @@ import com.socrata.datacoordinator.id.{ColumnId, UserColumnId}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.truth.loader.sql.DataSqlizer
 import com.socrata.datacoordinator.util.CloseableIterator
-import com.socrata.pg.server.QueryServer.ExplainInfo
 import com.socrata.pg.soql.{ParametricSql, QualifiedUserColumnId}
 import com.socrata.pg.store.PGSecondaryRowReader
 import com.socrata.soql.collection.OrderedMap
@@ -32,11 +31,11 @@ trait RowReaderQuerier[CT, CV] {
   }
 
   def queryExplain(context: SoQLContext,
-            analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
-            toSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]]) => ParametricSql,
-            queryTimeout: Option[Duration],
-            debug: Boolean,
-            analyze: Boolean): ExplainInfo = {
+                   analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
+                   toSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]]) => ParametricSql,
+                   queryTimeout: Option[Duration],
+                   debug: Boolean,
+                   analyze: Boolean): ExplainInfo = {
     val sqlizerq = sqlizer.asInstanceOf[DataSqlizer[CT, CV] with DataSqlizerQuerier[CT, CV]]
 
     sqlizerq.explainQuery(connection, context, analyses, toSql, queryTimeout, analyze)
