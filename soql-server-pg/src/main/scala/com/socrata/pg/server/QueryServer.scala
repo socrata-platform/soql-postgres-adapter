@@ -411,6 +411,9 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     analyze: Boolean
   ): QueryResult = {
 
+    /**
+     * TODO: Refactor QueryServer.runQuery to use QueryServerHelper.sqlize
+     */
     def runQuery(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                  context: SoQLContext,
                  latestCopy: CopyInfo,
