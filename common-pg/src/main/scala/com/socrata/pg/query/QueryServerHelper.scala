@@ -189,9 +189,10 @@ object QueryServerHelper {
    * @param latest
    * @return a schema for the selected columns
    */
+  // TODO: Handle expressions and column aliases.
   def querySchema(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                          analysis: SoQLAnalysis[UserColumnId, SoQLType],
-                          latest: CopyInfo): OrderedMap[ColumnId, ColumnInfo[pgu.CT]] = {
+                  analysis: SoQLAnalysis[UserColumnId, SoQLType],
+                  latest: CopyInfo): OrderedMap[ColumnId, ColumnInfo[pgu.CT]] = {
     analysis.selection.foldLeft(OrderedMap.empty[ColumnId, ColumnInfo[pgu.CT]]) { (map, entry) =>
       entry match {
         case (columnName: ColumnName, coreExpr: CoreExpr[UserColumnId, SoQLType]) =>
