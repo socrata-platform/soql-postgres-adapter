@@ -21,6 +21,9 @@ import java.sql.Connection
 
 object QueryServerHelper {
 
+  /**
+   * TODO: Refactor QueryServer.runQuery to use this function
+   */
   def sqlize(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
              datasetInfo: DatasetInfo,
              analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]],
