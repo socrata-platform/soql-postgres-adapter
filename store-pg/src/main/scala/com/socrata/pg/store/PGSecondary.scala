@@ -351,18 +351,21 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
     case object DoNothing extends RollupUpdate { // for drop-working-copy
       // "Don't do anything at all with rollups"
-      def increaseTo(that: RollupUpdate) =
-        that
+      def increaseTo(that: RollupUpdate) = that
     }
-    case object TryToMove extends RollupUpdate {
+    case class TryToMove(except: Set[RollupName]) extends RollupUpdate {
       // "Move any rollups from the previous version, or create if necessary, if we're in an appropriate publication cycle stage"
       def increaseTo(that: RollupUpdate) =
-        that
+        that match {
+          case ttm: TryToMove =>
+            TryToMove(this.except ++ ttm.except)
+          case _ =>
+            that
+        }
     }
     case object ForceCreate extends RollupUpdate { // for optimize
       // "Create all rollups even if we're in an inappropriate publication cycle stage"
-      def increaseTo(that: RollupUpdate) =
-        this
+      def increaseTo(that: RollupUpdate) = this
     }
 
     // no rebuild index and no rows loader.
@@ -375,7 +378,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     ) {
       def withRollupUpdate(ru: RollupUpdate) = copy(rollupUpdate = rollupUpdate.increaseTo(ru))
     }
-    val startCtx = Ctx(false, initialTruthCopyInfo, None, RowDataUpdatedHandler.Progress(), TryToMove)
+    val startCtx = Ctx(false, initialTruthCopyInfo, None, RowDataUpdatedHandler.Progress(), TryToMove(Set.empty))
     val endCtx = remainingEvents.foldLeft(startCtx) { (ctx, e) =>
       logger.debug("got event: {}", e)
       e match {
@@ -422,7 +425,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           ctx.copy(dataLoader = None)
         case WorkingCopyPublished =>
           WorkingCopyPublishedHandler(pgu, ctx.truthCopyInfo)
-          ctx.copy(rebuildIndex = true).withRollupUpdate(TryToMove)
+          ctx.copy(rebuildIndex = true).withRollupUpdate(TryToMove(except = Set.empty))
         case RowDataUpdated(ops) =>
           val loader = ctx.dataLoader.getOrElse(prevettedLoader(pgu, ctx.truthCopyInfo))
           val rdp = RowDataUpdatedHandler(loader, ops, ctx.rowDataProgress)
@@ -432,7 +435,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           ctx
         case RollupCreatedOrUpdated(rollupInfo) =>
           RollupCreatedOrUpdatedHandler(pgu, ctx.truthCopyInfo, rollupInfo)
-          ctx
+          ctx.withRollupUpdate(TryToMove(Set(new RollupName(rollupInfo.name)))) // why isn't this a RN already?
         case RollupDropped(rollupInfo) =>
           RollupDroppedHandler(pgu, ctx.truthCopyInfo, rollupInfo)
           ctx
@@ -499,7 +502,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         updateRollups(pgu,
                       Some(initialTruthCopyInfo),
                       postUpdateTruthCopyInfo,
-                      tryToMove = endCtx.rollupUpdate == TryToMove,
+                      tryToMove = { rollup =>
+                        endCtx.rollupUpdate match {
+                          case TryToMove(except) => !except.contains(rollup)
+                          case _ => false
+                        }
+                      },
                       force = endCtx.rollupUpdate == ForceCreate)
       }
     }
@@ -659,7 +667,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
     // re-create rollup tables.  We don't need to pass in an old truth
     // because we just dropped any existing rollups above.
-    updateRollups(pgu, None, postUpdateTruthCopyInfo, tryToMove = false, force = false)
+    updateRollups(pgu, None, postUpdateTruthCopyInfo, tryToMove = Function.const(false), force = false)
 
     pgu.datasetMapWriter.enableDataset(truthCopyInfo.datasetInfo.systemId) // re-enable soql reads
     cookie
@@ -687,7 +695,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   private def updateRollups(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                             originalCopyInfo: Option[TruthCopyInfo],
                             copyInfo: TruthCopyInfo,
-                            tryToMove: Boolean,
+                            tryToMove: RollupName => Boolean,
                             force: Boolean) = {
     val rm = new RollupManager(pgu, copyInfo)
     pgu.datasetMapReader.rollups(copyInfo).foreach { ri =>

@@ -114,7 +114,7 @@ trait DatabaseTestBase {
   def createRollup(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo): String = {
     val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"), "select 'x'")
     val rm = new RollupManager(pgu, copyInfo)
-    rm.updateRollup(rollupInfo, None, false)
+    rm.updateRollup(rollupInfo, None, Function.const(false))
     pgu.commit()
     rollupInfo.tableName
   }
