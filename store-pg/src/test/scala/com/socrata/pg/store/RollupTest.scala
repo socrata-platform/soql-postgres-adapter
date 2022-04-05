@@ -31,7 +31,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
         "select * (EXCEPT _point, _multipolygon, _location, _phone)")
 
       val rm = new RollupManager(pgu, copyInfo)
-      rm.updateRollup(rollupInfo, None, false)
+      rm.updateRollup(rollupInfo, None, Function.const(false))
 
       val tableName = rollupInfo.tableName
 
@@ -50,7 +50,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"), "select _point, _multipolygon, _polygon, _line, _multipoint")
 
       val rm = new RollupManager(pgu, copyInfo)
-      rm.updateRollup(rollupInfo, None, false)
+      rm.updateRollup(rollupInfo, None, Function.const(false))
 
       val tableName = rollupInfo.tableName
 
@@ -71,7 +71,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
         "select _make, avg(_aspect_ratio) AS _avg_asp WHERE _v_min >20 GROUP BY _make HAVING _avg_asp > 4 ORDER BY _make limit 100 offset 1")
 
       val rm = new RollupManager(pgu, copyInfo)
-      rm.updateRollup(rollupInfo, None, false)
+      rm.updateRollup(rollupInfo, None, Function.const(false))
 
       val tableName = rollupInfo.tableName
       jdbcColumnCount(pgu.conn, tableName) should be (2)
@@ -91,7 +91,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
         "select I am a monkey GROUP BY monkeyland")
 
       val rm = new RollupManager(pgu, copyInfo)
-      rm.updateRollup(rollupInfo, None, false)
+      rm.updateRollup(rollupInfo, None, Function.const(false))
 
       val tableName = rollupInfo.tableName
       jdbcColumnCount(pgu.conn, tableName) should be (0)
@@ -131,7 +131,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       RollupManager.makeSecondaryRollupInfo(rollupInFirstCopy) should be (rollup)
 
       // create the rollup table
-      (new RollupManager(pgu, firstCopyPublished)).updateRollup(rollupInFirstCopy, None, false)
+      (new RollupManager(pgu, firstCopyPublished)).updateRollup(rollupInFirstCopy, None, Function.const(false))
 
       val tableNameFirstCopy = rollupInFirstCopy.tableName
       jdbcColumnCount(pgu.conn, tableNameFirstCopy) should be (1)
@@ -151,7 +151,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val rollupsInSecondCopy = pgu.datasetMapReader.rollups(secondCopyPublished)
       rollupsInSecondCopy.size should be (1)
       val rollupInSecondCopy = rollupsInSecondCopy.head
-      (new RollupManager(pgu, secondCopyPublished)).updateRollup(rollupInSecondCopy, Some(secondCopy), true)
+      (new RollupManager(pgu, secondCopyPublished)).updateRollup(rollupInSecondCopy, Some(secondCopy), Function.const(true))
       RollupManager.makeSecondaryRollupInfo(rollupInSecondCopy) should be (rollup)
 
       val tableNameSecondCopy = rollupInSecondCopy.tableName
@@ -205,7 +205,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       RollupCreatedOrUpdatedHandler(pgu, truthCopyInfo, rollup)
       val rm = new RollupManager(pgu, truthCopyInfo)
       pgu.datasetMapReader.rollups(truthCopyInfo).foreach { ru =>
-        rm.updateRollup(ru, None, true)
+        rm.updateRollup(ru, None, Function.const(true))
       }
 
       val rows2 = rows :+
@@ -267,7 +267,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       RollupManager.makeSecondaryRollupInfo(rollupInFirstCopy) should be (rollup)
 
       // create the rollup table
-      (new RollupManager(pgu, firstCopyPublished)).updateRollup(rollupInFirstCopy, None, true)
+      (new RollupManager(pgu, firstCopyPublished)).updateRollup(rollupInFirstCopy, None, Function.const(true))
 
       val tableNameFirstCopy = rollupInFirstCopy.tableName
       jdbcColumnCount(pgu.conn, tableNameFirstCopy) should be (1)
@@ -307,7 +307,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
         "select _make, avg(_aspect_ratio) over(partition by _make)  AS _avg_asp")
 
       val rm = new RollupManager(pgu, copyInfo)
-      rm.updateRollup(rollupInfo, None, true)
+      rm.updateRollup(rollupInfo, None, Function.const(true))
 
       val tableName = rollupInfo.tableName
       jdbcColumnCount(pgu.conn, tableName) should be (2)

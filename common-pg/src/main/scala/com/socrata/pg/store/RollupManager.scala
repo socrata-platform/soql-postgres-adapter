@@ -4,7 +4,7 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.sql.{Connection, SQLException}
 import scala.util.{Failure, Success, Try}
 import com.rojoma.simplearm.v2.using
-import com.socrata.datacoordinator.id.UserColumnId
+import com.socrata.datacoordinator.id.{UserColumnId, RollupName}
 import com.socrata.datacoordinator.secondary.{RollupInfo => SecondaryRollupInfo}
 import com.socrata.datacoordinator.truth.loader.sql.{ChangeOwner, SqlTableDropper}
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, LifecycleStage}
@@ -100,7 +100,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    * @param newDataVersion The version of the dataset that will be current after the current
    *                       transaction completes.
    */
-  def updateRollup(originalRollupInfo: LocalRollupInfo, oldCopyInfo: Option[CopyInfo], tryToMove: Boolean, force: Boolean = false): Unit = {
+  def updateRollup(originalRollupInfo: LocalRollupInfo, oldCopyInfo: Option[CopyInfo], tryToMove: RollupName => Boolean, force: Boolean = false): Unit = {
     var rollupInfo = originalRollupInfo
     logger.info(s"Updating copy $copyInfo, rollup $rollupInfo")
     time("update-rollup", "dataset_id" -> copyInfo.datasetInfo.systemId, "rollupName" -> rollupInfo.name) {
@@ -151,7 +151,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
             }.toSeq
 
             oldRollup match {
-              case Some(or) if tryToMove && or.soql == rollupInfo.soql && oldRollupExists =>
+              case Some(or) if tryToMove(or.name) && oldRollupExists =>
                 logger.info("Transferring preexisting rollup table rather than rebuilding it")
                 pgu.datasetMapWriter.transferRollup(or, rollupInfo.copyInfo)
                 oldRollupTransferred = true
