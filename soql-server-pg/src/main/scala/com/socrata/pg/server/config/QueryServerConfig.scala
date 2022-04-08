@@ -2,10 +2,13 @@ package com.socrata.pg.server.config
 
 import com.typesafe.config.Config
 import com.socrata.http.server.livenesscheck.LivenessCheckConfig
-import com.socrata.pg.config.{StoreConfig}
+import com.socrata.pg.config.StoreConfig
 import com.socrata.curator.{CuratorConfig, DiscoveryConfig}
 import com.socrata.thirdparty.metrics.MetricsOptions
 import com.socrata.thirdparty.typesafeconfig.ConfigClass
+
+import java.util.concurrent.TimeUnit
+import scala.concurrent.duration.Duration
 
 class QueryServerConfig(val config: Config, val root: String) extends ConfigClass(config, root) {
   val log4j = getRawConfig("log4j")
@@ -19,4 +22,6 @@ class QueryServerConfig(val config: Config, val root: String) extends ConfigClas
   val threadpool = getRawConfig("threadpool")
   val maxConcurrentRequestsPerDataset = getInt("max-concurrent-requests-per-dataset")
   val leadingSearch = getBoolean("leading-search")
+  val maxQueryTimeout = Duration.apply(1, TimeUnit.HOURS) // getDuration("max-query-timeout")
+  val httpQueryTimeoutDelta = Duration.apply(1, TimeUnit.SECONDS) //getDuration("http-query-timeout-delta")
 }
