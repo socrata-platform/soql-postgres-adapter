@@ -72,6 +72,9 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
   import QueryServerHelper._
   import com.socrata.pg.query.QueryResult._
 
+  val maxQueryTimeoutSeconds: Int = 60000
+  val httpQueryTimeoutDelta: FiniteDuration = Duration.Zero
+
   val dsConfig: DataSourceConfig = null // scalastyle:ignore null // unused
 
   val postgresUniverseCommon = PostgresUniverseCommon
@@ -526,10 +529,14 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                             && precondition == NoPrecondition =>
             NotModified(Seq(etag))
           case Some(_) | None =>
+            if (queryTimeout.exists(timeout => timeout.toSeconds > maxQueryTimeoutSeconds && !debug)) {
+              return QueryError(s"query timeout exceeds maximum of ${maxQueryTimeoutSeconds}s")
+            }
+            val qto = queryTimeout.map(_.minus(httpQueryTimeoutDelta)) // can go negative which is handled by downstream function
             try {
-              runQuery(pgu, context, copy, analysis, rowCount, queryTimeout, explain, analyze) match {
+              runQuery(pgu, context, copy, analysis, rowCount, qto, explain, analyze) match {
                 case RowsQueryResult(qrySchema, version, results) =>
-                  Success (qrySchema, copy.copyNumber, version, results, etag, lastModified)
+                  Success(qrySchema, copy.copyNumber, version, results, etag, lastModified)
                 case InfoQueryResult(dataVersion, explainInfo) =>
                   InfoSuccess(copy.copyNumber, dataVersion, explainInfo)
               }
