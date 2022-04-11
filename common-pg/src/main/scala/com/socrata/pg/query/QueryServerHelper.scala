@@ -18,7 +18,6 @@ import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion}
 
 import java.sql.Connection
-import scala.concurrent.duration.FiniteDuration
 
 object QueryServerHelper {
 
