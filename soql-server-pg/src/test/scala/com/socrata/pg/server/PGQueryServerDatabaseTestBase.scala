@@ -19,6 +19,7 @@ import com.socrata.soql.stdlib.{Context => SoQLContext}
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import org.scalatest.matchers.{BeMatcher, MatchResult}
 
+import scala.concurrent.duration.Duration
 import scala.language.existentials
 
 // scalastyle:off method.length
@@ -75,7 +76,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
 
         val (qrySchema, dataVersion, mresult) =
           ds.run { dsInfo =>
-            val qs = new QueryServer(dsInfo, caseSensitivity, leadingSearch)
+            val qs = new QueryServer(dsInfo, caseSensitivity, leadingSearch, 60000, Duration.Zero)
             qs.execQuery(pgu, context, "someDatasetInternalName", copyInfo.datasetInfo, analyses, expectedRowCount.isDefined, None, None, true,
               NoPrecondition, None, None, None, None, false, false, false) match {
               case QueryResult.Success(schema, _, version, results, etag, lastModified) =>
