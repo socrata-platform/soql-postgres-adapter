@@ -68,7 +68,7 @@ import scala.collection.immutable.SortedMap
 import scala.language.existentials
 
 class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val leadingSearch: Boolean = true,
-                  val maxQueryTimeoutSeconds: Int = 60000, val httpQueryTimeoutDelta: FiniteDuration = Duration.Zero) extends SecondaryBase {
+                  val httpQueryTimeoutDelta: FiniteDuration = Duration.Zero) extends SecondaryBase {
   import QueryServer._ // scalastyle:ignore import.grouping
   import QueryServerHelper._
   import com.socrata.pg.query.QueryResult._
@@ -527,9 +527,6 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                             && precondition == NoPrecondition =>
             NotModified(Seq(etag))
           case Some(_) | None =>
-            if (queryTimeout.exists(timeout => timeout.toSeconds > maxQueryTimeoutSeconds && !debug)) {
-              return QueryError(s"query timeout exceeds maximum of ${maxQueryTimeoutSeconds}s")
-            }
             val qto = queryTimeout.map(_.minus(httpQueryTimeoutDelta)) // can go negative which is handled by downstream function
             try {
               runQuery(pgu, context, copy, analysis, rowCount, qto, explain, analyze) match {
@@ -689,7 +686,7 @@ object QueryServer extends DynamicPortMap {
       reporter <- MetricsReporter.managed(config.metrics)
     } {
       pong.start()
-      val queryServer = new QueryServer(dsInfo, CaseSensitive, config.leadingSearch, config.maxQueryTimeout.toSeconds.toInt, config.httpQueryTimeoutDelta)
+      val queryServer = new QueryServer(dsInfo, CaseSensitive, config.leadingSearch, config.httpQueryTimeoutDelta)
       val advertisedLivenessCheckInfo = new LivenessCheckInfo(hostPort(pong.livenessCheckInfo.getPort),
                                                               pong.livenessCheckInfo.getResponse)
       val auxData = new AuxiliaryData(livenessCheckInfo = Some(advertisedLivenessCheckInfo))

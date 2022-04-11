@@ -67,7 +67,7 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase w
           SoQLAnalyzerHelper.analyzeSoQL(soql, Map(TableName.PrimaryTable.qualifier -> datasetCtx), primaryTableColumnNameIdMap)
         val (requestColumns, version, mresult) =
           ds.run { dsInfo =>
-            val qs = new QueryServer(dsInfo, CaseSensitive, leadingSearch = true, 60000, Duration.Zero)
+            val qs = new QueryServer(dsInfo, CaseSensitive, leadingSearch = true, Duration.Zero)
             qs.execQuery(pgu, SoQLContext.empty, "someDatasetInternalName", copyInfo.datasetInfo, analyses, false, None, None, true,
               NoPrecondition, None, None, None, None, false, false, false) match {
               case QueryResult.Success(schema, _, version, results, etag, lastModified) =>
