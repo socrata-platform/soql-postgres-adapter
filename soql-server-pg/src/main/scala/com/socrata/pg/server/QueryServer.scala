@@ -705,7 +705,7 @@ object QueryServer extends DynamicPortMap {
                        withExtraHandlers(List(SocrataHttpSupport.getHandler(config.metrics))).
                        withPoolOptions(SocrataServerJetty.Pool(config.threadpool)).
                        withBroker(curatorBroker))
-      logger.info("starting pg query server")
+      logger.info(s"starting pg query server ${config.instance}")
       server.run()
     }
     logger.info("pg query server exited")
