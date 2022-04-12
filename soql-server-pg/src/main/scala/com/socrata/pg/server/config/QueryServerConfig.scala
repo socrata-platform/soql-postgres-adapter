@@ -19,4 +19,5 @@ class QueryServerConfig(val config: Config, val root: String) extends ConfigClas
   val threadpool = getRawConfig("threadpool")
   val maxConcurrentRequestsPerDataset = getInt("max-concurrent-requests-per-dataset")
   val leadingSearch = getBoolean("leading-search")
+  val httpQueryTimeoutDelta = getDuration("http-query-timeout-delta")
 }

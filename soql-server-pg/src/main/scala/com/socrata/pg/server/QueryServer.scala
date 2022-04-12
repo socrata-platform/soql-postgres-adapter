@@ -67,7 +67,8 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.collection.immutable.SortedMap
 import scala.language.existentials
 
-class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val leadingSearch: Boolean = true) extends SecondaryBase {
+class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val leadingSearch: Boolean = true,
+                  val httpQueryTimeoutDelta: FiniteDuration = Duration.Zero) extends SecondaryBase {
   import QueryServer._ // scalastyle:ignore import.grouping
   import QueryServerHelper._
   import com.socrata.pg.query.QueryResult._
@@ -526,10 +527,11 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                             && precondition == NoPrecondition =>
             NotModified(Seq(etag))
           case Some(_) | None =>
+            val qto = queryTimeout.map(_.minus(httpQueryTimeoutDelta)) // can go negative which is handled by downstream function
             try {
-              runQuery(pgu, context, copy, analysis, rowCount, queryTimeout, explain, analyze) match {
+              runQuery(pgu, context, copy, analysis, rowCount, qto, explain, analyze) match {
                 case RowsQueryResult(qrySchema, version, results) =>
-                  Success (qrySchema, copy.copyNumber, version, results, etag, lastModified)
+                  Success(qrySchema, copy.copyNumber, version, results, etag, lastModified)
                 case InfoQueryResult(dataVersion, explainInfo) =>
                   InfoSuccess(copy.copyNumber, dataVersion, explainInfo)
               }
@@ -684,7 +686,7 @@ object QueryServer extends DynamicPortMap {
       reporter <- MetricsReporter.managed(config.metrics)
     } {
       pong.start()
-      val queryServer = new QueryServer(dsInfo, CaseSensitive, config.leadingSearch)
+      val queryServer = new QueryServer(dsInfo, CaseSensitive, config.leadingSearch, config.httpQueryTimeoutDelta)
       val advertisedLivenessCheckInfo = new LivenessCheckInfo(hostPort(pong.livenessCheckInfo.getPort),
                                                               pong.livenessCheckInfo.getResponse)
       val auxData = new AuxiliaryData(livenessCheckInfo = Some(advertisedLivenessCheckInfo))

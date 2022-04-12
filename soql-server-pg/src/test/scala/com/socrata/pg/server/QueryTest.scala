@@ -19,6 +19,8 @@ import com.socrata.pg.soql.CaseSensitive
 import com.socrata.http.server.util.NoPrecondition
 import com.socrata.pg.query.{PGQueryTestBase, QueryResult}
 
+import scala.concurrent.duration.Duration
+
 class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase with PGQueryTestBase {
 
   override def beforeAll: Unit = {
@@ -65,7 +67,7 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase w
           SoQLAnalyzerHelper.analyzeSoQL(soql, Map(TableName.PrimaryTable.qualifier -> datasetCtx), primaryTableColumnNameIdMap)
         val (requestColumns, version, mresult) =
           ds.run { dsInfo =>
-            val qs = new QueryServer(dsInfo, CaseSensitive, leadingSearch = true)
+            val qs = new QueryServer(dsInfo, CaseSensitive, leadingSearch = true, Duration.Zero)
             qs.execQuery(pgu, SoQLContext.empty, "someDatasetInternalName", copyInfo.datasetInfo, analyses, false, None, None, true,
               NoPrecondition, None, None, None, None, false, false, false) match {
               case QueryResult.Success(schema, _, version, results, etag, lastModified) =>
