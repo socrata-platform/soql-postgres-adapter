@@ -167,7 +167,7 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
             if shouldCreateIndex(directivesStmt, ci)
         } {
           time.info("creating-index",
-                    "datasetId" -> ci.copyInfo.datasetInfo.systemId,
+                    "datasetId" -> ci.copyInfo.datasetInfo.systemId.underlying,
                     "columnId" -> ci.userColumnId.underlying,
                     "index" -> idx.toString) {
             sqlErrorHandler.guard(conn) {
