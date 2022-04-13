@@ -102,7 +102,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    */
   def updateRollup(originalRollupInfo: LocalRollupInfo, oldCopyInfo: Option[CopyInfo], tryToMove: RollupName => Boolean, force: Boolean = false): Unit = {
     var rollupInfo = originalRollupInfo
-    time.info("update-rollup", "dataset_id" -> copyInfo.datasetInfo.systemId, "rollupName" -> rollupInfo.name) {
+    time.info("update-rollup", "datasetId" -> copyInfo.datasetInfo.systemId, "rollupName" -> rollupInfo.name) {
       val oldRollup = oldCopyInfo.flatMap(pgu.datasetMapReader.rollup(_, rollupInfo.name))
       var oldRollupTransferred = false
 
@@ -246,7 +246,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    */
   private def createRollupTable(rollupReps: Seq[SqlCol], rollupInfo: LocalRollupInfo): Unit = {
     time("create-rollup-table",
-      "dataset_id" -> copyInfo.datasetInfo.systemId.underlying,
+      "datasetId" -> copyInfo.datasetInfo.systemId.underlying,
       "rollupName" -> rollupInfo.name.underlying) {
       // Note that we aren't doing the work to figure out which columns should be not null
       // or unique since that is of marginal use for us.
