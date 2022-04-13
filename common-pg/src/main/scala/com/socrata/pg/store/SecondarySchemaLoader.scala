@@ -14,9 +14,8 @@ import java.nio.charset.StandardCharsets
 
 import com.rojoma.json.v3.ast.{JBoolean, JObject}
 import com.rojoma.json.v3.util.JsonUtil
-import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.datacoordinator.util.TimingReport
-import com.socrata.soql.environment.ColumnName
+import org.joda.time.{DateTime, Seconds}
 
 class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
                                     repFor: ColumnInfo[CT] => SqlColumnRep[CT, CV] with Indexable[CT],
@@ -161,11 +160,17 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
       val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
         throw new Exception(s"${table} does not exist when creating index.")))
       using(conn.createStatement(), conn.prepareStatement(directivesSql)) { (stmt, directivesStmt) =>
+        var lastLogTime = new DateTime()
         for {
           (ci, idx) <- columnInfos.zipWithIndex
           createIndexSql <- repFor(ci).createIndex(table, tablespace)
             if shouldCreateIndex(directivesStmt, ci)
         } {
+          if (Seconds.secondsBetween(lastLogTime, new DateTime()).getSeconds >= 3600) {
+            // log something every hour in potentially long process
+            lastLogTime = new DateTime()
+            logger.info(s"creating index for ${ci.copyInfo.datasetInfo.systemId} ${idx} of ${columnInfos.size}")
+          }
           time("creating-index",
                "column_id" -> ci.userColumnId.underlying,
                "index" -> idx.toString) {
