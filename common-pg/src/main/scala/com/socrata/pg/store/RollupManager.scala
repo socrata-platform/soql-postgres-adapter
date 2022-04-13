@@ -102,7 +102,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    */
   def updateRollup(originalRollupInfo: LocalRollupInfo, oldCopyInfo: Option[CopyInfo], tryToMove: RollupName => Boolean, force: Boolean = false): Unit = {
     var rollupInfo = originalRollupInfo
-    time.info("update-rollup", "datasetId" -> copyInfo.datasetInfo.systemId.underlying, "rollupName" -> rollupInfo.name) {
+    time("update-rollup", "datasetId" -> copyInfo.datasetInfo.systemId.underlying, "rollupName" -> rollupInfo.name) {
       val oldRollup = oldCopyInfo.flatMap(pgu.datasetMapReader.rollup(_, rollupInfo.name))
       var oldRollupTransferred = false
 
