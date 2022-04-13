@@ -102,8 +102,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    */
   def updateRollup(originalRollupInfo: LocalRollupInfo, oldCopyInfo: Option[CopyInfo], tryToMove: RollupName => Boolean, force: Boolean = false): Unit = {
     var rollupInfo = originalRollupInfo
-    logger.info(s"Updating copy $copyInfo, rollup $rollupInfo")
-    time("update-rollup", "dataset_id" -> copyInfo.datasetInfo.systemId, "rollupName" -> rollupInfo.name) {
+    time("update-rollup", "datasetId" -> copyInfo.datasetInfo.systemId.underlying, "rollupName" -> rollupInfo.name) {
       val oldRollup = oldCopyInfo.flatMap(pgu.datasetMapReader.rollup(_, rollupInfo.name))
       var oldRollupTransferred = false
 
@@ -247,7 +246,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    */
   private def createRollupTable(rollupReps: Seq[SqlCol], rollupInfo: LocalRollupInfo): Unit = {
     time("create-rollup-table",
-      "dataset_id" -> copyInfo.datasetInfo.systemId.underlying,
+      "datasetId" -> copyInfo.datasetInfo.systemId.underlying,
       "rollupName" -> rollupInfo.name.underlying) {
       // Note that we aren't doing the work to figure out which columns should be not null
       // or unique since that is of marginal use for us.
@@ -285,7 +284,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       rollupAnalyses: BinaryTree[SoQLAnalysis[ColumnName, SoQLType]],
       rollupReps: Seq[SqlColumnRep[SoQLType, SoQLValue]]): Unit = {
     time("populate-rollup-table",
-      "dataset_id" -> copyInfo.datasetInfo.systemId.underlying,
+      "datasetId" -> copyInfo.datasetInfo.systemId.underlying,
       "rollupName" -> rollupInfo.name.underlying) {
       val soqlAnalysis = analysesToSoQLType(rollupAnalyses)
 
@@ -308,7 +307,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
   private def createIndexes(rollupInfo: LocalRollupInfo, rollupReps: Seq[SqlColIdx]) = {
     time("create-indexes",
-         "dataset_id" -> copyInfo.datasetInfo.systemId.underlying,
+         "datasetId" -> copyInfo.datasetInfo.systemId.underlying,
          "rollupName" -> rollupInfo.name.underlying) {
       using(pgu.conn.createStatement()) { stmt =>
         for {
