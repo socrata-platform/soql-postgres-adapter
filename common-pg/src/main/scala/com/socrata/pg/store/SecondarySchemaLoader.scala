@@ -99,7 +99,7 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
             logger.info("creating fts index")
             dropFullTextSearchIndex(columnInfos)
             using(conn.createStatement()) { stmt =>
-              time("create-search-index", "table" -> table) {
+              time.info("create-search-index", "table" -> table) {
                 SecondarySchemaLoader.fullTextIndexCreateSqlErrorHandler.guard(stmt) {
                   stmt.execute(sql)
                   // can't use a prepared statement parameter here, but the
@@ -166,9 +166,10 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
           createIndexSql <- repFor(ci).createIndex(table, tablespace)
             if shouldCreateIndex(directivesStmt, ci)
         } {
-          time("creating-index",
-               "column_id" -> ci.userColumnId.underlying,
-               "index" -> idx.toString) {
+          time.info("creating-index",
+                    "dataset_id" -> ci.copyInfo.datasetInfo.systemId,
+                    "column_id" -> ci.userColumnId.underlying,
+                    "index" -> idx.toString) {
             sqlErrorHandler.guard(conn) {
               stmt.execute(createIndexSql)
             }
