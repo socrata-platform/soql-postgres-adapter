@@ -284,7 +284,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       rollupAnalyses: BinaryTree[SoQLAnalysis[ColumnName, SoQLType]],
       rollupReps: Seq[SqlColumnRep[SoQLType, SoQLValue]]): Unit = {
     time("populate-rollup-table",
-      "dataset_id" -> copyInfo.datasetInfo.systemId.underlying,
+      "datasetId" -> copyInfo.datasetInfo.systemId.underlying,
       "rollupName" -> rollupInfo.name.underlying) {
       val soqlAnalysis = analysesToSoQLType(rollupAnalyses)
 
@@ -307,7 +307,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
   private def createIndexes(rollupInfo: LocalRollupInfo, rollupReps: Seq[SqlColIdx]) = {
     time("create-indexes",
-         "dataset_id" -> copyInfo.datasetInfo.systemId.underlying,
+         "datasetId" -> copyInfo.datasetInfo.systemId.underlying,
          "rollupName" -> rollupInfo.name.underlying) {
       using(pgu.conn.createStatement()) { stmt =>
         for {
