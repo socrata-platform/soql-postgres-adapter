@@ -88,8 +88,8 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    */
   private def columnNameRemovePrefixMap(cn: ColumnName, qualifier: Qualifier): ColumnName = {
     cn.name(0) match {
-      case ':' => cn
-      case _ => new ColumnName(cn.name.drop(1))
+      case '_' => new ColumnName(cn.name.drop(1))
+      case _ => cn // leave system columns (prefixed ':') or derived columns unchanged
     }
   }
 
