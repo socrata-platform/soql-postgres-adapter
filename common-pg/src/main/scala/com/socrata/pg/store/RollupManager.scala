@@ -96,13 +96,16 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
   /**
    * Rebuilds the given rollup table, and also schedules the previous version
    * of the rollup table for dropping, if it exists.
-   *
-   * @param newDataVersion The version of the dataset that will be current after the current
-   *                       transaction completes.
    */
   def updateRollup(originalRollupInfo: LocalRollupInfo, oldCopyInfo: Option[CopyInfo], tryToMove: RollupName => Boolean, force: Boolean = false): Unit = {
     var rollupInfo = originalRollupInfo
-    time("update-rollup", "datasetId" -> copyInfo.datasetInfo.systemId.underlying, "rollupName" -> rollupInfo.name) {
+    time("update-rollup",
+         "datasetId" -> copyInfo.datasetInfo.systemId.underlying,
+         "oldCopy" -> oldCopyInfo.map(_.copyNumber).getOrElse(0),
+         "copy" -> copyInfo.copyNumber,
+         "dataVersion" -> copyInfo.dataVersion,
+         "shapeVersion" -> copyInfo.dataShapeVersion,
+         "rollupName" -> rollupInfo.name.underlying) {
       val oldRollup = oldCopyInfo.flatMap(pgu.datasetMapReader.rollup(_, rollupInfo.name))
       var oldRollupTransferred = false
 
@@ -245,22 +248,22 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    * postgres infer what type to use using its type system.
    */
   private def createRollupTable(rollupReps: Seq[SqlCol], rollupInfo: LocalRollupInfo): Unit = {
-    time("create-rollup-table",
-      "datasetId" -> copyInfo.datasetInfo.systemId.underlying,
-      "rollupName" -> rollupInfo.name.underlying) {
-      // Note that we aren't doing the work to figure out which columns should be not null
-      // or unique since that is of marginal use for us.
-      val colDdls = for {
-        rep <- rollupReps
-        (colName, colType) <- rep.physColumns.zip(rep.sqlTypes)
-      } yield s"${colName} ${colType} NULL"
+    // Note that we aren't doing the work to figure out which columns should be not null
+    // or unique since that is of marginal use for us.
+    val colDdls = for {
+      rep <- rollupReps
+      (colName, colType) <- rep.physColumns.zip(rep.sqlTypes)
+    } yield s"${colName} ${colType} NULL"
 
-      using(pgu.conn.createStatement()) { stmt =>
-        val createSql = s"CREATE TABLE ${rollupInfo.tableName} (${colDdls.mkString(", ")} )${tablespaceSql};"
-
-        logger.info(s"Creating rollup table ${rollupInfo.tableName} for ${copyInfo} / ${rollupInfo} using sql: ${createSql}")
+    using(pgu.conn.createStatement()) { stmt =>
+      val createSql = s"CREATE TABLE ${rollupInfo.tableName} (${colDdls.mkString(", ")} )${tablespaceSql};"
+      time("create-rollup-table",
+           "copy" -> copyInfo.copyNumber,
+           "dataVersion" -> copyInfo.dataVersion,
+           "shapeVersion" -> copyInfo.dataShapeVersion,
+           "rollupName" -> rollupInfo.name.underlying,
+           "sql" -> createSql) {
         stmt.execute(createSql + ChangeOwner.sql(pgu.conn, rollupInfo.tableName))
-
         // sadly the COMMENT statement can't use prepared statement params...
         val commentSql = s"COMMENT ON TABLE ${rollupInfo.tableName} IS '" +
           SqlUtils.escapeString(pgu.conn, rollupInfo.name.underlying + " = " + rollupInfo.soql) + "'"
@@ -280,34 +283,32 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
   }
 
   private def populateRollupTable(
-      rollupInfo: LocalRollupInfo,
-      rollupAnalyses: BinaryTree[SoQLAnalysis[ColumnName, SoQLType]],
-      rollupReps: Seq[SqlColumnRep[SoQLType, SoQLValue]]): Unit = {
+    rollupInfo: LocalRollupInfo,
+    rollupAnalyses: BinaryTree[SoQLAnalysis[ColumnName, SoQLType]],
+    rollupReps: Seq[SqlColumnRep[SoQLType, SoQLValue]]): Unit = {
+    val soqlAnalysis = analysesToSoQLType(rollupAnalyses)
+    val selectParamSql = QueryServerHelper.sqlize(// scalastyle:ignore method.length parameter.number cyclomatic.complexity
+      pgu,
+      copyInfo.datasetInfo,
+      soqlAnalysis,
+      None, //reqCopy: Option[String],
+      None, //rollupName: Option[RollupName],
+      false, // obfuscateId: Boolean,
+      CaseSensitive,
+      true)
+    val insertParamSql = selectParamSql.copy(sql = Seq(s"INSERT INTO ${rollupInfo.tableName} ( ${selectParamSql.sql.head} )"))
     time("populate-rollup-table",
-      "datasetId" -> copyInfo.datasetInfo.systemId.underlying,
-      "rollupName" -> rollupInfo.name.underlying) {
-      val soqlAnalysis = analysesToSoQLType(rollupAnalyses)
-
-     val selectParamSql = QueryServerHelper.sqlize(// scalastyle:ignore method.length parameter.number cyclomatic.complexity
-       pgu,
-       copyInfo.datasetInfo,
-       soqlAnalysis,
-       None, //reqCopy: Option[String],
-       None, //rollupName: Option[RollupName],
-       false, // obfuscateId: Boolean,
-       CaseSensitive,
-       true)
-
-      val insertParamSql = selectParamSql.copy(sql = Seq(s"INSERT INTO ${rollupInfo.tableName} ( ${selectParamSql.sql.head} )"))
-
-      logger.info(s"Populating rollup table ${rollupInfo.tableName} for ${copyInfo} / ${rollupInfo} using sql: ${insertParamSql}")
+         "copy" -> copyInfo.copyNumber,
+         "dataVersion" -> copyInfo.dataVersion,
+         "shapeVersion" -> copyInfo.dataShapeVersion,
+         "rollupName" -> rollupInfo.name.underlying,
+         "sql" -> insertParamSql) {
       executeParamSqlUpdate(pgu.conn, insertParamSql)
     }
   }
 
   private def createIndexes(rollupInfo: LocalRollupInfo, rollupReps: Seq[SqlColIdx]) = {
     time("create-indexes",
-         "datasetId" -> copyInfo.datasetInfo.systemId.underlying,
          "rollupName" -> rollupInfo.name.underlying) {
       using(pgu.conn.createStatement()) { stmt =>
         for {

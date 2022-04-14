@@ -160,6 +160,7 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
       val table = tableName(columnInfos)
       val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
         throw new Exception(s"${table} does not exist when creating index.")))
+      val size = columnInfos.size
       using(conn.createStatement(), conn.prepareStatement(directivesSql)) { (stmt, directivesStmt) =>
         for {
           (ci, idx) <- columnInfos.zipWithIndex
@@ -169,7 +170,7 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
           time.info("creating-index",
                     "datasetId" -> ci.copyInfo.datasetInfo.systemId.underlying,
                     "columnId" -> ci.userColumnId.underlying,
-                    "index" -> idx.toString) {
+                    "index" -> s"${idx}/${size}") {
             sqlErrorHandler.guard(conn) {
               stmt.execute(createIndexSql)
             }
