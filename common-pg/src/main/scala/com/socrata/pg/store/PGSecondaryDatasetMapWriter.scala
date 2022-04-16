@@ -149,7 +149,7 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
 
   def insertLocalRollupQuery = "INSERT INTO rollup_map (name, copy_system_id, soql, table_name) VALUES (?, ?, ?, ?)"
   def updateLocalRollupQuery = "UPDATE rollup_map SET soql = ?, table_name = ? WHERE name = ? AND copy_system_id = ?"
-  override def createOrUpdateRollup(copyInfo: CopyInfo, name: RollupName, soql: String): LocalRollupInfo = {
+  override def createOrUpdateRollup(copyInfo: CopyInfo, name: RollupName, soql: String, rawSoql: Option[String]): LocalRollupInfo = {
     val tableName = LocalRollupInfo.tableName(copyInfo, name)
     rollup(copyInfo, name) match {
       case Some(_) =>
