@@ -14,5 +14,5 @@ import com.socrata.soql.types.{SoQLType, SoQLValue}
 case class RollupCreatedOrUpdatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                                          copyInfo: CopyInfo,
                                          secRollupInfo: SecRollupInfo) {
-  pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName(secRollupInfo.name), secRollupInfo.soql)
+  pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName(secRollupInfo.name), secRollupInfo.soql, None)
 }
