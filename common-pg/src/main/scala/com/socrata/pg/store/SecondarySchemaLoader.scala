@@ -157,7 +157,6 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
 
   /**
    * create indexes, also drop indexes that are not wanted.
-   * @param columnInfos
    */
   def createIndexes(columnInfos: Iterable[ColumnInfo[CT]]): Unit = {
     if (columnInfos.nonEmpty) {
