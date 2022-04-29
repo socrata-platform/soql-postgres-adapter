@@ -202,7 +202,6 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
       if (resultSet.next()) {
         Option(resultSet.getString("directive")) match {
           case Some(json) =>
-            logger.info(column.fieldName.get.name)
             JsonUtil.parseJson[JObject](json) match {
               case Right(JObject(indexDirectives)) =>
                 indexDirectives.get("enabled") match {
