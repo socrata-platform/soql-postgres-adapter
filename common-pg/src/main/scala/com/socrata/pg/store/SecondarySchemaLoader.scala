@@ -155,6 +155,9 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
     }
   }
 
+  /**
+   * create indexes, also drop indexes that are not wanted.
+   */
   def createIndexes(columnInfos: Iterable[ColumnInfo[CT]]): Unit = {
     if (columnInfos.nonEmpty) {
       val table = tableName(columnInfos)
@@ -165,14 +168,17 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
         for {
           (ci, idx) <- columnInfos.zipWithIndex
           createIndexSql <- repFor(ci).createIndex(table, tablespace)
-            if shouldCreateIndex(directivesStmt, ci)
+          dropIndexSql <- repFor(ci).dropIndex(table)
         } {
-          time.info("creating-index",
-                    "datasetId" -> ci.copyInfo.datasetInfo.systemId.underlying,
-                    "columnId" -> ci.userColumnId.underlying,
-                    "index" -> s"${idx}/${size}") {
+          val createIndex = shouldCreateIndex(directivesStmt, ci)
+          val action = (if (createIndex) "create" else "drop") + "-index"
+          val sql = if (createIndex) createIndexSql else dropIndexSql
+          time.info(action,
+            "datasetId" -> ci.copyInfo.datasetInfo.systemId.underlying,
+            "columnId" -> ci.userColumnId.underlying,
+            "index" -> s"${idx}/${size}") {
             sqlErrorHandler.guard(conn) {
-              stmt.execute(createIndexSql)
+              stmt.execute(sql)
             }
           }
         }
@@ -191,22 +197,23 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
     val defaultResult = true
     stmt.setLong(1, column.copyInfo.systemId.underlying)
     stmt.setLong(2, column.systemId.underlying)
-    val resultSet = stmt.executeQuery()
-    if (resultSet.next()) {
-      Option(resultSet.getString("directive")) match {
-        case Some(json) =>
-          JsonUtil.parseJson[JObject](json) match {
-            case Right(JObject(indexDirectives)) =>
-              indexDirectives.get("enabled") match {
-                case Some(JBoolean(b)) => b
-                case _ => defaultResult
-              }
-            case Left(_) => defaultResult
-          }
-        case None => defaultResult
+    using(stmt.executeQuery()) { resultSet =>
+      if (resultSet.next()) {
+        Option(resultSet.getString("directive")) match {
+          case Some(json) =>
+            JsonUtil.parseJson[JObject](json) match {
+              case Right(JObject(indexDirectives)) =>
+                indexDirectives.get("enabled") match {
+                  case Some(JBoolean(b)) => b
+                  case _ => defaultResult
+                }
+              case Left(_) => defaultResult
+            }
+          case None => defaultResult
+        }
+      } else {
+        defaultResult
       }
-    } else {
-      defaultResult
     }
   }
 
