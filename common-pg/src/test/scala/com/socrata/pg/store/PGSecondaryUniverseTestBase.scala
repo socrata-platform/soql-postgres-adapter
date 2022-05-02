@@ -1,8 +1,7 @@
 package com.socrata.pg.store
 
-import java.sql.{Connection, DriverManager}
+import java.sql.{Connection, DriverManager, ResultSet}
 import java.util.UUID
-
 import com.rojoma.json.v3.ast.{JArray, JObject, JString}
 import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.id.{ColumnId, RowId, UserColumnId}
@@ -17,6 +16,8 @@ import com.socrata.soql.types._
 import com.typesafe.config.Config
 import org.joda.time.{DateTime, LocalDate, LocalDateTime, LocalTime, Period}
 import org.scalatest.{BeforeAndAfterAll, FunSuiteLike, Matchers}
+
+import scala.annotation.tailrec
 
 // scalastyle:off null cyclomatic.complexity
 trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with BeforeAndAfterAll {
@@ -117,6 +118,31 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
       using(stmt.executeQuery()) { rs =>
         rs.next()
         rs.getInt(1)
+      }
+    }
+  }
+
+  def jdbcIndexes(conn:Connection, tableName:String): Map[String, String] = {
+
+    @tailrec
+    def loop(resultSet: ResultSet,
+             accumulator: Map[String, String] = Map.empty): Map[String, String] = {
+      if (!resultSet.next) {
+        accumulator
+      } else {
+        loop(resultSet, accumulator + (resultSet.getString(1) -> resultSet.getString(2)))
+      }
+    }
+
+    val sql = """SELECT indexname, indexdef
+                   FROM pg_indexes
+                  WHERE schemaname = 'public'
+                    AND tableName = ?
+              """
+    using(conn.prepareStatement(sql)) { stmt =>
+      stmt.setString(1, tableName)
+      using(stmt.executeQuery()) { rs =>
+        loop(rs)
       }
     }
   }

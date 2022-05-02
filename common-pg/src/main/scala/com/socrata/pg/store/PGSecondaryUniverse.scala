@@ -132,6 +132,10 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
   lazy val tableCleanup: TableCleanup =
     new SqlTableCleanup(conn, 0)
 
+  lazy val indexCleanup: IndexCleanup = {
+    new SqlIndexCleanup()
+  }
+
   lazy val analyzer =
     new SqlTableAnalyzer(conn)
 }

@@ -708,6 +708,21 @@ object QueryServer extends DynamicPortMap {
                        withPoolOptions(SocrataServerJetty.Pool(config.threadpool)).
                        withBroker(curatorBroker))
       logger.info("starting pg query server")
+
+
+//        using ( conn.createStatement()) { stmt =>
+      ////          stmt.execute(
+      ////            """
+      //// SELECT pg_terminate_backend(process.pid)
+      ////      FROM pg_catalog.pg_locks AS process
+      ////      JOIN pg_catalog.pg_stat_activity AS process_stm ON process_stm.pid = process.pid
+      ////      JOIN pg_class c on c.relname ='test_idx1'
+      ////     where process.relation::regclass::varchar = 'dataset_map';
+      ////     drop index test_idx1;
+      ////              """)
+      ////
+      ////        }
+
       server.run()
     }
     logger.info("pg query server exited")

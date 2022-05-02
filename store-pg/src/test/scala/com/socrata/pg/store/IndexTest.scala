@@ -1,7 +1,7 @@
 package com.socrata.pg.store
 
 import com.rojoma.simplearm.v2.unmanaged
-import com.socrata.datacoordinator.id.{ColumnId, CopyId, RollupName, UserColumnId}
+import com.socrata.datacoordinator.id.{ColumnId, CopyId, IndexName, RollupName, UserColumnId}
 import com.socrata.datacoordinator.secondary._
 import com.socrata.datacoordinator.truth.metadata
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, LifecycleStage => TruthLifecycleStage}
@@ -12,7 +12,7 @@ import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.types._
 import org.joda.time.DateTime
 
-class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
+class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
   override def beforeAll: Unit = {
     createDatabases()
@@ -21,80 +21,53 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
     }
   }
 
-  test("rollup all columns except point") {
+  test("create index") {
     withPgu() { pgu =>
       val secondary = new PGSecondary(config)
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
-      val dsName = s"$dcInstance.${truthDatasetId.underlying}"
-      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"),
-        "select * (EXCEPT _point, _multipolygon, _location, _phone)", None)
-
-      val rm = new RollupManager(pgu, copyInfo)
-      rm.updateRollup(rollupInfo, None, Function.const(false))
-
-      val tableName = rollupInfo.tableName
-
-      jdbcColumnCount(pgu.conn, tableName) should be (24)
-      jdbcRowCount(pgu.conn,tableName) should be (totalRows)
+      val indexInfo = pgu.datasetMapWriter.createOrUpdateIndex(copyInfo, new IndexName("idx1"), "make,code", None)
+      val im = new IndexManager(pgu, copyInfo)
+      im.updateIndex(indexInfo)
+      val dbIndexes = jdbcIndexes(pgu.conn, copyInfo.dataTableName)
+      val dbIndexName = im.dbIndexName(indexInfo)
+      dbIndexes.contains(dbIndexName) should be(true)
+      val indexRx = "CREATE INDEX t1_1_idx_1 ON public.t1_1 USING btree \\(u_make_[0-9]+, u_code_[0-9]+\\)".r
+      indexRx.findFirstMatchIn(dbIndexes(dbIndexName)).isDefined should be(true)
       secondary.shutdown()
     }
   }
 
-  test("rollup geometric columns") {
+  test("create complicated index") {
     withPgu() { pgu =>
       val secondary = new PGSecondary(config)
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
-      val dsName = s"$dcInstance.${truthDatasetId.underlying}"
-      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"), "select _point, _multipolygon, _polygon, _line, _multipoint", None)
-
-      val rm = new RollupManager(pgu, copyInfo)
-      rm.updateRollup(rollupInfo, None, Function.const(false))
-
-      val tableName = rollupInfo.tableName
-
-      jdbcColumnCount(pgu.conn, tableName) should be (5)
-      jdbcRowCount(pgu.conn,tableName) should be (totalRows)
+      val indexInfo = pgu.datasetMapWriter.createOrUpdateIndex(copyInfo, new IndexName("idx2"), "make,code || v_trim::text asc null last", Some("make is not null"))
+      val im = new IndexManager(pgu, copyInfo)
+      im.updateIndex(indexInfo)
+      val dbIndexes = jdbcIndexes(pgu.conn, copyInfo.dataTableName)
+      val dbIndexName = im.dbIndexName(indexInfo)
+      dbIndexes.contains(dbIndexName) should be(true)
+      val dbIndexDef = dbIndexes(dbIndexName)
+      val indexRx = "CREATE INDEX t1_1_idx_1 ON public.t1_1 USING btree \\(u_make_[0-9]+, \\(\\(u_code_[0-9]+ || \\(\\(u_v_trim_[0-9]+\\)::character varying\\)::text\\)\\)\\) WHERE \\(u_make_[0-9]+ IS NOT NULL\\)".r
+      indexRx.findFirstMatchIn(dbIndexes(dbIndexName)).isDefined should be(true)
       secondary.shutdown()
     }
   }
 
-  test("rollup complex query") {
+  test("invalid expression shouldn't throw exception") {
     withPgu() { pgu =>
       val secondary = new PGSecondary(config)
       secondary.shutdown()
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
-      val dsName = s"$dcInstance.${truthDatasetId.underlying}"
-      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"),
-        "select _make, avg(_aspect_ratio) AS _avg_asp WHERE _v_min >20 GROUP BY _make HAVING _avg_asp > 4 ORDER BY _make limit 100 offset 1", None)
-
-      val rm = new RollupManager(pgu, copyInfo)
-      rm.updateRollup(rollupInfo, None, Function.const(false))
-
-      val tableName = rollupInfo.tableName
-      jdbcColumnCount(pgu.conn, tableName) should be (2)
-      jdbcRowCount(pgu.conn,tableName) should be (2)
-      secondary.shutdown()
-    }
-  }
-
-  test("invalid soql shouldn't throw exception") {
-    withPgu() { pgu =>
-      val secondary = new PGSecondary(config)
-      secondary.shutdown()
-      val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
-      val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
-      val dsName = s"$dcInstance.${truthDatasetId.underlying}"
-      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"),
-        "select I am a monkey GROUP BY monkeyland", Some("select"))
-
-      val rm = new RollupManager(pgu, copyInfo)
-      rm.updateRollup(rollupInfo, None, Function.const(false))
-
-      val tableName = rollupInfo.tableName
-      jdbcColumnCount(pgu.conn, tableName) should be (0)
+      val indexInfo = pgu.datasetMapWriter.createOrUpdateIndex(copyInfo, new IndexName("idx_invalid"), "nonexist_column", None)
+      val im = new IndexManager(pgu, copyInfo)
+      im.updateIndex(indexInfo)
+      val dbIndexes = jdbcIndexes(pgu.conn, copyInfo.dataTableName)
+      val dbIndexName = im.dbIndexName(indexInfo)
+      dbIndexes.contains(dbIndexName) should be(false)
       secondary.shutdown()
     }
   }

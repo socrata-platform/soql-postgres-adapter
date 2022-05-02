@@ -2,8 +2,8 @@ package com.socrata.pg.store
 
 import com.rojoma.json.v3.ast.JObject
 import com.socrata.datacoordinator.truth.loader.Logger
-import com.socrata.datacoordinator.id.RowId
-import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, ComputationStrategyInfo, CopyInfo, RollupInfo}
+import com.socrata.datacoordinator.id.{IndexName, RowId}
+import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, ComputationStrategyInfo, CopyInfo, IndexInfo, RollupInfo}
 import com.socrata.soql.environment.ColumnName
 import com.typesafe.scalalogging.{Logger => SLogger}
 import org.joda.time.DateTime
@@ -79,4 +79,8 @@ class PGSecondaryLogger[CT, CV] extends Logger[CT, CV] {
   def indexDirectiveCreatedOrUpdated(info: ColumnInfo[CT], directive: JObject): Unit = logger.debug(s"indexDirectiveCreatedOrUpdated: $info $directive")
 
   def indexDirectiveDropped(info: ColumnInfo[CT]): Unit = logger.debug(s"indexDirectiveDropped: $info")
+
+  def indexCreatedOrUpdated(info: IndexInfo): Unit = logger.debug(s"indexCreatedOrUpdated: $info")
+
+  def indexDropped(name: IndexName): Unit =  logger.debug(s"indexDropped: $name")
 }

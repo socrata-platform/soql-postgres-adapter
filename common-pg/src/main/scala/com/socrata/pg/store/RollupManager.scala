@@ -31,24 +31,13 @@ import com.socrata.soql.parsing.StandaloneParser
 import com.socrata.soql.typed.Qualifier
 
 // scalastyle:off multiple.string.literals
-class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) {
+class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) extends SecondaryManagerBase(pgu, copyInfo) {
   import RollupManager.logger
 
   // put rollups in the same tablespace as the copy
   private val tablespaceSql = pgu.commonSupport.tablespace(copyInfo.dataTableName).map(" TABLESPACE " + _).getOrElse("")
 
-  private val dsSchema: ColumnIdMap[ColumnInfo[SoQLType]] =
-    for(readCtx <- pgu.datasetReader.openDataset(copyInfo)) {
-      readCtx.schema
-    }
-
-  private def getDsSchema(resourceName: ResourceName): ColumnIdMap[ColumnInfo[SoQLType]] = {
-    val dsInfo = pgu.datasetMapReader.datasetInfoByResourceName(resourceName).get
-    val copyInfo = pgu.datasetMapReader.latest(dsInfo)
-    for (readCtx <- pgu.datasetReader.openDataset(copyInfo)) {
-      readCtx.schema
-    }
-  }
+  private val dsSchema = getDsSchema(copyInfo)
 
   private def getDsContext(resourceName: ResourceName) = new DatasetContext[SoQLType] {
     val dsSchemaX = getDsSchema(resourceName)
@@ -60,26 +49,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     OrderedMap(dsSchemaX.values.map(x => (columnIdToPrefixNameMap(x.userColumnId), x.typ)).toSeq.sortBy(_._1): _*)
   }
 
-
-  private val dsContext = new DatasetContext[SoQLType] {
-    // we are sorting by the column name for consistency with query coordinator and how we build
-    // schema hashes, it may not matter here though.  Column id to name mapping is 1:1 in our case
-    // since our rollup query is pre-mapped.
-    val schema: OrderedMap[ColumnName, SoQLType] =
-      OrderedMap(dsSchema.values.map(x => (ColumnName(x.userColumnId.underlying), x.typ)).toSeq.sortBy(_._1): _*)
-  }
-
   private val time = new LoggedTimingReport(org.slf4j.LoggerFactory.getLogger("rollup-timing")) with StackedTimingReport
-
-  /**
-   * For analyzing the rollup query, we need to map the dataset schema column ids to the "_" prefixed
-   * version of the name that we get, designed to ensure the column name is valid soql
-   * and doesn't start with a number.
-   */
-  private def columnIdToPrefixNameMap(cid: UserColumnId): ColumnName = {
-    val name = cid.underlying
-    new ColumnName(if (name(0) == ':') name else "_" + name)
-  }
 
   /**
    * Once we have the analyzed rollup query with column names, we need to remove the leading "_" on non-system
