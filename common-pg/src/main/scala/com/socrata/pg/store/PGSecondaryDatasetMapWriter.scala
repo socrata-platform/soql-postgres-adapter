@@ -106,6 +106,7 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
 
     dropRollup(copyInfo, None) // drop all related rollups metadata
     dropIndexDirectives(copyInfo)
+    dropIndex(copyInfo, None)
 
     using(conn.prepareStatement(deleteCopyQueryColumnMap)) { stmt =>
       stmt.setLong(1, copyInfo.systemId.underlying)

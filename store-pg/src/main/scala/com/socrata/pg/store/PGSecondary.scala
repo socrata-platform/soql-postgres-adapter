@@ -15,7 +15,7 @@ import com.socrata.datacoordinator.secondary.Secondary.Cookie
 import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo, CopyInfo => SecondaryCopyInfo, _}
 import com.socrata.datacoordinator.truth.loader.sql.SqlPrevettedLoader
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, DatasetCopyContext}
-import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, LifecycleStage => TruthLifecycleStage}
+import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, IndexInfo => TruthIndexInfo, LifecycleStage => TruthLifecycleStage}
 import com.socrata.datacoordinator.truth.universe.sql.{C3P0WrappedPostgresCopyIn, PostgresCopyIn}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.SecondaryBase
@@ -45,9 +45,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
   private val dsInfo = DataSourceFromConfig.unmanaged(dsConfig)
   private val finished = new CountDownLatch(1)
+  private val indexDropfinished = new CountDownLatch(1)
   private val tableDropper = startTableDropper()
+  private val indexDropper = startIndexDropper()
   private val resyncBatchSize = storeConfig.resyncBatchSize
   private val tableDropTimeoutSeconds: Long = 60
+  private val indexDropTimeoutSeconds: Long = 60
   private val curator = storeConfig.curatorConfig.map { cc =>
     val client = CuratorFromConfig.unmanaged(cc)
     client.start()
@@ -66,7 +69,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   def shutdown(): Unit = {
     logger.info("shutting down {} {} ...", dsConfig.host, dsConfig.database)
     finished.countDown()
+    indexDropfinished.countDown()
     tableDropper.join()
+    indexDropper.join()
     dsInfo.close()
     rowsChangedPreviewConfig match {
       case closable: Closeable => closable.close()
@@ -374,11 +379,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       truthCopyInfo: TruthCopyInfo,
       dataLoader: Option[SqlPrevettedLoader[SoQLType, SoQLValue]],
       rowDataProgress: RowDataUpdatedHandler.Progress,
-      rollupUpdate: RollupUpdate
+      rollupUpdate: RollupUpdate,
+      indexesUpdate: Seq[TruthIndexInfo]
     ) {
       def withRollupUpdate(ru: RollupUpdate) = copy(rollupUpdate = rollupUpdate.increaseTo(ru))
     }
-    val startCtx = Ctx(false, initialTruthCopyInfo, None, RowDataUpdatedHandler.Progress(), TryToMove(Set.empty))
+    val startCtx = Ctx(false, initialTruthCopyInfo, None, RowDataUpdatedHandler.Progress(), TryToMove(Set.empty), Seq.empty)
     val endCtx = remainingEvents.foldLeft(startCtx) { (ctx, e) =>
       logger.debug("got event: {}", e)
       e match {
@@ -424,8 +430,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           }
           ctx.copy(dataLoader = None)
         case WorkingCopyPublished =>
-          WorkingCopyPublishedHandler(pgu, ctx.truthCopyInfo)
-          ctx.copy(rebuildIndex = true).withRollupUpdate(TryToMove(except = Set.empty))
+          val publishedCopyInfo = WorkingCopyPublishedHandler(pgu, ctx.truthCopyInfo)
+          ctx.copy(rebuildIndex = true, truthCopyInfo = publishedCopyInfo).withRollupUpdate(TryToMove(except = Set.empty))
         case RowDataUpdated(ops) =>
           val loader = ctx.dataLoader.getOrElse(prevettedLoader(pgu, ctx.truthCopyInfo))
           val rdp = RowDataUpdatedHandler(loader, ops, ctx.rowDataProgress)
@@ -439,6 +445,12 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         case RollupDropped(rollupInfo) =>
           RollupDroppedHandler(pgu, ctx.truthCopyInfo, rollupInfo)
           ctx
+        case IndexCreatedOrUpdated(indexInfo) =>
+          val idx = IndexCreatedOrUpdatedHandler(pgu, ctx.truthCopyInfo, indexInfo)
+          ctx.copy(rebuildIndex = true, indexesUpdate = ctx.indexesUpdate :+ idx)
+        case IndexDropped(indexName) =>
+          IndexDroppedHandler(pgu, ctx.truthCopyInfo, indexName)
+          ctx.copy(rebuildIndex = true)
         case ComputationStrategyCreated(_) => // no op
           ctx
         case ComputationStrategyRemoved(_) => // no op
@@ -512,6 +524,10 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       }
     }
 
+    val im = new IndexManager(pgu, endCtx.truthCopyInfo)
+    if (im.justPublish(startCtx.truthCopyInfo) || endCtx.indexesUpdate.nonEmpty) {
+      im.updateIndexes(endCtx.indexesUpdate)
+    }
     cookie
   }
 
@@ -529,13 +545,14 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
              rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
              rollups: Seq[RollupInfo],
              indexDirectives: Seq[com.socrata.datacoordinator.truth.metadata.IndexDirective[SoQLType]],
+             indexes: Seq[IndexInfo],
              isLatestLivingCopy: Boolean): Secondary.Cookie = {
     // should tell us the new copy number
     // We need to perform some accounting here to make sure readers know a resync is in process
     logger.info("resync (datasetInfo: {}, secondaryCopyInfo: {}, schema: {}, cookie: {})",
       datasetInfo, secondaryCopyInfo, schema, cookie)
     withPgu(dsInfo, Some(datasetInfo)) { pgu =>
-      val cookieOut = doResync(pgu, datasetInfo, secondaryCopyInfo, schema, cookie, rows, rollups, indexDirectives)
+      val cookieOut = doResync(pgu, datasetInfo, secondaryCopyInfo, schema, cookie, rows, rollups, indexDirectives, indexes)
       pgu.commit()
       cookieOut
     }
@@ -549,7 +566,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
                cookie: Secondary.Cookie,
                rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
                rollups: Seq[RollupInfo],
-               indexDirectives: Seq[com.socrata.datacoordinator.truth.metadata.IndexDirective[SoQLType]]): Secondary.Cookie =
+               indexDirectives: Seq[com.socrata.datacoordinator.truth.metadata.IndexDirective[SoQLType]],
+               indexes: Seq[IndexInfo]): Secondary.Cookie =
   {
     val truthCopyInfo = pgu.datasetMapReader.datasetIdForInternalName(secondaryDatasetInfo.internalName) match { // scalastyle:ignore line.size.limit
       case None =>
@@ -660,14 +678,23 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     // re-create rollup metadata
     for { rollup <- rollups } RollupCreatedOrUpdatedHandler(pgu, postUpdateTruthCopyInfo, rollup)
 
+    // re-create rollup tables.  We don't need to pass in an old truth
+    // because we just dropped any existing rollups above.
+    updateRollups(pgu, None, postUpdateTruthCopyInfo, tryToMove = Function.const(false), force = false)
+
     // re-create index directives
     for { idx <- indexDirectives } {
       IndexDirectiveCreatedOrUpdatedHandler(pgu, idx.columnInfo, idx.directive)
     }
 
-    // re-create rollup tables.  We don't need to pass in an old truth
-    // because we just dropped any existing rollups above.
-    updateRollups(pgu, None, postUpdateTruthCopyInfo, tryToMove = Function.const(false), force = false)
+    // re-create indexes
+    if (indexes.nonEmpty) {
+      for { idx <- indexes } {
+        IndexCreatedOrUpdatedHandler(pgu, postUpdateTruthCopyInfo, idx)
+      }
+      val im = new IndexManager(pgu, postUpdateTruthCopyInfo)
+      im.updateIndexes()
+    }
 
     pgu.datasetMapWriter.enableDataset(truthCopyInfo.datasetInfo.systemId) // re-enable soql reads
     cookie
@@ -728,6 +755,28 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
     tableDropper.start()
     tableDropper
+  }
+
+  private def startIndexDropper() = {
+    val dropper = new Thread() {
+      val host = storeConfig.database.host
+      setName(s"pg-sec-index-dropper-${host}")
+      override def run(): Unit = {
+        while (!indexDropfinished.await(indexDropTimeoutSeconds, TimeUnit.SECONDS)) {
+          try {
+            withPgu(dsInfo, None) { pgu =>
+              while(indexDropfinished.getCount > 0 && pgu.indexCleanup.cleanupPendingDrops(dsInfo.dataSource, host)) {
+                logger.info("index drop sleep")
+              }
+            }
+          } catch {
+            case e: Exception => logger.error("Unexpected error while dropping indexes", e)
+          }
+        }
+      }
+    }
+    dropper.start()
+    dropper
   }
 
   override def metric(datasetInternalName: String, cookie: Cookie): Option[SecondaryMetric] = {

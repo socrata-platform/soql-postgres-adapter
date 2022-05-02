@@ -41,8 +41,8 @@ object SoQLAnalyzerHelper {
    * This function is for test setup and should mimic the the same function
    * in the "Query Coordinator" project QueryParser class.
    */
-  private def remapAnalyses(columnIdMapping: Map[QualifiedColumnName, UserColumnId],
-                            analyses: BinaryTree[SoQLAnalysis[ColumnName, SoQLType]]):
+  def remapAnalyses(columnIdMapping: Map[QualifiedColumnName, UserColumnId],
+                    analyses: BinaryTree[SoQLAnalysis[ColumnName, SoQLType]]):
       BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] = {
 
     val newMapping: Map[(ColumnName, Qualifier), UserColumnId] = columnIdMapping map {

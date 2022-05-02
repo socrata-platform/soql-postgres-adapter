@@ -26,8 +26,11 @@ case class WorkingCopyDroppedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
   }
 }
 
-case class WorkingCopyPublishedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], truthCopyInfo: CopyInfo) {
-  pgu.datasetMapWriter.publish(truthCopyInfo)
+object WorkingCopyPublishedHandler {
+  def apply(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], truthCopyInfo: CopyInfo): CopyInfo = {
+    val (publishedCopyInfo, _) = pgu.datasetMapWriter.publish(truthCopyInfo)
+    publishedCopyInfo
+  }
 }
 
 case class DataCopiedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],

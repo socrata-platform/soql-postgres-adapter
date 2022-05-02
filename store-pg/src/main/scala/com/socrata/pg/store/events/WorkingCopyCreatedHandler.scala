@@ -3,7 +3,7 @@ package com.socrata.pg.store.events
 import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, DatasetInfo => SecondaryDatasetInfo}
 import com.socrata.datacoordinator.truth.loader.SchemaLoader
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo}
-import com.socrata.pg.store.{RollupManager, PGSecondaryLogger, PGSecondaryUniverse}
+import com.socrata.pg.store.{IndexManager, PGSecondaryLogger, PGSecondaryUniverse, RollupManager}
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.scalalogging.Logger
 
@@ -13,6 +13,10 @@ object WorkingCopyCreatedHandler {
 
 /**
  * Handles WorkingCopyCreated Event
+ * Unlike columns which are copied (replayed) from truth store where no work about columns is needed in this handle,
+ * rollups and indexes are copied from secondary store in this handler.
+ * TODO: index_directives are similar to rollups and indexes.  But because they depend on columns which have not been
+ *       copied yet, index_directives copy should be done on the publish event.
  */
 case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                                      datasetId: Option[com.socrata.datacoordinator.id.DatasetId],
@@ -53,6 +57,13 @@ case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
         }
         pgu.datasetMapReader.rollups(newCopyInfo).foreach { ru =>
           rm.updateRollup(ru, Some(oldCopyInfo), Function.const(false))
+        }
+
+        // Copy indexes
+        val im = new IndexManager(pgu, newCopyInfo)
+        pgu.datasetMapReader.indexes(oldCopyInfo).foreach { idx =>
+          val sidx = im.makeSecondaryIndexInfo(idx)
+          IndexCreatedOrUpdatedHandler(pgu, newCopyInfo, sidx)
         }
       }
   }
