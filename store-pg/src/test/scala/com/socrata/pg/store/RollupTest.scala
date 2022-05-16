@@ -191,7 +191,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       )
 
       // First resync a dataset that doesn't exist
-      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows.iterator), Seq.empty, Seq.empty)
+      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows.iterator), Seq.empty, Seq.empty, Nil)
 
       // there are 2 rows
       val truthCopyInfo = getTruthCopyInfo(pgu, secondaryDatasetInfo)
@@ -215,7 +215,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
           new ColumnId(12) -> new SoQLText("taz"))
 
       // resync again with an extra row plus rollup
-      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows2.iterator), Seq(rollup), Seq.empty)
+      pgs.doResync(pgu, secondaryDatasetInfo, secondaryCopyInfo, newSchema, cookie, unmanaged(rows2.iterator), Seq(rollup), Seq.empty, Nil)
 
       // there is rollup
       val truthCopyInfoAfterResync = getTruthCopyInfo(pgu, secondaryDatasetInfo)
