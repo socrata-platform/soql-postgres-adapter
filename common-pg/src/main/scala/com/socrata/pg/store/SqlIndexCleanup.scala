@@ -2,6 +2,7 @@ package com.socrata.pg.store
 
 import java.sql.SQLException
 import com.rojoma.simplearm.v2._
+import com.socrata.pg.query.QueryResult.QueryRuntimeError
 
 import javax.sql.DataSource
 
@@ -37,8 +38,13 @@ class SqlIndexCleanup() extends IndexCleanup {
               true
             } catch {
               case ex: SQLException =>
-                conn.clearWarnings()
-                log.error(s"sql error dropping index $name ${ex.toString}")
+                QueryRuntimeError(ex) match {
+                  case None =>
+                    log.error(s"SQL Exception drop index $name (${ex.getSQLState})", ex)
+                  case Some(e) =>
+                    log.warn(s"SQL Exception drop index $name ${e.getClass.getSimpleName} (${ex.getSQLState})")
+                }
+                conn.clearWarnings() // reset connection on the basis of autoCommit being true
                 true // failed, but there is work
             }
           } else {

@@ -4,6 +4,8 @@ import com.rojoma.simplearm.v2.using
 import com.socrata.datacoordinator.id.{IndexId, IndexName}
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, IndexInfo, LifecycleStage}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
+import com.socrata.pg.error.{SqlErrorHelper, SqlErrorPattern}
+import com.socrata.pg.query.QueryResult.QueryRuntimeError
 import com.socrata.pg.query.QueryServerHelper.readerWithQuery
 import com.socrata.pg.soql.Sqlizer
 import com.socrata.pg.soql.SqlizerContext._
@@ -89,24 +91,32 @@ class IndexManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Copy
     if (shouldMaterialize()) {
       try {
         val createIndexSql = sqlize(index)
-        using(pgu.conn.prepareStatement(createIndexSql)) { stmt =>
-          pgu.commonSupport.timingReport.info("create-index",
-            "datasetId" -> copyInfo.datasetInfo.systemId.underlying,
-            "copyId" -> copyInfo.systemId.underlying,
-            "indexName" -> index.name.underlying,
-            "sql" -> createIndexSql) {
-            stmt.execute()
+        try {
+          sqlErrorHandler.guard(pgu.conn, None) {
+            using(pgu.conn.prepareStatement(createIndexSql)) { stmt =>
+              pgu.commonSupport.timingReport.info("create-index",
+                "datasetId" -> copyInfo.datasetInfo.systemId.underlying,
+                "copyId" -> copyInfo.systemId.underlying,
+                "indexName" -> index.name.underlying,
+                "sql" -> createIndexSql) {
+                stmt.execute()
+              }
+            }
           }
+        } catch {
+          case ex: SQLException =>
+            QueryRuntimeError(ex) match {
+              case None =>
+                logger.error(s"SQL Exception create index $createIndexSql (${ex.getSQLState})", ex)
+              case Some(e) =>
+                logger.warn(s"SQL Exception create index $createIndexSql ${e.getClass.getSimpleName} (${ex.getSQLState})")
+            }
         }
       } catch {
         case e: NoSuchColumn =>
           logger.info(s"ignore index ${index.name.underlying} on ${copyInfo} because ${e.getMessage}")
         case e: BadParse =>
           logger.warn(s"ignore index ${index.name.underlying} on ${copyInfo} because ${e.getMessage}")
-        case e: SQLException =>
-          logger.warn(s"bad index sql", e)
-          pgu.conn.clearWarnings()
-          throw e
       }
     }
   }
@@ -170,4 +180,7 @@ object IndexManager {
       search = None,
       hints = Nil)
   }
+
+  private val sqlErrorPatterns = QueryRuntimeError.validErrorCodes.map(state => SqlErrorPattern(state, ".*".r)).toSeq
+  val sqlErrorHandler = new SqlErrorHelper(sqlErrorPatterns: _*)
 }
