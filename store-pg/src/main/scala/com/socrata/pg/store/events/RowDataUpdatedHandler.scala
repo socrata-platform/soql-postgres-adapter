@@ -40,7 +40,7 @@ object RowDataUpdatedHandler {
         performedOps += 1
         val now = System.nanoTime()
         if(now - lastTickedAt > IntervalBetweenTicksNS) {
-          logger.info("Upsert progress: {}/{} ({}%) operations performed", performedOps, progress.expectedOps, 100.0 * performedOps.toDouble / progress.expectedOps)
+          logger.info("Upsert progress: {}/{} ({}%) operations performed", performedOps, progress.expectedOps, "%.2f".format(100.0 * performedOps.toDouble / progress.expectedOps))
           lastTickedAt = now
         }
       }
