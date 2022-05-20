@@ -11,11 +11,13 @@ trait Indexable[T] { this: SqlColumnCommonRep[T] =>
   def createIndex(tableName: String, tablespace: String): Option[String]
   def createRollupIndex(tableName: String, tablespace: String): Option[String] = createIndex(tableName, tablespace)
   def dropIndex(tableName: String): Option[String]
+  def dbIndexNames(tableName: String): Seq[String]
 }
 
 trait NoIndex[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
   def createIndex(tableName: String, tablespace: String): Option[String] = None
   def dropIndex(tableName: String): Option[String] = None
+  def dbIndexNames(tableName: String): Seq[String] = Nil
 }
 
 // scalastyle:off regex multiple.string.literals
@@ -74,6 +76,17 @@ trait TextIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
     }.mkString(";")
     Some(sql)
   }
+
+  override def dbIndexNames(tableName: String): Seq[String] = {
+    this.physColumns.flatMap { phyCol =>
+      Seq(s"idx_${tableName}_$phyCol",
+          s"idx_${tableName}_u_$phyCol",
+          s"idx_${tableName}_nl_$phyCol",
+          s"idx_${tableName}_nf_$phyCol",
+          s"idx_${tableName}_unl_$phyCol",
+          s"idx_${tableName}_unf_$phyCol")
+    }
+  }
 }
 
 trait BaseIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
@@ -99,6 +112,12 @@ trait BaseIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
     }.mkString(";")
     Some(sql)
   }
+
+  override def dbIndexNames(tableName: String): Seq[String] = {
+    this.physColumns.flatMap { phyCol =>
+      Seq(s"idx_${tableName}_nl_$phyCol", s"idx_${tableName}_nf_$phyCol")
+    }
+  }
 }
 
 trait JsonbIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
@@ -121,6 +140,12 @@ trait JsonbIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
       DROP INDEX IF EXISTS idx_${tableName}_$phyCol"""
     }.mkString(";")
     Some(sql)
+  }
+
+  override def dbIndexNames(tableName: String): Seq[String] = {
+    this.physColumns.flatMap { phyCol =>
+      Seq(s"idx_${tableName}_$phyCol")
+    }
   }
 }
 
@@ -155,6 +180,12 @@ trait GeoIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] =>
       s"""DROP INDEX IF EXISTS idx_${tableName}_${phyCol}_gist"""
     }.mkString(";")
     Some(sql)
+  }
+
+  override def dbIndexNames(tableName: String): Seq[String] = {
+    this.physColumns.flatMap { phyCol =>
+      Seq(s"idx_${tableName}_${phyCol}_gist")
+    }
   }
 }
 
