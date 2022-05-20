@@ -11,7 +11,7 @@ import com.socrata.soql.types.{SoQLType, SoQLValue}
 case class IndexDroppedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                                copyInfo: CopyInfo,
                                indexName: IndexName) {
-    pgu.datasetMapWriter.dropIndex(copyInfo, Some(indexName))
-    val im = new IndexManager(pgu, copyInfo)
-    im.dropIndex(indexName)
+  val im = new IndexManager(pgu, copyInfo)
+  im.dropIndex(indexName)
+  pgu.datasetMapWriter.dropIndex(copyInfo, Some(indexName))
 }
