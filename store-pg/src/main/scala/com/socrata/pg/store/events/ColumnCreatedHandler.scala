@@ -1,9 +1,9 @@
 package com.socrata.pg.store.events
 
-import com.socrata.pg.store.{SoQLSystemColumns, StandardDatasetMapLimits, PGSecondaryLogger, PGSecondaryUniverse}
-import com.socrata.soql.types.{SoQLValue, SoQLType}
+import com.socrata.pg.store.{PGSecondaryLogger, PGSecondaryUniverse, SoQLSystemColumns, StandardDatasetMapLimits}
+import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo}
-import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo}
+import com.socrata.datacoordinator.truth.metadata.{LifecycleStage, CopyInfo => TruthCopyInfo}
 import com.socrata.soql.brita.AsciiIdentifierFilter
 import com.socrata.datacoordinator.id.UserColumnId
 import com.rojoma.simplearm.v2._
@@ -31,6 +31,14 @@ case class ColumnCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
 
   sLoader.addColumns(Seq(truthColInfo))
   if (truthColInfo.isSystemPrimaryKey) sLoader.makeSystemPrimaryKey(truthColInfo)
+
+  for { published <- pgu.datasetMapReader.lookup(truthCopyInfo.datasetInfo, LifecycleStage.Published)
+        fieldName <- secColInfo.fieldName } {
+    val idxdirectives = pgu.datasetMapWriter.indexDirectives(published, Some(fieldName))
+    for (idxdt <- idxdirectives) {
+      pgu.datasetMapWriter.createOrUpdateIndexDirective(truthColInfo, idxdt.directive)
+    }
+  }
 
   // TODO this is copy and paste from SoQLCommon ...
   private def physicalColumnBaseBase(nameHint: String, systemColumn: Boolean): String =
