@@ -115,13 +115,15 @@ class SqlizerJoinTest  extends SqlizerTest {
   test("chained primary table join with chained sub-query - select columns") {
     val soql = "select case_number, primary_type |> select primary_type, count(*) as total group by primary_type |> select primary_type, total |>  select primary_type, total, @y.year, @y.avg_temperature join (SELECT * FROM @year |> SELECT year, avg_temperature WHERE avg_temperature > 30) as y on @y.year = total and total = 2000"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT "x1"."primary_type","x1"."total","_y"."year","_y"."avg_temperature" FROM (SELECT "primary_type" as "primary_type","total" as "total" FROM (SELECT "primary_type" as "primary_type",(count(*)::numeric) as "total" FROM (SELECT "t1".case_number as "case_number","t1".primary_type as "primary_type" FROM t1) AS "x1" GROUP BY "primary_type") AS "x1") AS "x1" JOIN (SELECT "x1"."year" as "year","x1"."avg_temperature" as "avg_temperature" FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1" WHERE ("x1"."avg_temperature" > ?)) as "_y" ON (("_y"."year" = "x1"."total") and ("x1"."total" = ?))""")
+    val expected = """SELECT "x1"."primary_type","x1"."total","_y"."year","_y"."avg_temperature" FROM (SELECT "primary_type" as "primary_type","total" as "total" FROM (SELECT "primary_type" as "primary_type",(count(*)::numeric) as "total" FROM (SELECT "t1".case_number as "case_number","t1".primary_type as "primary_type" FROM t1) AS "x1" GROUP BY "primary_type") AS "x1") AS "x1" JOIN (SELECT "year" as "year","avg_temperature" as "avg_temperature" FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1" WHERE ("avg_temperature" > ?)) as "_y" ON (("_y"."year" = "x1"."total") and ("x1"."total" = ?))"""
+    sql should be (expected)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq(30, 2000).map(BigDecimal(_)))
 
     val soqlChainSelectMax = soql + " |> select max(year)"
     val ParametricSql(Seq(sqlChainSelectMax), setParamsChainSelectMax) = sqlize(soqlChainSelectMax, CaseSensitive)
-    sqlChainSelectMax should be ("""SELECT (max("year")) FROM (SELECT "x1"."primary_type" as "primary_type","x1"."total" as "total","_y"."year" as "year","_y"."avg_temperature" as "avg_temperature" FROM (SELECT "primary_type" as "primary_type","total" as "total" FROM (SELECT "primary_type" as "primary_type",(count(*)::numeric) as "total" FROM (SELECT "t1".case_number as "case_number","t1".primary_type as "primary_type" FROM t1) AS "x1" GROUP BY "primary_type") AS "x1") AS "x1" JOIN (SELECT "x1"."year" as "year","x1"."avg_temperature" as "avg_temperature" FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1" WHERE ("x1"."avg_temperature" > ?)) as "_y" ON (("_y"."year" = "x1"."total") and ("x1"."total" = ?))) AS "x1"""")
+    val expectedSqlChainSelectMax = """SELECT (max("year")) FROM (SELECT "x1"."primary_type" as "primary_type","x1"."total" as "total","_y"."year" as "year","_y"."avg_temperature" as "avg_temperature" FROM (SELECT "primary_type" as "primary_type","total" as "total" FROM (SELECT "primary_type" as "primary_type",(count(*)::numeric) as "total" FROM (SELECT "t1".case_number as "case_number","t1".primary_type as "primary_type" FROM t1) AS "x1" GROUP BY "primary_type") AS "x1") AS "x1" JOIN (SELECT "year" as "year","avg_temperature" as "avg_temperature" FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1" WHERE ("avg_temperature" > ?)) as "_y" ON (("_y"."year" = "x1"."total") and ("x1"."total" = ?))) AS "x1""""
+    sqlChainSelectMax should be (expectedSqlChainSelectMax)
     val paramsChainSelectMax = setParams.map { (setParam) => setParam(None, 0).get }
     paramsChainSelectMax should be (params)
   }
@@ -242,7 +244,22 @@ class SqlizerJoinTest  extends SqlizerTest {
     val soql = "SELECT @t.:id FROM @this as t |> SELECT @t2.:id, @d.:id as id2 FROM @this as t2 JOIN @dog as d ON true"
     val expected = """SELECT "_t2".":id","_d".":id_51" FROM (SELECT "_t".":id_1" as ":id" FROM t1 as "_t") as "_t2" JOIN t12 as "_d" ON ?"""
     val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive, useRepsWithId = true)
-    println(sql)
+    sql should be (expected)
+  }
+
+  test("@this alias does not spread into join") {
+    val soql = "SELECT primary_type |> SELECT @c.primary_type, @d.name FROM @this as c JOIN (SELECT name,breed FROM @dog |> SELECT name) as d ON true"
+    val expected = """SELECT "_c"."primary_type","_d"."name" FROM (SELECT "t1".primary_type_7 as "primary_type" FROM t1) as "_c" JOIN (SELECT "name" as "name" FROM (SELECT "name_55" as "name","breed_56" as "breed" FROM t12) AS "x1") as "_d" ON ?"""
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive, useRepsWithId = true)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq(true))
+    sql should be (expected)
+  }
+
+  test("@this alias does not spread into join more") {
+    val soql = "SELECT primary_type |> SELECT @c.primary_type, @x.name FROM @this as c JOIN (SELECT name, @dog.breed, @bird.bird, @f.fish FROM @dog JOIN @bird on breed=@bird.breed JOIN @fish as f on breed=@f.breed) as x ON primary_type=@x.name"
+    val expected = """SELECT "_c"."primary_type","_x"."name" FROM (SELECT "t1".primary_type_7 as "primary_type" FROM t1) as "_c" JOIN (SELECT "name_55" as "name","_dog"."breed_56" as "breed","_bird"."bird_68" as "bird","_f"."fish_68" as "fish" FROM t12 JOIN t13 ON ("breed_56" = "_bird"."breed_66")  JOIN t14 as "_f" ON ("breed_56" = "_f"."breed_66")) as "_x" ON ("_c"."primary_type" = "_x"."name")"""
+    val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive, useRepsWithId = true)
     sql should be (expected)
   }
 

@@ -397,7 +397,7 @@ trait SoQLAnalysisSqlizer {
         case Right(SubAnalysis(analyses, alias)) =>
           val repJoin = if (join.lateral) repFrom ++ rep else rep
           val joinTableLikeParamSql = Sqlizer.sql(
-            (analyses, joinTableNames, allColumnReps))(repJoin, typeRep, Seq.empty, ctxJoin, escape)
+            (analyses, joinTableNames, allColumnReps))(repJoin, typeRep, Seq.empty, ctxJoin - PrimaryTableAlias, escape)
           val tn = "(" + joinTableLikeParamSql.sql.mkString + ") as \"" + alias + "\""
           (tn, joinTableLikeParamSql.setParams)
         case Left(tableName) =>
