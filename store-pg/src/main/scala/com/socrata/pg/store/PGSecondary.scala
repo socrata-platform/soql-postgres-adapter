@@ -447,10 +447,10 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           ctx
         case IndexCreatedOrUpdated(indexInfo) =>
           val idx = IndexCreatedOrUpdatedHandler(pgu, ctx.truthCopyInfo, indexInfo)
-          ctx.copy(rebuildIndex = true, indexesUpdate = ctx.indexesUpdate :+ idx)
+          ctx.copy(indexesUpdate = ctx.indexesUpdate :+ idx)
         case IndexDropped(indexName) =>
           IndexDroppedHandler(pgu, ctx.truthCopyInfo, indexName)
-          ctx.copy(rebuildIndex = true)
+          ctx
         case ComputationStrategyCreated(_) => // no op
           ctx
         case ComputationStrategyRemoved(_) => // no op
