@@ -3,15 +3,15 @@ package com.socrata.pg.store
 import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.truth.loader.sql.{ChangeOwner, RepBasedPostgresSchemaLoader}
 import com.socrata.datacoordinator.truth.loader.Logger
-import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo}
+import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, IndexDirective}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.pg.store.index.{FullTextSearch, Indexable}
 import com.socrata.pg.error.{SqlErrorHandler, SqlErrorHelper, SqlErrorPattern}
 import com.typesafe.scalalogging.{Logger => SLogger}
+
 import java.sql.{Connection, PreparedStatement, Statement}
 import java.security.MessageDigest
 import java.nio.charset.StandardCharsets
-
 import com.rojoma.json.v3.ast.{JBoolean, JObject}
 import com.rojoma.json.v3.util.JsonUtil
 import com.socrata.datacoordinator.id.DatasetId
@@ -49,7 +49,7 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
     dsLogger.workingCopyCreated(copyInfo)
   }
 
-  def createFullTextSearchIndex(columnInfos: Iterable[ColumnInfo[CT]]): Unit = {
+  def createFullTextSearchIndex(columnInfos: Iterable[ColumnInfo[CT]], indexDirectives: Seq[IndexDirective[CT]]): Unit = {
     // Bit of a dance here because we only want to create the index if
     // it isn't already what it's supposed to be, and "what it's
     // supposed to be" is more complicated than for individual column
@@ -68,47 +68,50 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
     // publishing does not have all its hard work on the index thrown
     // away by the publish.
     if (columnInfos.nonEmpty) {
-      val table = tableName(columnInfos)
-      val idxname = s"idx_search_${table}"
-
-      val sql = {
-        val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
-          throw new Exception(table + " does not exist when creating search index.")))
-        fullTextSearch.searchVector(columnInfos.map(repFor).toSeq, None).flatMap { allColumnsVector =>
-          using(conn.prepareStatement(directivesSql)) { (directivesStmt) =>
-            val column = columnInfos.find(_.userColumnId.underlying == ":id")
-            val shouldCreateSearchIndex = column.map(c => shouldCreateIndex(directivesStmt, c)).getOrElse(true)
-            if (shouldCreateSearchIndex) {
-              Some(s"CREATE INDEX ${idxname} on ${table} USING GIN ($allColumnsVector) $tablespace")
-            } else {
-              None
-            }
-          }
-        }
-      }
-
-      sql match {
-        case None =>
-          dropFullTextSearchIndex(columnInfos)
-        case Some(sql) =>
-          val md = MessageDigest.getInstance("SHA-256")
-          md.update(sql.getBytes(StandardCharsets.UTF_8))
-          val tag = md.digest().iterator.map { b => "%02x".format(b & 0xff) }.mkString("")
-
-          if(indexDefinitionHasChanged(idxname, tag)) {
-            logger.info("creating fts index")
-            dropFullTextSearchIndex(columnInfos)
-            using(conn.createStatement()) { stmt =>
-              time.info("create-search-index", "table" -> table) {
-                SecondarySchemaLoader.fullTextIndexCreateSqlErrorHandler.guard(stmt) {
-                  stmt.execute(sql)
-                  // can't use a prepared statement parameter here, but the
-                  // tag is just a hex string so...
-                  stmt.execute(s"COMMENT ON INDEX $idxname is '$tag'")
-                }
+      val excludedColsInSearch = excludedColumnsInSearch(indexDirectives)
+      val searchableColumnInfos = columnInfos.filterNot(excludedColsInSearch.contains)
+      if (searchableColumnInfos.nonEmpty) {
+        val table = tableName(columnInfos)
+        val idxname = s"idx_search_${table}"
+        val sql = {
+          val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
+            throw new Exception(table + " does not exist when creating search index.")))
+          fullTextSearch.searchVector(searchableColumnInfos.map(repFor).toSeq, None).flatMap { allColumnsVector =>
+            using(conn.prepareStatement(directivesSql)) { (directivesStmt) =>
+              val column = columnInfos.find(_.userColumnId.underlying == ":id")
+              val shouldCreateSearchIndex = column.map(c => shouldCreateIndex(directivesStmt, c)).getOrElse(true)
+              if (shouldCreateSearchIndex) {
+                Some(s"CREATE INDEX ${idxname} on ${table} USING GIN ($allColumnsVector) $tablespace")
+              } else {
+                None
               }
             }
           }
+        }
+
+        sql match {
+          case None =>
+            dropFullTextSearchIndex(columnInfos)
+          case Some(sql) =>
+            val md = MessageDigest.getInstance("SHA-256")
+            md.update(sql.getBytes(StandardCharsets.UTF_8))
+            val tag = md.digest().iterator.map { b => "%02x".format(b & 0xff) }.mkString("")
+
+            if (indexDefinitionHasChanged(idxname, tag)) {
+              logger.info("creating fts index")
+              dropFullTextSearchIndex(columnInfos)
+              using(conn.createStatement()) { stmt =>
+                time.info("create-search-index", "table" -> table) {
+                  SecondarySchemaLoader.fullTextIndexCreateSqlErrorHandler.guard(stmt) {
+                    stmt.execute(sql)
+                    // can't use a prepared statement parameter here, but the
+                    // tag is just a hex string so...
+                    stmt.execute(s"COMMENT ON INDEX $idxname is '$tag'")
+                  }
+                }
+              }
+            }
+        }
       }
     }
   }
@@ -132,8 +135,8 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
     dropIndexes(columnInfos)
   }
 
-  def optimize(columnInfos: Iterable[ColumnInfo[CT]]): Unit = {
-    createFullTextSearchIndex(columnInfos)
+  def optimize(columnInfos: Iterable[ColumnInfo[CT]], indexDirectives: Seq[IndexDirective[CT]]): Unit = {
+    createFullTextSearchIndex(columnInfos, indexDirectives)
     createIndexes(columnInfos)
   }
 
@@ -226,6 +229,15 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
         defaultResult
       }
     }
+  }
+
+  private def excludedColumnsInSearch(indexDirectives: Seq[IndexDirective[CT]]): Set[ColumnInfo[CT]] = {
+    indexDirectives.filter { idxDir =>
+      idxDir.directive.get("search") match {
+        case Some(JBoolean(false)) => true
+        case _ => false
+      }
+    }.map(_.columnInfo).toSet
   }
 
   private def tableName(columnInfo: Iterable[ColumnInfo[CT]]) = columnInfo.head.copyInfo.dataTableName
