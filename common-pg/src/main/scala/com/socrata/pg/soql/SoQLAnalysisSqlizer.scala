@@ -68,7 +68,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
         analysis
       case Compound(_, _, _) =>
         val selection = OrderedMap(com.socrata.soql.environment.ColumnName("count") -> (FunctionCall(SoQLFunctions.CountStar.monomorphic.get, Seq.empty, None, None)(NoPosition, NoPosition)))
-        val countAnalysis = SoQLAnalysis[UserColumnId, SoQLType](false, false, selection, None, Seq.empty, None, Seq.empty, None, Seq.empty, None, None, None, Seq.empty)
+        val countAnalysis = SoQLAnalysis[UserColumnId, SoQLType](false, Indistinct[UserColumnId, SoQLType], selection, None, Seq.empty, None, Seq.empty, None, Seq.empty, None, None, None, Seq.empty)
         PipeQuery(analysis, Leaf(countAnalysis))
       case _ =>
         analysis
@@ -362,11 +362,12 @@ trait SoQLAnalysisSqlizer {
     // TODO: rename repMinusComplexJoinTable. name retained for continuity
     val repMinusComplexJoinTable = rep ++ repJoins
 
+    val ParametricSql(distinctOnPhrase, setParamsDistinctOn) = distinctiveness(analysis)(repMinusComplexJoinTable, typeRep, Nil, ctxSelectWithJoins, escape)
     val (selectPhrase, setParamsSelect) =
       if (reqRowCountFinal && analysis.groupBys.isEmpty && analysis.search.isEmpty) {
         (List("count(*)"), Nil)
       } else {
-        select(analysis)(repMinusComplexJoinTable, typeRep, Nil, ctxSelectWithJoins, escape)
+        select(analysis)(repMinusComplexJoinTable, typeRep, setParamsDistinctOn, ctxSelectWithJoins, escape)
       }
 
     val paramsCountInSelect = setParamsSelect.size
@@ -503,7 +504,7 @@ trait SoQLAnalysisSqlizer {
       }
 
     // COMPLETE SQL
-    val selectOptionalDistinct = "SELECT " + (if (analysis.distinct) "DISTINCT " else "")
+    val selectOptionalDistinct = "SELECT " + distinctOnPhrase.mkString("")
     val completeSql = selectPhrase.mkString(selectOptionalDistinct, ",", "") +
       from +
       joinPhrase.mkString(" ") +
@@ -669,6 +670,28 @@ trait SoQLAnalysisSqlizer {
     else { sql }
   }
 
+  private def distinctiveness(analysis: SoQLAnalysis[UserColumnId, SoQLType])
+                             (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                              typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                              setParams: Seq[SetParam],
+                              ctx: Context,
+                              escape: Escape) = {
+
+    analysis.distinct match {
+      case DistinctOn(exprs) =>
+        val (distinctSqls, distinctSetParams) = exprs.foldLeft((List.empty[String], Seq.empty[SetParam])) { (acc, coreExpr) =>
+          val (_, selectSetParams) = acc
+          val ParametricSql(sqls, newSetParams) = Sqlizer.sql(coreExpr)(rep, typeRep, selectSetParams, ctx, escape)
+          (acc._1 ++ sqls, newSetParams)
+        }
+        ParametricSql(Seq(distinctSqls.mkString("DISTINCT ON (", ",", ") ")), distinctSetParams)
+      case _: Indistinct[_, _] =>
+        ParametricSql(Seq(""), setParams)
+      case _: FullyDistinct[_, _] =>
+        ParametricSql(Seq("DISTINCT "), setParams)
+    }
+  }
+
   private def select(analysis: SoQLAnalysis[UserColumnId, SoQLType])
                     (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                      typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
@@ -680,7 +703,7 @@ trait SoQLAnalysisSqlizer {
       // Chain select handles setParams differently than others.  The current setParams are prepended
       // to existing setParams.  Others are appended.
       // That is why setParams starts with empty in foldLeft.
-      analysis.selection.foldLeft(Tuple2(Seq.empty[String], Seq.empty[SetParam])) { (acc, columnNameAndcoreExpr) =>
+      analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams /* Seq.empty[SetParam] */)) { (acc, columnNameAndcoreExpr) =>
         val (columnName, coreExpr) = columnNameAndcoreExpr
         val ctxSelect = ctx + (RootExpr -> coreExpr) + (SqlizerContext.ColumnName -> columnName.name)
         val (_, selectSetParams) = acc
@@ -696,7 +719,7 @@ trait SoQLAnalysisSqlizer {
           }
         (acc._1 ++ sqlGeomConverted, newSetParams)
       }
-    (sqls, setParamsInSelect ++ setParams)
+    (sqls, setParamsInSelect /* ++ setParams */)
   }
 
   private def shouldConvertGeomToText(ctx: Context): Boolean = {
