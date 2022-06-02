@@ -502,8 +502,9 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
       maybeLogTime("Rebuilding indexes") {
         val schema = pgu.datasetMapReader.schema(endCtx.truthCopyInfo)
         val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
+        val indexDirectives = pgu.datasetMapReader.indexDirectives(endCtx.truthCopyInfo, None)
         sLoader.createIndexes(schema.values)
-        sLoader.createFullTextSearchIndex(schema.values)
+        sLoader.createFullTextSearchIndex(schema.values, indexDirectives)
         pgu.analyzer.analyze(endCtx.truthCopyInfo)
       }
     }
@@ -662,7 +663,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     truthSchema.values.find(_.isSystemPrimaryKey).foreach { pkCol =>
       sLoader.makeSystemPrimaryKey(pkCol)
     }
-    sLoader.optimize(truthSchema.values)
+    sLoader.optimize(truthSchema.values, pgu.datasetMapReader.indexDirectives(truthCopyInfo, None))
 
     if (truthCopyInfo.lifecycleStage == TruthLifecycleStage.Unpublished &&
         secondaryCopyInfo.lifecycleStage == LifecycleStage.Published) {
