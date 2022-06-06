@@ -433,6 +433,13 @@ class SqlizerBasicTest extends SqlizerTest {
     setParams.length should be (0)
   }
 
+  test("distinct on order by") {
+    val soql = "select distinct on (primary_type, year) case_number order by primary_type, year"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("""SELECT DISTINCT ON ("t1".primary_type,"t1".year) "t1".case_number FROM t1 ORDER BY "t1".primary_type nulls last,"t1".year nulls last""")
+    setParams.length should be (0)
+  }
+
   test("row id") {
     val rep = sqlCtx(SqlizerContext.IdRep).asInstanceOf[SoQLID.StringRep]
     val rowId = 2

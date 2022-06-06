@@ -11,7 +11,7 @@ import com.socrata.pg.soql.Sqlizer
 import com.socrata.pg.soql.SqlizerContext._
 import com.socrata.soql.{Leaf, SoQLAnalyzer}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
-import com.socrata.soql.ast.{Expression, OrderBy, Select, Selection}
+import com.socrata.soql.ast.{Expression, Indistinct, OrderBy, Select, Selection}
 import com.socrata.soql.environment.TableName
 import com.socrata.soql.exceptions.NoSuchColumn
 import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLTypeInfo}
@@ -167,7 +167,7 @@ object IndexManager {
   )
 
   def toSelect(exprs: Seq[OrderBy], filter: Option[Expression]): Select = {
-    Select(distinct = false,
+    Select(distinct = Indistinct,
       selection = Selection(None, Nil, Nil),
       from = None,
       joins = Nil,
