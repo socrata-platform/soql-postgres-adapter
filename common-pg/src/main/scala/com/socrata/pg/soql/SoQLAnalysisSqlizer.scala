@@ -700,10 +700,7 @@ trait SoQLAnalysisSqlizer {
                      escape: Escape) = {
     val strictOutermostSoql = isStrictOutermostSoql(ctx)
     val (sqls, setParamsInSelect) =
-      // Chain select handles setParams differently than others.  The current setParams are prepended
-      // to existing setParams.  Others are appended.
-      // That is why setParams starts with empty in foldLeft.
-      analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams /* Seq.empty[SetParam] */)) { (acc, columnNameAndcoreExpr) =>
+      analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, columnNameAndcoreExpr) =>
         val (columnName, coreExpr) = columnNameAndcoreExpr
         val ctxSelect = ctx + (RootExpr -> coreExpr) + (SqlizerContext.ColumnName -> columnName.name)
         val (_, selectSetParams) = acc
@@ -719,7 +716,7 @@ trait SoQLAnalysisSqlizer {
           }
         (acc._1 ++ sqlGeomConverted, newSetParams)
       }
-    (sqls, setParamsInSelect /* ++ setParams */)
+    (sqls, setParamsInSelect)
   }
 
   private def shouldConvertGeomToText(ctx: Context): Boolean = {
