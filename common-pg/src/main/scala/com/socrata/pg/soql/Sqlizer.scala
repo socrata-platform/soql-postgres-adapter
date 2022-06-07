@@ -194,6 +194,7 @@ object SqlizerContext extends Enumeration {
   val LeadingSearch = Value("leading-search")
 
   val TimestampLiteral = Value("timestamp-literal")
+  val SoQLContext = Value("soql-context")
 }
 
 sealed trait CaseSensitivity

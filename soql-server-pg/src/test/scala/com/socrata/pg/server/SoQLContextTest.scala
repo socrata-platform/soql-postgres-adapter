@@ -28,7 +28,7 @@ class SoQLContextTest extends SoQLTest {
   }
 
   test("bunch of context") {
-    compareSoqlResult("select get_context('a') as a, get_context('b') as b, get_context('c') as c, get_context('d') as d, get_context('e') as e, get_context('f') as f, get_context('g') as g limit 1", "context-many.json",
+    compareSoqlResult("select get_context('a') as a, get_context('b') as b, get_context('c'||'') as c, get_context('d') as d, get_context('e') as e, get_context('f') as f, get_context('g') as g limit 1", "context-many.json",
                       context = Context(
                         system = Map("a" -> "1",
                                      "b" -> "2",
