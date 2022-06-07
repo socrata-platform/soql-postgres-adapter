@@ -430,7 +430,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                                  else { new ClearNumberRep(cryptProvider) }),
         SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
         SqlizerContext.CaseSensitivity -> caseSensitivity,
-        SqlizerContext.LeadingSearch -> leadingSearch
+        SqlizerContext.LeadingSearch -> leadingSearch,
+        SqlizerContext.SoQLContext -> context,
       )
       val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit)
 

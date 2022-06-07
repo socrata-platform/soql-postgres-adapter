@@ -4,6 +4,7 @@ import scala.util.parsing.input.NoPosition
 import com.socrata.datacoordinator.id.UserColumnId
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.soql.functions._
+import com.socrata.soql.stdlib.{Context => SoQLContext}
 import com.socrata.soql.typed._
 import com.socrata.soql.types.SoQLID.{StringRep => SoQLIDRep}
 import com.socrata.soql.types.SoQLVersion.{StringRep => SoQLVersionRep}
@@ -75,7 +76,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     LeftPad -> formatCall("lpad(%s, %s::int, %s)") _,
     RightPad -> formatCall("rpad(%s, %s::int, %s)") _,
 
-    GetContext -> formatCall("current_setting('socrata_system.' || md5(%s), true)") _,
+    GetContext -> contextCall _,
     GetParameterText -> formatCall("current_setting('socrata_text.' || md5(%s), true)") _,
     GetParameterBoolean -> formatCall("(current_setting('socrata_bool.' || md5(%s), true)::bool)") _,
     GetParameterNumber -> formatCall("(current_setting('socrata_num.' || md5(%s), true)::numeric)") _,
@@ -531,6 +532,34 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                    ctx: Sqlizer.Context,
                    escape: Escape): ParametricSql = {
     throw BadParse(s"${fn.function.name.name} is not available", fn.functionNamePosition)
+  }
+
+  def contextCall(fn: FunCall,
+                  rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                  typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                  setParams: Seq[SetParam],
+                  ctx: Sqlizer.Context,
+                  escape: Escape): ParametricSql = {
+
+    def fallback() =
+      formatCall("current_setting('socrata_system.' || md5(%s), true)")(fn, rep, typeRep, setParams, ctx, escape)
+
+    fn.parameters match {
+      case Seq(param@StringLiteral(key, SoQLText)) =>
+        ctx.get(SqlizerContext.SoQLContext) match {
+          case Some(systemCtx: SoQLContext) =>
+            systemCtx.system.get(key) match {
+              case Some(value) =>
+                StringLiteralSqlizer.sql(StringLiteral[SoQLType](value, SoQLText)(param.position))(rep, typeRep, setParams, ctx, escape)
+              case None =>
+                NullLiteralSqlizer.sql(NullLiteral[SoQLType](SoQLText)(param.position))(rep, typeRep, setParams, ctx, escape)
+            }
+          case _ =>
+            fallback()
+        }
+      case _ =>
+        fallback()
+    }
   }
 
   def formatCall(template: String, // scalastyle:ignore parameter.number
