@@ -253,6 +253,4 @@ object SecondarySchemaLoader {
   }
 
   private val directivesSql = "SELECT directive FROM index_directive_map WHERE copy_system_id =? AND column_system_id =? AND deleted_at is null limit 1"
-
-  private val pendingIndexDropSql = "INSERT INTO pending_index_drops(name) VALUES (?)"
 }
