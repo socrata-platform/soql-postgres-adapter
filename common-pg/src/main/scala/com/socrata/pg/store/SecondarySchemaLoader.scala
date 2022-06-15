@@ -143,22 +143,18 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
   protected def dropFullTextSearchIndex(columnInfos: Iterable[ColumnInfo[CT]]): Unit =
     if (columnInfos.nonEmpty) {
       val table = tableName(columnInfos)
-      using(conn.prepareStatement(pendingIndexDropSql)) { stmt =>
-        stmt.setString(1, s"idx_search_${table}")
-        stmt.executeUpdate()
+      using(conn.createStatement()) { (stmt: Statement) =>
+        stmt.execute(s"DROP INDEX IF EXISTS idx_search_${table}")
       }
     }
 
   protected def dropIndexes(columnInfos: Iterable[ColumnInfo[CT]]): Unit = {
     val table = tableName(columnInfos)
-    using(conn.prepareStatement(pendingIndexDropSql)) { stmt =>
+    using(conn.createStatement()) { stmt =>
       for {
         ci <- columnInfos
-        dbIndexName <- repFor(ci).dbIndexNames(table)
-      } {
-        stmt.setString(1, dbIndexName)
-        stmt.executeUpdate()
-      }
+        indexSql <- repFor(ci).dropIndex(table)
+      } stmt.execute(indexSql)
     }
   }
 
@@ -171,28 +167,21 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
       val tablespace = tablespaceSqlPart(tablespaceOfTable(table).getOrElse(
         throw new Exception(s"${table} does not exist when creating index.")))
       val size = columnInfos.size
-      using(conn.createStatement(), conn.prepareStatement(directivesSql),
-            conn.prepareStatement(pendingIndexDropSql)) { (stmt, directivesStmt, pendingIndexDropStmt) =>
+      using(conn.createStatement(), conn.prepareStatement(directivesSql)) { (stmt, directivesStmt) =>
         for {
           (ci, idx) <- columnInfos.zipWithIndex
           createIndexSql <- repFor(ci).createIndex(table, tablespace)
+          dropIndexSql <- repFor(ci).dropIndex(table)
         } {
           val createIndex = shouldCreateIndex(directivesStmt, ci)
-          if (createIndex) {
-            time.info("create-index",
-              "datasetId" -> ci.copyInfo.datasetInfo.systemId.underlying,
-              "columnId" -> ci.userColumnId.underlying,
-              "index" -> s"${idx}/${size}") {
-              sqlErrorHandler.guard(conn) {
-                stmt.execute(createIndexSql)
-              }
-            }
-          } else {
-            repFor(ci).dbIndexNames(table).foreach { dbIndexName =>
-              sqlErrorHandler.guard(conn) {
-                pendingIndexDropStmt.setString(1, dbIndexName)
-                pendingIndexDropStmt.executeUpdate()
-              }
+          val action = (if (createIndex) "create" else "drop") + "-index"
+          val sql = if (createIndex) createIndexSql else dropIndexSql
+          time.info(action,
+            "datasetId" -> ci.copyInfo.datasetInfo.systemId.underlying,
+            "columnId" -> ci.userColumnId.underlying,
+            "index" -> s"${idx}/${size}") {
+            sqlErrorHandler.guard(conn) {
+              stmt.execute(sql)
             }
           }
         }
@@ -264,6 +253,4 @@ object SecondarySchemaLoader {
   }
 
   private val directivesSql = "SELECT directive FROM index_directive_map WHERE copy_system_id =? AND column_system_id =? AND deleted_at is null limit 1"
-
-  private val pendingIndexDropSql = "INSERT INTO pending_index_drops(name) VALUES (?)"
 }
