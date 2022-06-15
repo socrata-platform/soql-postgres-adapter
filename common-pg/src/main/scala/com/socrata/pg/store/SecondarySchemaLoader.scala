@@ -143,22 +143,18 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
   protected def dropFullTextSearchIndex(columnInfos: Iterable[ColumnInfo[CT]]): Unit =
     if (columnInfos.nonEmpty) {
       val table = tableName(columnInfos)
-      using(conn.prepareStatement(pendingIndexDropSql)) { stmt =>
-        stmt.setString(1, s"idx_search_${table}")
-        stmt.executeUpdate()
+      using(conn.createStatement()) { (stmt: Statement) =>
+        stmt.execute(s"DROP INDEX IF EXISTS idx_search_${table}")
       }
     }
 
   protected def dropIndexes(columnInfos: Iterable[ColumnInfo[CT]]): Unit = {
     val table = tableName(columnInfos)
-    using(conn.prepareStatement(pendingIndexDropSql)) { stmt =>
+    using(conn.createStatement()) { stmt =>
       for {
         ci <- columnInfos
-        dbIndexName <- repFor(ci).dbIndexNames(table)
-      } {
-        stmt.setString(1, dbIndexName)
-        stmt.executeUpdate()
-      }
+        indexSql <- repFor(ci).dropIndex(table)
+      } stmt.execute(indexSql)
     }
   }
 
