@@ -171,6 +171,7 @@ object SqlizerContext extends Enumeration {
   val SoqlHaving = Value("having")
   val SoqlOrder = Value("order")
   val SoqlSearch = Value("search")
+  val SoqlDistinct = Value("distinct")
   // Normally geometry is converted to text when used in select.
   // But if the sql is used for table insert like rollup, we do not want geometry converted to text.
   val LeaveGeomAsIs = Value("leave-geom-as-is")
