@@ -681,7 +681,7 @@ trait SoQLAnalysisSqlizer {
       case DistinctOn(exprs) =>
         val (distinctSqls, distinctSetParams) = exprs.foldLeft((List.empty[String], Seq.empty[SetParam])) { (acc, coreExpr) =>
           val (_, selectSetParams) = acc
-          val ParametricSql(sqls, newSetParams) = Sqlizer.sql(coreExpr)(rep, typeRep, selectSetParams, ctx, escape)
+          val ParametricSql(sqls, newSetParams) = Sqlizer.sql(coreExpr)(rep, typeRep, selectSetParams, ctx + (SoqlPart -> SoqlDistinct), escape)
           (acc._1 ++ sqls, newSetParams)
         }
         ParametricSql(Seq(distinctSqls.mkString("DISTINCT ON (", ",", ") ")), distinctSetParams)

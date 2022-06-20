@@ -166,4 +166,13 @@ class SqlizerChainTest extends SqlizerTest {
     sql should be (expected(index))
     params should be(Seq(2))
   }
+
+  test("distinct on chain count") {
+    val soql = "SELECT Distinct on (case_number, 'one') case_number |> SELECT count(*)"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("""SELECT (count(*)::numeric) FROM (SELECT DISTINCT ON ("t1".case_number,?) "t1".case_number as "case_number" FROM t1) AS "x1"""")
+    setParams.length should be (1)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq("one" ))
+  }
 }
