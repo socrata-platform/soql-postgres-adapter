@@ -2,7 +2,17 @@
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
     http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
-    <changeSet author="Marc Slemko" id="20200210-add-median-function">
+    <changeSet author="Marc Slemko" id="20200210-add-median-function" runOnChange="true">
+        <preConditions onFail="MARK_RAN">
+            <!-- examples of vesion() output
+                PostgreSQL 9.6.2 on aarch64-unknown-linux-gnu, ...
+                PostgreSQL 12.10 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 7.3.1 20180712 (Red Hat 7.3.1-6), 64-bit
+                PostgreSQL 12.11 (Ubuntu 12.11-1.pgdg18.04+1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit
+                PostgreSQL 13.3 on x86_64-apple-darwin19.6.0, compiled by Apple clang version 11.0.3 (clang-1103.0.32.62), 64-bit
+            -->
+            <sqlCheck expectedResult="t">SELECT (regexp_matches(version(), 'PostgreSQL\s+([0-9]+[\.][0-9]+)\S*\s','i'))[1]::numeric &lt; 14</sqlCheck>
+        </preConditions>
+
         <sql splitStatements="false">
             -- This is the second function on https://wiki.postgresql.org/wiki/Aggregate_Median as of 2020/02/10, with
             -- the following modifications:
@@ -11,7 +21,7 @@
             --   you could end up returning a value that wasn't in the dataset especially if the source data has already
             --   been "enhanced" by misconceived floating type conversions outside the platform.
             --
-            CREATE FUNCTION _final_median_ulib_agg(anyarray) RETURNS anyelement AS $$
+            CREATE OR REPLACE FUNCTION _final_median_ulib_agg(anyarray) RETURNS anyelement AS $$
               WITH q AS
               (
                  SELECT val
@@ -32,7 +42,7 @@
               ) q2;
             $$ LANGUAGE SQL IMMUTABLE;
 
-            CREATE AGGREGATE median_ulib_agg(anyelement) (
+            CREATE OR REPLACE AGGREGATE median_ulib_agg(anyelement) (
               SFUNC=array_append,
               STYPE=anyarray,
               FINALFUNC=_final_median_ulib_agg,
@@ -41,8 +51,57 @@
         </sql>
         <rollback>
             <sql>
-                DROP AGGREGATE median_ulib_agg(anyelement);
-                DROP FUNCTION _final_median_ulib_agg(anyarray);
+                DROP AGGREGATE IF EXISTS median_ulib_agg(anyelement);
+                DROP FUNCTION IF EXISTS _final_median_ulib_agg(anyarray);
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="Chi" id="20200210-add-median-function-pg14+" runOnChange="true">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="t">SELECT (regexp_matches(version(), 'PostgreSQL\s+([0-9]+[\.][0-9]+)\S*\s','i'))[1]::numeric >= 14</sqlCheck>
+        </preConditions>
+
+        <sql splitStatements="false">
+            -- This is the second function on https://wiki.postgresql.org/wiki/Aggregate_Median as of 2020/02/10, with
+            -- the following modifications:
+            --
+            -- * Returns anyelement instead of hardcoding float8 to avoid unnecessary type conversions.  In the original
+            --   you could end up returning a value that wasn't in the dataset especially if the source data has already
+            --   been "enhanced" by misconceived floating type conversions outside the platform.
+            --
+            CREATE OR REPLACE FUNCTION _final_median_ulib_agg(anycompatiblearray) RETURNS anycompatible AS $$
+              WITH q AS
+              (
+                SELECT val
+                  FROM unnest($1) val
+                 WHERE VAL IS NOT NULL
+                 ORDER BY 1
+              ),
+              cnt AS
+              (
+                SELECT COUNT(*) AS c FROM q
+              )
+              SELECT AVG(val)
+                FROM
+                (
+                  SELECT val FROM q
+                   LIMIT  2 - MOD((SELECT c FROM cnt), 2)
+                  OFFSET GREATEST(CEIL((SELECT c FROM cnt) / 2.0) - 1,0)
+                ) q2;
+            $$ LANGUAGE SQL IMMUTABLE;
+
+            CREATE OR REPLACE AGGREGATE median_ulib_agg(anycompatible) (
+              SFUNC=array_append,
+              STYPE=anycompatiblearray,
+              FINALFUNC=_final_median_ulib_agg,
+              INITCOND='{}'
+            );
+        </sql>
+        <rollback>
+            <sql>
+                DROP AGGREGATE IF EXISTS median_ulib_agg(anycompatible);
+                DROP FUNCTION IF EXISTS _final_median_ulib_agg(anycompatiblearray);
             </sql>
         </rollback>
     </changeSet>
