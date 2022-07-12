@@ -134,7 +134,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
           var fullStmt = Option.empty[PreparedStatement]
 
           def sql(n: Int) =
-            Iterator.fill(n) { s"set_config('socrata_${tag}.' || md5(?), ?, true)" }.
+            Iterator.fill(n) { s"set_config('socrata_${tag}.a' || md5(?), ?, true)" }.
               mkString("SELECT ", ", ", "")
 
           for(group <- vars.iterator.grouped(BatchSize)) {
