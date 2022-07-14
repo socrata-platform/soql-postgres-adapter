@@ -32,7 +32,7 @@ object SoQLAnalyzerHelper {
                   idMap: Map[QualifiedColumnName, UserColumnId]): BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]] = {
 
     val ast =  new Parser().binaryTreeSelect(soql)
-    val analysis = analyzer.analyzeBinary(ast)(datasetCtx)
+    val analysis = analyzer.analyzeBinary(ast)(AnalysisContext(datasetCtx, ParameterSpec.empty))
     remapAnalyses(idMap, analysis)
   }
 

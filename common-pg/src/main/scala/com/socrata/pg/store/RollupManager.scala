@@ -14,7 +14,7 @@ import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
 import com.socrata.pg.soql._
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.store.index.SoQLIndexableRep
-import com.socrata.soql.{BinaryTree, Compound, Leaf, SoQLAnalysis, SoQLAnalyzer}
+import com.socrata.soql.{AnalysisContext, BinaryTree, Compound, Leaf, ParameterSpec, SoQLAnalysis, SoQLAnalyzer}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, DatasetContext, ResourceName, TableName}
@@ -105,11 +105,15 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
             val schema: OrderedMap[ColumnName, SoQLType] =
               OrderedMap(dsSchema.values.map(x => (columnIdToPrefixNameMap(x.userColumnId), x.typ)).toSeq.sortBy(_._1): _*)
           })
-          val prefixedDsContext = tableNames.foldLeft(prefixedDsContext0) { (acc, tableName) =>
+          val prefixedDsSchemas = tableNames.foldLeft(prefixedDsContext0) { (acc, tableName) =>
             val resourceName = ResourceName(tableName)
             val dsctx = getDsContext(resourceName)
             acc + (tableName -> dsctx)
           }
+          val prefixedDsContext = AnalysisContext[SoQLType, SoQLValue](
+            prefixedDsSchemas,
+            ParameterSpec.empty
+          )
           analyzer.analyzeBinary(selects)(prefixedDsContext)
         }
 

@@ -166,7 +166,7 @@ class PostgresUniverseCommon(val tablespace: String => Option[String],
 
   def generateObfuscationKey(): Array[Byte] = CryptProvider.generateKey()
 
-  def soqlAnalyzer: SoQLAnalyzer[SoQLType] = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
+  def soqlAnalyzer: SoQLAnalyzer[SoQLType, SoQLValue] = new SoQLAnalyzer(SoQLTypeInfo, SoQLFunctionInfo)
 
   val executor: ExecutorService = Executors.newCachedThreadPool()
   val obfuscationKeyGenerator: () => Array[Byte] = generateObfuscationKey
