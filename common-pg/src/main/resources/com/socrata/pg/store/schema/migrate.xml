@@ -30,4 +30,5 @@
     <include file="com/socrata/pg/store/schema/20220208-add-data-shape-version.xml"/>
     <include file="com/socrata/pg/store/schema/20220218-add-rollup-table-name.xml"/>
     <include file="com/socrata/pg/store/schema/20220502-create-index-map.xml"/>
+    <include file="com/socrata/pg/store/schema/20220718-create-dummy-resync-table.xml"/>
 </databaseChangeLog>
