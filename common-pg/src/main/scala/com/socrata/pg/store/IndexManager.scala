@@ -9,7 +9,7 @@ import com.socrata.pg.query.QueryResult.QueryRuntimeError
 import com.socrata.pg.query.QueryServerHelper.readerWithQuery
 import com.socrata.pg.soql.Sqlizer
 import com.socrata.pg.soql.SqlizerContext._
-import com.socrata.soql.{Leaf, SoQLAnalyzer}
+import com.socrata.soql.{AnalysisContext, Leaf, ParameterSpec, SoQLAnalyzer}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
 import com.socrata.soql.ast.{Expression, Indistinct, OrderBy, Select, Selection}
 import com.socrata.soql.environment.TableName
@@ -57,7 +57,10 @@ class IndexManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Copy
     val filter = index.filter.map(parser.expression)
     val dsSchema = getDsSchema(copyInfo)
     val idxName = dbIndexName(index)
-    val analyszContext = Map(TableName.PrimaryTable.qualifier -> toDatasetContext(dsSchema.values))
+    val analyszContext = AnalysisContext[SoQLType, SoQLValue](
+      Map(TableName.PrimaryTable.qualifier -> toDatasetContext(dsSchema.values)),
+      ParameterSpec.empty
+    )
     val select = toSelect(exprs, filter)
     val analysis = analyzer.analyzeWithSelection(select)(analyszContext)
     val cnToCidMap = columnNameToColumnIdMap(dsSchema.values)

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+    <changeSet author="robertm" id="20220718-create-resync">
+        <!-- This table exists just to keep the pgdatasetmap stuff from data-coordinator happy -->
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="resync"/></not>
+        </preConditions>
+        <createTable tableName="resync">
+            <column name="dataset_system_id" type="bigint" />
+        </createTable>
+    </changeSet>
+</databaseChangeLog>
