@@ -26,4 +26,13 @@
         </createTable>
     </changeSet>
 
+    <changeSet author="chi" id="20220721-add-secondary-manifest-cookie-column">
+        <!-- fake cookie column to keep SqlTableCleanup.cleanupDeleteds happy -->
+        <preConditions onFail="MARK_RAN">
+            <not><columnExists tableName="secondary_manifest" columnName="cookie"/></not>
+        </preConditions>
+        <addColumn tableName="secondary_manifest">
+            <column name="cookie" type="text"/>
+        </addColumn>
+    </changeSet>
 </databaseChangeLog>
