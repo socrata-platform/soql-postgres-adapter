@@ -15,24 +15,15 @@
         </createTable>
     </changeSet>
 
-    <changeSet author="robertm" id="20191224-add-secondary-manifest-table">
+    <changeSet author="robertm" id="20191224-add-secondary-manifest-table" runOnChange="true">
       <!-- this is a fake secondary_manifest table to keep SqlTableCleanup.cleanupDeleteds happy -->
-        <preConditions onFail="MARK_RAN">
-            <not><tableExists tableName="secondary_manifest"/></not>
-        </preConditions>
+        <sql>
+            DROP TABLE IF EXISTS secondary_manifest
+        </sql>
 
         <createTable tableName="secondary_manifest">
             <column name="dataset_system_id" type="BIGINT"/>
+            <column name="went_out_of_sync_at" type="TIMESTAMP WITH TIME ZONE"/>
         </createTable>
-    </changeSet>
-
-    <changeSet author="chi" id="20220721-add-secondary-manifest-cookie-column">
-        <!-- fake cookie column to keep SqlTableCleanup.cleanupDeleteds happy -->
-        <preConditions onFail="MARK_RAN">
-            <not><columnExists tableName="secondary_manifest" columnName="cookie"/></not>
-        </preConditions>
-        <addColumn tableName="secondary_manifest">
-            <column name="cookie" type="text"/>
-        </addColumn>
     </changeSet>
 </databaseChangeLog>
