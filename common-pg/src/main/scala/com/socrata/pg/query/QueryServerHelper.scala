@@ -8,7 +8,7 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.soql.{CaseSensitivity, ParametricSql, QualifiedUserColumnId, Sqlizer, SqlizerContext}
-import com.socrata.pg.store.{PGSecondaryRowReader, PGSecondaryUniverse, SchemaUtil, SqlUtils}
+import com.socrata.pg.store.{PGSecondaryRowReader, PGSecondaryUniverse, PostgresUniverseCommon, SchemaUtil, SqlUtils}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, ResourceName, TableName}
 import com.socrata.soql.{BinaryTree, SoQLAnalysis, typed}
@@ -52,9 +52,7 @@ object QueryServerHelper {
       val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
       val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
       val sqlReps = querier.getSqlReps(readCtx.copyInfo.dataTableName, systemToUserColumnMap)
-
-      // TODO: rethink how reps should be constructed and passed into each chained soql.
-      val typeReps = getTypeReps(pgu)
+      val typeReps = QueryServerHelper.typeReps
 
       // rollups will cause querier's dataTableName to be different than the normal dataset tablename
       val tableName = querier.sqlizer.dataTableName
@@ -214,15 +212,15 @@ object QueryServerHelper {
     }
   }
 
-  def getTypeReps(pgu: PGSecondaryUniverse[SoQLType, SoQLValue]): Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]] = {
+  val typeReps: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]] = {
     // build fake columnInfo where most properties values do not matter except type
     val cid = new ColumnId(0)
     val datasetInfo = DatasetInfo(DatasetId.Invalid, 0, 0, "", Array.empty[Byte], None)(null)
     val copyInfo = CopyInfo(datasetInfo, CopyId.Invalid, 0, LifecycleStage.Published, 0, 0, new DateTime(0), None)(null)
-    SoQLType.typePreferences.foldLeft(Map.empty[pgu.CT, SqlColumnRep[SoQLType, SoQLValue]]) { (map, entry) =>
+    SoQLType.typePreferences.foldLeft(Map.empty[SoQLType, SqlColumnRep[SoQLType, SoQLValue]]) { (map, entry) =>
       entry match {
         case soqlType =>
-          val cinfo = new ColumnInfo[pgu.CT](
+          val cinfo = new ColumnInfo[SoQLType](
             copyInfo,
             cid,
             new UserColumnId(soqlType.name.caseFolded),
@@ -235,7 +233,7 @@ object QueryServerHelper {
             None, // computation strategy we aren't actually storing...
             Seq.empty
           )(SoQLTypeContext.typeNamespace, null) // scalastyle:ignore null
-          map + (soqlType -> pgu.commonSupport.repFor(cinfo))
+          map + (soqlType -> PostgresUniverseCommon.repFor(cinfo))
       }
     }
   }
