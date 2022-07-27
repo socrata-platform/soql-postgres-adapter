@@ -8,7 +8,7 @@ import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.soql.{CaseSensitivity, ParametricSql, QualifiedUserColumnId, Sqlizer, SqlizerContext}
-import com.socrata.pg.store.{PGSecondaryRowReader, PGSecondaryUniverse, PostgresUniverseCommon, SchemaUtil, SqlUtils}
+import com.socrata.pg.store.{LocalRollupInfo, PGSecondaryRowReader, PGSecondaryUniverse, PostgresUniverseCommon, SchemaUtil, SqlUtils}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, ResourceName, TableName}
 import com.socrata.soql.{BinaryTree, SoQLAnalysis, typed}
@@ -57,8 +57,10 @@ object QueryServerHelper {
       // rollups will cause querier's dataTableName to be different than the normal dataset tablename
       val tableName = querier.sqlizer.dataTableName
       val copyInfo = readCtx.copyInfo
-      val joinCopiesMap = getJoinCopies(pgu, analyses, reqCopy) ++ copyInfo.datasetInfo.resourceName.map(rn => Map(TableName(rn) -> copyInfo)).getOrElse(Map.empty)
 
+      val relatedTableNames = removeTableAlias(collectRelatedTableNames(analyses))
+      val (relatedCopyMap, _relatedRollupMap) = getCopyAndRollupMaps(pgu, relatedTableNames, reqCopy)
+      val joinCopiesMap = relatedCopyMap ++ copyInfo.datasetInfo.resourceName.map(rn => Map(TableName(rn) -> copyInfo)).getOrElse(Map.empty)
       val sqlRepsWithJoin = joinCopiesMap.foldLeft(sqlReps) { (acc, joinCopy) =>
         val (tableName, copyInfo) = joinCopy
         acc ++ getJoinReps(pgu, copyInfo, tableName)
@@ -71,7 +73,7 @@ object QueryServerHelper {
           Map.empty
       }
 
-      val tableNameMap = getDatasetTablenameMap(joinCopiesMap) ++ thisTableNameMap +
+      val tableNameMap = mapCopyToTablename(joinCopiesMap) ++ thisTableNameMap +
         (TableName.PrimaryTable -> tableName) + (TableName(tableName) -> tableName)
       Sqlizer.sql((analyses, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
     }
@@ -105,23 +107,44 @@ object QueryServerHelper {
     ) with RowReaderQuerier[SoQLType, SoQLValue]
   }
 
-  def getJoinCopies(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                    analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]],
-                    reqCopy: Option[String]): Map[TableName, CopyInfo] = {
+  def collectRelatedTableNames(analyses: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]]): Seq[TableName] = {
     val joins = typed.Join.expandJoins(analyses.seq)
     val froms = analyses.seq.flatMap(x => x.from.toSeq)
-    val joinTables = joins.flatMap(x => x.from.fromTables) ++ froms
-    val joinTableMap = joinTables.flatMap { resourceName =>
-      getCopy(pgu, new ResourceName(resourceName.name), reqCopy).map(copy => (resourceName, copy))
-    }.toMap
+    joins.flatMap(x => x.from.fromTables) ++ froms
+  }
 
-    val allMap = joinTableMap
-    val allMapNoAliases = allMap.map {
-      case (tableName, copy) =>
-        (tableName.copy(alias = None), copy)
+  def removeTableAlias(tableNames: Seq[TableName]): Seq[TableName] = {
+    tableNames.map(_.copy(alias = None))
+  }
+
+  def getCopyAndRollupMaps(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+                           tableNames: Seq[TableName],
+                           reqCopy: Option[String]):
+      (Map[TableName, CopyInfo], Map[TableName, LocalRollupInfo]) = {
+    val rollupRx = "(_.{4}-.{4})\\.(.+)".r
+    tableNames.foldLeft((Map.empty[TableName, CopyInfo], Map.empty[TableName, LocalRollupInfo])) { (acc, tableName) =>
+      tableName.name match {
+        case rollupRx(resourceName, rollupName) =>
+          val ruOpt = for {
+            datasetInfo <- pgu.datasetMapReader.datasetInfoByResourceName(ResourceName(resourceName))
+            copyInfo <- pgu.datasetMapReader.lookup(datasetInfo, LifecycleStage.Published)
+            rollupInfo <- pgu.datasetMapReader.rollup(copyInfo, new RollupName(rollupName))
+          } yield { rollupInfo }
+          ruOpt match {
+            case Some(ru) =>
+              (acc._1, acc._2 + (tableName -> ru))
+            case _ =>
+              acc
+          }
+        case name =>
+          getCopy(pgu, new ResourceName(name), reqCopy) match {
+            case Some(copy) =>
+              (acc._1 + (tableName -> copy), acc._2)
+            case _ =>
+              acc
+          }
+      }
     }
-
-    allMapNoAliases
   }
 
   def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], ds: String, reqCopy: Option[String]): Option[CopyInfo] = {
@@ -158,10 +181,12 @@ object QueryServerHelper {
     }
   }
 
-  def getDatasetTablenameMap(copies: Map[TableName, CopyInfo]): Map[TableName, String] = {
-    copies.mapValues { copy =>
-      copy.dataTableName
-    }
+  def mapCopyToTablename(copies: Map[TableName, CopyInfo]): Map[TableName, String] = {
+    copies.mapValues(_.dataTableName)
+  }
+
+  def mapRollupToTablename(map: Map[TableName, LocalRollupInfo]): Map[TableName, String] = {
+    map.mapValues(_.tableName)
   }
 
   def getJoinReps(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],

@@ -6,6 +6,7 @@ import com.socrata.datacoordinator.id.ColumnId
 import com.socrata.datacoordinator.truth.metadata.ColumnInfo
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.http.server.util.EntityTag
+import com.socrata.pg.store.LocalRollupInfo
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import org.joda.time.DateTime
@@ -49,7 +50,8 @@ object QueryResult {
                      dataVersion: Long,
                      results: Managed[CloseableIterator[Row[SoQLValue]] with RowCount],
                      etag: EntityTag,
-                     lastModified: DateTime
+                     lastModified: DateTime,
+                     rollups: Seq[LocalRollupInfo]
                     ) extends QueryResult
   case class InfoSuccess(copyNumber: Long,
                          dataVersion: Long,

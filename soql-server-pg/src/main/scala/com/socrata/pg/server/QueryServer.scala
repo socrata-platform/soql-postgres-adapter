@@ -349,14 +349,14 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                 case NotModified(etags) => notModified(etags)(resp)
                 case PreconditionFailed => responses.PreconditionFailed(resp)
                 case RequestTimedOut(timeout) => requestTimeout(timeout)(resp)
-                case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified) =>
+                case Success(qrySchema, copyNumber, dataVersion, results, etag, lastModified, rollups) =>
                   // Very weird separation of concerns between execQuery and streaming. Most likely we will
                   // want yet-another-refactoring where much of execQuery is lifted out into this function.
                   // This will significantly change the tests; however.
                   if(debug) logger.info(s"Returning etag: ${etag.asBytes.mkString(",")}")
                   ETag(etag)(resp)
                   copyInfoHeaderForRows(copyNumber, dataVersion, lastModified)(resp)
-                  rollupName.foreach(r => Header("X-SODA2-Rollup", r.underlying)(resp))
+                  writeRollupHeader("X-SODA2-Rollup", rollupName, rollups)(resp)
                   results.run { r =>
                     CJSONWriter.writeCJson(datasetInfo, qrySchema,
                       r, reqRowCount, r.rowCount, dataVersion, lastModified, obfuscateId)(resp)
@@ -381,11 +381,20 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     }
   }
 
+  private def writeRollupHeader(header: String, ru: Option[RollupName], rus: Seq[RollupInfo])(resp: HttpServletResponse): Unit = {
+    val combined = ru.toSeq.map(_.underlying) ++
+      rus.map(ru => s"${(new TableName(ru.copyInfo.datasetInfo.resourceName.get)).nameWithoutPrefix}.${ru.name.underlying}")
+    if (combined.nonEmpty) {
+      Header(header, combined.mkString(","))(resp)
+    }
+  }
+
   trait QueryResultBall
   case class RowsQueryResult(
     querySchema: OrderedMap[ColumnId, ColumnInfo[SoQLType]],
     dataVersion: Long,
-    rows: Managed[CloseableIterator[Row[SoQLValue]] with RowCount]
+    rows: Managed[CloseableIterator[Row[SoQLValue]] with RowCount],
+    rollups: Seq[LocalRollupInfo]
   ) extends QueryResultBall
   case class InfoQueryResult(
     dataVersion: Long,
@@ -449,9 +458,15 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
         // rollups will cause querier's dataTableName to be different than the normal dataset tablename
         val tableName = querier.sqlizer.dataTableName
         val copyInfo = readCtx.copyInfo
-        val joinCopiesMap = getJoinCopies(pgu, analysis, reqCopy) ++ copyInfo.datasetInfo.resourceName.map(rn => Map(TableName(rn) -> copyInfo)).getOrElse(Map.empty)
 
-        val sqlRepsWithJoin = joinCopiesMap.foldLeft(sqlReps) { (acc, joinCopy) =>
+        // There are two kinds of related table entries -
+        // 1. regular tablename contains dataset_map.resource_name
+        // 2. rollup tablename contains dataset_map.resource_name + "." + rollup_map.name
+        val relatedTableNames = removeTableAlias(collectRelatedTableNames(analysis))
+        val (relatedCopyMap, relatedRollupMap) = getCopyAndRollupMaps(pgu, relatedTableNames, reqCopy)
+        val joinCopiesMap = relatedCopyMap ++ copyInfo.datasetInfo.resourceName.map(rn => Map(TableName(rn) -> copyInfo)).getOrElse(Map.empty)
+
+        val sqlRepsWithJoin = relatedCopyMap.foldLeft(sqlReps) { (acc, joinCopy) =>
           val (tableName, copyInfo) = joinCopy
           acc ++ getJoinReps(pgu, copyInfo, tableName)
         }
@@ -468,7 +483,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
             context,
             analyses,
             (as: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]]) => {
-              val tableNameMap = getDatasetTablenameMap(joinCopiesMap) + (TableName.PrimaryTable -> tableName)
+              val tableNameMap = mapCopyToTablename(joinCopiesMap) ++ mapRollupToTablename(relatedRollupMap) + (TableName.PrimaryTable -> tableName)
               Sqlizer.sql((as, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
             },
             queryTimeout,
@@ -481,12 +496,12 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
             context,
             analyses,
             (as: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]]) => {
-              val tableNameMap = getDatasetTablenameMap(joinCopiesMap) ++ thisTableNameMap +
+              val tableNameMap = mapCopyToTablename(joinCopiesMap) ++ mapRollupToTablename(relatedRollupMap) ++ thisTableNameMap +
               (TableName.PrimaryTable -> tableName) + (TableName(tableName) -> tableName)
               Sqlizer.sql((as, tableNameMap, sqlReps.values.toSeq))(sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
             },
             (as: BinaryTree[SoQLAnalysis[UserColumnId, SoQLType]]) => {
-              val tableNameMap = getDatasetTablenameMap(joinCopiesMap) ++ thisTableNameMap + (TableName.PrimaryTable -> tableName) + (TableName(tableName) -> tableName)
+              val tableNameMap = mapCopyToTablename(joinCopiesMap) ++ mapRollupToTablename(relatedRollupMap) ++ thisTableNameMap + (TableName.PrimaryTable -> tableName) + (TableName(tableName) -> tableName)
               BinarySoQLAnalysisSqlizer.rowCountSql((as, tableNameMap, sqlReps.values.toSeq))(
                 sqlRepsWithJoin, typeReps, Seq.empty, sqlCtx, escape)
             },
@@ -495,7 +510,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
             queryTimeout,
             debug)
 
-          RowsQueryResult(qrySchema, latestCopy.dataVersion, results)
+          RowsQueryResult(qrySchema, latestCopy.dataVersion, results, relatedRollupMap.values.toSeq)
         }
       }
     }
@@ -524,8 +539,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
             val qto = queryTimeout.map(_.minus(httpQueryTimeoutDelta)) // can go negative which is handled by downstream function
             try {
               runQuery(pgu, context, copy, analysis, rowCount, qto, explain, analyze) match {
-                case RowsQueryResult(qrySchema, version, results) =>
-                  Success(qrySchema, copy.copyNumber, version, results, etag, lastModified)
+                case RowsQueryResult(qrySchema, version, results, rollups) =>
+                  Success(qrySchema, copy.copyNumber, version, results, etag, lastModified, rollups)
                 case InfoQueryResult(dataVersion, explainInfo) =>
                   InfoSuccess(copy.copyNumber, dataVersion, explainInfo)
               }
