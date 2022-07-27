@@ -446,12 +446,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
         val sqlReps = querier.getSqlReps(readCtx.copyInfo.dataTableName, systemToUserColumnMap)
 
         // TODO: rethink how reps should be constructed and passed into each chained soql.
-        val typeReps = analyses.seq.flatMap { analysis =>
-          val qrySchema = querySchema(pgu, analysis, latestCopy)
-          qrySchema.map { case (columnId, columnInfo) =>
-            columnInfo.typ -> pgu.commonSupport.repFor(columnInfo)
-          }
-        }.toMap
+        val typeReps = getTypeReps(pgu)
 
         // rollups will cause querier's dataTableName to be different than the normal dataset tablename
         val tableName = querier.sqlizer.dataTableName
