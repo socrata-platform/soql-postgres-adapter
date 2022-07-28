@@ -1,14 +1,14 @@
 package com.socrata.pg.query
 
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
-import com.socrata.datacoordinator.id.{ColumnId, RollupName, UserColumnId}
+import com.socrata.datacoordinator.id.{ColumnId, CopyId, DatasetId, RollupName, UserColumnId}
 import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
-import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, DatasetCopyContext, DatasetInfo}
+import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, DatasetCopyContext, DatasetInfo, LifecycleStage}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.soql.{CaseSensitivity, ParametricSql, QualifiedUserColumnId, Sqlizer, SqlizerContext}
-import com.socrata.pg.store.{PGSecondaryRowReader, PGSecondaryUniverse, SchemaUtil, SqlUtils}
+import com.socrata.pg.store.{PGSecondaryRowReader, PGSecondaryUniverse, PostgresUniverseCommon, SchemaUtil, SqlUtils}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, ResourceName, TableName}
 import com.socrata.soql.{BinaryTree, SoQLAnalysis, typed}
@@ -16,6 +16,7 @@ import com.socrata.soql.typed.CoreExpr
 import com.socrata.soql.types.SoQLID.ClearNumberRep
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion}
+import org.joda.time.DateTime
 
 import java.sql.Connection
 
@@ -51,14 +52,7 @@ object QueryServerHelper {
       val systemToUserColumnMap = SchemaUtil.systemToUserColumnMap(readCtx.schema)
       val querier = this.readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, rollupName)
       val sqlReps = querier.getSqlReps(readCtx.copyInfo.dataTableName, systemToUserColumnMap)
-
-      // TODO: rethink how reps should be constructed and passed into each chained soql.
-      val typeReps = analyses.seq.flatMap { analysis =>
-        val qrySchema = querySchema(pgu, analysis, copy)
-        qrySchema.map { case (columnId, columnInfo) =>
-          columnInfo.typ -> pgu.commonSupport.repFor(columnInfo)
-        }
-      }.toMap
+      val typeReps = QueryServerHelper.typeReps
 
       // rollups will cause querier's dataTableName to be different than the normal dataset tablename
       val tableName = querier.sqlizer.dataTableName
@@ -214,6 +208,32 @@ object QueryServerHelper {
             Seq.empty
           )(SoQLTypeContext.typeNamespace, null) // scalastyle:ignore null
           map + (cid -> cinfo)
+      }
+    }
+  }
+
+  val typeReps: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]] = {
+    // build fake columnInfo where most properties values do not matter except type
+    val cid = new ColumnId(0)
+    val datasetInfo = DatasetInfo(DatasetId.Invalid, 0, 0, "", Array.empty[Byte], None)(null)
+    val copyInfo = CopyInfo(datasetInfo, CopyId.Invalid, 0, LifecycleStage.Published, 0, 0, new DateTime(0), None)(null)
+    SoQLType.typePreferences.foldLeft(Map.empty[SoQLType, SqlColumnRep[SoQLType, SoQLValue]]) { (map, entry) =>
+      entry match {
+        case soqlType =>
+          val cinfo = new ColumnInfo[SoQLType](
+            copyInfo,
+            cid,
+            new UserColumnId(soqlType.name.caseFolded),
+            None, // field name
+            soqlType.t,
+            soqlType.name.caseFolded,
+            false, // isSystemPrimaryKey
+            false, // isUserPrimaryKey
+            false, // isVersion
+            None, // computation strategy we aren't actually storing...
+            Seq.empty
+          )(SoQLTypeContext.typeNamespace, null) // scalastyle:ignore null
+          map + (soqlType -> PostgresUniverseCommon.repFor(cinfo))
       }
     }
   }
