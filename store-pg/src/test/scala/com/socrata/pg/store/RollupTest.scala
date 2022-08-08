@@ -82,24 +82,24 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
     }
   }
 
-  test("invalid soql shouldn't throw exception") {
-    withPgu() { pgu =>
-      val secondary = new PGSecondary(config)
-      secondary.shutdown()
-      val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
-      val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
-      val dsName = s"$dcInstance.${truthDatasetId.underlying}"
-      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"),
-        "select I am a monkey GROUP BY monkeyland", Some("select"))
-
-      val rm = new RollupManager(pgu, copyInfo)
-      rm.updateRollup(rollupInfo, None, Function.const(false))
-
-      val tableName = rollupInfo.tableName
-      jdbcColumnCount(pgu.conn, tableName) should be (0)
-      secondary.shutdown()
-    }
-  }
+//  test("invalid soql shouldn't throw exception") {
+//    withPgu() { pgu =>
+//      val secondary = new PGSecondary(config)
+//      secondary.shutdown()
+//      val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
+//      val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
+//      val dsName = s"$dcInstance.${truthDatasetId.underlying}"
+//      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"),
+//        "select I am a monkey GROUP BY monkeyland", Some("select"))
+//
+//      val rm = new RollupManager(pgu, copyInfo)
+//      rm.updateRollup(rollupInfo, None, Function.const(false))
+//
+//      val tableName = rollupInfo.tableName
+//      jdbcColumnCount(pgu.conn, tableName) should be (0)
+//      secondary.shutdown()
+//    }
+//  }
 
   test("rollup is copied from first to second copy") {
     withPgu() { pgu =>
