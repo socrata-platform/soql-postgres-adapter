@@ -1,5 +1,5 @@
 [
-{ c: "create", user: "test", resource: "_abcd-xxxx"},
+{ c: "create", user: "test"},
 { c: "add column", id: "code", type: "text", field_name: "code"},
 { c: "add column", id: "make", type: "text", field_name: "make" },
 { c: "add column", id: "name", type: "text", field_name: "name" },
