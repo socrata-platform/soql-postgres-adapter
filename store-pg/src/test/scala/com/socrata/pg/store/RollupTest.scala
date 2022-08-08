@@ -19,7 +19,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
   override def beforeAll: Unit = {
     createDatabases()
     withDb() { conn =>
-      importDataset(conn)
+      importDataset(conn, "mutate-create-with-resource.json")
     }
   }
 
@@ -316,13 +316,18 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       jdbcRowCount(pgu.conn,tableName) should be (18)
 
       // test getCopyAndRollupMaps
-//      val regularTableName = TableName(datasetInfo.resourceName.get)
-//      val rollupTableName = TableName(s"${datasetInfo.resourceName.get}.${rollupInfo.name.underlying}")
-//      val (copyMap, rollupMap) = QueryServerHelper.getCopyAndRollupMaps(pgu,Seq(regularTableName, rollupTableName, PrimaryTable), None)
-//      copyMap(regularTableName) should be(copyInfo)
-//      rollupMap(rollupTableName) should be (rollupInfo)
-//      copyMap.size should be (1)
-//      rollupMap.size should be (1)
+      val regularTableName = TableName(datasetInfo.resourceName.get)
+      val rollupTableName = TableName(s"${datasetInfo.resourceName.get}.${rollupInfo.name.underlying}")
+      val (copyMap, rollupMap) = QueryServerHelper.getCopyAndRollupMaps(pgu,Seq(regularTableName, rollupTableName, PrimaryTable), None)
+      println("HERE " + copyMap.size.toString + ":" + rollupMap.size.toString)
+      println(copyMap(regularTableName))
+      println(copyInfo)
+      println(rollupMap(rollupTableName))
+      println(rollupInfo)
+      copyMap(regularTableName) should be (copyInfo)
+      rollupMap(rollupTableName) should be (rollupInfo)
+      copyMap.size should be (1)
+      rollupMap.size should be (1)
 
       secondary.shutdown()
     }
