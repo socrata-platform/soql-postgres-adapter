@@ -23,7 +23,7 @@ import java.sql.Connection
 object QueryServerHelper {
 
   // rollup tablename example: _abcd-yyyy.rollupname
-  private val rollupRx = "(_.{4}-.{4})\\.(.+)".r
+  private val rollupTablenameRx = "(_.{4}-.{4})\\.(.+)".r
 
   /**
    * TODO: Refactor QueryServer.runQuery to use this function
@@ -126,7 +126,7 @@ object QueryServerHelper {
       (Map[TableName, CopyInfo], Map[TableName, LocalRollupInfo]) = {
     tableNames.foldLeft((Map.empty[TableName, CopyInfo], Map.empty[TableName, LocalRollupInfo])) { (acc, tableName) =>
       tableName.name match {
-        case rollupRx(resourceName, rollupName) =>
+        case rollupTablenameRx(resourceName, rollupName) =>
           val ruOpt = for {
             datasetInfo <- pgu.datasetMapReader.datasetInfoByResourceName(ResourceName(resourceName))
             copyInfo <- pgu.datasetMapReader.lookup(datasetInfo, LifecycleStage.Published)
