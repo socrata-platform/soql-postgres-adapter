@@ -148,10 +148,11 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
     }
   }
 
-  def insertLocalRollupQuery = "INSERT INTO rollup_map (name, copy_system_id, soql, table_name) VALUES (?, ?, ?, ?)"
-  def updateLocalRollupQuery = "UPDATE rollup_map SET soql = ?, table_name = ? WHERE name = ? AND copy_system_id = ?"
+  def insertLocalRollupQuery = "INSERT INTO rollup_map (name, copy_system_id, soql, table_name) VALUES (?, ?, ?, ?) returning system_id"
+  def updateLocalRollupQuery = "UPDATE rollup_map SET soql = ?, table_name = ? WHERE name = ? AND copy_system_id = ? returning system_id"
   override def createOrUpdateRollup(copyInfo: CopyInfo, name: RollupName, soql: String, rawSoql: Option[String]): LocalRollupInfo = {
     val tableName = LocalRollupInfo.tableName(copyInfo, name)
+    var system_id = -1L
     rollup(copyInfo, name) match {
       case Some(_) =>
         using(conn.prepareStatement(updateLocalRollupQuery)) { stmt =>
@@ -159,7 +160,13 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
           stmt.setString(2, tableName)
           stmt.setString(3, name.underlying)
           stmt.setLong(4, copyInfo.systemId.underlying)
-          t("create-or-update-rollup", "action" -> "update", "copy-id" -> copyInfo.systemId, "name" -> name)(stmt.executeUpdate())
+          t("create-or-update-rollup", "action" -> "update", "copy-id" -> copyInfo.systemId, "name" -> name)(
+            using(stmt.executeQuery()){resultSet =>
+              if(resultSet.next()){
+                system_id = resultSet.getLong("system_id")
+              }
+            }
+          )
         }
       case None =>
         using(conn.prepareStatement(insertLocalRollupQuery)) { stmt =>
@@ -167,10 +174,46 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
           stmt.setLong(2, copyInfo.systemId.underlying)
           stmt.setString(3, soql)
           stmt.setString(4, tableName)
-          t("create-or-update-rollup", "action" -> "insert", "copy-id" -> copyInfo.systemId, "name" -> name)(stmt.executeUpdate())
+          t("create-or-update-rollup", "action" -> "insert", "copy-id" -> copyInfo.systemId, "name" -> name)(
+            using(stmt.executeQuery()){resultSet =>
+              if(resultSet.next()){
+                system_id = resultSet.getLong("system_id")
+              }
+            }
+          )
         }
     }
-    new LocalRollupInfo(copyInfo, name, soql, tableName)
+    new LocalRollupInfo(copyInfo, name, soql, tableName,system_id)
+  }
+  def createRollupRelationship = "insert into rollup_relationship_map (rollup_system_id, referenced_copy_system_id) values (?,?) on conflict do nothing"
+  def createRollupRelationship(rollupInfo: LocalRollupInfo, relatedCopyInfo: CopyInfo): Unit ={
+    using(conn.prepareStatement(createRollupRelationship)) { stmt =>
+      stmt.setLong(1, rollupInfo.systemId)
+      stmt.setLong(2, relatedCopyInfo.systemId.underlying)
+      t("create-rollup-relationship", "rollupInfo" -> rollupInfo.systemId, "referencedCopyId" -> relatedCopyInfo.systemId.underlying)(
+        stmt.executeUpdate()
+      )
+    }
+  }
+
+  def deleteRollupRelationshipsRollupQuery = "delete from rollup_relationship_map where rollup_system_id = ?"
+  def deleteRollupRelationships(rollupInfo: LocalRollupInfo): Unit ={
+    using(conn.prepareStatement(deleteRollupRelationshipsRollupQuery)) { stmt =>
+      stmt.setLong(1, rollupInfo.systemId)
+      t("delete-rollup-relationship", "rollupInfo" -> rollupInfo.systemId)(
+        stmt.executeUpdate()
+      )
+    }
+  }
+
+  def deleteRollupRelationshipsCopyQuery = "delete from rollup_relationship_map where referenced_copy_system_id = ?"
+  def deleteRollupRelationships(copyInfo: CopyInfo): Unit ={
+    using(conn.prepareStatement(deleteRollupRelationshipsCopyQuery)) { stmt =>
+      stmt.setLong(1, copyInfo.systemId.underlying)
+      t("delete-rollup-relationship", "copyInfo" -> copyInfo.systemId)(
+        stmt.executeUpdate()
+      )
+    }
   }
 
   def transferLocalRollupsQuery = "UPDATE rollup_map SET copy_system_id = ? WHERE copy_system_id = ? and name = ?"
@@ -201,6 +244,7 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
   }
 
   def dropRollup(ri: LocalRollupInfo) {
+    deleteRollupRelationships(ri)
     dropRollup(ri.copyInfo, Some(ri.name))
   }
 }

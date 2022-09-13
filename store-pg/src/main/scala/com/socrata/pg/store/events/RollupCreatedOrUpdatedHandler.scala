@@ -3,8 +3,11 @@ package com.socrata.pg.store.events
 import com.socrata.datacoordinator.id.RollupName
 import com.socrata.datacoordinator.secondary.{RollupInfo => SecRollupInfo}
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
-import com.socrata.pg.store.PGSecondaryUniverse
+import com.socrata.pg.store.RollupManager.parseAndCollectTableNames
+import com.socrata.pg.store.{LocalRollupInfo, PGSecondary, PGSecondaryUniverse, RollupManager}
+import com.socrata.soql.environment.ResourceName
 import com.socrata.soql.types.{SoQLType, SoQLValue}
+import com.typesafe.scalalogging.Logger
 
 /**
  * Handles creation or updates to rollup tables.  Note that this handles only the metadata, it doesn't
@@ -14,5 +17,21 @@ import com.socrata.soql.types.{SoQLType, SoQLValue}
 case class RollupCreatedOrUpdatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                                          copyInfo: CopyInfo,
                                          secRollupInfo: SecRollupInfo) {
-  pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName(secRollupInfo.name), secRollupInfo.soql, None)
+  private val logger = Logger[RollupCreatedOrUpdatedHandler]
+
+  updateRollupRelationships(
+    pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName(secRollupInfo.name), secRollupInfo.soql, None)
+  )
+
+  def updateRollupRelationships(rollupInfo: LocalRollupInfo): Unit ={
+    for(tableName<-parseAndCollectTableNames(rollupInfo)){
+      pgu.datasetMapReader.datasetInfoByResourceName(new ResourceName(tableName)) match{
+        case Some(dataSetInfo)=>
+          logger.info(s"dataset '${rollupInfo.copyInfo.datasetInfo.resourceName.getOrElse(rollupInfo.copyInfo.datasetInfo.systemId)}' rollup '${rollupInfo.name}' relates to dataset '${dataSetInfo.resourceName.getOrElse(dataSetInfo.systemId)}'")
+        pgu.datasetMapWriter.createRollupRelationship(rollupInfo,pgu.datasetMapReader.latest(dataSetInfo))
+        case None=>
+          logger.error(s"Could not find a dataset with identifier '${tableName}'")
+      }
+    }
+  }
 }
