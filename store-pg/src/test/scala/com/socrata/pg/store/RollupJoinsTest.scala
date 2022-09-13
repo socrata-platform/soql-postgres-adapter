@@ -61,7 +61,7 @@ class RollupJoinsTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBa
         RollupCreatedOrUpdated(peopleLikeCountRollup)),
         () => {
           //Adam should only have a single thing he likes (travel)
-          val rollupInfo = getRollupByInternalDatasetNameAndName(peopleDatasetInfo.internalName, peopleLikeCountRollup.name).getOrElse(fail("Could not find rollup"))
+          val rollupInfo = getRollupByInternalDatasetNameAndName(peopleDatasetInfo.internalName, peopleLikeCountRollup.name).getOrElse(fail(s"Could not find rollup ${peopleLikeCountRollup.name} for ${peopleDatasetInfo.internalName}"))
           getSingleNumericValueFromStatement(s"select c3 from ${rollupInfo.tableName} where c2='adam'")
             .getOrElse(fail("Could not extract resultset")) should be (BigDecimal.valueOf(1))
         }: Unit),
@@ -81,7 +81,7 @@ class RollupJoinsTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBa
         () => {
           //Adam initially only likes 1 thing (travel), then gets updated to like 2 things (travel,food)
           //If his like count is 2, that means the rollup was rebuilt
-          val rollupInfo = getRollupByInternalDatasetNameAndName(peopleDatasetInfo.internalName, peopleLikeCountRollup.name).getOrElse(fail("Could not find rollup"))
+          val rollupInfo = getRollupByInternalDatasetNameAndName(peopleDatasetInfo.internalName, peopleLikeCountRollup.name).getOrElse(fail(s"Could not find rollup ${peopleLikeCountRollup.name} for ${peopleDatasetInfo.internalName}"))
           getSingleNumericValueFromStatement(s"select c3 from ${rollupInfo.tableName} where c2='adam'")
             .getOrElse(fail("Could not extract resultset")) should be (BigDecimal.valueOf(2))
         }: Unit),
@@ -140,7 +140,7 @@ class RollupJoinsTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBa
             val peopleCopy = getCopyInfoByInternalDatasetName(peopleDatasetInfo.internalName).getOrElse(fail(s"Could not find ${peopleDatasetInfo.internalName}"))
             val peopleRollup = pgu.datasetMapReader.rollup(peopleCopy,new RollupName(peopleLikeCountRollup.name))
             peopleRollup.isDefined should be (true)
-            val actionCopy = getCopyInfoByInternalDatasetName(actionDatasetInfo.internalName).getOrElse(fail(s"Could not find ${peopleDatasetInfo.internalName}"))
+            val actionCopy = getCopyInfoByInternalDatasetName(actionDatasetInfo.internalName).getOrElse(fail(s"Could not find ${actionDatasetInfo.internalName}"))
             pgu.datasetMapReader.getRollupCopiesRelatedToCopy(actionCopy) should have size (1)
           }
         }: Unit),
@@ -152,7 +152,7 @@ class RollupJoinsTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBa
             val peopleCopy = getCopyInfoByInternalDatasetName(peopleDatasetInfo.internalName).getOrElse(fail(s"Could not find ${peopleDatasetInfo.internalName}"))
             val peopleRollup = pgu.datasetMapReader.rollup(peopleCopy,new RollupName(peopleLikeCountRollup.name))
             peopleRollup.isDefined should be (false)
-            val actionCopy = getCopyInfoByInternalDatasetName(actionDatasetInfo.internalName).getOrElse(fail(s"Could not find ${peopleDatasetInfo.internalName}"))
+            val actionCopy = getCopyInfoByInternalDatasetName(actionDatasetInfo.internalName).getOrElse(fail(s"Could not find ${actionDatasetInfo.internalName}"))
             pgu.datasetMapReader.getRollupCopiesRelatedToCopy(actionCopy) should have size (0)
           }
         }: Unit),
@@ -211,7 +211,7 @@ class RollupJoinsTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBa
             val peopleCopy = getCopyInfoByInternalDatasetName(peopleDatasetInfo.internalName).getOrElse(fail(s"Could not find ${peopleDatasetInfo.internalName}"))
             val peopleRollup = pgu.datasetMapReader.rollup(peopleCopy,new RollupName(peopleLikeCountRollup.name))
             peopleRollup.isDefined should be (true)
-            val actionCopy = getCopyInfoByInternalDatasetName(actionDatasetInfo.internalName).getOrElse(fail(s"Could not find ${peopleDatasetInfo.internalName}"))
+            val actionCopy = getCopyInfoByInternalDatasetName(actionDatasetInfo.internalName).getOrElse(fail(s"Could not find ${actionDatasetInfo.internalName}"))
             pgu.datasetMapReader.getRollupCopiesRelatedToCopy(actionCopy) should have size (1)
           }
         }: Unit)
@@ -220,7 +220,7 @@ class RollupJoinsTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBa
     executePlayback(playback)
     val secondary = new PGSecondary(config)
     //Get this before deleting so we have access to what the copy id would have been, for the future assert query
-    val actionCopy = getCopyInfoByInternalDatasetName(actionDatasetInfo.internalName).getOrElse(fail(s"Could not find ${peopleDatasetInfo.internalName}"))
+    val actionCopy = getCopyInfoByInternalDatasetName(actionDatasetInfo.internalName).getOrElse(fail(s"Could not find ${actionDatasetInfo.internalName}"))
 
     secondary.dropDataset(actionDatasetInfo.internalName,None)
     withPgu(){pgu=>
