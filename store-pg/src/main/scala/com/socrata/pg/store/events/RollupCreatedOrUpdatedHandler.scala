@@ -20,7 +20,7 @@ case class RollupCreatedOrUpdatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQL
   private val logger = Logger[RollupCreatedOrUpdatedHandler]
 
   updateRollupRelationships(
-    pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName(secRollupInfo.name), secRollupInfo.soql, None)
+    pgu.datasetMapWriter.createOrUpdateRollupSecondary(copyInfo, new RollupName(secRollupInfo.name), secRollupInfo.soql, None).getOrElse(throw new IllegalStateException("Could not create rollup"))
   )
 
   def updateRollupRelationships(rollupInfo: LocalRollupInfo): Unit ={
