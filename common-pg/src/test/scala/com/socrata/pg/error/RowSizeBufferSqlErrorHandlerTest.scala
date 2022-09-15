@@ -86,7 +86,7 @@ class RowSizeBufferSqlErrorHandlerTest extends FunSuite with Matchers with Befor
 
   private def createDatabase(dbName: String): Unit = {
     try {
-      Class.forName("org.postgresql.Driver").newInstance()
+      Class.forName("org.postgresql.Driver").getDeclaredConstructor().newInstance()
     } catch {
       case ex: ClassNotFoundException => throw ex
     }
