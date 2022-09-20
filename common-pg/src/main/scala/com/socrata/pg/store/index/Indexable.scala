@@ -31,6 +31,10 @@ trait TextIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
          |    CREATE INDEX idx_${tableName}_u_${phyCol} on ${tableName}
          |    USING BTREE (upper(${phyCol}) text_pattern_ops)${tablespace};
          |  END IF;
+         |  IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_tpo_${phyCol}') THEN
+         |    CREATE INDEX idx_${tableName}_tpo_${phyCol} on ${tableName}
+         |    USING BTREE (${phyCol} text_pattern_ops)${tablespace};
+         |  END IF;
          |  IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_nl_${phyCol}') THEN
          |    CREATE INDEX idx_${tableName}_nl_${phyCol} on ${tableName}
          |    USING BTREE (${phyCol} nulls last)${tablespace};
@@ -72,7 +76,8 @@ trait TextIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
       DROP INDEX IF EXISTS idx_${tableName}_nl_$phyCol;
       DROP INDEX IF EXISTS idx_${tableName}_nf_$phyCol;
       DROP INDEX IF EXISTS idx_${tableName}_unl_$phyCol;
-      DROP INDEX IF EXISTS idx_${tableName}_unf_$phyCol"""
+      DROP INDEX IF EXISTS idx_${tableName}_unf_$phyCol;
+      DROP INDEX IF EXISTS idx_${tableName}_tpo_$phyCol"""
     }.mkString(";")
     Some(sql)
   }
@@ -84,7 +89,8 @@ trait TextIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
           s"idx_${tableName}_nl_$phyCol",
           s"idx_${tableName}_nf_$phyCol",
           s"idx_${tableName}_unl_$phyCol",
-          s"idx_${tableName}_unf_$phyCol")
+          s"idx_${tableName}_unf_$phyCol",
+          s"idx_${tableName}_tpo_$phyCol")
     }
   }
 }
