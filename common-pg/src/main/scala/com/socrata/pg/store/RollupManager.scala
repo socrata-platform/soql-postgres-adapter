@@ -195,7 +195,6 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    */
   def dropRollups(immediate: Boolean): Unit = {
     val rollups = pgu.datasetMapReader.rollups(copyInfo)
-    pgu.datasetMapWriter.deleteRollupRelationships(copyInfo)
     rollups.foreach(dropRollup(_, immediate))
   }
 
