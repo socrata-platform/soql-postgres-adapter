@@ -265,7 +265,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       pgu,
       copyInfo.datasetInfo,
       soqlAnalysis,
-      None, //reqCopy: Option[String],
+      Some(copyInfo.copyNumber.toString), //reqCopy: Option[String],
       None, //rollupName: Option[RollupName],
       false, // obfuscateId: Boolean,
       CaseSensitive,

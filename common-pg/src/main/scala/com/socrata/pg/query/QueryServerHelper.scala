@@ -159,7 +159,7 @@ object QueryServerHelper {
   }
 
   def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInfo: DatasetInfo, reqCopy: Option[String]): CopyInfo = {
-    val intRx = "^[0-9]+$".r
+    val intRx = "^([0-9]+)$".r
     val rd = pgu.datasetMapReader
     reqCopy match {
       case Some("latest") =>
