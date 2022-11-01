@@ -4,7 +4,7 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.sql.{Connection, SQLException}
 import scala.util.{Failure, Success, Try}
 import com.rojoma.simplearm.v2.using
-import com.socrata.datacoordinator.id.{RollupName, UserColumnId}
+import com.socrata.datacoordinator.id.{UserColumnId, RollupName}
 import com.socrata.datacoordinator.secondary.{RollupInfo => SecondaryRollupInfo}
 import com.socrata.datacoordinator.truth.loader.sql.{ChangeOwner, SqlTableDropper}
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, LifecycleStage}
@@ -23,7 +23,7 @@ import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLTypeInfo}
 import com.socrata.soql.parsing.standalone_exceptions.{BadParse, StandaloneLexerException}
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.scalalogging.Logger
-import RollupManager.{parseAndCollectTableNames, _}
+import RollupManager._
 import com.socrata.datacoordinator.util.{LoggedTimingReport, StackedTimingReport}
 import com.socrata.pg.query.QueryServerHelper
 import com.socrata.soql.ast.{JoinFunc, JoinQuery, JoinTable, Select}
@@ -195,7 +195,6 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
    */
   def dropRollups(immediate: Boolean): Unit = {
     val rollups = pgu.datasetMapReader.rollups(copyInfo)
-    pgu.datasetMapWriter.deleteRollupRelationships(copyInfo)
     rollups.foreach(dropRollup(_, immediate))
   }
 
@@ -351,9 +350,4 @@ object RollupManager {
         }
     }
   }
-
-  def parseAndCollectTableNames(soql: String): Set[String] = collectTableNames(new StandaloneParser().binaryTreeSelect(soql))
-
-  def parseAndCollectTableNames(rollupInfo: LocalRollupInfo):Set[String] = parseAndCollectTableNames(rollupInfo.soql)
-
 }

@@ -13,7 +13,6 @@ import com.socrata.soql.environment.TableName.PrimaryTable
 import com.socrata.soql.environment.{ColumnName, TableName}
 import com.socrata.soql.types._
 import org.joda.time.DateTime
-import org.scalatest.Matchers.fail
 
 class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
@@ -30,8 +29,8 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
       val dsName = s"$dcInstance.${truthDatasetId.underlying}"
-      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollupSecondary(copyInfo, new RollupName("roll1"),
-        "select * (EXCEPT _point, _multipolygon, _location, _phone)", None).getOrElse(fail("Could not create rollup"))
+      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"),
+        "select * (EXCEPT _point, _multipolygon, _location, _phone)", None)
 
       val rm = new RollupManager(pgu, copyInfo)
       rm.updateRollup(rollupInfo, None, Function.const(false))
@@ -50,7 +49,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
       val dsName = s"$dcInstance.${truthDatasetId.underlying}"
-      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollupSecondary(copyInfo, new RollupName("roll1"), "select _point, _multipolygon, _polygon, _line, _multipoint", None).getOrElse(fail("Could not create rollup"))
+      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"), "select _point, _multipolygon, _polygon, _line, _multipoint", None)
 
       val rm = new RollupManager(pgu, copyInfo)
       rm.updateRollup(rollupInfo, None, Function.const(false))
@@ -70,8 +69,8 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
       val dsName = s"$dcInstance.${truthDatasetId.underlying}"
-      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollupSecondary(copyInfo, new RollupName("roll1"),
-        "select _make, avg(_aspect_ratio) AS _avg_asp WHERE _v_min >20 GROUP BY _make HAVING _avg_asp > 4 ORDER BY _make limit 100 offset 1", None).getOrElse(fail("Could not create rollup"))
+      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"),
+        "select _make, avg(_aspect_ratio) AS _avg_asp WHERE _v_min >20 GROUP BY _make HAVING _avg_asp > 4 ORDER BY _make limit 100 offset 1", None)
 
       val rm = new RollupManager(pgu, copyInfo)
       rm.updateRollup(rollupInfo, None, Function.const(false))
@@ -90,8 +89,8 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
       val dsName = s"$dcInstance.${truthDatasetId.underlying}"
-      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollupSecondary(copyInfo, new RollupName("roll1"),
-        "select I am a monkey GROUP BY monkeyland", Some("select")).getOrElse(fail("Could not create rollup"))
+      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"),
+        "select I am a monkey GROUP BY monkeyland", Some("select"))
 
       val rm = new RollupManager(pgu, copyInfo)
       rm.updateRollup(rollupInfo, None, Function.const(false))
@@ -306,8 +305,8 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
       val dsName = s"$dcInstance.${truthDatasetId.underlying}"
-      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollupSecondary(copyInfo, new RollupName("roll1"),
-        "select _make, avg(_aspect_ratio) over(partition by _make)  AS _avg_asp", Some("select")).getOrElse(fail("Could not create rollup"))
+      val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"),
+        "select _make, avg(_aspect_ratio) over(partition by _make)  AS _avg_asp", Some("select"))
 
       val rm = new RollupManager(pgu, copyInfo)
       rm.updateRollup(rollupInfo, None, Function.const(true))
