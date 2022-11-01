@@ -104,7 +104,6 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
    */
   def deleteCopy(copyInfo: CopyInfo): Unit = {
 
-    deleteRollupRelationships(copyInfo)
     dropRollup(copyInfo, None) // drop all related rollups metadata
     dropIndexDirectives(copyInfo)
     dropIndex(copyInfo, None)
