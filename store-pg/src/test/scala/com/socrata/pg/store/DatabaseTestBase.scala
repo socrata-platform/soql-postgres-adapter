@@ -5,8 +5,10 @@ import java.nio.charset.StandardCharsets
 import java.sql.{Connection, DriverManager, PreparedStatement, ResultSet}
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.io.Codec
+
 import com.rojoma.json.v3.ast.{JArray, JValue}
 import com.rojoma.json.v3.io.{JsonEventIterator, JsonReader}
 import com.rojoma.json.v3.util.{JsonArrayIterator, JsonUtil}
@@ -24,7 +26,6 @@ import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.Logger
-import org.scalatest.Matchers.fail
 
 /**
  * Recreate test databases of truth and secondary.
@@ -111,7 +112,7 @@ trait DatabaseTestBase {
   }
 
   def createRollup(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo): String = {
-    val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollupSecondary(copyInfo, new RollupName("roll1"), "select 'x'", None).getOrElse(fail("Could not create rollup"))
+    val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollup(copyInfo, new RollupName("roll1"), "select 'x'", None)
     val rm = new RollupManager(pgu, copyInfo)
     rm.updateRollup(rollupInfo, None, Function.const(false))
     pgu.commit()
@@ -222,7 +223,7 @@ object DatabaseTestBase {
 
   private def createDatabase(dbName: String): Unit = {
     try {
-      Class.forName("org.postgresql.Driver").getDeclaredConstructor().newInstance()
+      Class.forName("org.postgresql.Driver").newInstance()
     } catch {
       case ex: ClassNotFoundException => throw ex
     }

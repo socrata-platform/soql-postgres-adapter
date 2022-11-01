@@ -5,8 +5,8 @@ import java.security.MessageDigest
 import com.socrata.datacoordinator.id.RollupName
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo, RollupInfo}
 
-class LocalRollupInfo(copyInfo: CopyInfo, name: RollupName, soql: String, val tableName: String,val systemId: RollupId)(implicit tag: com.socrata.datacoordinator.truth.metadata.`-impl`.Tag) extends RollupInfo(copyInfo, name, soql, None) {
-  def updateName(newTableName: String) = new LocalRollupInfo(copyInfo, name, soql, newTableName,systemId)
+class LocalRollupInfo(copyInfo: CopyInfo, name: RollupName, soql: String, val tableName: String)(implicit tag: com.socrata.datacoordinator.truth.metadata.`-impl`.Tag) extends RollupInfo(copyInfo, name, soql, None) {
+  def updateName(newTableName: String) = new LocalRollupInfo(copyInfo, name, soql, newTableName)
 }
 
 object LocalRollupInfo {

@@ -8,7 +8,6 @@ import com.socrata.soql.types.{SoQLType, SoQLValue}
 case class CopyDroppedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) {
   val rm = new RollupManager(pgu, copyInfo)
   rm.dropRollups(immediate = false)
-  pgu.datasetMapWriter.deleteRollupRelationships(copyInfo)
   pgu.datasetMapWriter.dropCopy(copyInfo)
   val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
   sLoader.drop(copyInfo)
