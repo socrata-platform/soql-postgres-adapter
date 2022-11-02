@@ -31,7 +31,7 @@ libraryDependencies ++= Seq(
 
 enablePlugins(BuildInfoPlugin)
 
-buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion)
+buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion,git.gitHeadCommit)
 
 buildInfoPackage := "com.socrata.pg"
 
