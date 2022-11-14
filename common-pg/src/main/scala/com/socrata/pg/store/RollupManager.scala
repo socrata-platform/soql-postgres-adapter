@@ -135,7 +135,12 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
                 // ok, we're going to be making a table.  Which means
                 // we don't actually care about the old table and _can
                 // change its name_.
-                rollupInfo = pgu.datasetMapWriter.changeRollupTableName(rollupInfo, LocalRollupInfo.tableName(rollupInfo.copyInfo, rollupInfo.name))
+
+                // At this point we are either creating the rollup table for the first time,
+                // or we need to rename the existing one and create a new one
+                if(oldRollupExists){
+                  rollupInfo = pgu.datasetMapWriter.changeRollupTableName(rollupInfo, LocalRollupInfo.tableName(rollupInfo.copyInfo, rollupInfo.name))
+                }
 
                 for(or <- oldRollup) {
                   if(or.tableName == rollupInfo.tableName && oldRollupExists) {

@@ -150,25 +150,24 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
   }
 
   def insertLocalRollupQuery = "INSERT INTO rollup_map (name, copy_system_id, soql, table_name) VALUES (?, ?, ?, ?) returning system_id"
-  def updateLocalRollupQuery = "UPDATE rollup_map SET soql = ?, table_name = ? WHERE name = ? AND copy_system_id = ? returning system_id"
+  def updateLocalRollupQuery = "UPDATE rollup_map SET soql = ? WHERE name = ? AND copy_system_id = ? returning system_id,table_name"
   def createOrUpdateRollupSecondary(copyInfo: CopyInfo, name: RollupName, soql: String, rawSoql: Option[String]): Option[LocalRollupInfo] = {
-    val tableName = LocalRollupInfo.tableName(copyInfo, name)
     rollup(copyInfo, name) match {
       case Some(_) =>
         using(conn.prepareStatement(updateLocalRollupQuery)) { stmt =>
           stmt.setString(1, soql)
-          stmt.setString(2, tableName)
-          stmt.setString(3, name.underlying)
-          stmt.setLong(4, copyInfo.systemId.underlying)
+          stmt.setString(2, name.underlying)
+          stmt.setLong(3, copyInfo.systemId.underlying)
           t("create-or-update-rollup", "action" -> "update", "copy-id" -> copyInfo.systemId, "name" -> name)(
             using(stmt.executeQuery()){resultSet =>
               if(resultSet.next()){
-                return Some(new LocalRollupInfo(copyInfo, name, soql, tableName,RollupId(resultSet.getLong("system_id"))))
+                return Some(new LocalRollupInfo(copyInfo, name, soql, resultSet.getString("table_name"),RollupId(resultSet.getLong("system_id"))))
               }
             }
           )
         }
       case None =>
+        val tableName = LocalRollupInfo.tableName(copyInfo, name)
         using(conn.prepareStatement(insertLocalRollupQuery)) { stmt =>
           stmt.setString(1, name.underlying)
           stmt.setLong(2, copyInfo.systemId.underlying)
