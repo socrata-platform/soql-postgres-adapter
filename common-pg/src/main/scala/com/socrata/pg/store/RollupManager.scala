@@ -4,7 +4,7 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.sql.{Connection, SQLException}
 import scala.util.{Failure, Success, Try}
 import com.rojoma.simplearm.v2.using
-import com.socrata.datacoordinator.id.{UserColumnId, RollupName}
+import com.socrata.datacoordinator.id.{RollupName, UserColumnId}
 import com.socrata.datacoordinator.secondary.{RollupInfo => SecondaryRollupInfo}
 import com.socrata.datacoordinator.truth.loader.sql.{ChangeOwner, SqlTableDropper}
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, LifecycleStage}
@@ -23,7 +23,7 @@ import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLTypeInfo}
 import com.socrata.soql.parsing.standalone_exceptions.{BadParse, StandaloneLexerException}
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.scalalogging.Logger
-import RollupManager._
+import RollupManager.{parseAndCollectTableNames, _}
 import com.socrata.datacoordinator.util.{LoggedTimingReport, StackedTimingReport}
 import com.socrata.pg.query.QueryServerHelper
 import com.socrata.soql.ast.{JoinFunc, JoinQuery, JoinTable, Select}
@@ -135,7 +135,12 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
                 // ok, we're going to be making a table.  Which means
                 // we don't actually care about the old table and _can
                 // change its name_.
-                rollupInfo = pgu.datasetMapWriter.changeRollupTableName(rollupInfo, LocalRollupInfo.tableName(rollupInfo.copyInfo, rollupInfo.name))
+
+                // At this point we are either creating the rollup table for the first time,
+                // or we need to rename the existing one and create a new one
+                if(oldRollupExists){
+                  rollupInfo = pgu.datasetMapWriter.changeRollupTableName(rollupInfo, LocalRollupInfo.tableName(rollupInfo.copyInfo, rollupInfo.name))
+                }
 
                 for(or <- oldRollup) {
                   if(or.tableName == rollupInfo.tableName && oldRollupExists) {
@@ -230,7 +235,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     } yield s"${colName} ${colType} NULL"
 
     using(pgu.conn.createStatement()) { stmt =>
-      val createSql = s"CREATE TABLE ${rollupInfo.tableName} (${colDdls.mkString(", ")} )${tablespaceSql};"
+      val createSql = s"""CREATE TABLE "${rollupInfo.tableName}" (${colDdls.mkString(", ")} )${tablespaceSql};"""
       time("create-rollup-table",
            "copy" -> copyInfo.copyNumber,
            "dataVersion" -> copyInfo.dataVersion,
@@ -239,7 +244,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
            "sql" -> createSql) {
         stmt.execute(createSql + ChangeOwner.sql(pgu.conn, rollupInfo.tableName))
         // sadly the COMMENT statement can't use prepared statement params...
-        val commentSql = s"COMMENT ON TABLE ${rollupInfo.tableName} IS '" +
+        val commentSql = s"""COMMENT ON TABLE "${rollupInfo.tableName}" IS '""" +
           SqlUtils.escapeString(pgu.conn, rollupInfo.name.underlying + " = " + rollupInfo.soql) + "'"
         stmt.execute(commentSql)
       }
@@ -270,7 +275,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       false, // obfuscateId: Boolean,
       CaseSensitive,
       true)
-    val insertParamSql = selectParamSql.copy(sql = Seq(s"INSERT INTO ${rollupInfo.tableName} ( ${selectParamSql.sql.head} )"))
+    val insertParamSql = selectParamSql.copy(sql = Seq(s"""INSERT INTO "${rollupInfo.tableName}" ( ${selectParamSql.sql.head} )"""))
     time("populate-rollup-table",
          "copy" -> copyInfo.copyNumber,
          "dataVersion" -> copyInfo.dataVersion,
@@ -350,4 +355,9 @@ object RollupManager {
         }
     }
   }
+
+  def parseAndCollectTableNames(soql: String): Set[String] = collectTableNames(new StandaloneParser().binaryTreeSelect(soql))
+
+  def parseAndCollectTableNames(rollupInfo: LocalRollupInfo):Set[String] = parseAndCollectTableNames(rollupInfo.soql)
+
 }
