@@ -14,7 +14,7 @@ object Predicates {
 
     def ||(them: Predicate[T]): Predicate[T] = (t: T) => me(t) || them(t)
 
-    // this allows you to specify negation of a predicate before its evaluated
+    // this allows you to specify negation of a predicate before its applied
     // e.g (!isAlphaNumeric && !isUnderscore)('a')
     def unary_!(c: T): Boolean = !me(c)
 

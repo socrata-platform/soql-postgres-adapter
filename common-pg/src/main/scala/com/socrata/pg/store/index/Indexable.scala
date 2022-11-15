@@ -28,19 +28,19 @@ trait TextIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
       // text_pattern_ops for like 'prefix%' or equality
       s"""DO $$$$ BEGIN
          |  IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_u_${phyCol}') THEN
-         |    CREATE INDEX idx_${tableName}_u_${phyCol} on ${tableName}
+         |    CREATE INDEX "idx_${tableName}_u_${phyCol}" on "${tableName}"
          |    USING BTREE (upper(${phyCol}) text_pattern_ops)${tablespace};
          |  END IF;
          |  IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_tpo_${phyCol}') THEN
-         |    CREATE INDEX idx_${tableName}_tpo_${phyCol} on ${tableName}
+         |    CREATE INDEX "idx_${tableName}_tpo_${phyCol}" on "${tableName}"
          |    USING BTREE (${phyCol} text_pattern_ops)${tablespace};
          |  END IF;
          |  IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_nl_${phyCol}') THEN
-         |    CREATE INDEX idx_${tableName}_nl_${phyCol} on ${tableName}
+         |    CREATE INDEX "idx_${tableName}_nl_${phyCol}" on "${tableName}"
          |    USING BTREE (${phyCol} nulls last)${tablespace};
          |  END IF;
          |  IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_unl_${phyCol}') THEN
-         |    CREATE INDEX idx_${tableName}_unl_${phyCol} on ${tableName}
+         |    CREATE INDEX "idx_${tableName}_unl_${phyCol}" on "${tableName}"
          |    USING BTREE (upper(${phyCol}) nulls last)${tablespace};
          |  END IF;
          |END; $$$$;
@@ -60,7 +60,7 @@ trait TextIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
       s"""
       DO $$$$ BEGIN
         IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_nl_$phyCol') THEN
-          CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last)$tablespace;
+          CREATE INDEX "idx_${tableName}_nl_$phyCol" on "$tableName" USING BTREE ($phyCol nulls last)$tablespace;
         END IF;
       END; $$$$;"""
     }.mkString(";")
@@ -71,26 +71,26 @@ trait TextIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
     val sql = this.physColumns.map { phyCol =>
       // we used to create nulls first indexes, so drop those if exist
       s"""
-      DROP INDEX IF EXISTS idx_${tableName}_$phyCol;
-      DROP INDEX IF EXISTS idx_${tableName}_u_$phyCol;
-      DROP INDEX IF EXISTS idx_${tableName}_nl_$phyCol;
-      DROP INDEX IF EXISTS idx_${tableName}_nf_$phyCol;
-      DROP INDEX IF EXISTS idx_${tableName}_unl_$phyCol;
-      DROP INDEX IF EXISTS idx_${tableName}_unf_$phyCol;
-      DROP INDEX IF EXISTS idx_${tableName}_tpo_$phyCol"""
+      DROP INDEX IF EXISTS "idx_${tableName}_$phyCol";
+      DROP INDEX IF EXISTS "idx_${tableName}_u_$phyCol";
+      DROP INDEX IF EXISTS "idx_${tableName}_nl_$phyCol";
+      DROP INDEX IF EXISTS "idx_${tableName}_nf_$phyCol";
+      DROP INDEX IF EXISTS "idx_${tableName}_unl_$phyCol";
+      DROP INDEX IF EXISTS "idx_${tableName}_unf_$phyCol";
+      DROP INDEX IF EXISTS "idx_${tableName}_tpo_$phyCol""""
     }.mkString(";")
     Some(sql)
   }
 
   override def dbIndexNames(tableName: String): Seq[String] = {
     this.physColumns.flatMap { phyCol =>
-      Seq(s"idx_${tableName}_$phyCol",
-          s"idx_${tableName}_u_$phyCol",
-          s"idx_${tableName}_nl_$phyCol",
-          s"idx_${tableName}_nf_$phyCol",
-          s"idx_${tableName}_unl_$phyCol",
-          s"idx_${tableName}_unf_$phyCol",
-          s"idx_${tableName}_tpo_$phyCol")
+      Seq(s""""idx_${tableName}_$phyCol"""",
+          s""""idx_${tableName}_u_$phyCol"""",
+          s""""idx_${tableName}_nl_$phyCol"""",
+          s""""idx_${tableName}_nf_$phyCol"""",
+          s""""idx_${tableName}_unl_$phyCol"""",
+          s""""idx_${tableName}_unf_$phyCol"""",
+          s""""idx_${tableName}_tpo_$phyCol"""")
     }
   }
 }
@@ -102,7 +102,7 @@ trait BaseIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
       s"""
       DO $$$$ BEGIN
         IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_nl_$phyCol') THEN
-          CREATE INDEX idx_${tableName}_nl_$phyCol on $tableName USING BTREE ($phyCol nulls last)$tablespace;
+          CREATE INDEX "idx_${tableName}_nl_$phyCol" on "$tableName" USING BTREE ($phyCol nulls last)$tablespace;
         END IF;
       END; $$$$;"""
     }.mkString(";")
@@ -113,15 +113,15 @@ trait BaseIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
     val sql = this.physColumns.map { phyCol =>
       // we used to create a nulls first index, so also drop it if exists
       s"""
-      DROP INDEX IF EXISTS idx_${tableName}_nl_$phyCol;
-      DROP INDEX IF EXISTS idx_${tableName}_nf_$phyCol"""
+      DROP INDEX IF EXISTS "idx_${tableName}_nl_$phyCol";
+      DROP INDEX IF EXISTS "idx_${tableName}_nf_$phyCol""""
     }.mkString(";")
     Some(sql)
   }
 
   override def dbIndexNames(tableName: String): Seq[String] = {
     this.physColumns.flatMap { phyCol =>
-      Seq(s"idx_${tableName}_nl_$phyCol", s"idx_${tableName}_nf_$phyCol")
+      Seq(s""""idx_${tableName}_nl_$phyCol"""", s""""idx_${tableName}_nf_$phyCol"""")
     }
   }
 }
@@ -133,7 +133,7 @@ trait JsonbIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
       s"""
       DO $$$$ BEGIN
         IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_$phyCol') THEN
-          CREATE INDEX idx_${tableName}_$phyCol on $tableName USING GIN ($phyCol)$tablespace;
+          CREATE INDEX "idx_${tableName}_$phyCol" on "$tableName" USING GIN ($phyCol)$tablespace;
         END IF;
       END; $$$$;"""
     }.mkString(";")
@@ -143,14 +143,14 @@ trait JsonbIndexable[T] extends Indexable[T] { this: SqlColumnCommonRep[T] =>
   override def dropIndex(tableName: String): Option[String] = {
     val sql = this.physColumns.map { phyCol =>
       s"""
-      DROP INDEX IF EXISTS idx_${tableName}_$phyCol"""
+      DROP INDEX IF EXISTS "idx_${tableName}_$phyCol""""
     }.mkString(";")
     Some(sql)
   }
 
   override def dbIndexNames(tableName: String): Seq[String] = {
     this.physColumns.flatMap { phyCol =>
-      Seq(s"idx_${tableName}_$phyCol")
+      Seq(s""""idx_${tableName}_$phyCol"""")
     }
   }
 }
@@ -174,7 +174,7 @@ trait GeoIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] =>
       s"""
       DO $$$$ BEGIN
         IF NOT EXISTS(select 1 from pg_indexes WHERE indexname = 'idx_${tableName}_${phyCol}_gist') THEN
-          CREATE index idx_${tableName}_${phyCol}_gist ON ${tableName} USING GIST(${phyCol})$tablespace;
+          CREATE index "idx_${tableName}_${phyCol}_gist" ON "${tableName}" USING GIST(${phyCol})$tablespace;
         END IF;
       END; $$$$;"""
     }.mkString(";")
@@ -183,14 +183,14 @@ trait GeoIndexable[T] extends BaseIndexable[T] { this: SqlColumnCommonRep[T] =>
 
   override def dropIndex(tableName: String): Option[String] = {
     val sql = indexableColumns.map { phyCol =>
-      s"""DROP INDEX IF EXISTS idx_${tableName}_${phyCol}_gist"""
+      s"""DROP INDEX IF EXISTS "idx_${tableName}_${phyCol}_gist""""
     }.mkString(";")
     Some(sql)
   }
 
   override def dbIndexNames(tableName: String): Seq[String] = {
     this.physColumns.flatMap { phyCol =>
-      Seq(s"idx_${tableName}_${phyCol}_gist")
+      Seq(s""""idx_${tableName}_${phyCol}_gist"""")
     }
   }
 }
