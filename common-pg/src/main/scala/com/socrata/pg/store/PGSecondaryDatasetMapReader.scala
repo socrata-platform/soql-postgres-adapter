@@ -146,16 +146,16 @@ where referenced_copy_system_id = ?"""
   }
 
   def nextSequenceValue = "select nextval(?)"
-  def getNextSequence[T](sequenceName: String): Option[T] = {
+  def getNextSequence(sequenceName: String): Option[Long] = {
     using(conn.prepareStatement(nextSequenceValue)) { stmt =>
       stmt.setString(1, sequenceName)
       using(t("getNextSequence", "sequence" -> sequenceName)(stmt.executeQuery())) { rs =>
-        if (rs.next()) Some(rs.getObject(1).asInstanceOf[T]) else None
+        if (rs.next()) Some(rs.getLong(1)) else None
       }
     }
   }
 
-  def getNextRollupTableNameSequence = getNextSequence[Long](RollupManager.tableNameSequenceIdentifier).getOrElse(throw new IllegalStateException(s"Could not get next value of sequence '${RollupManager.tableNameSequenceIdentifier}'"))
+  def getNextRollupTableNameSequence = getNextSequence(RollupManager.tableNameSequenceIdentifier).getOrElse(throw new IllegalStateException(s"Could not get next value of sequence '${RollupManager.tableNameSequenceIdentifier}'"))
 
 }
 
