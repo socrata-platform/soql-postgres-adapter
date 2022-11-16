@@ -12,6 +12,8 @@ import scala.reflect.ClassTag
 
 trait LocalRollupReaderOverride[CT] {
   self: BasePostgresDatasetMapReader[CT] =>
+
+  def localRollupsQuery = "SELECT system_id, name, soql, table_name FROM rollup_map WHERE copy_system_id = ?"
   override def rollups(copyInfo: CopyInfo): Seq[LocalRollupInfo] = {
     using(conn.prepareStatement(localRollupsQuery)) { stmt =>
       stmt.setLong(1, copyInfo.systemId.underlying)
@@ -25,7 +27,7 @@ trait LocalRollupReaderOverride[CT] {
     }
   }
 
-  def localRollupsQuery = "SELECT system_id, name, soql, table_name FROM rollup_map WHERE copy_system_id = ?"
+  def localRollupQuery = "SELECT system_id, soql, table_name FROM rollup_map WHERE copy_system_id = ? AND name = ?"
 
   override def rollup(copyInfo: CopyInfo, name: RollupName): Option[LocalRollupInfo] = {
     using(conn.prepareStatement(localRollupQuery)) { stmt =>
@@ -41,7 +43,26 @@ trait LocalRollupReaderOverride[CT] {
     }
   }
 
-  def localRollupQuery = "SELECT system_id, soql, table_name FROM rollup_map WHERE copy_system_id = ? AND name = ?"
+  def getRollupCopiesRelatedToCopyQuery =
+    """select dataset_map.system_id           as dataset_map_system_id,
+       dataset_map.next_counter_value  as dataset_map_next_counter_value,
+       dataset_map.latest_data_version as dataset_map_latest_data_version,
+       dataset_map.locale_name         as dataset_map_locale_name,
+       dataset_map.obfuscation_key     as dataset_map_obfuscation_key,
+       dataset_map.resource_name       as dataset_map_resource_name,
+       copy_map.system_id as copy_map_system_id,
+       copy_map.copy_number as copy_map_copy_number,
+       copy_map.lifecycle_stage :: TEXT as copy_map_lifecycle_stage,
+       copy_map.data_version as copy_map_data_version,
+       copy_map.data_shape_version as copy_map_data_shape_version,
+       copy_map.last_modified as copy_map_last_modified,
+       copy_map_table_modifiers.table_modifier as copy_map_table_modifiers_table_modifier
+from rollup_relationship_map
+         join rollup_map on rollup_relationship_map.rollup_system_id = rollup_map.system_id
+         join copy_map on rollup_map.copy_system_id = copy_map.system_id
+         left join copy_map_table_modifiers ON copy_map.system_id = copy_map_table_modifiers.copy_system_id
+         join dataset_map on copy_map.dataset_system_id = dataset_map.system_id
+where referenced_copy_system_id = ?"""
 
   def getRollupCopiesRelatedToCopy(copyInfo: CopyInfo): Set[CopyInfo] = {
     var out = Set[CopyInfo]()
@@ -65,8 +86,13 @@ trait LocalRollupReaderOverride[CT] {
     out
   }
 
-  def getRollupCopiesRelatedToCopyQuery =
-    """select dataset_map.system_id           as dataset_map_system_id,
+  def getRollupsRelatedToCopyQuery =
+    """select
+       rollup_map.system_id            as rollup_map_system_id,
+       rollup_map.name                 as rollup_map_name,
+       rollup_map.soql                 as rollup_map_soql,
+       rollup_map.table_name           as rollup_map_table_name,
+       dataset_map.system_id           as dataset_map_system_id,
        dataset_map.next_counter_value  as dataset_map_next_counter_value,
        dataset_map.latest_data_version as dataset_map_latest_data_version,
        dataset_map.locale_name         as dataset_map_locale_name,
@@ -125,31 +151,6 @@ where referenced_copy_system_id = ?"""
 
   def getNextRollupTableNameSequence = getNextSequence[Long](RollupManager.tableNameSequenceIdentifier).getOrElse(throw new IllegalStateException(s"Could not get next value of sequence '${RollupManager.tableNameSequenceIdentifier}'"))
 
-  def getRollupsRelatedToCopyQuery =
-    """select
-       rollup_map.system_id            as rollup_map_system_id,
-       rollup_map.name                 as rollup_map_name,
-       rollup_map.soql                 as rollup_map_soql,
-       rollup_map.table_name           as rollup_map_table_name,
-       dataset_map.system_id           as dataset_map_system_id,
-       dataset_map.next_counter_value  as dataset_map_next_counter_value,
-       dataset_map.latest_data_version as dataset_map_latest_data_version,
-       dataset_map.locale_name         as dataset_map_locale_name,
-       dataset_map.obfuscation_key     as dataset_map_obfuscation_key,
-       dataset_map.resource_name       as dataset_map_resource_name,
-       copy_map.system_id as copy_map_system_id,
-       copy_map.copy_number as copy_map_copy_number,
-       copy_map.lifecycle_stage :: TEXT as copy_map_lifecycle_stage,
-       copy_map.data_version as copy_map_data_version,
-       copy_map.data_shape_version as copy_map_data_shape_version,
-       copy_map.last_modified as copy_map_last_modified,
-       copy_map_table_modifiers.table_modifier as copy_map_table_modifiers_table_modifier
-from rollup_relationship_map
-         join rollup_map on rollup_relationship_map.rollup_system_id = rollup_map.system_id
-         join copy_map on rollup_map.copy_system_id = copy_map.system_id
-         left join copy_map_table_modifiers ON copy_map.system_id = copy_map_table_modifiers.copy_system_id
-         join dataset_map on copy_map.dataset_system_id = dataset_map.system_id
-where referenced_copy_system_id = ?"""
 }
 
 

@@ -16,6 +16,6 @@ object LocalRollupInfo {
   def tableName(copyInfo: CopyInfo, name: RollupName, sequenceToAppend: String): String = {
     val base = copyInfo.dataTableName + "_r_" + copyInfo.dataVersion + "_" + name.underlying.filter(Predicates.isAlphaNumericUnderscore).toLowerCase + "_"
     // clamp our base string to be max 63-randomBits since postgres table names are limited to 63 characters
-    (base.take(63 - sequenceToAppend.length) + sequenceToAppend)
+    base.take(63 - sequenceToAppend.length) + sequenceToAppend
   }
 }
