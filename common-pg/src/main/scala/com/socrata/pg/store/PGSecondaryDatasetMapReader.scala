@@ -8,6 +8,7 @@ import com.socrata.datacoordinator.util.TimingReport
 import org.joda.time.DateTime
 
 import java.sql.Connection
+import scala.reflect.ClassTag
 
 trait LocalRollupReaderOverride[CT] {
   self: BasePostgresDatasetMapReader[CT] =>
@@ -111,6 +112,18 @@ where referenced_copy_system_id = ?"""
     }
     out
   }
+
+  def nextSequenceValue = "select nextval(?)"
+  def getNextSequence[T](sequenceName: String): Option[T] = {
+    using(conn.prepareStatement(nextSequenceValue)) { stmt =>
+      stmt.setString(1, sequenceName)
+      using(t("getNextSequence", "sequence" -> sequenceName)(stmt.executeQuery())) { rs =>
+        if (rs.next()) Some(rs.getObject(1)).asInstanceOf[Option[T]] else None
+      }
+    }
+  }
+
+  def getNextRollupTableNameSequence = getNextSequence[Long](RollupManager.tableNameSequenceIdentifier).getOrElse(throw new IllegalStateException(s"Could not get next value of sequence '${RollupManager.tableNameSequenceIdentifier}'"))
 
   def getRollupsRelatedToCopyQuery =
     """select
