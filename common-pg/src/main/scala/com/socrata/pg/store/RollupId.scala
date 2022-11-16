@@ -16,6 +16,4 @@ object RollupId {
       case other => Left(DecodeError.InvalidType(JNumber, other.jsonType))
     }
   }
-
-  val Invalid = new RollupId(-1)
 }
