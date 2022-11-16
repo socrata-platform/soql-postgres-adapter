@@ -547,7 +547,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         updateRollups(pgu,
           Some(relatedCopy),
           relatedCopy,
-          tryToMove = { _ =>false},
+          tryToMove = _ =>false,
           force = false
         )
       })
