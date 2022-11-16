@@ -150,7 +150,7 @@ where referenced_copy_system_id = ?"""
     using(conn.prepareStatement(nextSequenceValue)) { stmt =>
       stmt.setString(1, sequenceName)
       using(t("getNextSequence", "sequence" -> sequenceName)(stmt.executeQuery())) { rs =>
-        if (rs.next()) Some(rs.getObject(1)).asInstanceOf[Option[T]] else None
+        if (rs.next()) Some(rs.getObject(1).asInstanceOf[T]) else None
       }
     }
   }
