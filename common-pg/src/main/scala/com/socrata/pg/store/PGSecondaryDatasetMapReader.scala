@@ -35,7 +35,7 @@ trait LocalRollupReaderOverride[CT] {
       stmt.setString(2, name.underlying)
       using(t("rollup", "copy_id" -> copyInfo.systemId, "name" -> name)(stmt.executeQuery())) { rs =>
         if (rs.next()) {
-          Some(new LocalRollupInfo(copyInfo, name, rs.getString("soql"), rs.getString("table_name"), RollupId(rs.getLong("system_id"))))
+          Some(new LocalRollupInfo(copyInfo, new RollupName(rs.getString("name")), rs.getString("soql"), rs.getString("table_name"), RollupId(rs.getLong("system_id"))))
         } else {
           None
         }
