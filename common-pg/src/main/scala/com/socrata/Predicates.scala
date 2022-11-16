@@ -2,7 +2,7 @@ package com.socrata
 
 object Predicates {
 
-  type Predicate[T] = Function[T, Boolean]
+  type Predicate[T] = (T)=>Boolean
 
   // For functions, the implicit should/needs be associated on the raw type, not a custom type
   implicit class PredicateOperators[T](me: (T)=>Boolean) {
