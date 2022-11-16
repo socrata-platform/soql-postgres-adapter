@@ -4,8 +4,6 @@ import com.socrata.Predicates
 import com.socrata.datacoordinator.id.RollupName
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo, RollupInfo}
 
-import java.util.function.{Consumer, Supplier}
-import scala.util.Random
 
 class LocalRollupInfo(copyInfo: CopyInfo, name: RollupName, soql: String, val tableName: String, val systemId: RollupId)(implicit tag: com.socrata.datacoordinator.truth.metadata.`-impl`.Tag) extends RollupInfo(copyInfo, name, soql, None) {
   def updateName(newTableName: String) = new LocalRollupInfo(copyInfo, name, soql, newTableName, systemId)
