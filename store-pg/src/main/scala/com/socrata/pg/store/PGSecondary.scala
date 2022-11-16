@@ -92,17 +92,17 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           val datasetId = copyInfo.datasetInfo.systemId
           for { copy <- pgu.datasetMapReader.allCopies(copyInfo.datasetInfo) } {
             //Get all rollups that reference this copy
-            pgu.datasetMapReader.getRollupsRelatedToCopy(copy).foreach(rollup=>{
+            pgu.datasetMapReader.getRollupsRelatedToCopy(copy).foreach{rollup=>
               //Schedule the built rollup table of the referenced copy for drop
               new RollupManager(pgu,rollup.copyInfo).dropRollup(rollup,false)
               //Drop the metadata here since the referenced dataset is not being dropped and this will not happen otherwise
               pgu.datasetMapWriter.dropRollup(rollup)
-            })
+            }
             //Drop rollup_relationship metadata here since the official "drop routine" is in a library from data-coordinator, and DC does not keep track of rollup_relationships.
             //Future refactor would be ideal to keep deletion of rollup_map and rollup_relationship_map together.
-            pgu.datasetMapReader.rollups(copy).foreach(rollup =>{
+            pgu.datasetMapReader.rollups(copy).foreach{rollup =>
               pgu.datasetMapWriter.deleteRollupRelationships(rollup)
-            })
+            }
             //Schedule all built rollups for this copy to be dropped
             val rm = new RollupManager(pgu, copy)
             rm.dropRollups(immediate = false)
