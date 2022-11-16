@@ -235,7 +235,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     } yield s"${colName} ${colType} NULL"
 
     using(pgu.conn.createStatement()) { stmt =>
-      val createSql = s"""CREATE TABLE "${rollupInfo.tableName}" (${colDdls.mkString(", ")} )${tablespaceSql};"""
+      val createSql = s"CREATE TABLE ${rollupInfo.tableName} (${colDdls.mkString(", ")} )${tablespaceSql};"
       time("create-rollup-table",
            "copy" -> copyInfo.copyNumber,
            "dataVersion" -> copyInfo.dataVersion,
@@ -244,7 +244,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
            "sql" -> createSql) {
         stmt.execute(createSql + ChangeOwner.sql(pgu.conn, rollupInfo.tableName))
         // sadly the COMMENT statement can't use prepared statement params...
-        val commentSql = s"""COMMENT ON TABLE "${rollupInfo.tableName}" IS '""" +
+        val commentSql = s"COMMENT ON TABLE ${rollupInfo.tableName} IS '" +
           SqlUtils.escapeString(pgu.conn, rollupInfo.name.underlying + " = " + rollupInfo.soql) + "'"
         stmt.execute(commentSql)
       }
@@ -275,7 +275,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
       false, // obfuscateId: Boolean,
       CaseSensitive,
       true)
-    val insertParamSql = selectParamSql.copy(sql = Seq(s"""INSERT INTO "${rollupInfo.tableName}" ( ${selectParamSql.sql.head} )"""))
+    val insertParamSql = selectParamSql.copy(sql = Seq(s"INSERT INTO ${rollupInfo.tableName} ( ${selectParamSql.sql.head} )"))
     time("populate-rollup-table",
          "copy" -> copyInfo.copyNumber,
          "dataVersion" -> copyInfo.dataVersion,
