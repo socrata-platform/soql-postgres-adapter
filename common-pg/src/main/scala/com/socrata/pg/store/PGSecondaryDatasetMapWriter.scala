@@ -5,11 +5,12 @@ import com.socrata.datacoordinator.id.{CopyId, DatasetId, RollupName}
 import com.socrata.datacoordinator.id.sql._
 import com.socrata.datacoordinator.truth.DatabaseInReadOnlyMode
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo, DatasetInfo, TypeNamespace}
-import com.socrata.datacoordinator.truth.metadata.sql.{PostgresDatasetMapWriter, BasePostgresDatasetMapReader}
+import com.socrata.datacoordinator.truth.metadata.sql.{BasePostgresDatasetMapReader, PostgresDatasetMapWriter}
 import com.socrata.datacoordinator.util.TimingReport
+import com.socrata.pg.store.RollupManager.logger
 import com.typesafe.scalalogging.Logger
-import java.sql.{Connection, Timestamp}
 
+import java.sql.{Connection, Timestamp}
 import org.postgresql.util.PSQLException
 
 object PGSecondaryDatasetMapWriter {
@@ -167,7 +168,8 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
           )
         }
       case None =>
-        val tableName = LocalRollupInfo.tableName(copyInfo, name)
+
+        val tableName = LocalRollupInfo.tableName(copyInfo, name,getNextRollupTableNameSequence.toString)
         using(conn.prepareStatement(insertLocalRollupQuery)) { stmt =>
           stmt.setString(1, name.underlying)
           stmt.setLong(2, copyInfo.systemId.underlying)
@@ -231,6 +233,7 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
 
   def changeRollupTableNameQuery = "UPDATE rollup_map SET table_name = ? WHERE copy_system_id = ? and name = ?"
   def changeRollupTableName(ri: LocalRollupInfo, name: String): LocalRollupInfo = {
+    logger.info(s"Renaming rollup table ${ri.tableName} to ${name}")
     using(conn.prepareStatement(changeRollupTableNameQuery)) { stmt =>
       stmt.setString(1, name)
       stmt.setLong(2, ri.copyInfo.systemId.underlying)

@@ -32,4 +32,5 @@
     <include file="com/socrata/pg/store/schema/20220502-create-index-map.xml"/>
     <include file="com/socrata/pg/store/schema/20220718-create-dummy-resync-table.xml"/>
     <include file="com/socrata/pg/store/schema/20220907-create-rollup-relationship-map.xml"/>
+    <include file="com/socrata/pg/store/schema/20221116-create-rollup-table-name-seq.xml"/>
 </databaseChangeLog>

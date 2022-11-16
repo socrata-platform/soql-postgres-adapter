@@ -139,7 +139,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
                 // At this point we are either creating the rollup table for the first time,
                 // or we need to rename the existing one and create a new one
                 if(oldRollupExists){
-                  rollupInfo = pgu.datasetMapWriter.changeRollupTableName(rollupInfo, LocalRollupInfo.tableName(rollupInfo.copyInfo, rollupInfo.name))
+                  rollupInfo = pgu.datasetMapWriter.changeRollupTableName(rollupInfo, LocalRollupInfo.tableName(rollupInfo.copyInfo, rollupInfo.name,pgu.datasetMapReader.getNextRollupTableNameSequence.toString))
                 }
 
                 for(or <- oldRollup) {
@@ -332,6 +332,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
 object RollupManager {
   private val logger = Logger[RollupManager]
+  val tableNameSequenceIdentifier = "rollup_table_name_seq"
 
   def makeSecondaryRollupInfo(rollupInfo: LocalRollupInfo): SecondaryRollupInfo =
      SecondaryRollupInfo(rollupInfo.name.underlying, rollupInfo.soql)
