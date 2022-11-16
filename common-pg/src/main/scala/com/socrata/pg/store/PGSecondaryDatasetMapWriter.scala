@@ -162,8 +162,8 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
           t("create-or-update-rollup", "action" -> "update", "copy-id" -> copyInfo.systemId, "name" -> name)(
             using(stmt.executeQuery()){resultSet =>
               if(resultSet.next()){
-                return Some(new LocalRollupInfo(copyInfo, name, soql, resultSet.getString("table_name"),RollupId(resultSet.getLong("system_id"))))
-              }
+                 Some(new LocalRollupInfo(copyInfo, name, soql, resultSet.getString("table_name"),RollupId(resultSet.getLong("system_id"))))
+              }else None
             }
           )
         }
@@ -179,12 +179,11 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
             using(stmt.executeQuery()){resultSet =>
               if(resultSet.next()){
                 Some(new LocalRollupInfo(copyInfo, name, soql, tableName,RollupId(resultSet.getLong("system_id"))))
-              }
+              }else None
             }
           )
         }
     }
-    None
   }
   def createRollupRelationship = "insert into rollup_relationship_map (rollup_system_id, referenced_copy_system_id) values (?,?) on conflict do nothing"
   def createRollupRelationship(rollupInfo: LocalRollupInfo, relatedCopyInfo: CopyInfo): Unit ={
