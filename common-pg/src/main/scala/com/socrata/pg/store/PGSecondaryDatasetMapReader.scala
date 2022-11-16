@@ -18,11 +18,17 @@ trait LocalRollupReaderOverride[CT] {
     using(conn.prepareStatement(localRollupsQuery)) { stmt =>
       stmt.setLong(1, copyInfo.systemId.underlying)
       using(t("rollups", "copy_id" -> copyInfo.systemId)(stmt.executeQuery())) { rs =>
-        val res = Vector.newBuilder[LocalRollupInfo]
-        while (rs.next()) {
-          res += new LocalRollupInfo(copyInfo, new RollupName(rs.getString("name")), rs.getString("soql"), rs.getString("table_name"), RollupId(rs.getLong("system_id")))
-        }
-        res.result()
+        Iterator.continually(rs.next())
+          .takeWhile(identity)
+          .map(_=>
+            new LocalRollupInfo(
+              copyInfo,
+              new RollupName(rs.getString("name")),
+              rs.getString("soql"),
+              rs.getString("table_name"),
+              RollupId(rs.getLong("system_id"))
+            )
+          ).toSeq
       }
     }
   }
@@ -65,25 +71,25 @@ from rollup_relationship_map
 where referenced_copy_system_id = ?"""
 
   def getRollupCopiesRelatedToCopy(copyInfo: CopyInfo): Set[CopyInfo] = {
-    var out = Set[CopyInfo]()
     using(conn.prepareStatement(getRollupCopiesRelatedToCopyQuery)) { stmt =>
       stmt.setLong(1, copyInfo.systemId.underlying)
       using(t("getRollupCopiesRelatedToCopy", "copy_id" -> copyInfo.systemId)(stmt.executeQuery())) { rs =>
-        while (rs.next()) {
-          out += CopyInfo(
-            DatasetInfo(new DatasetId(rs.getLong("dataset_map_system_id")), rs.getLong("dataset_map_next_counter_value"), rs.getLong("dataset_map_latest_data_version"), rs.getString("dataset_map_locale_name"), rs.getBytes("dataset_map_obfuscation_key"), Option(rs.getString("dataset_map_resource_name"))),
-            new CopyId(rs.getLong("copy_map_system_id")),
-            rs.getLong("copy_map_copy_number"),
-            LifecycleStage.valueOf(rs.getString("copy_map_lifecycle_stage")),
-            rs.getLong("copy_map_data_version"),
-            rs.getLong("copy_map_data_shape_version"),
-            new DateTime(rs.getTimestamp("copy_map_last_modified").getTime),
-            Some(rs.getLong("copy_map_table_modifiers_table_modifier"))
-          )
-        }
+        Iterator.continually(rs.next())
+          .takeWhile(identity)
+          .map(_=>
+            CopyInfo(
+              DatasetInfo(new DatasetId(rs.getLong("dataset_map_system_id")), rs.getLong("dataset_map_next_counter_value"), rs.getLong("dataset_map_latest_data_version"), rs.getString("dataset_map_locale_name"), rs.getBytes("dataset_map_obfuscation_key"), Option(rs.getString("dataset_map_resource_name"))),
+              new CopyId(rs.getLong("copy_map_system_id")),
+              rs.getLong("copy_map_copy_number"),
+              LifecycleStage.valueOf(rs.getString("copy_map_lifecycle_stage")),
+              rs.getLong("copy_map_data_version"),
+              rs.getLong("copy_map_data_shape_version"),
+              new DateTime(rs.getTimestamp("copy_map_last_modified").getTime),
+              Some(rs.getLong("copy_map_table_modifiers_table_modifier"))
+            )
+          ).toSet
       }
     }
-    out
   }
 
   def getRollupsRelatedToCopyQuery =
@@ -113,30 +119,30 @@ from rollup_relationship_map
 where referenced_copy_system_id = ?"""
 
   def getRollupsRelatedToCopy(copyInfo: CopyInfo): Set[LocalRollupInfo] = {
-    var out = Set[LocalRollupInfo]()
     using(conn.prepareStatement(getRollupsRelatedToCopyQuery)) { stmt =>
       stmt.setLong(1, copyInfo.systemId.underlying)
       using(t("getRollupsRelatedToCopy", "copy_id" -> copyInfo.systemId)(stmt.executeQuery())) { rs =>
-        while (rs.next()) {
-          out += new LocalRollupInfo(
-            CopyInfo(
-              DatasetInfo(new DatasetId(rs.getLong("dataset_map_system_id")), rs.getLong("dataset_map_next_counter_value"), rs.getLong("dataset_map_latest_data_version"), rs.getString("dataset_map_locale_name"), rs.getBytes("dataset_map_obfuscation_key"), Option(rs.getString("dataset_map_resource_name"))),
-              new CopyId(rs.getLong("copy_map_system_id")),
-              rs.getLong("copy_map_copy_number"),
-              LifecycleStage.valueOf(rs.getString("copy_map_lifecycle_stage")),
-              rs.getLong("copy_map_data_version"),
-              rs.getLong("copy_map_data_shape_version"),
-              new DateTime(rs.getTimestamp("copy_map_last_modified").getTime),
-              Some(rs.getLong("copy_map_table_modifiers_table_modifier"))
-            ),
-            new RollupName(rs.getString("rollup_map_name")),
-            rs.getString("rollup_map_soql"),
-            rs.getString("rollup_map_table_name"),
-            RollupId(rs.getLong("rollup_map_system_id")))
-        }
+        Iterator.continually(rs.next())
+          .takeWhile(identity)
+          .map(_=>
+            new LocalRollupInfo(
+              CopyInfo(
+                DatasetInfo(new DatasetId(rs.getLong("dataset_map_system_id")), rs.getLong("dataset_map_next_counter_value"), rs.getLong("dataset_map_latest_data_version"), rs.getString("dataset_map_locale_name"), rs.getBytes("dataset_map_obfuscation_key"), Option(rs.getString("dataset_map_resource_name"))),
+                new CopyId(rs.getLong("copy_map_system_id")),
+                rs.getLong("copy_map_copy_number"),
+                LifecycleStage.valueOf(rs.getString("copy_map_lifecycle_stage")),
+                rs.getLong("copy_map_data_version"),
+                rs.getLong("copy_map_data_shape_version"),
+                new DateTime(rs.getTimestamp("copy_map_last_modified").getTime),
+                Some(rs.getLong("copy_map_table_modifiers_table_modifier"))
+              ),
+              new RollupName(rs.getString("rollup_map_name")),
+              rs.getString("rollup_map_soql"),
+              rs.getString("rollup_map_table_name"),
+              RollupId(rs.getLong("rollup_map_system_id")))
+          ).toSet
       }
     }
-    out
   }
 
   def nextSequenceValue = "select nextval(?)"
