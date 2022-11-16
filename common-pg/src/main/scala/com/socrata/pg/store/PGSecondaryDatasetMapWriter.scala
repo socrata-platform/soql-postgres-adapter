@@ -178,7 +178,7 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
           t("create-or-update-rollup", "action" -> "insert", "copy-id" -> copyInfo.systemId, "name" -> name)(
             using(stmt.executeQuery()){resultSet =>
               if(resultSet.next()){
-                return Some(new LocalRollupInfo(copyInfo, name, soql, tableName,RollupId(resultSet.getLong("system_id"))))
+                Some(new LocalRollupInfo(copyInfo, name, soql, tableName,RollupId(resultSet.getLong("system_id"))))
               }
             }
           )
