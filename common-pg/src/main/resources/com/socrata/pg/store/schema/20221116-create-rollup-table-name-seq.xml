@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+    <changeSet author="Paul Maksimovich" id="20221116-create-rollup-table-name-seq">
+        <sql>
+            create sequence rollup_table_name_seq
+                minvalue 0
+                cycle;
+        </sql>
+        <rollback>
+            <sql>
+                drop sequence rollup_table_name_seq;
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
