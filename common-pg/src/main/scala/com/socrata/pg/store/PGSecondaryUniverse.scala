@@ -45,12 +45,20 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
 {
   import commonSupport._ // scalastyle:ignore import.grouping
   private val txnStart = DateTime.now()
+  private var isAutoCommit_ = false
 
   def transactionStart: DateTime = txnStart
 
   def commit(): Unit = conn.commit()
 
   def rollback(): Unit = conn.abort(commonSupport.executor)
+
+  def autoCommit(on: Boolean): Unit = {
+    conn.setAutoCommit(on)
+    isAutoCommit_ = on
+  }
+
+  def isAutoCommit = isAutoCommit_
 
   def prevettedLoader(copyCtx: DatasetCopyContext[SoQLType],
                       logger: Logger[SoQLType, SoQLValue]): SqlPrevettedLoader[SoQLType,SoQLValue] =
