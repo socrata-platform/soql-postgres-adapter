@@ -60,7 +60,7 @@ class RollupCopyDroppedHandlerTest extends PlaybackBase {
         WorkingCopyCreated(CopyInfo(new CopyId(-1), 2, LifecycleStage.Unpublished, 0L, 0L, DateTime.now())),
         WorkingCopyDropped),
         () => {
-
+            //no error happens
         }: Unit),
     )
 
