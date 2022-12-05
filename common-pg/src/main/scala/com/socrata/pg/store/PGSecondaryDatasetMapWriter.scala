@@ -106,6 +106,7 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
   def deleteCopy(copyInfo: CopyInfo): Unit = {
 
     deleteRollupRelationships(copyInfo)
+    deleteRollupRelationshipByRollupMapCopyInfo(copyInfo)
     dropRollup(copyInfo, None) // drop all related rollups metadata
     dropIndexDirectives(copyInfo)
     dropIndex(copyInfo, None)
@@ -216,6 +217,16 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
     }
   }
 
+  def deleteRollupRelationshipByRollupMapCopyInfoQuery = "delete from rollup_relationship_map where rollup_system_id in (select system_id from rollup_map where copy_system_id=?)"
+
+  def deleteRollupRelationshipByRollupMapCopyInfo(copyInfo: CopyInfo): Unit = {
+    using(conn.prepareStatement(deleteRollupRelationshipByRollupMapCopyInfoQuery)) { stmt =>
+      stmt.setLong(1, copyInfo.systemId.underlying)
+      t("delete-rollup-relationship-by-rollup-map-copy-info", "copyInfo" -> copyInfo.systemId)(
+        stmt.executeUpdate()
+      )
+    }
+  }
   def transferLocalRollupsQuery = "UPDATE rollup_map SET copy_system_id = ? WHERE copy_system_id = ? and name = ?"
   def transferRollup(from: LocalRollupInfo, to: CopyInfo) {
     if(from.copyInfo.systemId != to.systemId) {

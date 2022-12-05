@@ -9,6 +9,7 @@ case class CopyDroppedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], cop
   val rm = new RollupManager(pgu, copyInfo)
   rm.dropRollups(immediate = false)
   pgu.datasetMapWriter.deleteRollupRelationships(copyInfo)
+  pgu.datasetMapWriter.deleteRollupRelationshipByRollupMapCopyInfo(copyInfo)
   pgu.datasetMapWriter.dropCopy(copyInfo)
   val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
   sLoader.drop(copyInfo)

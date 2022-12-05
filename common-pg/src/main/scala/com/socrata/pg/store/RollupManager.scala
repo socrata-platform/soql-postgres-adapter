@@ -189,6 +189,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
   private def dropRollupInfo(rollupInfo: LocalRollupInfo) {
     for { ri <- pgu.datasetMapReader.rollup(copyInfo, rollupInfo.name) } {
       dropRollup(ri, immediate = true)
+      pgu.datasetMapWriter.deleteRollupRelationships(rollupInfo)
       pgu.datasetMapWriter.dropRollup(copyInfo, Some(rollupInfo.name))
     }
   }
