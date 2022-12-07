@@ -51,6 +51,8 @@ import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.curator.{CuratorFromConfig, DiscoveryFromConfig}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.http.common.util.HttpUtils
+import com.socrata.metrics.rollup.RollupMetrics
+import com.socrata.metrics.rollup.events.RollupHit
 import com.socrata.pg.server.CJSONWriter.utf8EncodingName
 import com.socrata.thirdparty.metrics.{MetricsReporter, SocrataHttpSupport}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
@@ -63,6 +65,7 @@ import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
+import java.time.{Clock, LocalDateTime}
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.collection.immutable.SortedMap
 import scala.language.existentials
@@ -353,6 +356,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                   // Very weird separation of concerns between execQuery and streaming. Most likely we will
                   // want yet-another-refactoring where much of execQuery is lifted out into this function.
                   // This will significantly change the tests; however.
+                  rollupName.foreach(rollupName=>
+                    //rollup name exists and we just successfully executed the query, lets tell someone
+                    RollupMetrics.digest(RollupHit(datasetInfo.resourceName.getOrElse("unknown"),rollupName.underlying,LocalDateTime.now(Clock.systemUTC())))
+                  )
                   if(debug) logger.info(s"Returning etag: ${etag.asBytes.mkString(",")}")
                   ETag(etag)(resp)
                   copyInfoHeaderForRows(copyNumber, dataVersion, lastModified)(resp)
