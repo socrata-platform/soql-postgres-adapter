@@ -185,4 +185,15 @@ class PGSecondaryDatasetMapReader[CT](conn: Connection, tns: TypeNamespace[CT], 
       }
     }
   }
+
+  def pgTotalRelationSizeQuery = "select pg_total_relation_size(?)"
+
+  def getTotalRelationSize(tableName: String): Option[Long] = {
+    using(conn.prepareStatement(pgTotalRelationSizeQuery)) { stmt =>
+      stmt.setString(1, tableName)
+      using(t("get-total-relation-size", "tableName" -> tableName)(stmt.executeQuery())) { rs =>
+        if (rs.next()) Some(rs.getLong(1)) else None
+      }
+    }
+  }
 }
