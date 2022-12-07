@@ -13,7 +13,7 @@ object Dependencies {
     val liquibasePlugin = "1.9.5.0"
     val postgresql = "9.4.1212"
     val simpleArm = "1.1.10"
-    val slf4j = "1.7.5"
+    val slf4j = "2.0.5"
     val scalatest = "3.0.8"
     val socrataUtils = "0.11.0"
     val socrataCuratorUtils = "1.2.0"
@@ -27,6 +27,7 @@ object Dependencies {
     val metrics = "4.1.2"
     val metricsScala = "4.1.1"
     val clojure = "1.5.1"
+    val rollupMetrics = "2.0"
   }
 
   val c3p0 = "com.mchange" % "c3p0" % versions.c3p0
@@ -80,4 +81,6 @@ object Dependencies {
   val metricsScala = "nl.grons" %% "metrics4-scala" % versions.metricsScala
 
   val clojure = "org.clojure" % "clojure" % versions.clojure
+
+  val rollupMetrics = "rollup-metrics" %% "rollup-metrics" % versions.rollupMetrics
 }

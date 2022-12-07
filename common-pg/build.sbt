@@ -26,7 +26,8 @@ libraryDependencies ++= Seq(
   metricsJetty,
   metricsGraphite,
   metricsJmx,
-  scalatest % "test"
+  scalatest % "test",
+  rollupMetrics
 )
 
 enablePlugins(BuildInfoPlugin)

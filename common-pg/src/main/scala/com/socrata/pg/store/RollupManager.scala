@@ -25,10 +25,15 @@ import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.scalalogging.Logger
 import RollupManager.{parseAndCollectTableNames, _}
 import com.socrata.datacoordinator.util.{LoggedTimingReport, StackedTimingReport}
+import com.socrata.metrics.rollup.RollupMetrics
+import com.socrata.metrics.rollup.events.RollupBuilt
 import com.socrata.pg.query.QueryServerHelper
 import com.socrata.soql.ast.{JoinFunc, JoinQuery, JoinTable, Select}
 import com.socrata.soql.parsing.StandaloneParser
 import com.socrata.soql.typed.Qualifier
+import com.socrata.util.Timing
+
+import java.time.{Clock, LocalDateTime, ZoneId}
 
 // scalastyle:off multiple.string.literals
 class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) extends SecondaryManagerBase(pgu, copyInfo) {
@@ -150,9 +155,13 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
                     dropRollup(or, immediate = true) // ick
                   }
                 }
-                createRollupTable(rollupReps, rollupInfo)
-                populateRollupTable(rollupInfo, rollupAnalyses, rollupReps)
-                createIndexes(rollupInfo, rollupReps)
+                Timing.wrap {
+                  createRollupTable(rollupReps, rollupInfo)
+                  populateRollupTable(rollupInfo, rollupAnalyses, rollupReps)
+                  createIndexes(rollupInfo, rollupReps)
+                }((_,dur)=>{
+                  RollupMetrics.digest(RollupBuilt(rollupInfo.copyInfo.datasetInfo.resourceName.getOrElse("unknown"),rollupInfo.name.underlying,LocalDateTime.now(Clock.systemUTC()),dur,pgu.datasetMapReader.getTotalRelationSize(rollupInfo.tableName).getOrElse(-1L)))
+                })
             }
           case Failure(e) =>
             e match {
