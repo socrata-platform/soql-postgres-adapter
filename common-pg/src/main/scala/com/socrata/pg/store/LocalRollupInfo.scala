@@ -13,9 +13,7 @@ object LocalRollupInfo {
   // Generate the name for the actual rollup table
   // It is important that this is somewhat random so that we can drop/recreate a rollup table and not have names conflict
   // Note that table name should be lowercase, as this is an assumption throughout the stack
-  def tableName(copyInfo: CopyInfo, name: RollupName, sequenceToAppend: String): String = {
-    val base = copyInfo.dataTableName + "_r_" + copyInfo.dataVersion + "_" + name.underlying.filter(Predicates.isAlphaNumericUnderscore).toLowerCase + "_"
-    // clamp our base string to be max 63-randomBits since postgres table names are limited to 63 characters
-    base.take(63 - sequenceToAppend.length) + sequenceToAppend
+  def tableName(copyInfo: CopyInfo, name: RollupName, uniqueSequence: String): String = {
+    (copyInfo.dataTableName + copyInfo.dataVersion + "_" + uniqueSequence + "_" + name.underlying.filter(Predicates.isAlphaNumericUnderscore).toLowerCase).take(63)
   }
 }
