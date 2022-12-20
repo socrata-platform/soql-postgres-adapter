@@ -145,6 +145,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     FixedTimeStampTruncYAtTimeZone -> formatCall("date_trunc('year', %s at time zone %s)") _,
 
     TimeStampDiffD -> formatCall("trunc((extract(epoch from %s) - extract(epoch from %s))::numeric / 86400)") _,
+    EpochSeconds -> formatCall("round(extract(epoch from %s) :: numeric, 3)") _,
     TimeStampAdd -> infix("+") _,
     TimeStampPlus -> infix("+") _,
     TimeStampMinus -> infix("-") _,
@@ -211,7 +212,11 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     FirstValue -> nary("first_value") _,
     LastValue -> nary("last_value") _,
     Lead -> nary("lead") _,
+    LeadOffset -> formatCall("lead(%s, %s::int)") _,
+    LeadOffsetDefault -> formatCall("lead(%s, %s::int, %s)") _,
     Lag -> nary("lag") _,
+    LagOffset -> formatCall("lag(%s, %s::int)") _,
+    LagOffsetDefault -> formatCall("lag(%s, %s::int, %s)") _,
 
     Count -> nary("count", Some("numeric")) _,
     CountStar -> formatCall("count(*)", typeCastIfPlainFunctionCall = Some("numeric")) _,
