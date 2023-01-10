@@ -40,29 +40,4 @@ class SoQLContextTest extends SoQLTest {
                         user = UserContext.empty
                       ))
   }
-
-  test("parameters") {
-    val SoQLFloatingTimestamp.StringRep(d1) = "2001-01-01T02:03:44.543"
-    val SoQLFixedTimestamp.StringRep(d2) = "2001-07-04T13:22:11.003-0700"
-
-    compareSoqlResult("""select
-                           text_parameter('text_1') as a, text_parameter('text_2') as b,
-                           number_parameter('n1') as c, number_parameter('n2') as d,
-                           boolean_parameter('b') as e,
-                           floating_timestamp_parameter('d') as f,
-                           fixed_timestamp_parameter('d2') as g,
-                           text_parameter('n1') as wrong_type
-                         limit 1""",
-                      "parameters.json",
-                      context = Context(
-                        system = Map.empty,
-                        user = UserContext(text = Map("text_1" -> SoQLText("hello"),
-                                                      "text_2" -> SoQLText("world")),
-                                           num = Map("n1" -> SoQLNumber(JBigDecimal.valueOf(3)),
-                                                     "n2" -> SoQLNumber(JBigDecimal.valueOf(42))),
-                                           bool = Map("b" -> SoQLBoolean(true)),
-                                           floating = Map("d" -> SoQLFloatingTimestamp(d1)),
-                                           fixed = Map("d2" -> SoQLFixedTimestamp(d2)))
-                      ))
-  }
 }

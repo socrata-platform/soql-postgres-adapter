@@ -165,11 +165,6 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
 
       val SoQLContext(system, UserContext(text, bool, num, float, fixed)) = context;
       assign("system", system)(identity)
-      assign("text", text)(_.value)
-      assign("bool", bool) { b => if(b.value) "true" else "false" }
-      assign("num", num)(_.value.toString)
-      assign("float", float) { f => SoQLFloatingTimestamp.StringRep(f.value) }
-      assign("fixed", fixed) { f => SoQLFixedTimestamp.StringRep(f.value) }
     }
   }
 
