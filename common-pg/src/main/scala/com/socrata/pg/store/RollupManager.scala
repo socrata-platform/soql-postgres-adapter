@@ -4,7 +4,7 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.sql.{Connection, SQLException}
 import scala.util.{Failure, Success, Try}
 import com.rojoma.simplearm.v2.using
-import com.socrata.datacoordinator.id.{UserColumnId, RollupName}
+import com.socrata.datacoordinator.id.{RollupName, UserColumnId}
 import com.socrata.datacoordinator.secondary.{RollupInfo => SecondaryRollupInfo}
 import com.socrata.datacoordinator.truth.loader.sql.{ChangeOwner, SqlTableDropper}
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, LifecycleStage}
@@ -23,12 +23,17 @@ import com.socrata.soql.functions.{SoQLFunctionInfo, SoQLTypeInfo}
 import com.socrata.soql.parsing.standalone_exceptions.{BadParse, StandaloneLexerException}
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.scalalogging.Logger
-import RollupManager._
+import RollupManager.{parseAndCollectTableNames, _}
 import com.socrata.datacoordinator.util.{LoggedTimingReport, StackedTimingReport}
+import com.socrata.metrics.rollup.RollupMetrics
+import com.socrata.metrics.rollup.events.RollupBuilt
 import com.socrata.pg.query.QueryServerHelper
 import com.socrata.soql.ast.{JoinFunc, JoinQuery, JoinTable, Select}
 import com.socrata.soql.parsing.StandaloneParser
 import com.socrata.soql.typed.Qualifier
+import com.socrata.util.Timing
+
+import java.time.{Clock, LocalDateTime, ZoneId}
 
 // scalastyle:off multiple.string.literals
 class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) extends SecondaryManagerBase(pgu, copyInfo) {
@@ -135,7 +140,12 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
                 // ok, we're going to be making a table.  Which means
                 // we don't actually care about the old table and _can
                 // change its name_.
-                rollupInfo = pgu.datasetMapWriter.changeRollupTableName(rollupInfo, LocalRollupInfo.tableName(rollupInfo.copyInfo, rollupInfo.name))
+
+                // At this point we are either creating the rollup table for the first time,
+                // or we need to rename the existing one and create a new one
+                if(oldRollupExists){
+                  rollupInfo = pgu.datasetMapWriter.changeRollupTableName(rollupInfo, LocalRollupInfo.tableName(rollupInfo.copyInfo, rollupInfo.name,pgu.datasetMapReader.getNextRollupTableNameSequence.toString))
+                }
 
                 for(or <- oldRollup) {
                   if(or.tableName == rollupInfo.tableName && oldRollupExists) {
@@ -145,9 +155,13 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
                     dropRollup(or, immediate = true) // ick
                   }
                 }
-                createRollupTable(rollupReps, rollupInfo)
-                populateRollupTable(rollupInfo, rollupAnalyses, rollupReps)
-                createIndexes(rollupInfo, rollupReps)
+                Timing.wrap {
+                  createRollupTable(rollupReps, rollupInfo)
+                  populateRollupTable(rollupInfo, rollupAnalyses, rollupReps)
+                  createIndexes(rollupInfo, rollupReps)
+                }((_,dur)=>{
+                  RollupMetrics.digest(RollupBuilt(rollupInfo.copyInfo.datasetInfo.resourceName.getOrElse("unknown"),rollupInfo.name.underlying,LocalDateTime.now(Clock.systemUTC()),dur,pgu.datasetMapReader.getTotalRelationSize(rollupInfo.tableName).getOrElse(-1L)))
+                })
             }
           case Failure(e) =>
             e match {
@@ -184,6 +198,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
   private def dropRollupInfo(rollupInfo: LocalRollupInfo) {
     for { ri <- pgu.datasetMapReader.rollup(copyInfo, rollupInfo.name) } {
       dropRollup(ri, immediate = true)
+      pgu.datasetMapWriter.deleteRollupRelationships(rollupInfo)
       pgu.datasetMapWriter.dropRollup(copyInfo, Some(rollupInfo.name))
     }
   }
@@ -327,6 +342,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
 object RollupManager {
   private val logger = Logger[RollupManager]
+  val tableNameSequenceIdentifier = "rollup_table_name_seq"
 
   def makeSecondaryRollupInfo(rollupInfo: LocalRollupInfo): SecondaryRollupInfo =
      SecondaryRollupInfo(rollupInfo.name.underlying, rollupInfo.soql)
@@ -350,4 +366,9 @@ object RollupManager {
         }
     }
   }
+
+  def parseAndCollectTableNames(soql: String): Set[String] = collectTableNames(new StandaloneParser().binaryTreeSelect(soql))
+
+  def parseAndCollectTableNames(rollupInfo: LocalRollupInfo):Set[String] = parseAndCollectTableNames(rollupInfo.soql)
+
 }
