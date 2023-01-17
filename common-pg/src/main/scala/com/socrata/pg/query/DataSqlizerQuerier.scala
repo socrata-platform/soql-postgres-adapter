@@ -163,7 +163,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
         }
       }
 
-      val SoQLContext(system, UserContext(text, bool, num, float, fixed)) = context;
+      val SoQLContext(system, _) = context;
       assign("system", system)(identity)
     }
   }
