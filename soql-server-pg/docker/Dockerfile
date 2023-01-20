@@ -1,9 +1,8 @@
 FROM socrata/java8-bionic
 
-# TODO expose JMX
-EXPOSE 6090 6091
+EXPOSE 6090
+EXPOSE 6091/udp
 ENV JMX_PORT 6099
-EXPOSE 6099
 
 ENV SERVER_ROOT /srv/soql-server-pg
 ENV SERVER_ARTIFACT soql-server-pg-assembly.jar
