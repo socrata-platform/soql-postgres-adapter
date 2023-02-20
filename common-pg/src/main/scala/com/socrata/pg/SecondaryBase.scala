@@ -17,6 +17,24 @@ trait SecondaryBase {
 
   protected def populateDatabase(conn: Connection): Unit = { }
 
+  protected def openDb(dsInfo: DSInfo, rs: ResourceScope): Connection = {
+    val conn = rs.open(dsInfo.dataSource.getConnection)
+    try {
+      conn.setAutoCommit(false)
+      conn.setClientInfo("ApplicationName", applicationNameString)
+      conn
+    } catch {
+      case e: Exception =>
+        try {
+          rs.close(conn)
+        } catch {
+          case e2: Exception =>
+            e.addSuppressed(e2)
+        }
+        throw e
+    }
+  }
+
   protected def withDb[T](dsInfo:DSInfo)(f: (Connection) => T): T = {
     for {
       conn <- managed(dsInfo.dataSource.getConnection)
@@ -42,6 +60,22 @@ trait SecondaryBase {
       // X-Socrata-Resource is set to the soda fountain resource name, not what the request came into core with.
       // It would be nice to expose the 4x4 the request came into core with but that requires more plumbing work.
       Option(MDC.get("X-Socrata-Resource")).orElse(Option(MDC.get("dataset-id"))).getOrElse("-")
+  }
+
+  protected def openPgu(dsInfo: DSInfo, truthStoreDatasetInfo: Option[DatasetInfo], rs: ResourceScope): PGSecondaryUniverse[SoQLType, SoQLValue] = {
+    val conn = openDb(dsInfo, rs)
+    try {
+      rs.openUnmanaged(new PGSecondaryUniverse[SoQLType, SoQLValue](conn, postgresUniverseCommon, truthStoreDatasetInfo), transitiveClose = List(conn))
+    } catch {
+      case e: Exception =>
+        try {
+          rs.close(conn)
+        } catch {
+          case e2: Exception =>
+            e.addSuppressed(e2)
+        }
+        throw e
+    }
   }
 
   protected def withPgu[T](dsInfo:DSInfo, truthStoreDatasetInfo:Option[DatasetInfo])

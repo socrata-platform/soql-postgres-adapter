@@ -1,23 +1,28 @@
 package com.socrata.pg.server
 
+import scala.collection.{mutable => scm}
+
 import java.io.{ByteArrayInputStream, OutputStreamWriter}
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
-import java.sql.{Connection, SQLException}
+import java.sql.{Connection, SQLException, PreparedStatement}
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import javax.servlet.http.HttpServletResponse
 import com.socrata.pg.BuildInfo
-import com.rojoma.json.v3.ast.{JObject, JString}
+import com.rojoma.json.v3.ast.{JObject, JString, JValue, JArray, JNull}
 import com.rojoma.json.v3.io.CompactJsonWriter
-import com.rojoma.json.v3.util.{AutomaticJsonEncodeBuilder, JsonUtil}
+import com.rojoma.json.v3.util.{AutomaticJsonEncodeBuilder, JsonUtil, AutomaticJsonEncode}
 import com.rojoma.simplearm.v2._
+import com.socrata.prettyprint.prelude._
+import com.socrata.prettyprint.SimpleDocStream
 import com.socrata.datacoordinator.Row
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
-import com.socrata.datacoordinator.common.soql.SoQLTypeContext
+import com.socrata.datacoordinator.common.soql.{SoQLTypeContext, SoQLRep}
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.datacoordinator.id._
 import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
 import com.socrata.datacoordinator.truth.metadata._
+import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.http.common.AuxiliaryData
@@ -33,6 +38,7 @@ import com.socrata.http.server.util.Precondition._
 import com.socrata.http.server.util.RequestId.ReqIdHeader
 import com.socrata.http.server.util.handlers.{LoggingOptions, NewLoggingHandler, ThreadRenamingHandler}
 import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, StrongEntityTag}
+import com.socrata.pg.analyzer2.CryptProviderProvider
 import com.socrata.pg.SecondaryBase
 import com.socrata.pg.query.{DataSqlizerQuerier, ExplainInfo, QueryResult, QueryServerHelper, RowCount, RowReaderQuerier}
 import com.socrata.pg.server.config.{DynamicPortMap, QueryServerConfig}
@@ -41,12 +47,13 @@ import com.socrata.pg.soql._
 import com.socrata.pg.store._
 import com.socrata.soql.{BinaryTree, Compound, Leaf, SoQLAnalysis, typed}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
+import com.socrata.soql.analyzer2.Statement
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, ResourceName, TableName}
 import com.socrata.soql.stdlib.{Context => SoQLContext}
 import com.socrata.soql.typed.CoreExpr
 import com.socrata.soql.types.SoQLID.ClearNumberRep
-import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion}
+import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion, SoQLNull}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.curator.{CuratorFromConfig, DiscoveryFromConfig}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
@@ -88,7 +95,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
       Route("/rollups", RollupResource),
       Route("/query", QueryResource),
       Route("/version", VersionResource),
-      Route("/info", InfoResource)
+      Route("/info", InfoResource),
+      Route("/new-query", NewQueryResource)
     )
   }
 
@@ -173,6 +181,18 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
 
   object InfoResource extends SimpleResource {
     override val post = query(true) _
+  }
+
+  object NewQueryResource extends SimpleResource {
+    override val post = newQuery _
+  }
+
+  def newQuery(req: HttpRequest): HttpResponse = {
+    val rs = req.resourceScope
+
+    val analyzer2.Deserializer.Request(analysis, systemContext, passes) = analyzer2.Deserializer(req.inputStream)
+
+    analyzer2.ProcessQuery(analysis, systemContext, passes, openPgu(dsInfo, None, rs), req.precondition, rs)
   }
 
   def etagFromCopy(datasetInternalName: String, copy: CopyInfo, etagInfo: Option[String], debug: Boolean = false): EntityTag = {
