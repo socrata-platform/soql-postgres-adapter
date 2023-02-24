@@ -54,7 +54,7 @@ trait DatabaseTestBase {
 
   var secDatasetId: DatasetId = _
 
-  val idMap =  (cn: ColumnName) => new UserColumnId(cn.name)
+  val idMap =  (cn: ColumnName) => new UserColumnId(cn.caseFolded)
 
   val datasetIdToInternal = (datasetId: DatasetId) => s"${dcInstance}.${datasetId.underlying}"
 

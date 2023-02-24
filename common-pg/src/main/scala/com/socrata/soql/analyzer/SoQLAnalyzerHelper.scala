@@ -51,7 +51,7 @@ object SoQLAnalyzerHelper {
     }
 
     def toColumnNameJoinAlias(joinAlias: Option[String], columnName: ColumnName) = (columnName, joinAlias)
-    def toUserColumnId(columnName: ColumnName) = new UserColumnId(columnName.name)
+    def toUserColumnId(columnName: ColumnName) = new UserColumnId(columnName.caseFolded)
 
     analyses match {
       case PipeQuery(l, r) =>

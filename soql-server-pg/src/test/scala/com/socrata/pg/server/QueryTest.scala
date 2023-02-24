@@ -47,7 +47,7 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase w
         (v) => assert(rowValues.contains(v._2), "Could not find " + v + " in row values: " + rowValues)
       }
 
-      val idMap =  (cn: ColumnName) => new UserColumnId(cn.name)
+      val idMap =  (cn: ColumnName) => new UserColumnId(cn.caseFolded)
       val soql = "select text_USERNAME, number_USERNAME"
 
       pgu.datasetReader.openDataset(copyInfo).run { readCtx =>

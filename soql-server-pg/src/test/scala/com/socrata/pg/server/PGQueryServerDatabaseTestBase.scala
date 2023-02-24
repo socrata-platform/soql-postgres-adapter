@@ -66,7 +66,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
         val joinTableColumnNameIdMap = joinDatasetCtx.foldLeft(Map.empty[QualifiedColumnName, UserColumnId]) { (acc, jctx) =>
           val (name, ctx) = jctx
           val columnNameIdMap = ctx.columns.map { columnName =>
-            QualifiedColumnName(Some(name), columnName) -> new UserColumnId(columnName.name)
+            QualifiedColumnName(Some(name), columnName) -> new UserColumnId(columnName.caseFolded)
           }
           acc ++ columnNameIdMap
         }
