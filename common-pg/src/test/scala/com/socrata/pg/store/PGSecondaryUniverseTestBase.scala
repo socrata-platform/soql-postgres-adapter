@@ -63,10 +63,10 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
                                                     t != SoQLVersion.name)
                                    .map {
       case (n, t) => pgu.datasetMapWriter.addColumn(copyInfo,
-                                                    new UserColumnId(n + "_USERNAME"),
+                                                    new UserColumnId(n + "_username"),
                                                     Some(ColumnName(n + "_FIELD")),
                                                     t,
-                                                    n + "_PHYSNAME",
+                                                    n + "_physname",
                                                     None)
     }
 
