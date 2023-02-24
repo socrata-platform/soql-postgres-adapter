@@ -706,7 +706,7 @@ trait SoQLAnalysisSqlizer {
     val (sqls, setParamsInSelect) =
       analysis.selection.foldLeft(Tuple2(Seq.empty[String], setParams)) { (acc, columnNameAndcoreExpr) =>
         val (columnName, coreExpr) = columnNameAndcoreExpr
-        val ctxSelect = ctx + (RootExpr -> coreExpr) + (SqlizerContext.ColumnName -> columnName.name)
+        val ctxSelect = ctx + (RootExpr -> coreExpr) + (SqlizerContext.ColumnName -> columnName.caseFolded)
         val (_, selectSetParams) = acc
         val ParametricSql(sqls, newSetParams) = Sqlizer.sql(coreExpr)(rep, typeRep, selectSetParams, ctxSelect, escape)
         val sqlGeomConverted =
