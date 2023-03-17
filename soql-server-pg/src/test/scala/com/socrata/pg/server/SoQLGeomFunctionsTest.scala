@@ -64,11 +64,11 @@ class SoQLGeomFunctionsTest extends SoQLTest {
   }
 
   test("concave hull") {
-    compareSoqlResult("select concave_hull(multipolygon, 0.99) as concave_hull where country = 'Germany'", "select-concave-hull.json")
+    compareSoqlResult("select concave_hull(spatial_union(multipolygon), 0.99) as concave_hull where country = 'Germany'", "select-concave-hull.json")
   }
 
   test("convex hull") {
-    compareSoqlResult("select convex_hull(multipolygon) as convex_hull where country = 'Germany'", "select-convex-hull.json")
+    compareSoqlResult("select convex_hull(spatial_union(multipolygon)) as convex_hull where country = 'Germany'", "select-convex-hull.json")
   }
 
   test("intersects") {

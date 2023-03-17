@@ -53,9 +53,9 @@ class SqlizerBasicTest extends SqlizerTest {
   test("concave hull") {
     val soql = "select concave_hull(point, 0.99), concave_hull(multiline, 0.89), concave_hull(multipolygon, 0.79)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ST_AsBinary((ST_Multi(ST_ConcaveHull(ST_Union("t1".point), ?)))),""" +
-      """ST_AsBinary((ST_Multi(ST_ConcaveHull(ST_Union("t1".multiline), ?)))),""" +
-      """ST_AsBinary((ST_Multi(ST_ConcaveHull(ST_Union("t1".multipolygon), ?)))) FROM t1""")
+    sql should be ("""SELECT ST_AsBinary((ST_Multi(ST_Buffer(ST_ConcaveHull("t1".point, ?),0.0)))),""" +
+      """ST_AsBinary((ST_Multi(ST_Buffer(ST_ConcaveHull("t1".multiline, ?),0.0)))),""" +
+      """ST_AsBinary((ST_Multi(ST_Buffer(ST_ConcaveHull("t1".multipolygon, ?),0.0)))) FROM t1""")
     setParams.length should be (3)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq(0.99, 0.89, 0.79).map(BigDecimal(_)))
@@ -64,9 +64,9 @@ class SqlizerBasicTest extends SqlizerTest {
   test("convex hull") {
     val soql = "select convex_hull(point), convex_hull(multiline), convex_hull(multipolygon)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ST_AsBinary((ST_Multi(ST_ConvexHull(ST_Union("t1".point))))),""" +
-      """ST_AsBinary((ST_Multi(ST_ConvexHull(ST_Union("t1".multiline))))),""" +
-      """ST_AsBinary((ST_Multi(ST_ConvexHull(ST_Union("t1".multipolygon))))) FROM t1""")
+    sql should be ("""SELECT ST_AsBinary((ST_Multi(ST_Buffer(ST_ConvexHull("t1".point),0.0)))),""" +
+      """ST_AsBinary((ST_Multi(ST_Buffer(ST_ConvexHull("t1".multiline),0.0)))),""" +
+      """ST_AsBinary((ST_Multi(ST_Buffer(ST_ConvexHull("t1".multipolygon),0.0)))) FROM t1""")
     setParams.length should be (0)
   }
 
