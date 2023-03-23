@@ -37,7 +37,7 @@ object StringLiteralSqlizer extends Sqlizer[StringLiteral[SoQLType]] {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
         val v = toUpper(lit, quote(lit.value, escape), ctx)
         ParametricSql(Seq(v), setParams)
-      case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(lit)(ctx) =>
+      case Some(SoqlSelect) | Some(SoqlOrder) =>
         val v = toUpper(lit, quote(lit.value, escape), ctx) + selectAlias(lit)(ctx)
         ParametricSql(Seq(v), setParams)
       case _ =>
@@ -106,7 +106,7 @@ object NumberLiteralSqlizer extends Sqlizer[NumberLiteral[SoQLType]] {
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
         ParametricSql(Seq(lit.value.bigDecimal.toPlainString), setParams)
-      case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(lit)(ctx) =>
+      case Some(SoqlSelect) | Some(SoqlOrder) =>
         ParametricSql(Seq(lit.value.bigDecimal.toPlainString + selectAlias(lit)(ctx)), setParams)
       case _ =>
         val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
@@ -128,7 +128,7 @@ object BooleanLiteralSqlizer extends Sqlizer[BooleanLiteral[SoQLType]] {
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
         ParametricSql(Seq(lit.toString), setParams)
-      case Some(SoqlSelect) | Some(SoqlOrder) if usedInGroupBy(lit)(ctx) =>
+      case Some(SoqlSelect) | Some(SoqlOrder) =>
         ParametricSql(Seq(lit.toString + selectAlias(lit)(ctx)), setParams)
       case _ =>
         val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
