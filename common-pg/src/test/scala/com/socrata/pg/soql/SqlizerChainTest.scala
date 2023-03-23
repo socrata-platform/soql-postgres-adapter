@@ -12,13 +12,11 @@ class SqlizerChainTest extends SqlizerTest {
     val soql = "SELECT 'one' as one, max('two') as two GROUP BY one |> SELECT /*hint*/ one, two"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     val expected = Seq(
-      """SELECT "one","two" FROM (SELECT e'one' as "one",(max(?)) as "two" FROM t1 GROUP BY 1) AS "x1"""",
-      """WITH "x1" AS MATERIALIZED (SELECT e'one' as "one",(max(?)) as "two" FROM t1 GROUP BY 1)
+      """SELECT "one","two" FROM (SELECT e'[[one]]' as "one",(max(e'[[two]]')) as "two" FROM t1 GROUP BY 1) AS "x1"""",
+      """WITH "x1" AS MATERIALIZED (SELECT e'[[one]]' as "one",(max(e'[[two]]')) as "two" FROM t1 GROUP BY 1)
         |SELECT "one","two" FROM x1""".stripMargin)
     sql should be (expected(index))
-    val expectedParams = Seq(Seq("two"), Seq("two"))
-    val params = setParams.map { setParam => setParam(None, 0).get }
-    params should be (expectedParams(index))
+    setParams.length should be (0)
   }
 
   test("chained soql set params positions match place holder positions in sql") {
@@ -27,12 +25,12 @@ class SqlizerChainTest extends SqlizerTest {
         |SELECT /*hint*/ aa || 'b' as bb WHERE aa !='11'""".stripMargin
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     val expected = Seq(
-      """SELECT ("aa" || ?) FROM (SELECT ? as "aa" FROM t1 WHERE ("t1".primary_type != ?)) AS "x1" WHERE ("aa" != ?)""",
-      """WITH "x1" AS MATERIALIZED (SELECT ? as "aa" FROM t1 WHERE ("t1".primary_type != ?))
-        |SELECT ("aa" || ?) FROM x1 WHERE ("aa" != ?)""".stripMargin
+      """SELECT ("aa" || e'[[b]]') FROM (SELECT e'[[aa]]' as "aa" FROM t1 WHERE ("t1".primary_type != ?)) AS "x1" WHERE ("aa" != ?)""",
+      """WITH "x1" AS MATERIALIZED (SELECT e'[[aa]]' as "aa" FROM t1 WHERE ("t1".primary_type != ?))
+        |SELECT ("aa" || e'[[b]]') FROM x1 WHERE ("aa" != ?)""".stripMargin
     )
     sql should be (expected(index))
-    val expectedParams = Seq(Seq("b", "aa", "00", "11"), Seq("aa", "00", "b", "11"))
+    val expectedParams = Seq(Seq("00", "11"), Seq("00", "11"))
     val params = setParams.map { setParam => setParam(None, 0).get }
     params should be(expectedParams(index))
   }
@@ -44,14 +42,14 @@ class SqlizerChainTest extends SqlizerTest {
         |SELECT bb || 'c' as cc WHERE bb !='22'""".stripMargin
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     val expected = Seq(
-      """SELECT ("bb" || ?) FROM (SELECT ("aa" || ?) as "bb" FROM (SELECT ? as "aa" FROM t1 WHERE ("t1".primary_type != ?)) AS "x1" WHERE ("aa" != ?)) AS "x1" WHERE ("bb" != ?)""",
-      """SELECT ("bb" || ?) FROM (WITH "x1" AS MATERIALIZED (SELECT ? as "aa" FROM t1 WHERE ("t1".primary_type != ?))
-        |SELECT ("aa" || ?) as "bb" FROM x1 WHERE ("aa" != ?)) AS "x1" WHERE ("bb" != ?)""".stripMargin
+      """SELECT ("bb" || e'[[c]]') FROM (SELECT ("aa" || e'[[b]]') as "bb" FROM (SELECT e'[[aa]]' as "aa" FROM t1 WHERE ("t1".primary_type != ?)) AS "x1" WHERE ("aa" != ?)) AS "x1" WHERE ("bb" != ?)""",
+      """SELECT ("bb" || e'[[c]]') FROM (WITH "x1" AS MATERIALIZED (SELECT e'[[aa]]' as "aa" FROM t1 WHERE ("t1".primary_type != ?))
+        |SELECT ("aa" || e'[[b]]') as "bb" FROM x1 WHERE ("aa" != ?)) AS "x1" WHERE ("bb" != ?)""".stripMargin
     )
     sql should be (expected(index))
     val expectedParams = Seq(
-      Seq("c", "b", "aa", "00", "11", "22"),
-      Seq("c", "aa", "00", "b", "11", "22")
+      Seq("00", "11", "22"),
+      Seq("00", "11", "22")
     )
     val params = setParams.map { setParam => setParam(None, 0).get }
     params should be(expectedParams(index))
@@ -64,15 +62,15 @@ class SqlizerChainTest extends SqlizerTest {
         |SELECT /*hint*/ bb || 'c' as cc WHERE bb !='22'""".stripMargin
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     val expected = Seq(
-      """SELECT ("bb" || ?) FROM (SELECT ("aa" || ?) as "bb" FROM (SELECT ? as "aa" FROM t1 WHERE ("t1".primary_type != ?)) AS "x1" WHERE ("aa" != ?)) AS "x1" WHERE ("bb" != ?)""",
-      """WITH "x1" AS MATERIALIZED (WITH "x1" AS MATERIALIZED (SELECT ? as "aa" FROM t1 WHERE ("t1".primary_type != ?))
-        |SELECT ("aa" || ?) as "bb" FROM x1 WHERE ("aa" != ?))
-        |SELECT ("bb" || ?) FROM x1 WHERE ("bb" != ?)""".stripMargin
+      """SELECT ("bb" || e'[[c]]') FROM (SELECT ("aa" || e'[[b]]') as "bb" FROM (SELECT e'[[aa]]' as "aa" FROM t1 WHERE ("t1".primary_type != ?)) AS "x1" WHERE ("aa" != ?)) AS "x1" WHERE ("bb" != ?)""",
+      """WITH "x1" AS MATERIALIZED (WITH "x1" AS MATERIALIZED (SELECT e'[[aa]]' as "aa" FROM t1 WHERE ("t1".primary_type != ?))
+        |SELECT ("aa" || e'[[b]]') as "bb" FROM x1 WHERE ("aa" != ?))
+        |SELECT ("bb" || e'[[c]]') FROM x1 WHERE ("bb" != ?)""".stripMargin
     )
     sql should be (expected(index))
     val expectedParams = Seq(
-      Seq("c", "b", "aa", "00", "11", "22"),
-      Seq("aa", "00", "b", "11", "c", "22")
+      Seq("00", "11", "22"),
+      Seq("00", "11", "22")
     )
     val params = setParams.map { setParam => setParam(None, 0).get }
     params should be(expectedParams(index))

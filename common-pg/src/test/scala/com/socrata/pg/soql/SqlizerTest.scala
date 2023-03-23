@@ -76,12 +76,15 @@ object SqlizerTest {
       typeReps,
       Seq.empty,
       sqlCtx + (SqlizerContext.CaseSensitivity -> caseSensitivity) + (SqlizerContext.LeadingSearch -> leadingSearch),
-      passThrough)
+      escape)
   }
 
   private val idMap = (cn: ColumnName) => new UserColumnId(cn.caseFolded)
 
-  private val passThrough = (s: String) => s
+  // deliberately not a valid sql escape, to show that strings are
+  // _definitely_ having the sqlizer escape function called on them
+  // where appropriate.
+  private val escape = (s: String) => "[[" + s + "]]"
 
   private val columnMap = Map(
     ColumnName(":id") -> ((1, SoQLID)),

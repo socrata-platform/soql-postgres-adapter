@@ -16,9 +16,8 @@ class SqlizerUrlTest extends SqlizerTest {
   test("url ctor") {
     val soql = "SELECT url('http://www.socrata.com', 'Home Site')"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (?),(?) FROM t1")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("http://www.socrata.com", "Home Site"))
+    sql should be ("SELECT (e'[[http://www.socrata.com]]'),(e'[[Home Site]]') FROM t1")
+    setParams.length should be (0)
   }
 
   test("url group") {

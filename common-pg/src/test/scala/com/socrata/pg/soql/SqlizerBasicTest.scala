@@ -12,10 +12,8 @@ class SqlizerBasicTest extends SqlizerTest {
   test("string literal with quotes") {
     val soql = "select 'there is a '' quote'"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT ? FROM t1")
-    setParams.length should be (1)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("there is a ' quote" ))
+    sql should be ("SELECT e'[[there is a ' quote]]' FROM t1")
+    setParams.length should be (0)
   }
 
   test("field in (x, y...)") {
@@ -53,12 +51,10 @@ class SqlizerBasicTest extends SqlizerTest {
   test("concave hull") {
     val soql = "select concave_hull(point, 0.99), concave_hull(multiline, 0.89), concave_hull(multipolygon, 0.79)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ST_AsBinary((ST_Multi(ST_Buffer(ST_ConcaveHull("t1".point, ?),0.0)))),""" +
-      """ST_AsBinary((ST_Multi(ST_Buffer(ST_ConcaveHull("t1".multiline, ?),0.0)))),""" +
-      """ST_AsBinary((ST_Multi(ST_Buffer(ST_ConcaveHull("t1".multipolygon, ?),0.0)))) FROM t1""")
-    setParams.length should be (3)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq(0.99, 0.89, 0.79).map(BigDecimal(_)))
+    sql should be ("""SELECT ST_AsBinary((ST_Multi(ST_Buffer(ST_ConcaveHull("t1".point, 0.99),0.0)))),""" +
+      """ST_AsBinary((ST_Multi(ST_Buffer(ST_ConcaveHull("t1".multiline, 0.89),0.0)))),""" +
+      """ST_AsBinary((ST_Multi(ST_Buffer(ST_ConcaveHull("t1".multipolygon, 0.79),0.0)))) FROM t1""")
+    setParams.length should be (0)
   }
 
   test("convex hull") {
@@ -73,19 +69,15 @@ class SqlizerBasicTest extends SqlizerTest {
   test("intersects") {
     val soql = "select intersects(point, 'MULTIPOLYGON (((1 1, 2 1, 2 2, 1 2, 1 1)))')"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT (ST_Intersects("t1".point, (ST_GeomFromText(?, 4326)))) FROM t1""")
-    setParams.length should be (1)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("MULTIPOLYGON (((1 1, 2 1, 2 2, 1 2, 1 1)))"))
+    sql should be ("""SELECT (ST_Intersects("t1".point, (ST_GeomFromText(e'[[MULTIPOLYGON (((1 1, 2 1, 2 2, 1 2, 1 1)))]]', 4326)))) FROM t1""")
+    setParams.length should be (0)
   }
 
   test("distance in meters") {
     val soql = "select distance_in_meters(point, 'POINT(0 0)')"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT (ST_Distance("t1".point::geography, (ST_GeomFromText(?, 4326))::geography)::numeric) FROM t1""")
-    setParams.length should be (1)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("POINT(0 0)"))
+    sql should be ("""SELECT (ST_Distance("t1".point::geography, (ST_GeomFromText(e'[[POINT(0 0)]]', 4326))::geography)::numeric) FROM t1""")
+    setParams.length should be (0)
   }
 
   test("number of points") {
@@ -110,13 +102,11 @@ class SqlizerBasicTest extends SqlizerTest {
       """SELECT ((NOT ST_IsEmpty("t1".multipolygon))
         |     AND (ST_GeometryType("t1".multipolygon) = 'ST_Point'
         |     OR ST_GeometryType("t1".multipolygon) = 'ST_MultiPoint'
-        |     OR (ST_XMax("t1".multipolygon) - ST_XMin("t1".multipolygon)) >= ?
-        |     OR (ST_YMax("t1".multipolygon) - ST_YMin("t1".multipolygon)) >= ?) )
+        |     OR (ST_XMax("t1".multipolygon) - ST_XMin("t1".multipolygon)) >= 0.03
+        |     OR (ST_YMax("t1".multipolygon) - ST_YMin("t1".multipolygon)) >= 0.03) )
         | FROM t1""".stripMargin.replaceAll("\\s+", " ")
     sql.replaceAll("\\s+", " ") should be (expected)
-    setParams.length should be (2)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq(0.03, 0.03).map(BigDecimal(_)))
+    setParams.length should be (0)
   }
 
   test("expr and expr") {
@@ -188,42 +178,36 @@ class SqlizerBasicTest extends SqlizerTest {
   test("select text and number conversions") {
     val soql = "select 123::text, '123'::number"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (?::varchar),(?::numeric) FROM t1")
-    setParams.length should be (2)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq(123, "123"))
+    sql should be ("SELECT (123::varchar),(e'[[123]]'::numeric) FROM t1")
+    setParams.length should be (0)
   }
 
   test("substring start parameter only") {
     val soql = "select substring(case_number, 1)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT (substring("t1".case_number, ?::int)) FROM t1""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq(1))
+    sql should be ("""SELECT (substring("t1".case_number, 1::int)) FROM t1""")
+    setParams.length should be (0)
   }
 
   test("substring two parameters") {
     val soql = "select substring(case_number, 1, 2)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT (substring("t1".case_number, ?::int, ?::int)) FROM t1""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq(1, 2))
+    sql should be ("""SELECT (substring("t1".case_number, 1::int, 2::int)) FROM t1""")
+    setParams.length should be (0)
   }
 
   test("order by literal is skipped") {
     val soql = "SELECT 'aa' || 'bb' as aabb, case_number ORDER BY aabb, case_number"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT (? || ?),"t1".case_number FROM t1 ORDER BY "t1".case_number nulls last""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("aa", "bb"))
+    sql should be ("""SELECT (e'[[aa]]' || e'[[bb]]'),"t1".case_number FROM t1 ORDER BY "t1".case_number nulls last""")
+    setParams.length should be (0)
   }
 
   test("order by literal is skipped and no incomplete order by") {
     val soql = "SELECT 'aa' || 'bb' as aabb, case_number ORDER BY aabb"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT (? || ?),"t1".case_number FROM t1""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("aa", "bb"))
+    sql should be ("""SELECT (e'[[aa]]' || e'[[bb]]'),"t1".case_number FROM t1""")
+    setParams.length should be (0)
   }
 
   test("count(*) is non-literal and kept in order by") {
@@ -255,10 +239,8 @@ class SqlizerBasicTest extends SqlizerTest {
   test("signed magnitude linear") {
     val soql = "select signed_magnitude_linear(year, 42)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be("""SELECT (case when ? = 1 then floor("t1".year) else sign("t1".year) * floor(abs("t1".year)/? + 1) end) FROM t1""")
-    setParams.length should be(2)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be(Seq(42,42))
+    sql should be("""SELECT (case when 42 = 1 then floor("t1".year) else sign("t1".year) * floor(abs("t1".year)/42 + 1) end) FROM t1""")
+    setParams.length should be(0)
   }
 
   test("date_extract_hh") {
@@ -313,33 +295,29 @@ class SqlizerBasicTest extends SqlizerTest {
   test("date_add") {
     val soql = "select date_add(updated_on, 'P1DT1H') as d1, date_add(updated_on, 'PT86401S') as d2, updated_on + 'P1D' as d3"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ("t1".updated_on + (?::interval)),("t1".updated_on + (?::interval)),("t1".updated_on + (?::interval)) FROM t1""")
-    val params = setParams.map { setParam => setParam(None, 0).get }
-    params should be(Seq("1 day 1 hour", "86401.000 seconds", "1 day"))
+    sql should be ("""SELECT ("t1".updated_on + (e'[[1 day 1 hour]]'::interval)),("t1".updated_on + (e'[[86401.000 seconds]]'::interval)),("t1".updated_on + (e'[[1 day]]'::interval)) FROM t1""")
+    setParams.length should be (0)
   }
 
   test("to_floating_timestamp") {
     val soql = "select date_trunc_ymd(to_floating_timestamp(:created_at, 'PST'))"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT (date_trunc('day', ("t1".:created_at at time zone ?))) FROM t1""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("PST"))
+    sql should be ("""SELECT (date_trunc('day', ("t1".:created_at at time zone e'[[PST]]'))) FROM t1""")
+    setParams.length should be (0)
   }
 
   test("case fn") {
     val soql = "select case(primary_type = 'A', 'X', primary_type = 'B', 'Y')"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT (case WHEN ("t1".primary_type = ?) THEN ? WHEN ("t1".primary_type = ?) THEN ? end) FROM t1""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("A", "X", "B", "Y"))
+    sql should be ("""SELECT (case WHEN ("t1".primary_type = e'[[A]]') THEN e'[[X]]' WHEN ("t1".primary_type = e'[[B]]') THEN e'[[Y]]' end) FROM t1""")
+    setParams.length should be (0)
   }
 
   test("coalesce") {
     val soql = "select coalesce(case_number, primary_type, 'default')"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT (coalesce("t1".case_number,"t1".primary_type,?)) FROM t1""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq("default"))
+    sql should be ("""SELECT (coalesce("t1".case_number,"t1".primary_type,e'[[default]]')) FROM t1""")
+    setParams.length should be (0)
   }
 
   test("nullif") {
@@ -360,59 +338,54 @@ class SqlizerBasicTest extends SqlizerTest {
   test("simplify multigeometry") {
     val soql = "select simplify(multipolygon, 0.5)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ST_AsBinary((ST_Multi(ST_Simplify("t1".multipolygon, ?)))) FROM t1""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be(Seq(0.5))
+    sql should be ("""SELECT ST_AsBinary((ST_Multi(ST_Simplify("t1".multipolygon, 0.5)))) FROM t1""")
+    setParams.length should be (0)
   }
 
   test("simplify geometry") {
     val soql = "select simplify(polygon, 0.5)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ST_AsBinary((ST_Simplify("t1".polygon, ?))) FROM t1""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be(Seq(0.5))
+    sql should be ("""SELECT ST_AsBinary((ST_Simplify("t1".polygon, 0.5))) FROM t1""")
+    setParams.length should be (0)
   }
 
   test("simplify multigeometry preserving topology") {
     val soql = "select simplify_preserve_topology(multipolygon, 0.5)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ST_AsBinary((ST_Multi(ST_SimplifyPreserveTopology("t1".multipolygon, ?)))) FROM t1""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be(Seq(0.5))
+    sql should be ("""SELECT ST_AsBinary((ST_Multi(ST_SimplifyPreserveTopology("t1".multipolygon, 0.5)))) FROM t1""")
+    setParams.length should be (0)
   }
 
   test("simplify geometry preserving topology") {
     val soql = "select simplify_preserve_topology(polygon, 0.5)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ST_AsBinary((ST_SimplifyPreserveTopology("t1".polygon, ?))) FROM t1""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be(Seq(0.5))
+    sql should be ("""SELECT ST_AsBinary((ST_SimplifyPreserveTopology("t1".polygon, 0.5))) FROM t1""")
+    setParams.length should be (0)
   }
 
   test("geometry snap to grid") {
     val soql = "select snap_to_grid(polygon, 0.5)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ST_AsBinary((ST_SnapToGrid("t1".polygon, ?))) FROM t1""")
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be(Seq(0.5))
+    sql should be ("""SELECT ST_AsBinary((ST_SnapToGrid("t1".polygon, 0.5))) FROM t1""")
+    setParams.length should be (0)
   }
 
   test("curated region test") {
     val soql = "select curated_region_test(multipolygon, 20)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     sql.replaceAll("""\s+""", " ") should be ("""SELECT
-                  (case when st_npoints("t1".multipolygon) > ? then 'too complex'
+                  (case when st_npoints("t1".multipolygon) > 20 then 'too complex'
                         when st_xmin("t1".multipolygon) < -180 or st_xmax("t1".multipolygon) > 180 or st_ymin("t1".multipolygon) < -90 or st_ymax("t1".multipolygon) > 90 then 'out of bounds'
                         when not st_isvalid("t1".multipolygon) then st_isvalidreason("t1".multipolygon)::text
                         when ("t1".multipolygon) is null then 'empty'
                    end ) FROM t1""".replaceAll("""\s+""", " "))
-    setParams.length should be (1)
+    setParams.length should be (0)
   }
 
   test("group by literals with constants removed") {
     val soql = "select id, 'stRing' as a, 5 as b, 2*3 as c group by id, a, b, c"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT "t1".id,e'stRing',5,(2 * 3) FROM t1 GROUP BY "t1".id""")
+    sql should be ("""SELECT "t1".id,e'[[stRing]]',5,(2 * 3) FROM t1 GROUP BY "t1".id""")
     setParams.length should be (0)
   }
 
@@ -422,7 +395,7 @@ class SqlizerBasicTest extends SqlizerTest {
   test("group by all literals and constants stay when everything is a constant") {
     val soql = "select 'stRing' as a, 5 as b, 2*3 as c group by a, b, c"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT e'stRing',5,(2 * 3) FROM t1 GROUP BY 1,2,3")
+    sql should be ("SELECT e'[[stRing]]',5,(2 * 3) FROM t1 GROUP BY 1,2,3")
     setParams.length should be (0)
   }
 
@@ -454,7 +427,6 @@ class SqlizerBasicTest extends SqlizerTest {
   test("window function") {
     val soql = "select avg(year) over(partition by primary_type, year)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
     sql should be ("""SELECT (avg("t1".year) over( partition by "t1".primary_type,"t1".year)) FROM t1""")
     setParams.length should be (0)
   }
@@ -462,7 +434,6 @@ class SqlizerBasicTest extends SqlizerTest {
   test("window function empty over") {
     val soql = "select avg(year) over()"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
     sql should be ("""SELECT (avg("t1".year) over()) FROM t1""")
     setParams.length should be (0)
   }
@@ -470,7 +441,6 @@ class SqlizerBasicTest extends SqlizerTest {
   test("window function rank over") {
     val soql = "select rank() over(order by year)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
     sql should be ("""SELECT (rank() over( order by "t1".year nulls last)) FROM t1""")
     setParams.length should be (0)
   }
@@ -478,7 +448,6 @@ class SqlizerBasicTest extends SqlizerTest {
   test("window function with frame clause") {
     val soql = "select avg(year) over(partition by primary_type, year ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
     sql should be ("""SELECT (avg("t1".year) over( partition by "t1".primary_type,"t1".year ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)) FROM t1""")
     setParams.length should be (0)
   }
@@ -486,44 +455,40 @@ class SqlizerBasicTest extends SqlizerTest {
   test("count(column) filter has proper numeric cast") {
     val soql = "select count(year) filter (where year = year and true)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    sql should be ("""SELECT (count("t1".year) filter(where (("t1".year = "t1".year) and ?) )::numeric) FROM t1""")
-    params should be (Seq(true))
+    sql should be ("""SELECT (count("t1".year) filter(where (("t1".year = "t1".year) and TRUE :: boolean) )::numeric) FROM t1""")
+    setParams.length should be (0)
   }
 
   test("count(*) filter + window function has proper numeric cast") {
     val soql = "select count(*) filter (where year = year and true) over(partition by primary_type, year)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    sql should be ("""SELECT (count(*) filter(where (("t1".year = "t1".year) and ?) ) over( partition by "t1".primary_type,"t1".year)::numeric) FROM t1""")
-    params should be (Seq(true))
+    sql should be ("""SELECT (count(*) filter(where (("t1".year = "t1".year) and TRUE :: boolean) ) over( partition by "t1".primary_type,"t1".year)::numeric) FROM t1""")
+    setParams.length should be (0)
   }
 
   test("filter + window function") {
     val soql = "select avg(year) filter (where year = year and true) over(partition by primary_type, year)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    sql should be ("""SELECT (avg("t1".year) filter(where (("t1".year = "t1".year) and ?) ) over( partition by "t1".primary_type,"t1".year)) FROM t1""")
-    params should be (Seq(true))
+    sql should be ("""SELECT (avg("t1".year) filter(where (("t1".year = "t1".year) and TRUE :: boolean) ) over( partition by "t1".primary_type,"t1".year)) FROM t1""")
+    setParams.length should be (0)
   }
 
   test("json subscript") {
     val soql = "select json.foo"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    val params = setParams.map { (setParam) => setParam(None, 0).get }
-    sql should be ("SELECT (\"t1\".json -> ?) FROM t1")
-    params should be (Seq("foo"))
-
+    sql should be ("SELECT (\"t1\".json -> e'[[foo]]') FROM t1")
+    setParams.length should be (0)
   }
 
   test("simple single row does not generate a from clause") {
     val soql = "select 'bleh' from @single_row"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT ?")
+    sql should be ("SELECT e'[[bleh]]'")
+    setParams.length should be (0)
   }
 
   test("timestamp literals use timestamp parameters") {
-    val soql = "select '2021-12-25T01:02:03'::floating_timestamp, '2021-12-25T01:02:03z'::fixed_timestamp, '2021-12-25T01:02:03-08:00'::fixed_timestamp from @single_row"
+    val soql = "select 1 from @single_row where null = '2021-12-25T01:02:03'::floating_timestamp or null = '2021-12-25T01:02:03z'::fixed_timestamp or null = '2021-12-25T01:02:03-08:00'::fixed_timestamp"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     val dt1 = new DateTime(2021, 12, 25, 1, 2, 3, 0)
@@ -533,11 +498,11 @@ class SqlizerBasicTest extends SqlizerTest {
     val ts2 = new Timestamp(dt2.getMillis)
     val ts3 = new Timestamp(dt3.getMillis)
     params should be (Seq(ts1, ts2, ts3))
-    sql should be ("SELECT (?::timestamp),(?::timestamp with time zone),(?::timestamp with time zone)")
+    sql should be ("SELECT 1 WHERE (((null = (?::timestamp)) or (null = (?::timestamp with time zone))) or (null = (?::timestamp with time zone)))")
   }
 
   test("timestamp literals use timestamp parameters in date_diff_d") {
-    val soql = "select date_diff_d('2021-12-25T01:02:03'::floating_timestamp, '2021-12-24T01:02:03'::floating_timestamp) as d1, date_diff_d('2021-12-25T01:02:03z'::fixed_timestamp, '2021-12-24T01:02:03z'::fixed_timestamp) as d2 from @single_row"
+    val soql = "select 1 from @single_row where date_diff_d('2021-12-25T01:02:03'::floating_timestamp, '2021-12-24T01:02:03'::floating_timestamp) is null or date_diff_d('2021-12-25T01:02:03z'::fixed_timestamp, '2021-12-24T01:02:03z'::fixed_timestamp) is null"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     val dt1 = new DateTime(2021, 12, 25, 1, 2, 3, 0)
@@ -549,14 +514,14 @@ class SqlizerBasicTest extends SqlizerTest {
     val ts3 = new Timestamp(dt3.getMillis)
     val ts4 = new Timestamp(dt4.getMillis)
     params should be (Seq(ts1, ts2, ts3, ts4))
-    sql should be ("SELECT (trunc((extract(epoch from (?::timestamp)) - extract(epoch from (?::timestamp)))::numeric / 86400)),(trunc((extract(epoch from (?::timestamp with time zone)) - extract(epoch from (?::timestamp with time zone)))::numeric / 86400))")
+    sql should be ("SELECT 1 WHERE (((trunc((extract(epoch from (?::timestamp)) - extract(epoch from (?::timestamp)))::numeric / 86400)) is null) or ((trunc((extract(epoch from (?::timestamp with time zone)) - extract(epoch from (?::timestamp with time zone)))::numeric / 86400)) is null))")
   }
 
   test("indirect literals should not generate timestamp parameters") {
-    val soql = "select ('2021-12-' || '25')::floating_timestamp from @single_row"
+    val soql = "select 1 from @single_row where ('2021-12-' || '25')::floating_timestamp is null"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq("2021-12-", "25")) // all parameters are text, no Timestamps
-    sql should be ("SELECT ((? || ?)::timestamp)")
+    sql should be ("SELECT 1 WHERE (((? || ?)::timestamp) is null)")
   }
 }

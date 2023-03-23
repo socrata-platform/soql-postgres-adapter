@@ -21,51 +21,51 @@ class SqlizerJoinTest  extends SqlizerTest {
 
   test("single row joined to table on true moves the first join into from") {
     val soql = "select 'bleh' from @single_row join @year as y on true"
-    val psql@ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ? FROM t3 as "_y"""")
-    psql.paramsAsStrings should be (Seq("bleh"))
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("""SELECT e'[[bleh]]' FROM t3 as "_y"""")
+    setParams.length should be (0)
   }
 
   test("single row joined to subquery on true moves the first join into from") {
     val soql = "select 'bleh' from @single_row join (select * from @year) as y on true"
-    val psql@ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ? FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) as "_y"""")
-    psql.paramsAsStrings should be (Seq("bleh"))
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("""SELECT e'[[bleh]]' FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) as "_y"""")
+    setParams.length should be (0)
   }
 
   test("single row joined to subquery on true moves the first join into from, with parameters in the subquery") {
     val soql = "select 'bleh' from @single_row join (select *, 'a' from @year) as y on true"
-    val psql@ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ? FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature",? as "a" FROM t3) as "_y"""")
-    psql.paramsAsStrings should be (Seq("bleh", "a"))
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+    sql should be ("""SELECT e'[[bleh]]' FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature",e'[[a]]' as "a" FROM t3) as "_y"""")
+    setParams.length should be (0)
   }
 
   test("single row join to table on anything other than true does generate a from clause") {
     val soql = "select 'bleh' from @single_row join @year as y on false"
     val psql@ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ? FROM single_row JOIN t3 as "_y" ON ?""")
-    psql.paramsAsStrings should be (Seq("bleh", "false"))
+    sql should be ("""SELECT e'[[bleh]]' FROM single_row JOIN t3 as "_y" ON ?""")
+    psql.paramsAsStrings should be (Seq("false"))
   }
 
   test("single row join to subquery on anything other than true does generate a from clause") {
     val soql = "select 'bleh' from @single_row join (select *, 'a' from @year) as y on false"
     val psql@ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ? FROM single_row JOIN (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature",? as "a" FROM t3) as "_y" ON ?""")
-    psql.paramsAsStrings should be (Seq("bleh", "a", "false"))
+    sql should be ("""SELECT e'[[bleh]]' FROM single_row JOIN (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature",e'[[a]]' as "a" FROM t3) as "_y" ON ?""")
+    psql.paramsAsStrings should be (Seq("false"))
   }
 
   test("join to single_row") {
     val soql = "select 'bleh' join @single_row on true"
     val psql@ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT ? FROM t1 JOIN single_row ON ?")
-    psql.paramsAsStrings should be (Seq("bleh", "true"))
+    sql should be ("SELECT e'[[bleh]]' FROM t1 JOIN single_row ON ?")
+    psql.paramsAsStrings should be (Seq("true"))
   }
 
   test("join to single_row in subselect") {
     val soql = "select 'bleh' join (select 1, 2, 3 from @single_row) as vars on true"
     val psql@ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ? FROM t1 JOIN (SELECT ? as "_1",? as "_2",? as "_3") as "_vars" ON ?""")
-    psql.paramsAsStrings should be (Seq("bleh", "1", "2", "3", "true"))
+    sql should be ("""SELECT e'[[bleh]]' FROM t1 JOIN (SELECT 1 as "_1",2 as "_2",3 as "_3") as "_vars" ON ?""")
+    psql.paramsAsStrings should be (Seq("true"))
   }
 
   test("join and chain") {
@@ -142,17 +142,17 @@ class SqlizerJoinTest  extends SqlizerTest {
 
     val expectedSql = """SELECT "t1".case_number FROM t1
       |     JOIN
-      |  (SELECT (coalesce((max("avg_temperature")),?)) as "coalesce_max_avg_temperature_1","year" as "year"
+      |  (SELECT (coalesce((max("avg_temperature")),1)) as "coalesce_max_avg_temperature_1","year" as "year"
       |     FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1"
       |    WHERE ("avg_temperature" < ?) GROUP BY "year") as "_j1" ON ("t1".year = "_j1"."year")
       |     JOIN
-      |  (SELECT (coalesce((sum("avg_temperature")),?)) as "coalesce_sum_avg_temperature_3","year" as "year"
+      |  (SELECT (coalesce((sum("avg_temperature")),3)) as "coalesce_sum_avg_temperature_3","year" as "year"
       |     FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1"
       |    WHERE ("avg_temperature" < ?) GROUP BY "year") as "_j2" ON ("t1".year = "_j2"."year")""".stripMargin
 
     collapseSpace(sql) should be (collapseSpace(expectedSql))
     val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq(1, 2, 3, 4).map(BigDecimal(_)))
+    params should be (Seq(2, 4).map(BigDecimal(_)))
   }
 
   test("parameters should align with joins and outer chain") {
@@ -167,20 +167,20 @@ class SqlizerJoinTest  extends SqlizerTest {
          """
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
 
-    val expectedSql = """SELECT "case_number",? FROM (SELECT "t1".case_number as "case_number" FROM t1
+    val expectedSql = """SELECT "case_number",11 FROM (SELECT "t1".case_number as "case_number" FROM t1
                                   JOIN
-                                       (SELECT (coalesce((max("avg_temperature")),?)) as "coalesce_max_avg_temperature_1","year" as "year"
+                                       (SELECT (coalesce((max("avg_temperature")),1)) as "coalesce_max_avg_temperature_1","year" as "year"
                                           FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1"
                                          WHERE ("avg_temperature" < ?) GROUP BY "year") as "_j1" ON ("t1".year = "_j1"."year")
                                   JOIN
-                                       (SELECT (coalesce((sum("avg_temperature")),?)) as "coalesce_sum_avg_temperature_3","year" as "year"
+                                       (SELECT (coalesce((sum("avg_temperature")),3)) as "coalesce_sum_avg_temperature_3","year" as "year"
                                           FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1"
                                          WHERE ("avg_temperature" < ?) GROUP BY "year") as "_j2" ON ("t1".year = "_j2"."year")) AS "x1" WHERE (? = ?)"""
 
     collapseSpace(sql) should be (collapseSpace(expectedSql))
 
     val params = setParams.map { (setParam) => setParam(None, 0).get }
-    params should be (Seq(11, 1, 2, 3, 4, 12, 13).map(BigDecimal(_)))
+    params should be (Seq(2, 4, 12, 13).map(BigDecimal(_)))
   }
 
   test("this alias") {
