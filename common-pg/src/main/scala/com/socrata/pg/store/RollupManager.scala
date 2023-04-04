@@ -334,7 +334,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
   private def analysesToSoQLType(analyses: ASysCol): AUserCol = {
     val baos = new ByteArrayOutputStream
     // TODO: Join handle qualifier
-    val analysesColumnId = analyses.flatMap(a => Leaf(a.mapColumnIds((name, qualifier) => new UserColumnId(name.name))))
+    val analysesColumnId = analyses.flatMap(a => Leaf(a.mapColumnIds((name, qualifier) => new UserColumnId(name.caseFolded))))
     SoQLAnalyzerHelper.serialize(baos, analysesColumnId)
     SoQLAnalyzerHelper.deserialize(new ByteArrayInputStream(baos.toByteArray))
   }
