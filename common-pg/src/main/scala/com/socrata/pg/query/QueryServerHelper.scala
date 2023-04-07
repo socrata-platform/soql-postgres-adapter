@@ -62,7 +62,7 @@ object QueryServerHelper {
       val copyInfo = readCtx.copyInfo
 
       val relatedTableNames = removeTableAlias(collectRelatedTableNames(analyses))
-      val (relatedCopyMap, _relatedRollupMap) = getCopyAndRollupMaps(pgu, relatedTableNames, reqCopy)
+      val (relatedCopyMap, _relatedRollupMap) = getCopyAndRollupMaps(pgu, relatedTableNames, datasetInfo.resourceName.map(ResourceName(_)), reqCopy)
       val joinCopiesMap = relatedCopyMap ++ copyInfo.datasetInfo.resourceName.map(rn => Map(TableName(rn) -> copyInfo)).getOrElse(Map.empty)
       val sqlRepsWithJoin = joinCopiesMap.foldLeft(sqlReps) { (acc, joinCopy) =>
         val (tableName, copyInfo) = joinCopy
@@ -122,7 +122,8 @@ object QueryServerHelper {
 
   def getCopyAndRollupMaps(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                            tableNames: Seq[TableName],
-                           reqCopy: Option[String]):
+                           myResourceName: Option[ResourceName],
+                           myCopy: Option[String]):
       (Map[TableName, CopyInfo], Map[TableName, LocalRollupInfo]) = {
     tableNames.foldLeft((Map.empty[TableName, CopyInfo], Map.empty[TableName, LocalRollupInfo])) { (acc, tableName) =>
       tableName.name match {
@@ -139,7 +140,16 @@ object QueryServerHelper {
               acc
           }
         case name =>
-          getCopy(pgu, new ResourceName(name), reqCopy) match {
+          val rn = new ResourceName(name)
+
+          val desiredCopy =
+            if(Some(rn) == myResourceName) { // self-joins use this copy
+              myCopy
+            } else {
+              None
+            }
+
+          getCopy(pgu, new ResourceName(name), desiredCopy) match {
             case Some(copy) =>
               (acc._1 + (tableName -> copy), acc._2)
             case _ =>
@@ -166,7 +176,7 @@ object QueryServerHelper {
         rd.latest(datasetInfo)
       case Some("published") | None =>
         rd.published(datasetInfo).getOrElse(rd.latest(datasetInfo))
-      case Some("unpublished") | None =>
+      case Some("unpublished") =>
         rd.unpublished(datasetInfo).getOrElse(rd.latest(datasetInfo))
       case Some(intRx(num)) =>
         rd.copyNumber(datasetInfo, num.toLong).getOrElse(rd.latest(datasetInfo))

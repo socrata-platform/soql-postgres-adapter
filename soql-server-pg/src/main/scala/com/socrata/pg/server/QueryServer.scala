@@ -470,7 +470,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
         // 1. regular tablename contains dataset_map.resource_name
         // 2. rollup tablename contains dataset_map.resource_name + "." + rollup_map.name
         val relatedTableNames = removeTableAlias(collectRelatedTableNames(analysis))
-        val (relatedCopyMap, relatedRollupMap) = getCopyAndRollupMaps(pgu, relatedTableNames, reqCopy)
+        val (relatedCopyMap, relatedRollupMap) = getCopyAndRollupMaps(pgu, relatedTableNames, datasetInfo.resourceName.map(ResourceName(_)), reqCopy)
         val joinCopiesMap = relatedCopyMap ++ copyInfo.datasetInfo.resourceName.map(rn => Map(TableName(rn) -> copyInfo)).getOrElse(Map.empty)
 
         val sqlRepsWithJoin = relatedCopyMap.foldLeft(sqlReps) { (acc, joinCopy) =>
