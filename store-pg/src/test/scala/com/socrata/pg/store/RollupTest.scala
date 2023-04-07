@@ -10,7 +10,7 @@ import com.socrata.pg.query.QueryServerHelper
 import com.socrata.pg.store.PGSecondaryUtil._
 import com.socrata.pg.store.events.{ColumnCreatedHandler, RollupCreatedOrUpdatedHandler, WorkingCopyCreatedHandler, WorkingCopyPublishedHandler}
 import com.socrata.soql.environment.TableName.PrimaryTable
-import com.socrata.soql.environment.{ColumnName, TableName}
+import com.socrata.soql.environment.{ColumnName, TableName, ResourceName}
 import com.socrata.soql.types._
 import org.joda.time.DateTime
 import org.scalatest.Matchers.fail
@@ -319,7 +319,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       // test getCopyAndRollupMaps
       val regularTableName = TableName(datasetInfo.resourceName.get)
       val rollupTableName = TableName(s"${datasetInfo.resourceName.get}.${rollupInfo.name.underlying}")
-      val (copyMap, rollupMap) = QueryServerHelper.getCopyAndRollupMaps(pgu,Seq(regularTableName, rollupTableName, PrimaryTable), None)
+      val (copyMap, rollupMap) = QueryServerHelper.getCopyAndRollupMaps(pgu,Seq(regularTableName, rollupTableName, PrimaryTable), datasetInfo.resourceName.map(ResourceName(_)), None)
       copyMap(regularTableName) should be (copyInfo)
       rollupMap(rollupTableName) should be (rollupInfo)
       copyMap.size should be (1)
