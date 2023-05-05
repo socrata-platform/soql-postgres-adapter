@@ -2,11 +2,11 @@ instances {
 {% for i in PG_SECONDARY_INSTANCES.split() %}
   {% set name, hostname = i.split(':') %}
   {{ name }} {
-    secondaryType = pg
+    secondaryType = {{ SECONDARY_TYPE }}
     numWorkers = {{ PG_SECONDARY_NUM_WORKERS }}
     config = {
       database {
-        app-name = "pg-secondary-store"
+        app-name = "{{ APP_NAME }}"
         host = "{{ hostname }}"
         port = "{{ PG_SECONDARY_DB_PORT }}"
         database = "{{ PG_SECONDARY_DB_NAME }}"
@@ -55,7 +55,7 @@ instances {
       {% if ZOOKEEPER_ENSEMBLE is defined -%}
       curator = {
         ensemble = {{ ZOOKEEPER_ENSEMBLE }}
-        namespace = "com.socrata/soda"
+        namespace = "com.socrata/soda" // maybe this
         session-timeout = 40s
         connect-timeout = 5s
         base-retry-wait = 100ms
