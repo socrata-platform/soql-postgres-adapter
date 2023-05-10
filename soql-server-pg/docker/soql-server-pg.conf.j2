@@ -14,6 +14,10 @@ com.socrata.soql-server-pg {
     log-metrics = {{ LOG_METRICS }}
   }
 
+  service-advertisement {
+    name = "{{ SERVICE_ADVERTISEMENT_NAME }}"
+  }
+
   store.database {
     host = "{{ PG_SECONDARY_DB_HOST }}"
     port = "{{ PG_SECONDARY_DB_PORT }}"
