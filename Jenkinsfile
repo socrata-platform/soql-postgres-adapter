@@ -188,5 +188,17 @@ pipeline {
         }
       }
     }
+
+    stage('Deploy Control Mirrors') {
+      when { expression { stage_deploy } }
+      steps {
+        script {
+          deploy.checkoutAndInstall()
+
+          deploy.deploy("soql-server-mirror-control-pg1-staging", deploy_environment, dockerize_server.getDeployTag())
+          deploy.deploy("secondary-watcher-mirror-control-pg*", deploy_environment, dockerize_secondary.getDeployTag())
+        }
+      }
+    }
   }
 }
