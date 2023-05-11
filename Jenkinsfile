@@ -185,8 +185,17 @@ pipeline {
           // deploy the service to the specified environment
           deploy.deploy(deploy_service_pattern_server, deploy_environment, dockerize_server.getDeployTag())
           deploy.deploy(deploy_service_pattern_secondary, deploy_environment, dockerize_secondary.getDeployTag())
+        }
+      }
+    }
 
-          deploy.deploy("soql-server-mirror-control-pg1", deploy_environment, dockerize_server.getDeployTag())
+    stage('Deploy Control Mirrors') {
+      when { expression { stage_deploy } }
+      steps {
+        script {
+          deploy.checkoutAndInstall()
+
+          deploy.deploy("soql-server-mirror-control-pg1-staging", deploy_environment, dockerize_server.getDeployTag())
           deploy.deploy("secondary-watcher-mirror-control-pg*", deploy_environment, dockerize_secondary.getDeployTag())
         }
       }
