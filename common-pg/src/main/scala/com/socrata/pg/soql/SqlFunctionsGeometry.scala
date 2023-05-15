@@ -50,6 +50,11 @@ trait SqlFunctionsGeometry {
     Intersects -> formatCall("ST_Intersects(%s, %s)") _,
     Crosses -> formatCall("ST_Crosses(%s, %s)") _,
     Overlaps -> formatCall("ST_Overlaps(%s, %s)") _,
+    // https://postgis.net/docs/ST_ReducePrecision.html
+    // Polygons can become multipolygons when reduced, so we need
+    // to branch those out here.
+    ReducePrecision -> formatCall("ST_ReducePrecision(%s, %s)") _,
+    ReducePolyPrecision -> formatCall("ST_Multi(ST_ReducePrecision(%s, %s))") _,
     // According to https://postgis.net/docs/ST_Intersection.html the Buffer at 0.0 will ensure
     // that any non-polygon intersections in the GeoCollection return are removed and only
     // the multipolygon intersection is returned
