@@ -52,7 +52,9 @@ instances {
 
       tablespace = "{{ PG_SECONDARY_TABLESPACE_FN }}"
 
+      {% if IS_CITUS is defined -%}
       is-citus = {{ IS_CITUS }}
+      {%- endif %}
 
       {% if ZOOKEEPER_ENSEMBLE is defined -%}
       curator = {
