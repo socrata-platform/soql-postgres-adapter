@@ -206,7 +206,7 @@ pipeline {
       }
         }
 
-    stage('Deploy Citus Control Mirrors') {
+    stage('Deploy Citus Mirrors') {
       when {
         allOf {
           expression { stage_deploy }
