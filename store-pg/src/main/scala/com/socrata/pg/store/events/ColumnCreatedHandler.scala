@@ -12,7 +12,7 @@ import com.rojoma.simplearm.v2._
 // TODO2 we should be batching these
 case class ColumnCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                                 truthCopyInfo: TruthCopyInfo,
-                                secColInfo: SecondaryColumnInfo[SoQLType]) {
+                                secColInfo: SecondaryColumnInfo[SoQLType], isDistributed: Boolean) {
   val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
 
   val truthColInfo = pgu.datasetMapWriter.addColumnWithId(
@@ -31,6 +31,8 @@ case class ColumnCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
 
   sLoader.addColumns(Seq(truthColInfo))
   if (truthColInfo.isSystemPrimaryKey) sLoader.makeSystemPrimaryKey(truthColInfo)
+  if (truthColInfo.isSystemPrimaryKey && isDistributed) sLoader.distribute(truthCopyInfo, truthColInfo)
+
 
   for { published <- pgu.datasetMapReader.lookup(truthCopyInfo.datasetInfo, LifecycleStage.Published)
         fieldName <- secColInfo.fieldName } {

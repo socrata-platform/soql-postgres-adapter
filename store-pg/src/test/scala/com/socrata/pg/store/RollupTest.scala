@@ -339,7 +339,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
     val col2 = com.socrata.datacoordinator.secondary.ColumnInfo[SoQLType](
       new ColumnId(baseId + 1), new UserColumnId(":version"), None, SoQLVersion, false, false, true, None
     )
-    ColumnCreatedHandler(pgu, copy, col1)
-    ColumnCreatedHandler(pgu, copy, col2)
+    ColumnCreatedHandler(pgu, copy, col1, false)
+    ColumnCreatedHandler(pgu, copy, col2, false)
   }
 }

@@ -406,7 +406,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
           TruncateHandler(pgu, ctx.truthCopyInfo)
           ctx.withRollupUpdate(TryToCreate)
         case ColumnCreated(secondaryColInfo) =>
-          ColumnCreatedHandler(pgu, ctx.truthCopyInfo, secondaryColInfo)
+          ColumnCreatedHandler(pgu, ctx.truthCopyInfo, secondaryColInfo, storeConfig.isCitus)
           ctx.copy(dataLoader = None).withRollupUpdate(TryToCreate)
         case ColumnRemoved(secondaryColInfo) =>
           ColumnRemovedHandler(pgu, ctx.truthCopyInfo, secondaryColInfo)
@@ -667,7 +667,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     sLoader.create(truthCopyInfo)
 
     newSchema.values.foreach { col =>
-      ColumnCreatedHandler(pgu, truthCopyInfo, col)
+      ColumnCreatedHandler(pgu, truthCopyInfo, col, storeConfig.isCitus)
     }
 
     val truthSchema: ColumnIdMap[ColumnInfo[SoQLType]] = pgu.datasetMapReader.schema(truthCopyInfo)

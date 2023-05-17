@@ -241,7 +241,7 @@ class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wit
         new ColumnId(baseId + idx), colInfo.userColumnId, colInfo.fieldName, colInfo.typ,
         colInfo.isSystemPrimaryKey, colInfo.isUserPrimaryKey, colInfo.isVersion, None
       )
-      ColumnCreatedHandler(pgu, toCopy, toCol)
+      ColumnCreatedHandler(pgu, toCopy, toCol, false)
     }
   }
 }

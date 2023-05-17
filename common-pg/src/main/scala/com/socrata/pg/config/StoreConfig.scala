@@ -15,6 +15,8 @@ class StoreConfig(config: Config, root: String) extends ConfigClass(config, root
     ConfigUtil.joinPath(fullKey: _*)
   }
 
+  val isCitus = optionally(getBoolean("is-citus")).getOrElse(false)
+
   val database = new DataSourceConfig(config, path("database"))
 
   val tablespace = optionally(getString("tablespace"))

@@ -28,6 +28,25 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
 
   import SecondarySchemaLoader._
 
+  private def createDistributionKey(tableName: String, phyCol: String) = {
+    using(conn.createStatement()) { stmt =>
+      stmt.execute(s"""
+select create_distributed_table('$tableName', '$phyCol')
+""""
+      )
+    }
+  }
+
+  def distribute(copyInfo: CopyInfo, colInfo: ColumnInfo[CT]): Unit = {
+    val rep = repFor(colInfo)
+    val physColumns = rep.physColumns
+    physColumns match {
+      case Array(colName) =>
+        createDistributionKey(copyInfo.dataTableName, colName)
+      case _ => throw new IllegalArgumentException(s"System Primary Key was not primitive")
+    }
+  }
+
   override def addColumns(columnInfos: Iterable[ColumnInfo[CT]]): Unit = {
     if (columnInfos.nonEmpty) super.addColumns(columnInfos)
     // createIndexes(columnInfos) was moved to publish time.
@@ -46,6 +65,7 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
       stmt.execute("CREATE TABLE " + copyInfo.dataTableName + " ()" + tablespaceSqlPart(ts) + ";" +
                    ChangeOwner.sql(conn, copyInfo.dataTableName))
     }
+
     dsLogger.workingCopyCreated(copyInfo)
   }
 
