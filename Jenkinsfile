@@ -192,7 +192,7 @@ pipeline {
     stage('Deploy Control Mirrors') {
       when {
         allOf {
-          expression { stage_deploy && !params.RELEASE_CUT}
+          expression { stage_deploy }
           not { expression { params.RELEASE_CUT} }
         }
       }
