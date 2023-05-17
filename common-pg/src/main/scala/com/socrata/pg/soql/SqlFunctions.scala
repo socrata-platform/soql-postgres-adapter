@@ -40,11 +40,15 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     IsNotNull -> formatCall("%s is not null" , Some(" or ")) _,
     Not -> formatCall("not %s") _,
     In -> naryish("in") _,
+    CaselessOneOf -> upperize(naryish("in") _),
     NotIn -> naryish("not in") _,
+    CaselessNotOneOf -> upperize(naryish("not in") _),
     Eq -> infixWithJsonbEqOptimization(SqlEq) _,
     EqEq -> infixWithJsonbEqOptimization(SqlEq) _,
+    CaselessEq -> upperize(infixWithJsonbEqOptimization(SqlEq) _),
     Neq -> infix(SqlNeq, " or ") _,
     BangEq -> infix(SqlNeq, " or ") _,
+    CaselessNe -> upperize(infix(SqlNeq, " or ") _),
     And -> infix("and") _,
     Or -> infix("or", " or ") _,
     NotBetween -> formatCall("not %s between %s and %s") _,
@@ -60,7 +64,9 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     Like -> infix("like") _,
     NotLike -> infix("not like") _,
     StartsWith -> infixSuffixWildcard("like", prefix = false) _,
+    CaselessStartsWith -> upperize(infixSuffixWildcard("like", prefix = false) _),
     Contains -> infixSuffixWildcard("like", prefix = true) _,
+    CaselessContains -> upperize(infixSuffixWildcard("like", prefix = true) _),
     Concat -> infix("||") _,
 
     Lower -> nary("lower") _,
@@ -377,6 +383,24 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
       case _ => ""
     }
     ParametricSql(Seq(sqlFragsAndParams._1.mkString(head + " " + fnName + "(" + aopt, ",", ")")), sqlFragsAndParams._2)
+  }
+
+  // Adds an `upper` call to all normal text parameters of the given
+  // function before sqlizing
+  private def upperize(fcts: FunCallToSql): FunCallToSql = { (fn, rep, typeRep, setParams, ctx, escape) =>
+    fcts(addUppers(fn), rep, typeRep, setParams, ctx, escape)
+  }
+
+  private def addUppers(fn: FunCall): FunCall =
+    fn.copy(parameters = fn.parameters.map(addUpper))
+
+  private def addUpper(expr: CoreExpr[UserColumnId, SoQLType]): CoreExpr[UserColumnId, SoQLType] = {
+    expr.typ match {
+      case SoQLText =>
+        FunctionCall(Upper.monomorphic.get, Seq(expr), None, None)(NoPosition, NoPosition)
+      case _ =>
+        expr
+    }
   }
 
   private def caseCall(fn: FunCall,
