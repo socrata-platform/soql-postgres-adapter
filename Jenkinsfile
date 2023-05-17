@@ -193,7 +193,7 @@ pipeline {
       when {
         allOf {
           expression { stage_deploy }
-          not { expression { params.RELEASE_CUT} }
+          not { expression { return params.RELEASE_CUT} }
         }
       }
       steps {
