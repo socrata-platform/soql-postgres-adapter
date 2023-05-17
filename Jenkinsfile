@@ -190,7 +190,12 @@ pipeline {
     }
 
     stage('Deploy Control Mirrors') {
-      when { expression { stage_deploy } }
+      when {
+        allOf {
+          expression { stage_deploy && !params.RELEASE_CUT}
+          not { expression { params.RELEASE_CUT} }
+        }
+      }
       steps {
         script {
           deploy.checkoutAndInstall()
