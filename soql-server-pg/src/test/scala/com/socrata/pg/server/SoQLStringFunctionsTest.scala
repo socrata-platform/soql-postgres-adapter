@@ -19,8 +19,16 @@ class SoQLStringFunctionsTest extends SoQLTest {
     compareSoqlResult("select make, name where make = 'APCO' order by name", "where-str-eq.json")
   }
 
+  test("caseless_eq(c, x)") {
+    compareSoqlResult("select make, name where caseless_eq(make, 'apco') order by name", "where-str-eq.json")
+  }
+
   test("c != x") {
     compareSoqlResult("select make, name where make != 'APCO' order by name", "where-str-ne.json")
+  }
+
+  test("caseless_ne(c, x)") {
+    compareSoqlResult("select make, name where caseless_ne(make, 'apco') order by name", "where-str-ne.json")
   }
 
   test("c > x") {
@@ -43,8 +51,16 @@ class SoQLStringFunctionsTest extends SoQLTest {
     compareSoqlResult("select make, name where starts_with(make, 'Skyw') order by name", "where-str-starts_with.json")
   }
 
+  test("caseless_starts_with(c, x)") {
+    compareSoqlResult("select make, name where caseless_starts_with(make, 'skyw') order by name", "where-str-starts_with.json")
+  }
+
   test("contains(c, x)") {
     compareSoqlResult("select make, name where contains(name, 'arm') order by name", "where-str-contains.json")
+  }
+
+  test("caseless_contains(c, x)") {
+    compareSoqlResult("select make, name where caseless_contains(name, 'ARM') order by name", "where-str-contains.json")
   }
 
   test("substring, length, split_part") {
