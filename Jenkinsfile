@@ -189,7 +189,7 @@ pipeline {
       }
     }
 
-    stage('Deploy Control Mirrors') {
+    stage('Deploy PG Control Mirrors') {
       when {
         allOf {
           expression { stage_deploy }
@@ -202,6 +202,23 @@ pipeline {
 
           deploy.deploy("soql-server-mirror-control-pg1-staging", deploy_environment, dockerize_server.getDeployTag())
           deploy.deploy("secondary-watcher-mirror-control-pg*", deploy_environment, dockerize_secondary.getDeployTag())
+        }
+      }
+        }
+
+    stage('Deploy Citus Mirrors') {
+      when {
+        allOf {
+          expression { stage_deploy }
+          not { expression { return params.RELEASE_CUT} }
+        }
+      }
+      steps {
+        script {
+          deploy.checkoutAndInstall()
+
+          deploy.deploy("soql-server-mirror-citus1-staging", deploy_environment, dockerize_server.getDeployTag())
+          deploy.deploy("secondary-watcher-mirror-citus*", deploy_environment, dockerize_secondary.getDeployTag())
         }
       }
     }
