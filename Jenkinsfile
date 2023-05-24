@@ -17,9 +17,9 @@ def service_sha = env.GIT_COMMIT
 
 // variables that determine which stages we run based on what triggered the job
 def boolean stage_cut = false
-def boolean stage_build = false
-def boolean stage_dockerize = false
-def boolean stage_deploy = false
+def boolean stage_build = true
+def boolean stage_dockerize = true
+def boolean stage_deploy = true
 
 // instanciate libraries
 def sbtbuild = new com.socrata.SBTBuild(steps, service_server, '.', [project_wd_server, project_wd_secondary])
@@ -201,10 +201,11 @@ pipeline {
           deploy.checkoutAndInstall()
 
           deploy.deploy("soql-server-mirror-control-pg1-staging", deploy_environment, dockerize_server.getDeployTag())
-          deploy.deploy("secondary-watcher-mirror-control-pg*", deploy_environment, dockerize_secondary.getDeployTag())
+          deploy.deploy("secondary-watcher-mirror-control-pg-alpha", deploy_environment, dockerize_secondary.getDeployTag())
+          deploy.deploy("secondary-watcher-mirror-control-pg-bravo", deploy_environment, dockerize_secondary.getDeployTag())
         }
       }
-        }
+    }
 
     stage('Deploy Citus Mirrors') {
       when {
@@ -218,7 +219,8 @@ pipeline {
           deploy.checkoutAndInstall()
 
           deploy.deploy("soql-server-mirror-citus1-staging", deploy_environment, dockerize_server.getDeployTag())
-          deploy.deploy("secondary-watcher-mirror-citus*", deploy_environment, dockerize_secondary.getDeployTag())
+          deploy.deploy("secondary-watcher-mirror-citus-alpha", deploy_environment, dockerize_secondary.getDeployTag())
+          deploy.deploy("secondary-watcher-mirror-citus-bravo", deploy_environment, dockerize_secondary.getDeployTag())
         }
       }
     }
