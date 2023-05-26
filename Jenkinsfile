@@ -28,6 +28,7 @@ pipeline {
     label params.AGENT
   }
   environment {
+    SERVICE = 'soql-server-pg'
     DEPLOY_PATTERN = 'soql-server-pg*'
     SECONDARY_DEPLOY_PATTERN = 'secondary-watcher-pg*'
   }
