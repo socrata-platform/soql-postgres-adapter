@@ -148,7 +148,7 @@ pipeline {
       when {
         allOf {
           not { expression { isPr } }
-          not { expression { return params.RELEASE_CUT} }
+          not { expression { return params.RELEASE_BUILD} }
         }
       }
       steps {
@@ -164,7 +164,7 @@ pipeline {
       when {
         allOf {
           not { expression { isPr } }
-          not { expression { return params.RELEASE_CUT} }
+          not { expression { return params.RELEASE_BUILD} }
         }
       }
       steps {
