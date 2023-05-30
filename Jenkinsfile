@@ -70,7 +70,7 @@ pipeline {
         }
       }
     }
-    stage('Build Server') {
+    stage('Build SoQL Server PG') {
       steps {
         script {
           echo "Building sbt project..."
@@ -85,7 +85,7 @@ pipeline {
         }
       }
     }
-    stage('Dockerize Server') {
+    stage('Dockerize SoQL Server PG') {
       when {
         not { expression { isPr } }
       }
@@ -105,7 +105,7 @@ pipeline {
         }
       }
     }
-    stage('Dockerize Secondry') {
+    stage('Dockerize Secondary Watcher PG') {
       when {
         not { expression { isPr } }
       }
@@ -125,59 +125,59 @@ pipeline {
         }
       }
     }
-    stage('Deploy Server') {
-      when {
-        not { expression { isPr } }
-        not { expression { return params.RELEASE_BUILD } }
-      }
-      steps {
-        script {
-          // uses env.DOCKER_TAG and deploys to staging by default
-          marathonDeploy(serviceName: env.DEPLOY_PATTERN, waitTime: '60')
-        }
-      }
-    }
-    stage('Deploy Secondary') {
-      when {
-        not { expression { isPr } }
-        not { expression { return params.RELEASE_BUILD } }
-      }
-      steps {
-        script {
-          // deploys to staging by default
-          marathonDeploy(serviceName: env.SECONDARY_DEPLOY_PATTERN, tag: SECONDARY_DOCKER_TAG, waitTime: '60')
-        }
-      }
-    }
-    stage('Deploy PG Control Mirrors') {
+    stage('Deploys:') {
       when {
         allOf {
           not { expression { isPr } }
           not { expression { return params.RELEASE_BUILD} }
         }
       }
-      steps {
-        script {
-          // uses env.DOCKER_TAG and deploys to staging by default
-          marathonDeploy(serviceName: 'soql-server-mirror-control-pg1-staging', waitTime: '60')
-          // deploys to staging by default
-          marathonDeploy(serviceName: 'secondary-watcher-mirror-control-pg*', tag: SECONDARY_DOCKER_TAG, waitTime: '60')
+      stage('Deploy SoQL Server PG') {
+        steps {
+          script {
+            // uses env.DOCKER_TAG and deploys to staging by default
+            marathonDeploy(serviceName: env.DEPLOY_PATTERN, waitTime: '60')
+          }
         }
       }
-    }
-    stage('Deploy Citus Mirrors') {
-      when {
-        allOf {
-          not { expression { isPr } }
-          not { expression { return params.RELEASE_BUILD} }
+      stage('Deploy Secondary Watcher PG') {
+        steps {
+          script {
+            // deploys to staging by default
+            marathonDeploy(serviceName: env.SECONDARY_DEPLOY_PATTERN, tag: SECONDARY_DOCKER_TAG)
+          }
         }
       }
-      steps {
-        script {
-          // uses env.DOCKER_TAG and deploys to staging by default
-          marathonDeploy(serviceName: 'soql-server-mirror-citus1-staging', waitTime: '60')
-          // deploys to staging by default
-          marathonDeploy(serviceName: 'secondary-watcher-mirror-citus*', tag: SECONDARY_DOCKER_TAG, waitTime: '60')
+      stage('Deploy SoQL Server PG Control Mirror') {
+        steps {
+          script {
+            // uses env.DOCKER_TAG and deploys to staging by default
+            marathonDeploy(serviceName: 'soql-server-mirror-control-pg1-staging', waitTime: '60')
+          }
+        }
+      }
+      stage('Deploy Secondary Watcher PG Control Mirror') {
+        steps {
+          script {
+            // deploys to staging by default
+            marathonDeploy(serviceName: 'secondary-watcher-mirror-control-pg*', tag: SECONDARY_DOCKER_TAG)
+          }
+        }
+      }
+      stage('Deploy SoQL Server Citus Mirror') {
+        steps {
+          script {
+            // uses env.DOCKER_TAG and deploys to staging by default
+            marathonDeploy(serviceName: 'soql-server-mirror-citus1-staging', waitTime: '60')
+          }
+        }
+      }
+      stage('Deploy Secondary Watcher Citus Mirror') {
+        steps {
+          script {
+            // deploys to staging by default
+            marathonDeploy(serviceName: 'secondary-watcher-mirror-citus*', tag: SECONDARY_DOCKER_TAG)
+          }
         }
       }
     }
