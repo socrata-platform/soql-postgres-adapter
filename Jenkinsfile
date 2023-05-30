@@ -105,7 +105,7 @@ pipeline {
         }
       }
     }
-    stage('Dockerize Secondary Watcher') {
+    stage('Dockerize Secondary') {
       when {
         not { expression { isPr } }
       }
@@ -133,36 +133,45 @@ pipeline {
         }
       }
       stages {
-        stage('Deploy SoQL Server PG & Secondary') {
+        stage('Deploy SoQL Server PG') {
           steps {
             script {
               // uses env.DOCKER_TAG and deploys to staging by default
               marathonDeploy(serviceName: env.DEPLOY_PATTERN, waitTime: '60')
-
+            }
+          }
+        }
+        stage('Deploy Secondary') {
+          steps {
+            script {
               // deploys to staging by default
               marathonDeploy(serviceName: env.SECONDARY_DEPLOY_PATTERN, tag: SECONDARY_DOCKER_TAG)
             }
           }
         }
-        stage('Deploy PG Control Mirrors') {
-          steps {
-            script {
-              // uses env.DOCKER_TAG and deploys to staging by default
-              marathonDeploy(serviceName: 'soql-server-mirror-control-pg1-staging', waitTime: '60')
+        stages {
+          parallel {
+            stage('Deploy PG Control Mirrors') {
+              steps {
+                script {
+                  // uses env.DOCKER_TAG and deploys to staging by default
+                  marathonDeploy(serviceName: 'soql-server-mirror-control-pg1-staging', waitTime: '60')
 
-              // deploys to staging by default
-              marathonDeploy(serviceName: 'secondary-watcher-mirror-control-pg*', tag: SECONDARY_DOCKER_TAG)
+                  // deploys to staging by default
+                  marathonDeploy(serviceName: 'secondary-watcher-mirror-control-pg*', tag: SECONDARY_DOCKER_TAG)
+                }
+              }
             }
-          }
-        }
-        stage('Deploy Citus Mirrors') {
-          steps {
-            script {
-              // uses env.DOCKER_TAG and deploys to staging by default
-              marathonDeploy(serviceName: 'soql-server-mirror-citus1-staging', waitTime: '60')
+            stage('Deploy Citus Mirrors') {
+              steps {
+                script {
+                  // uses env.DOCKER_TAG and deploys to staging by default
+                  marathonDeploy(serviceName: 'soql-server-mirror-citus1-staging', waitTime: '60')
 
-              // deploys to staging by default
-              marathonDeploy(serviceName: 'secondary-watcher-mirror-citus*', tag: SECONDARY_DOCKER_TAG)
+                  // deploys to staging by default
+                  marathonDeploy(serviceName: 'secondary-watcher-mirror-citus*', tag: SECONDARY_DOCKER_TAG)
+                }
+              }
             }
           }
         }
