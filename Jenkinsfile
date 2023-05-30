@@ -133,49 +133,34 @@ pipeline {
         }
       }
       stages {
-        stage('Deploy SoQL Server PG') {
+        stage('Deploy SoQL Server PG & Secondary') {
           steps {
             script {
               // uses env.DOCKER_TAG and deploys to staging by default
               marathonDeploy(serviceName: env.DEPLOY_PATTERN, waitTime: '60')
-            }
-          }
-        }
-        stage('Deploy Secondary Watcher PG') {
-          steps {
-            script {
+
               // deploys to staging by default
               marathonDeploy(serviceName: env.SECONDARY_DEPLOY_PATTERN, tag: SECONDARY_DOCKER_TAG)
             }
           }
         }
-        stage('Deploy SoQL Server PG Control Mirror') {
+        stage('Deploy PG Control Mirrors') {
           steps {
             script {
               // uses env.DOCKER_TAG and deploys to staging by default
               marathonDeploy(serviceName: 'soql-server-mirror-control-pg1-staging', waitTime: '60')
-            }
-          }
-        }
-        stage('Deploy Secondary Watcher PG Control Mirror') {
-          steps {
-            script {
+
               // deploys to staging by default
               marathonDeploy(serviceName: 'secondary-watcher-mirror-control-pg*', tag: SECONDARY_DOCKER_TAG)
             }
           }
         }
-        stage('Deploy SoQL Server Citus Mirror') {
+        stage('Deploy Citus Mirrors') {
           steps {
             script {
               // uses env.DOCKER_TAG and deploys to staging by default
               marathonDeploy(serviceName: 'soql-server-mirror-citus1-staging', waitTime: '60')
-            }
-          }
-        }
-        stage('Deploy Secondary Watcher Citus Mirror') {
-          steps {
-            script {
+
               // deploys to staging by default
               marathonDeploy(serviceName: 'secondary-watcher-mirror-citus*', tag: SECONDARY_DOCKER_TAG)
             }
