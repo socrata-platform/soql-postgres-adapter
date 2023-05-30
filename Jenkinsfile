@@ -125,7 +125,7 @@ pipeline {
         }
       }
     }
-    stage('Deploy') {
+    stage('Deploy Server') {
       when {
         not { expression { isPr } }
         not { expression { return params.RELEASE_BUILD } }
@@ -134,6 +134,16 @@ pipeline {
         script {
           // uses env.DOCKER_TAG and deploys to staging by default
           marathonDeploy(serviceName: env.DEPLOY_PATTERN, waitTime: '60')
+        }
+      }
+    }
+    stage('Deploy Secondary') {
+      when {
+        not { expression { isPr } }
+        not { expression { return params.RELEASE_BUILD } }
+      }
+      steps {
+        script {
           // deploys to staging by default
           marathonDeploy(serviceName: env.SECONDARY_DEPLOY_PATTERN, tag: SECONDARY_DOCKER_TAG, waitTime: '60')
         }
