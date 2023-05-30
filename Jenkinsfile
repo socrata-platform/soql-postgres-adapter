@@ -3,8 +3,8 @@
 
 // set up service and project variables
 def service_server = 'soql-server-pg'
-def service_secondary = 'secondary-watcher-pg'
 def project_wd_server = 'soql-server-pg'
+def service_secondary = 'secondary-watcher-pg'
 def project_wd_secondary = 'store-pg'
 
 def isPr = env.CHANGE_ID != null;
