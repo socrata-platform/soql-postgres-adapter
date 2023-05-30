@@ -1,6 +1,11 @@
 // Set up the libraries
 @Library('socrata-pipeline-library')
 
+// instanciate libraries
+def sbtbuild = new com.socrata.SBTBuild(steps, service_server, '.', [project_wd_server, project_wd_secondary])
+def dockerize_server = new com.socrata.Dockerize(steps, service_server, BUILD_NUMBER)
+def dockerize_secondary = new com.socrata.Dockerize(steps, service_secondary, BUILD_NUMBER)
+
 // set up service and project variables
 def service_server = 'soql-server-pg'
 def project_wd_server = 'soql-server-pg'
@@ -8,11 +13,6 @@ def service_secondary = 'secondary-watcher-pg'
 def project_wd_secondary = 'store-pg'
 
 def isPr = env.CHANGE_ID != null;
-
-// instanciate libraries
-def sbtbuild = new com.socrata.SBTBuild(steps, service_server, '.', [project_wd_server, project_wd_secondary])
-def dockerize_server = new com.socrata.Dockerize(steps, service_server, BUILD_NUMBER)
-def dockerize_secondary = new com.socrata.Dockerize(steps, service_secondary, BUILD_NUMBER)
 
 pipeline {
   options {
