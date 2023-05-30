@@ -28,9 +28,9 @@ pipeline {
     label params.AGENT
   }
   environment {
-    SERVICE = 'soql-server-pg'
-    DEPLOY_PATTERN = 'soql-server-pg*'
-    SECONDARY_DEPLOY_PATTERN = 'secondary-watcher-pg*'
+    SERVICE = "${service_server}"
+    DEPLOY_PATTERN = "${service_server}*"
+    SECONDARY_DEPLOY_PATTERN = "${service_secondary}*"
   }
   stages {
     stage('Release Tag') {
@@ -53,12 +53,6 @@ pipeline {
               publishStage = true
 
               echo 'Running sbt-release'
-
-              // The git config setup required for your project prior to running 'sbt release with-defaults' may vary:
-// EN-59946 commenting out because I don't think this is necessary -- other similar jobs do not have this.  I will follow up after the release build is run to remove or uncomment.
-//              sh(returnStdout: true, script: "git config user.name \'Jenkins Server in aws-us-west-2-infrastructure\'")
-//              sh(returnStdout: true, script: "git config user.email \'test-infrastructure-l@socrata.com\'")
-//              sh(returnStdout: true, script: "#!/bin/sh -e\ngit config remote.origin.url \"https://${GITHUB_API_TOKEN}@github.com/socrata-platform/soql-postgres-adapter.git\"")
               sh(returnStdout: true, script: "git config remote.origin.fetch +refs/heads/*:refs/remotes/origin/*")
               sh(returnStdout: true, script: "git config branch.main.remote origin")
               sh(returnStdout: true, script: "git config branch.main.merge refs/heads/main")
@@ -97,7 +91,7 @@ pipeline {
       }
       steps {
         script {
-          dockerize_server.docker_build(sbtbuild.getServiceVersion(), service_sha, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server))
+          dockerize_server.docker_build(sbtbuild.getServiceVersion(), env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server))
           env.DOCKER_TAG = dockerize_server.getDeployTag()
         }
       }
@@ -117,7 +111,7 @@ pipeline {
       }
       steps {
         script {
-          dockerize_secondary.docker_build(sbtbuild.getServiceVersion(), service_sha, sbtbuild.getDockerPath(project_wd_secondary), sbtbuild.getDockerArtifact(project_wd_secondary))
+          dockerize_secondary.docker_build(sbtbuild.getServiceVersion(), env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_secondary), sbtbuild.getDockerArtifact(project_wd_secondary))
           env.SECONDARY_DOCKER_TAG = dockerize_secondary.getDeployTag()
         }
       }
