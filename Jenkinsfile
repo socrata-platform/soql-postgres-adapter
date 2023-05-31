@@ -149,9 +149,9 @@ pipeline {
             }
           }
         }
-        stage('Deploy Mirrors') {
-          steps {
-            parallel control-pg: {
+        stage('Deploy Mirrors:') {
+          parallel {
+            stage('Control-PG') {
               script {
                 // uses env.DOCKER_TAG and deploys to staging by default
                 marathonDeploy(serviceName: 'soql-server-mirror-control-pg1-staging', waitTime: '60')
@@ -159,8 +159,8 @@ pipeline {
                 // deploys to staging by default
                 marathonDeploy(serviceName: 'secondary-watcher-mirror-control-pg*', tag: SECONDARY_DOCKER_TAG)
               }
-            },
-            citus: {
+            }
+            stage('Citus') {
               script {
                 // uses env.DOCKER_TAG and deploys to staging by default
                 marathonDeploy(serviceName: 'soql-server-mirror-citus1-staging', waitTime: '60')
