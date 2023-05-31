@@ -2,223 +2,174 @@
 @Library('socrata-pipeline-library')
 
 // set up service and project variables
-def service_server = "soql-server-pg"
-def project_wd_server = "soql-server-pg"
-//def project_name_server = "soqlServerPG"
-def deploy_service_pattern_server = "soql-server-pg*"
-def service_secondary = "secondary-watcher-pg"
-def project_wd_secondary = "store-pg"
-//def project_name_secondary = "storePG"
-def deploy_service_pattern_secondary = "secondary-watcher-pg*"
-def deploy_environment = "staging"
-def default_branch_specifier = "origin/main"
+def service_server = 'soql-server-pg'
+def project_wd_server = 'soql-server-pg'
+def service_secondary = 'secondary-watcher-pg'
+def project_wd_secondary = 'store-pg'
 
-def service_sha = env.GIT_COMMIT
-
-// variables that determine which stages we run based on what triggered the job
-def boolean stage_cut = false
-def boolean stage_build = false
-def boolean stage_dockerize = false
-def boolean stage_deploy = false
+def isPr = env.CHANGE_ID != null;
 
 // instanciate libraries
 def sbtbuild = new com.socrata.SBTBuild(steps, service_server, '.', [project_wd_server, project_wd_secondary])
-//def build_server = new com.socrata.SBTBuild(steps, service_server, project_wd_server)
-//build_server.setSubprojectName(project_name_server)
-//build_server.setScalaVersion("2.12")
 def dockerize_server = new com.socrata.Dockerize(steps, service_server, BUILD_NUMBER)
-//def build_secondary = new com.socrata.SBTBuild(steps, service_secondary, project_wd_secondary)
-//build_secondary.setSubprojectName(project_name_secondary)
-//build_secondary.setScalaVersion("2.12")
 def dockerize_secondary = new com.socrata.Dockerize(steps, service_secondary, BUILD_NUMBER)
-def deploy = new com.socrata.MarathonDeploy(steps)
 
 pipeline {
   options {
     ansiColor('xterm')
   }
   parameters {
-    booleanParam(name: 'RELEASE_CUT', defaultValue: false, description: 'Are we cutting a new release candidate?')
-    booleanParam(name: 'FORCE_BUILD', defaultValue: false, description: 'Force build from latest tag if sbt release needed to be run between cuts')
+    booleanParam(name: 'RELEASE_BUILD', defaultValue: false, description: 'Are we building a release candidate?')
+    booleanParam(name: 'RELEASE_DRY_RUN', defaultValue: false, description: 'To test out the release build without creating a new tag.')
     string(name: 'AGENT', defaultValue: 'build-worker', description: 'Which build agent to use?')
-    string(name: 'BRANCH_SPECIFIER', defaultValue: default_branch_specifier, description: 'Use this branch for building the artifact.')
+    string(name: 'BRANCH_SPECIFIER', defaultValue: 'origin/main', description: 'Use this branch for building the artifact.')
   }
   agent {
     label params.AGENT
   }
   environment {
-    PATH = "${WORKER_PATH}"
+    SERVICE = "${service_server}"
+    DEPLOY_PATTERN = "${service_server}*"
+    SECONDARY_DEPLOY_PATTERN = "${service_secondary}*"
   }
-
   stages {
-    stage('Setup') {
+    stage('Release Tag') {
+      when {
+        expression { return params.RELEASE_BUILD }
+      }
       steps {
         script {
-          // check to see if we want to use a non-standard branch and check out the repo
-          if (params.BRANCH_SPECIFIER == default_branch_specifier) {
-            checkout scm
-          } else {
-            def scmRepoUrl = scm.getUserRemoteConfigs()[0].getUrl()
-            checkout ([
-              $class: 'GitSCM',
-              branches: [[name: params.BRANCH_SPECIFIER ]],
-              userRemoteConfigs: [[ url: scmRepoUrl ]]
-            ])
-          }
-
-          // set the service sha to what was checked out (GIT_COMMIT isn't always set)
-          service_sha = sh(returnStdout: true, script: "git rev-parse HEAD").trim()
-
-          // determine what triggered the build and what stages need to be run
-          if (params.RELEASE_CUT == true) { // RELEASE_CUT parameter was set by a cut job
-            stage_cut = true  // other stages will be turned on in the cut step as needed
-            deploy_environment = "rc"
-          }
-          else if (env.CHANGE_ID != null) { // we're running a PR builder
-            stage_build = true
-          }
-          else if (BRANCH_NAME == "main") { // we're running a build on main branch to deploy to staging
-            stage_build = true
-            stage_dockerize = true
-            stage_deploy = true
+          if (params.RELEASE_DRY_RUN) {
+            echo 'DRY RUN: Skipping release tag creation'
           }
           else {
-            // we're not sure what we're doing...
-            echo "Unknown build trigger - Exiting as Failure"
-            currentBuild.result = 'FAILURE'
-            return
+            // get a list of all files changes since the last tag
+            files = sh(returnStdout: true, script: "git diff --name-only HEAD `git describe --match \"v*\" --abbrev=0`").trim()
+            echo "Files changed:\n${files}"
+
+            // the release build process changes the version file, so it will always be changed
+            // if there are other files changed, then increment the version, create a new tag and publish the changes
+            if (files != 'version.sbt') {
+              publishStage = true
+
+              echo 'Running sbt-release'
+              sh(returnStdout: true, script: "git config remote.origin.fetch +refs/heads/*:refs/remotes/origin/*")
+              sh(returnStdout: true, script: "git config branch.main.remote origin")
+              sh(returnStdout: true, script: "git config branch.main.merge refs/heads/main")
+
+              echo sh(returnStdout: true, script: "echo y | sbt \"release with-defaults\"")
+            }
           }
+          echo 'Getting release tag'
+          release_tag = sh(returnStdout: true, script: "git describe --abbrev=0 --match \"v*\"").trim()
+          branchSpecifier = "refs/tags/${release_tag}"
+          echo branchSpecifier
+
+          // checkout the tag so we're performing subsequent actions on it
+          sh "git checkout ${branchSpecifier}"
         }
       }
     }
-    stage('Cut') {
-      when { expression { stage_cut } }
-      steps {
-        script {
-          def cutNeeded = false
-
-          // get a list of all files changes since the last tag
-          files = sh(returnStdout: true, script: "git diff --name-only HEAD `git describe --match \"v*\" --abbrev=0`").trim()
-          echo "Files changed:\n${files}"
-
-          if (files == 'version.sbt') {
-            // Build anyway using latest tag - needed if sbt release had to be run between cuts
-            // This parameter will need to be set by the cut job in Jenkins
-            if(params.FORCE_BUILD) {
-              cutNeeded = true
-            }
-            else {
-              echo "No build needed, skipping subsequent steps"
-            }
-          }
-          else {
-            echo 'Running sbt-release'
-
-            // The git config setup required for your project prior to running 'sbt release with-defaults' may vary:
-            sh(returnStdout: true, script: "git config user.name \'Jenkins Server in aws-us-west-2-infrastructure\'")
-            sh(returnStdout: true, script: "git config user.email \'test-infrastructure-l@socrata.com\'")
-            sh(returnStdout: true, script: "#!/bin/sh -e\ngit config remote.origin.url \"https://${GITHUB_API_TOKEN}@github.com/socrata-platform/soql-postgres-adapter.git\"")
-            sh(returnStdout: true, script: "git config remote.origin.fetch +refs/heads/*:refs/remotes/origin/*")
-            sh(returnStdout: true, script: "git config branch.main.remote origin")
-            sh(returnStdout: true, script: "git config branch.main.merge refs/heads/main")
-
-            echo sh(returnStdout: true, script: "echo y | sbt \"release with-defaults\"")
-
-            cutNeeded = true
-          }
-
-          if(cutNeeded == true) {
-            echo 'Getting release tag'
-            release_tag = sh(returnStdout: true, script: "git describe --abbrev=0 --match \"v*\"").trim()
-            branchSpecifier = "refs/tags/${release_tag}"
-            echo branchSpecifier
-
-            // checkout the tag so we're performing subsequent actions on it
-            sh "git checkout ${branchSpecifier}"
-
-            // set the service_sha to the current tag because it might not be the same as env.GIT_COMMIT
-            service_sha = sh(returnStdout: true, script: "git rev-parse HEAD").trim()
-
-            // set later stages to run since we're cutting
-            stage_build = true
-            stage_dockerize = true
-            stage_deploy = true
-          }
-        }
-      }
-    }
-    stage('Build Server') {
-      when { expression { stage_build } }
+    stage('Build SoQL Server PG') {
       steps {
         script {
           echo "Building sbt project..."
           sbtbuild.setScalaVersion("2.12")
           sbtbuild.build()
-        }
-      }
-    }
-    stage('Dockerize Server') {
-      when { expression { stage_dockerize } }
-      steps {
-        script {
-          echo "Building docker container..."
-          dockerize_server.docker_build(sbtbuild.getServiceVersion(), service_sha, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server))
-        }
-      }
-    }
-    stage('Dockerize Secondry') {
-      when { expression { stage_dockerize } }
-      steps {
-        script {
-          echo "Building docker container..."
-          dockerize_secondary.docker_build(sbtbuild.getServiceVersion(), service_sha, sbtbuild.getDockerPath(project_wd_secondary), sbtbuild.getDockerArtifact(project_wd_secondary))
-        }
-      }
-    }
-    stage('Deploy') {
-      when { expression { stage_deploy } }
-      steps {
-        script {
-          // Checkout and run bundle install in the apps-marathon repo
-          deploy.checkoutAndInstall()
 
-          // deploy the service to the specified environment
-          deploy.deploy(deploy_service_pattern_server, deploy_environment, dockerize_server.getDeployTag())
-          deploy.deploy(deploy_service_pattern_secondary, deploy_environment, dockerize_secondary.getDeployTag())
+          env.SERVICE_VERSION = sbtbuild.getServiceVersion()
+          // set the SERVICE_SHA to the current head because it might not be the same as env.GIT_COMMIT
+          env.SERVICE_SHA = sh(returnStdout: true, script: "git rev-parse HEAD").trim()
+          // set build description to be the same as the docker deploy tag
+          currentBuild.description = "${env.SERVICE}:${env.SERVICE_VERSION}_${env.BUILD_NUMBER}_${env.SERVICE_SHA.take(8)}"
         }
       }
     }
-
-    stage('Deploy PG Control Mirrors') {
+    stage('Dockerize SoQL Server PG') {
+      when {
+        not { expression { isPr } }
+      }
+      steps {
+        script {
+          dockerize_server.docker_build(sbtbuild.getServiceVersion(), env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server))
+          env.DOCKER_TAG = dockerize_server.getDeployTag()
+        }
+      }
+      post {
+        success {
+          script {
+            if (params.RELEASE_BUILD){
+              echo env.DOCKER_TAG // For now, just print the deploy tag in the console output -- later, communicate to release metadata service
+            }
+          }
+        }
+      }
+    }
+    stage('Dockerize Secondary') {
+      when {
+        not { expression { isPr } }
+      }
+      steps {
+        script {
+          dockerize_secondary.docker_build(sbtbuild.getServiceVersion(), env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_secondary), sbtbuild.getDockerArtifact(project_wd_secondary))
+          env.SECONDARY_DOCKER_TAG = dockerize_secondary.getDeployTag()
+        }
+      }
+      post {
+        success {
+          script {
+            if (params.RELEASE_BUILD){
+              echo env.SECONDARY_DOCKER_TAG // For now, just print the deploy tag in the console output -- later, communicate to release metadata service
+            }
+          }
+        }
+      }
+    }
+    stage('Deploys:') {
       when {
         allOf {
-          expression { stage_deploy }
-          not { expression { return params.RELEASE_CUT} }
+          not { expression { isPr } }
+          not { expression { return params.RELEASE_BUILD} }
         }
       }
-      steps {
-        script {
-          deploy.checkoutAndInstall()
-
-          deploy.deploy("soql-server-mirror-control-pg1-staging", deploy_environment, dockerize_server.getDeployTag())
-          deploy.deploy("secondary-watcher-mirror-control-pg*", deploy_environment, dockerize_secondary.getDeployTag())
+      stages {
+        stage('Deploy SoQL Server PG') {
+          steps {
+            script {
+              // uses env.DOCKER_TAG and deploys to staging by default
+              marathonDeploy(serviceName: env.DEPLOY_PATTERN, waitTime: '60')
+            }
+          }
         }
-      }
+        stage('Deploy Secondary') {
+          steps {
+            script {
+              // deploys to staging by default
+              marathonDeploy(serviceName: env.SECONDARY_DEPLOY_PATTERN, tag: SECONDARY_DOCKER_TAG)
+            }
+          }
         }
+        stage('Deploy PG Control Mirrors') {
+          steps {
+            script {
+              // uses env.DOCKER_TAG and deploys to staging by default
+              marathonDeploy(serviceName: 'soql-server-mirror-control-pg1-staging', waitTime: '60')
 
-    stage('Deploy Citus Mirrors') {
-      when {
-        allOf {
-          expression { stage_deploy }
-          not { expression { return params.RELEASE_CUT} }
+              // deploys to staging by default
+              marathonDeploy(serviceName: 'secondary-watcher-mirror-control-pg*', tag: SECONDARY_DOCKER_TAG)
+            }
+          }
         }
-      }
-      steps {
-        script {
-          deploy.checkoutAndInstall()
+        stage('Deploy Citus Mirrors') {
+          steps {
+            script {
+              // uses env.DOCKER_TAG and deploys to staging by default
+              marathonDeploy(serviceName: 'soql-server-mirror-citus1-staging', waitTime: '60')
 
-          deploy.deploy("soql-server-mirror-citus1-staging", deploy_environment, dockerize_server.getDeployTag())
-          deploy.deploy("secondary-watcher-mirror-citus*", deploy_environment, dockerize_secondary.getDeployTag())
+              // deploys to staging by default
+              marathonDeploy(serviceName: 'secondary-watcher-mirror-citus*', tag: SECONDARY_DOCKER_TAG)
+            }
+          }
         }
       }
     }
