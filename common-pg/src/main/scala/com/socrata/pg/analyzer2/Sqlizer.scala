@@ -80,28 +80,39 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   type AugmentedSchema = OrderedMap[ColumnLabel, AugmentedType]
   type AvailableSchemas = Map[AutoTableLabel, AugmentedSchema]
 
-  implicit val repFor: Rep.Provider[MT]
-  implicit val namespace: SqlNamespaces
+  val repFor: Rep.Provider[MT]
+  val namespace: SqlNamespaces
   val systemContext: Map[String, String]
-
-  lazy val dynamicContext = FuncallSqlizer.DynamicContext[MT](repFor, systemContext, namespace)
-
   val rewriteSearch: RewriteSearch
 
-  def apply(stmt: Statement, availableSchemas: AvailableSchemas)(implicit ct: ClassTag[CV]): (Doc, ResultExtractor) = {
-    val (sql, augmentedSchema) = sqlizeStatement(rewriteSearch(stmt), availableSchemas, true)
-    (sql, new ResultExtractor(augmentedSchema, repFor))
+  private implicit def gensymProvider: GensymProvider = namespace
+
+  def apply(stmt: Statement, availableSchemas: AvailableSchemas)(implicit ct: ClassTag[CV]): Sqlizer.Result[MT] = {
+    val rewritten = rewriteSearch(stmt)
+    val dynamicContext = FuncallSqlizer.DynamicContext[MT](
+      repFor,
+      systemContext,
+      namespace,
+      ProvenanceTracker(rewritten, e => repFor(e.typ).provenanceOf(e))
+    )
+    val (sql, augmentedSchema) = sqlizeStatement(rewritten, availableSchemas, dynamicContext, true)
+    Sqlizer.Result(
+      sql,
+      new ResultExtractor(augmentedSchema, repFor),
+      dynamicContext.nonliteralSystemContextLookupFound
+    )
   }
 
   private def sqlizeStatement(
     stmt: Statement,
     availableSchemas: AvailableSchemas,
+    dynamicContext: FuncallSqlizer.DynamicContext[MT],
     topLevel: Boolean
   ): (Doc, AugmentedSchema) = {
     stmt match {
-      case select: Select => sqlizeSelect(select, availableSchemas, topLevel)
-      case values: Values => sqlizeValues(values, availableSchemas, topLevel)
-      case combinedTables: CombinedTables => sqlizeCombinedTables(combinedTables, availableSchemas, topLevel)
+      case select: Select => sqlizeSelect(select, availableSchemas, dynamicContext, topLevel)
+      case values: Values => sqlizeValues(values, availableSchemas, dynamicContext, topLevel)
+      case combinedTables: CombinedTables => sqlizeCombinedTables(combinedTables, availableSchemas, dynamicContext, topLevel)
       case cte: CTE => ???
     }
   }
@@ -109,6 +120,7 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   private def sqlizeCombinedTables(
     combinedTables: CombinedTables,
     availableSchemas: AvailableSchemas,
+    dynamicContext: FuncallSqlizer.DynamicContext[MT],
     topLevel: Boolean
   ): (Doc, AugmentedSchema) = {
     // Ok, this is a little complicated because both the left and
@@ -119,8 +131,8 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
 
     val CombinedTables(op, leftStmt, rightStmt) = combinedTables
 
-    val (leftDoc, leftSchema) = sqlizeStatement(leftStmt, availableSchemas, topLevel)
-    val (rightDoc, rightSchema) = sqlizeStatement(rightStmt, availableSchemas, topLevel)
+    val (leftDoc, leftSchema) = sqlizeStatement(leftStmt, availableSchemas, dynamicContext, topLevel)
+    val (rightDoc, rightSchema) = sqlizeStatement(rightStmt, availableSchemas, dynamicContext, topLevel)
 
     assert(leftSchema.values.map(_.typ) == rightSchema.values.map(_.typ))
 
@@ -221,13 +233,14 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   private def sqlizeValues(
     values: Values,
     availableSchemas: AvailableSchemas,
+    dynamicContext: FuncallSqlizer.DynamicContext[MT],
     topLevel: Boolean
   ): (Doc, AugmentedSchema) = {
     val physicalSchema = values.schema.iterator.flatMap { case (label, nameEntry) =>
       repFor(nameEntry.typ).expandedDatabaseColumns(label)
     }
 
-    val exprSqlizer = new ExprSqlizer(this, availableSchemas, Vector.empty)
+    val exprSqlizer = new ExprSqlizer(this, availableSchemas, Vector.empty, dynamicContext)
 
     // Ugh, why are valueses so weird?
     // Ok so, if we have a single row, just sqlize it as a FROMless SELECT.
@@ -329,6 +342,7 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   private def sqlizeSelect(
     select: Select,
     preSchemas: AvailableSchemas,
+    dynamicContext: FuncallSqlizer.DynamicContext[MT],
     topLevel: Boolean
   ): (Doc, AugmentedSchema) = {
     // ok so the order here is very particular because we need to
@@ -368,10 +382,10 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
       orderBy = orderBy.map(deSelectListReferenceWrappedToplevelExprs(selectListIndexes, _))
     }
 
-    val (fromSql, availableSchemas) = sqlizeFrom(from, preSchemas)
+    val (fromSql, availableSchemas) = sqlizeFrom(from, preSchemas, dynamicContext)
 
     val selectListExprs: Vector[(AutoColumnLabel, ExprSql)] = {
-      val exprSqlizer = new ExprSqlizer(this, availableSchemas, Vector.empty)
+      val exprSqlizer = new ExprSqlizer(this, availableSchemas, Vector.empty, dynamicContext)
       selectList.iterator.map { case (label, namedExpr) =>
         val sqlized = exprSqlizer.sqlize(namedExpr.expr)
         val wrapped =
@@ -413,7 +427,7 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
       (idx + expr.databaseExprCount, SelectListIndex(idx, isExpanded = false))
     }.toVector
 
-    val exprSqlizer = new ExprSqlizer(this, availableSchemas, selectListIndices)
+    val exprSqlizer = new ExprSqlizer(this, availableSchemas, selectListIndices, dynamicContext)
 
     val distinctSql = sqlizeDistinct(distinct, exprSqlizer)
 
@@ -472,17 +486,21 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     }
   }
 
-  private def sqlizeFrom(from: From, schemasSoFar: AvailableSchemas): (Doc, AvailableSchemas) = {
+  private def sqlizeFrom(
+    from: From,
+    schemasSoFar: AvailableSchemas,
+    dynamicContext: FuncallSqlizer.DynamicContext[MT]
+  ): (Doc, AvailableSchemas) = {
     // Ok so this is _way_ looser than actual SQL visibility semantics
     // but because we've been sure to give every table-instance a
     // unique label, it doesn't matter.
     from.reduce[(Doc, AvailableSchemas)](
-      sqlizeAtomicFrom(_, schemasSoFar),
+      sqlizeAtomicFrom(_, schemasSoFar, dynamicContext),
       { (acc, join) =>
         val (leftSql, leftSchemas) = acc
         val Join(joinType, lateral, _left, right, on) = join
-        val (rightSql, schemasSoFar) = sqlizeAtomicFrom(right, leftSchemas)
-        val exprSqlizer = new ExprSqlizer(this, schemasSoFar, Vector.empty)
+        val (rightSql, schemasSoFar) = sqlizeAtomicFrom(right, leftSchemas, dynamicContext)
+        val exprSqlizer = new ExprSqlizer(this, schemasSoFar, Vector.empty, dynamicContext)
         val onSql = exprSqlizer.sqlize(on).compressed.sql
 
         (
@@ -508,7 +526,7 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     Doc(result)
   }
 
-  private def sqlizeAtomicFrom(from: AtomicFrom, availableSchemas: AvailableSchemas): (Doc, AvailableSchemas) = {
+  private def sqlizeAtomicFrom(from: AtomicFrom, availableSchemas: AvailableSchemas, dynamicContext: FuncallSqlizer.DynamicContext[MT]): (Doc, AvailableSchemas) = {
     val (sql, schema: AugmentedSchema) =
       from match {
         case FromTable(name, _cn, _rn, _alias, _label, columns, _pks) =>
@@ -520,7 +538,7 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
           )
 
         case FromStatement(stmt, _label, _rn, _alias) =>
-          val (sql, schema) = sqlizeStatement(stmt, availableSchemas, topLevel = false)
+          val (sql, schema) = sqlizeStatement(stmt, availableSchemas, dynamicContext, topLevel = false)
           (d"(" ++ sql ++ d")", schema)
 
         case FromSingleRow(_label, _alias) =>
@@ -582,4 +600,10 @@ object Sqlizer {
           }
       }
   }
+
+  case class Result[MT <: MetaTypes](
+    sql: Doc[SqlizeAnnotation[MT]],
+    resultExtractor: ResultExtractor[MT],
+    nonliteralSystemContextLookupFound: Boolean
+  )
 }

@@ -16,6 +16,7 @@ trait Rep[MT <: MetaTypes] extends ExpressionUniverse[MT] {
   def expandedDatabaseColumns(name: ColumnLabel): Seq[Doc[Nothing]]
   def compressedDatabaseColumn(name: ColumnLabel): Doc[Nothing]
   def isProvenanced: Boolean = false
+  def provenanceOf(value: LiteralValue): Set[CanonicalName]
 
   // throws an exception if "field" is not a subcolumn of this type
   def subcolInfo(field: String): SubcolInfo[MT]
@@ -68,6 +69,8 @@ object Rep {
       }
 
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV
+
+      def provenanceOf(e: LiteralValue) = Set.empty
     }
 
     protected abstract class CompoundColumnRep(val typ: CT) extends Rep {
@@ -96,6 +99,8 @@ object Rep {
 
       protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV
       protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV
+
+      def provenanceOf(e: LiteralValue) = Set.empty
     }
 
     protected abstract class ProvenancedRep(val typ: CT, primarySqlTyp: Doc) extends Rep {
