@@ -17,6 +17,11 @@ class TestRepProvider(override val namespace: SqlNamespaces[SqlizerTest.TestMT])
 
   val reps = Map[TestType, Rep](
     TestID -> new ProvenancedRep(TestID, d"bigint") {
+      def provenanceOf(e: LiteralValue) = {
+        val rawId = e.value.asInstanceOf[TestID]
+        rawId.provenance.map(CanonicalName(_)).toSet
+      }
+
       def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
         val rawId = e.value.asInstanceOf[TestID]
 

@@ -40,6 +40,11 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
 
   val reps = Map[SoQLType, Rep](
     SoQLID -> new ProvenancedRep(SoQLID, d"bigint") {
+      def provenanceOf(e: LiteralValue) = {
+        val rawId = e.value.asInstanceOf[SoQLID]
+        rawId.provenance.map(CanonicalName(_)).toSet
+      }
+
       def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
         val rawId = e.value.asInstanceOf[SoQLID]
         val rawFormatted = SoQLID.FormattedButUnobfuscatedStringRep(rawId)
@@ -97,6 +102,11 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
       }
     },
     SoQLVersion -> new ProvenancedRep(SoQLVersion, d"bigint") {
+      def provenanceOf(e: LiteralValue) = {
+        val rawId = e.value.asInstanceOf[SoQLVersion]
+        rawId.provenance.map(CanonicalName(_)).toSet
+      }
+
       def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
         val rawId = e.value.asInstanceOf[SoQLVersion]
         val rawFormatted = SoQLVersion.FormattedButUnobfuscatedStringRep(rawId)

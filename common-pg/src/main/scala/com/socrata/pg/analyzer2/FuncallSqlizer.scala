@@ -7,7 +7,8 @@ object FuncallSqlizer {
   case class DynamicContext[MT <: MetaTypes](
     repFor: Rep.Provider[MT],
     systemContext: Map[String, String],
-    gensymProvider: GensymProvider
+    gensymProvider: GensymProvider,
+    provTracker: ProvenanceTracker[MT]
   ) {
     // This is kinda icky, but it lets us only set system context
     // settings if absolutely necessary, which in practice it should
@@ -78,6 +79,32 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     val rhs = args(1).compressed.sql
 
     ExprSql(lhs.parenthesized +#+ Doc(operator) +#+ rhs.parenthesized, e)
+  }
+
+  protected def sqlizeProvenancedBinaryOp(operator: String) = ofs { (e, args, ctx) =>
+    assert(args.length == 2)
+    assert(args.map(_.typ) == e.function.allParameters)
+
+    args match {
+      case Seq(a: ExprSql.Expanded[MT], b: ExprSql.Expanded[MT]) if ctx.repFor(a.typ).isProvenanced =>
+        // Provenanced types are special in that they are atomic types
+        // + a string which is not dependant on anything
+        // metatype-specific, and are null if and only if their
+        // "value" component is null.
+        val Seq(aProvSql, aValueSql) = a.sqls
+        val Seq(bProvSql, bValueSql) = b.sqls
+
+        val possibleAProv = ctx.provTracker(a.expr)
+        val possibleBProv = ctx.provTracker(b.expr)
+
+        if(possibleAProv.size < 2 && possibleBProv.size < 2 && possibleAProv == possibleBProv) {
+          ExprSql((aValueSql.parenthesized +#+ Doc(operator) +#+ bValueSql.parenthesized).group, e)
+        } else {
+          sqlizeBinaryOp(operator)(e, args, ctx)
+        }
+      case _ =>
+        sqlizeBinaryOp(operator)(e, args, ctx)
+    }
   }
 
   protected def sqlizeNormalOrdinaryFuncall(sqlFunctionName: String, prefixArgs: Seq[Doc] = Nil, suffixArgs: Seq[Doc] = Nil) = ofs { (e, args, ctx) =>
@@ -166,12 +193,20 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
         // + a string which is not dependant on anything
         // metatype-specific, and are null if and only if their
         // "value" component is null.
-        val Seq(aProv, aValue) = a.sqls
-        val Seq(bProv, bValue) = b.sqls
-        ExprSql(
-          (d"(" ++ aProv.parenthesized +#+ d"IS NOT DISTINCT FROM" +#+ bProv.parenthesized ++ d") AND (" ++ aValue.parenthesized +#+ d"=" +#+ bValue.parenthesized ++ d")").group,
-          e
-        )
+        val Seq(aProvSql, aValueSql) = a.sqls
+        val Seq(bProvSql, bValueSql) = b.sqls
+
+        val possibleAProv = ctx.provTracker(a.expr)
+        val possibleBProv = ctx.provTracker(b.expr)
+
+        if(possibleAProv.size < 2 && possibleBProv.size < 2 && possibleAProv == possibleBProv) {
+          ExprSql((aValueSql.parenthesized +#+ d"=" +#+ bValueSql.parenthesized).group, e)
+        } else {
+          ExprSql(
+            (d"(" ++ aProvSql.parenthesized +#+ d"IS NOT DISTINCT FROM" +#+ bProvSql.parenthesized ++ d") AND (" ++ aValueSql.parenthesized +#+ d"=" +#+ bValueSql.parenthesized ++ d")").group,
+            e
+          )
+        }
       case _ =>
         sqlizeBinaryOp("=")(e, args, ctx)
     }
@@ -188,12 +223,20 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
         // + a string which is not dependant on anything
         // metatype-specific, and are null if and only if their
         // "value" component is null.
-        val Seq(aProv, aValue) = a.sqls
-        val Seq(bProv, bValue) = b.sqls
-        ExprSql(
-          (d"(" ++ aProv.parenthesized +#+ d"IS DISTINCT FROM" +#+ bProv.parenthesized ++ d") OR (" ++ aValue.parenthesized +#+ d"=" +#+ bValue.parenthesized ++ d")").group,
-          e
-        )
+        val Seq(aProvSql, aValueSql) = a.sqls
+        val Seq(bProvSql, bValueSql) = b.sqls
+
+        val possibleAProv = ctx.provTracker(a.expr)
+        val possibleBProv = ctx.provTracker(b.expr)
+
+        if(possibleAProv.size < 2 && possibleBProv.size < 2 && possibleAProv == possibleBProv) {
+          ExprSql((aValueSql.parenthesized +#+ d"<>" +#+ bValueSql.parenthesized).group, e)
+        } else {
+          ExprSql(
+            (d"(" ++ aProvSql.parenthesized +#+ d"IS DISTINCT FROM" +#+ bProvSql.parenthesized ++ d") OR (" ++ aValueSql.parenthesized +#+ d"<>" +#+ bValueSql.parenthesized ++ d")").group,
+            e
+          )
+        }
       case _ =>
         sqlizeBinaryOp("<>")(e, args, ctx)
     }
