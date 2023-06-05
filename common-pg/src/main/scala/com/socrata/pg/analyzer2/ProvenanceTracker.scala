@@ -8,7 +8,7 @@ import com.socrata.soql.analyzer2._
 class ProvenanceTracker[MT <: MetaTypes] private (exprs: sc.Map[Expr[MT], Set[CanonicalName]]) extends SqlizerUniverse[MT] {
   // Returns the set of possible origin-tables for the value of this
   // expression.  In a tree where this is size <2 but demanded by an
-  // expression with size >=2 is where providences should start
+  // expression with size >=2 is where provenances should start
   // getting tracked dynamically.
   def apply(expr: Expr): Set[CanonicalName] =
     exprs(expr)

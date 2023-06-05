@@ -12,9 +12,9 @@ class ExprSqlizer[MT <: MetaTypes](
 
   def sqlizeOrderBy(e: OrderBy): OrderBySql[MT] = {
     if(repFor(e.expr.typ).isProvenanced) {
-      // Providenced columns should always be either not-null in both
+      // Provenanced columns should always be either not-null in both
       // columns or null in both columns.  It is _possible_ that a
-      // literal id/version will have a null providence, but one of
+      // literal id/version will have a null provenance, but one of
       // those ending up in a set of values being given to an ORDER BY
       // is _such_ an edge condition that I honestly don't care.
       e.expr match {
