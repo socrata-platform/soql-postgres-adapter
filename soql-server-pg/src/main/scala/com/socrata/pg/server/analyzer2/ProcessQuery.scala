@@ -26,7 +26,7 @@ import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
 import com.socrata.datacoordinator.common.soql.SoQLRep
 
-import com.socrata.pg.analyzer2.CryptProviderProvider
+import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer}
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils}
 import com.socrata.pg.server.CJSONWriter
 
@@ -77,7 +77,7 @@ object ProcessQuery {
     }
 
     val sqlizer = new ActualSqlizer(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext)
-    val (sql, extractor) = sqlizer(nameAnalysis.statement, OrderedMap.empty)
+    val Sqlizer.Result(sql, extractor, nonliteralSystemContextLookupFound) = sqlizer(nameAnalysis.statement, OrderedMap.empty)
     log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
     val laidOutSql = sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded))
     val renderedSql = laidOutSql.toString
@@ -92,7 +92,7 @@ object ProcessQuery {
     precondition.check(Some(etag), sideEffectFree = true) match {
       case Precondition.Passed =>
         fulfillRequest(
-          if(sqlizer.dynamicContext.nonliteralSystemContextLookupFound) Some(systemContext) else None,
+          if(nonliteralSystemContextLookupFound) Some(systemContext) else None,
           copyCache,
           etag,
           pgu,

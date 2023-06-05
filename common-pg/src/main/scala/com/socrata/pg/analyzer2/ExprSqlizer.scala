@@ -6,9 +6,12 @@ import com.socrata.prettyprint.prelude._
 class ExprSqlizer[MT <: MetaTypes](
   sqlizer: Sqlizer[MT],
   availableSchemas: Map[AutoTableLabel, Map[types.ColumnLabel[MT], AugmentedType[MT]]],
-  selectListIndices: IndexedSeq[SelectListIndex]
+  selectListIndices: IndexedSeq[SelectListIndex],
+  dynamicContext: FuncallSqlizer.DynamicContext[MT]
 ) extends StatementUniverse[MT] {
-  import sqlizer.{repFor, dynamicContext, funcallSqlizer, namespace}
+  import sqlizer.{funcallSqlizer, namespace}
+  private implicit def gensymProvider: GensymProvider = namespace
+  private implicit def repFor = dynamicContext.repFor
 
   def sqlizeOrderBy(e: OrderBy): OrderBySql[MT] = {
     if(repFor(e.expr.typ).isProvenanced) {
@@ -17,16 +20,16 @@ class ExprSqlizer[MT <: MetaTypes](
       // literal id/version will have a null provenance, but one of
       // those ending up in a set of values being given to an ORDER BY
       // is _such_ an edge condition that I honestly don't care.
-      e.expr match {
-        case _ : PhysicalColumn =>
-          // all provenance values in a physical column will be the
-          // same; eliminate them from the sqlizer so that the pg
-          // optimizer doesn't have to.
-          val result = sqlize(e.expr)
-          val Seq(_provenance, value) = result.sqls
-          OrderBySql(ExprSql(value, e.expr), ascending = e.ascending, nullLast = e.nullLast)
-        case _ =>
-          OrderBySql(sqlize(e.expr), ascending = e.ascending, nullLast = e.nullLast)
+      val possibleProv = dynamicContext.provTracker(e.expr)
+      if(possibleProv.size < 2) {
+        // all provenance values in a physical column will be the
+        // same; eliminate them from the sqlizer so that the pg
+        // optimizer doesn't have to.
+        val result = sqlize(e.expr)
+        val Seq(_provenance, value) = result.sqls
+        OrderBySql(ExprSql(value, e.expr), ascending = e.ascending, nullLast = e.nullLast)
+      } else {
+        OrderBySql(sqlize(e.expr), ascending = e.ascending, nullLast = e.nullLast)
       }
     } else {
       // We'll compress into a json array it because we don't want
@@ -64,9 +67,9 @@ class ExprSqlizer[MT <: MetaTypes](
           )
         }
       case fc@FunctionCall(_func, args) =>
-        funcallSqlizer.sqlizeOrdinaryFunction(fc, args.map(sqlize), sqlizer.dynamicContext)
+        funcallSqlizer.sqlizeOrdinaryFunction(fc, args.map(sqlize), dynamicContext)
       case afc@AggregateFunctionCall(_func, args, _distinct, filter) =>
-        funcallSqlizer.sqlizeAggregateFunction(afc, args.map(sqlize), filter.map(sqlize), sqlizer.dynamicContext)
+        funcallSqlizer.sqlizeAggregateFunction(afc, args.map(sqlize), filter.map(sqlize), dynamicContext)
       case wfc@WindowedFunctionCall(_func, args, filter, partitionBy, orderBy, _frame) =>
         funcallSqlizer.sqlizeWindowedFunction(
           wfc,
@@ -74,7 +77,7 @@ class ExprSqlizer[MT <: MetaTypes](
           filter.map(sqlize),
           partitionBy.map(sqlize),
           orderBy.map(sqlizeOrderBy),
-          sqlizer.dynamicContext
+          dynamicContext
         )
     }
 }

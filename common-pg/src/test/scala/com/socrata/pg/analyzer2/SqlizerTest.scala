@@ -65,7 +65,7 @@ class SqlizerTest extends FunSuite with MustMatchers with SqlizerUniverse[Sqlize
         case Left(err) => fail("Bad query: " + err)
       }
 
-    sqlizer(analysis.statement, Map.empty)._1
+    sqlizer(analysis.statement, Map.empty).sql
   }
 
   test("simple") {
@@ -200,7 +200,22 @@ class SqlizerTest extends FunSuite with MustMatchers with SqlizerUniverse[Sqlize
 
     val soql = "select :id from @table1 where :id = 'row-qwer-tyui-2345'"
     val sqlish = analyze(tf, soql).layoutSingleLine.toString
-    sqlish must equal ("SELECT \"table1\" :: text AS i1_provenance, x1.:id AS i1 FROM table1 AS x1 WHERE ((\"table1\" :: text) IS NOT DISTINCT FROM (\"table1\" :: text)) AND ((x1.:id) = (1200459281559959 :: bigint))")
+    sqlish must equal ("SELECT \"table1\" :: text AS i1_provenance, x1.:id AS i1 FROM table1 AS x1 WHERE (x1.:id) = (1200459281559959 :: bigint)")
+  }
+
+  test("provenance - joined") {
+    val tf = tableFinder(
+      (0, "table1") -> D(
+        ":id" -> TestID
+      ),
+      (0, "table2") -> D(
+        ":id" -> TestID
+      )
+    )
+
+    val soql = "select :id from @table1 join @table2 on @table1.:id = @table2.:id"
+    val sqlish = analyze(tf, soql).layoutSingleLine.toString
+    sqlish must equal ("SELECT \"table1\" :: text AS i1_provenance, x1.:id AS i1 FROM table1 AS x1 JOIN table2 AS x2 ON ((\"table1\" :: text) IS NOT DISTINCT FROM (\"table2\" :: text)) AND ((x1.:id) = (x2.:id))")
   }
 
   test("provenance - compressed") {
@@ -227,7 +242,7 @@ class SqlizerTest extends FunSuite with MustMatchers with SqlizerUniverse[Sqlize
     sqlish must equal ("SELECT \"table1\" :: text AS i1_provenance, x1.:id AS i1 FROM table1 AS x1 ORDER BY x1.:id ASC NULLS LAST")
   }
 
-  test("provenance - order by logical column DOES include the provenance") {
+  test("provenance - order by simple logical column does not include the provenance") {
     val tf = tableFinder(
       (0, "table1") -> D(
         ":id" -> TestID
@@ -236,8 +251,25 @@ class SqlizerTest extends FunSuite with MustMatchers with SqlizerUniverse[Sqlize
 
     val soql = "select :id from @table1 |> select :id order by :id"
     val sqlish = analyze(tf, soql).layoutSingleLine.toString
-    sqlish must equal ("SELECT x2.i1_provenance AS i2_provenance, x2.i1 AS i2 FROM (SELECT \"table1\" :: text AS i1_provenance, x1.:id AS i1 FROM table1 AS x1) AS x2 ORDER BY x2.i1_provenance ASC NULLS LAST, x2.i1 ASC NULLS LAST")
+    sqlish must equal ("SELECT x2.i1_provenance AS i2_provenance, x2.i1 AS i2 FROM (SELECT \"table1\" :: text AS i1_provenance, x1.:id AS i1 FROM table1 AS x1) AS x2 ORDER BY x2.i1 ASC NULLS LAST")
   }
+
+  test("provenance - order by unioned logical column DOES include the provenance") {
+    val tf = tableFinder(
+      (0, "table1") -> D(
+        ":id" -> TestID
+      ),
+      (0, "table2") -> D(
+        ":id" -> TestID
+      )
+    )
+
+    val soql = "(select :id from @table1 union select :id from @table2) |> select :id order by :id"
+    val sqlish = analyze(tf, soql).layoutSingleLine.toString
+    println(sqlish)
+    sqlish must equal ("SELECT x5.i1_provenance AS i3_provenance, x5.i1 AS i3 FROM ((SELECT \"table1\" :: text AS i1_provenance, x1.:id AS i1 FROM table1 AS x1) UNION (SELECT \"table2\" :: text AS i2_provenance, x3.:id AS i2 FROM table2 AS x3)) AS x5 ORDER BY x5.i1_provenance ASC NULLS LAST, x5.i1 ASC NULLS LAST")
+  }
+
 
   test("table function - trivial") {
     val tf = tableFinder(
