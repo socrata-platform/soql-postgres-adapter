@@ -27,6 +27,8 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     wrap(f, wrap(f, exprSql, "st_buffer", d"0.0"), "st_multi")
   }
 
+  val defaultSRIDLiteral = d"4326"
+
   def sqlizeGeomCast(sqlFunctionName: String) = ofs { (f, args, ctx) =>
     // Just like a normal ordinary function call, but with an
     // additional synthetic parameter for SRID
@@ -39,7 +41,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     assert(f.function.minArity == 1 && !f.function.isVariadic)
     assert(f.function.allParameters == args.map(_.typ))
 
-    val sql = (args.map(_.compressed.sql) :+ d"4326").funcall(Doc(sqlFunctionName))
+    val sql = (args.map(_.compressed.sql) :+ defaultSRIDLiteral).funcall(Doc(sqlFunctionName))
 
     ExprSql(sql.group, f)
   }

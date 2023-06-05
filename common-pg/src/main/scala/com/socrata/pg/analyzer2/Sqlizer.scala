@@ -237,7 +237,7 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
       val physicalSchema = (values.labels, row).zipped.flatMap { (label, expr) =>
         val rep = repFor(expr.typ)
         expr match {
-          case _ :ExprSql.Compressed[MT] =>
+          case _ : ExprSql.Compressed[MT] =>
             Seq(rep.compressedDatabaseColumn(label))
           case _ : ExprSql.Expanded[MT] =>
             rep.expandedDatabaseColumns(label)

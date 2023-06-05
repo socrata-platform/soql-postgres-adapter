@@ -26,7 +26,6 @@ package object analyzer2 {
 
   implicit class LayoutSingleLine[T](private val doc: Doc[T]) extends AnyVal {
     def layoutSingleLine = {
-      // println(doc)
       doc.group.layoutPretty(LayoutOptions(PageWidth.Unbounded))
     }
   }

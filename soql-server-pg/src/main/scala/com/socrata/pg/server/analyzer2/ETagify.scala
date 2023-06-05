@@ -9,7 +9,7 @@ import java.nio.ByteBuffer
 import com.socrata.http.server.util.{EntityTag, WeakEntityTag}
 
 object ETagify {
-  private val chars = Array('0','1','2','3','4','5','6','7','8','9','a','b,'c','d,'e','f')
+  private val chars = "0123456789abcdef".toCharArray
   private val nonUTF8 = 0xff.toByte
 
   def apply(sql: String, copyVersions: Seq[Long], systemContext: Map[String, String]): EntityTag = {
