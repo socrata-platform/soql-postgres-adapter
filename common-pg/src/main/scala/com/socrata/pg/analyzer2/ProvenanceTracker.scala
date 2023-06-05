@@ -1,0 +1,161 @@
+package com.socrata.pg.analyzer2
+
+import scala.collection.{mutable => scm}
+import scala.{collection => sc}
+
+import com.socrata.soql.analyzer2._
+
+class ProvenanceTracker[MT <: MetaTypes] private (exprs: sc.Map[Expr[MT], Set[CanonicalName]]) extends SqlizerUniverse[MT] {
+  // Returns the set of possible origin-tables for the value of this
+  // expression.  In a tree where this is size <2 but demanded by an
+  // expression with size >=2 is where providences should start
+  // getting tracked dynamically.
+  def apply(expr: Expr): Set[CanonicalName] =
+    exprs(expr)
+}
+
+object ProvenanceTracker {
+  def apply[MT <: MetaTypes](s: Statement[MT], provenanceOf: LiteralValue[MT] => Set[CanonicalName]): ProvenanceTracker[MT] = {
+    val builder = new Builder[MT](provenanceOf)
+    builder.processStatement(s)
+    new ProvenanceTracker(builder.exprs)
+  }
+
+  private class Builder[MT <: MetaTypes](provenanceOf: LiteralValue[MT] => Set[CanonicalName]) extends SqlizerUniverse[MT] {
+    val exprs = new scm.HashMap[Expr, Set[CanonicalName]]
+    val identifiers = new scm.HashMap[(AutoTableLabel, ColumnLabel), Set[CanonicalName]]
+
+    private val emptySLR = Array[Set[CanonicalName]]()
+
+    def processStatement(s: Statement): Seq[Set[CanonicalName]] = {
+      s match {
+        case CombinedTables(op, left, right) =>
+          (processStatement(left), processStatement(right)).zipped.map(_ union _)
+        case CTE(defLabel, _defAlias, defQuery, _, useQuery) =>
+          processStatement(defQuery)
+          processStatement(useQuery)
+
+        case Values(labels, values) =>
+          val result = new Array[Set[CanonicalName]](labels.size)
+          for(row <- values) {
+            for((col, i) <- row.iterator.zipWithIndex) {
+              val prov = processExpr(col, emptySLR)
+              result(i) ++= prov
+            }
+          }
+          result
+
+        case Select(distinctiveness, selectList, from, where, groupBy, having, orderBy, limit, offset, search, hint) =>
+          // Doing From first to populate identifiers
+          processFrom(from)
+
+          // Then selectList so that provs can be attached to selectListProvenances
+          val selectListProvenances = new Array[Set[CanonicalName]](selectList.size)
+          for((namedExpr, idx) <- selectList.valuesIterator.zipWithIndex) {
+            processExpr(namedExpr.expr, emptySLR)
+            selectListProvenances(idx) = exprs(namedExpr.expr)
+          }
+
+          // now all the rest
+          distinctiveness match {
+            case Distinctiveness.Indistinct() | Distinctiveness.FullyDistinct() =>
+              // nothing to do
+            case Distinctiveness.On(exprs) =>
+              for(e <- exprs) {
+                processExpr(e, selectListProvenances)
+              }
+          }
+
+          for(w <- where) {
+            processExpr(w, emptySLR) // where can't use selectlistferences
+          }
+
+          for(gb <- groupBy) {
+            processExpr(gb, selectListProvenances)
+          }
+
+          for(h <- having) {
+            processExpr(h, emptySLR) // having can't use selectlistferences
+          }
+
+          for(ob <- orderBy) {
+            processExpr(ob.expr, selectListProvenances)
+          }
+
+          selectListProvenances
+      }
+    }
+
+    def processFrom(f: From): Unit = {
+      f.reduce[Unit](
+        processAtomicFrom(_),
+        { case ((), join) =>
+          processAtomicFrom(join.right)
+          processExpr(join.on, emptySLR)
+        }
+      )
+    }
+
+    def processAtomicFrom(af: AtomicFrom): Unit = {
+      af match {
+        case _ : FromSingleRow =>
+          // no structure here
+        case ft: FromTable =>
+          val prov = Set(ft.canonicalName)
+          for(col <- ft.columns.keysIterator) {
+            identifiers += (ft.label, col) -> prov
+          }
+        case fs: FromStatement =>
+          (processStatement(fs.statement), fs.schema).zipped.foreach { (prov, schemaInfo) =>
+            identifiers += (schemaInfo.table, schemaInfo.column) -> prov
+          }
+      }
+    }
+
+    def processExpr(e: Expr, selectList: Array[Set[CanonicalName]]): Set[CanonicalName] = {
+      val prov: Set[CanonicalName] =
+        e match {
+          case l: LiteralValue =>
+            provenanceOf(l)
+          case c: Column =>
+            identifiers((c.table, c.column))
+          case n: NullLiteral =>
+            Set.empty
+          case FunctionCall(_func, args) =>
+            args.foldLeft(Set.empty[CanonicalName]) { (acc, arg) =>
+              acc ++ processExpr(arg, emptySLR) // selectlistreferences must be top-level
+            }
+          case AggregateFunctionCall(_func, args, _distinct, filter) =>
+            val argProvs =
+              args.foldLeft(Set.empty[CanonicalName]) { (acc, arg) =>
+                acc ++ processExpr(arg, emptySLR)
+              }
+            filter.foldLeft(argProvs) { (acc, filter) =>
+              acc ++ processExpr(filter, emptySLR)
+            }
+          case WindowedFunctionCall(_func, args, filter, partitionBy, orderBy, _frame) =>
+            val argProv =
+              args.foldLeft(Set.empty[CanonicalName]) { (acc, arg) =>
+                acc ++ processExpr(arg, emptySLR)
+              }
+            val filterProv =
+              filter.foldLeft(argProv) { (acc, filter) =>
+                acc ++ processExpr(filter, emptySLR)
+              }
+            val partitionByProv =
+              partitionBy.foldLeft(filterProv) { (acc, partitionBy) =>
+                acc ++ processExpr(partitionBy, emptySLR)
+              }
+            orderBy.foldLeft(partitionByProv) { (acc, ob) =>
+              acc ++ processExpr(ob.expr, emptySLR)
+            }
+          case SelectListReference(i, _, _, _) =>
+            selectList(i - 1)
+        }
+
+      exprs(e) = prov
+
+      prov
+    }
+  }
+}

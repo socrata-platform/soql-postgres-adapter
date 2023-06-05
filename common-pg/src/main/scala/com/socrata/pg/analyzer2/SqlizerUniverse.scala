@@ -18,4 +18,5 @@ trait SqlizerUniverse[MT <: MetaTypes] extends StatementUniverse[MT] {
   type SqlNamespaces = analyzer2.SqlNamespaces[MT]
   type ResultExtractor = analyzer2.ResultExtractor[MT]
   type RewriteSearch = analyzer2.RewriteSearch[MT]
+  type ProvenanceTracker = analyzer2.ProvenanceTracker[MT]
 }
