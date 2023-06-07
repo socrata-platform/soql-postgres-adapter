@@ -239,7 +239,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
   private def withRequestLimit(datasetId: String, resp: HttpServletResponse, f: HttpServletResponse => Unit) = {
     val tooManyAlready = currentRequests.synchronized {
       val currentRequestsForDataset = currentRequests(datasetId)
-      logger.trace(s"Currently processing $currentRequestsForDataset for dataset $datasetId, max allowed is $QueryServer.config.maxConcurrentRequestsPerDataset")
+      logger.trace(s"Currently processing $currentRequestsForDataset for dataset $datasetId, max allowed is ${QueryServer.config.maxConcurrentRequestsPerDataset}")
       if (currentRequestsForDataset >= QueryServer.config.maxConcurrentRequestsPerDataset) {
         true
       } else {
