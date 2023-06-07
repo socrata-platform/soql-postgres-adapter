@@ -153,7 +153,7 @@ pipeline {
           steps {
             script {
               // uses env.DOCKER_TAG and deploys to staging by default
-              marathonDeploy(serviceName: 'soql-server-mirror-control-pg1-staging', waitTime: '60')
+              marathonDeploy(serviceName: 'soql-server-mirror-control-pg1-staging', tag: dockerize_server.getDeployTag(), waitTime: '60')
 
               // deploys to staging by default
               marathonDeploy(serviceName: "secondary-watcher-mirror-control-pg-alpha", tag: SECONDARY_DOCKER_TAG)
@@ -165,7 +165,7 @@ pipeline {
           steps {
             script {
               // uses env.DOCKER_TAG and deploys to staging by default
-              marathonDeploy(serviceName: 'soql-server-mirror-citus1-staging', waitTime: '60')
+              marathonDeploy(serviceName: 'soql-server-mirror-citus1-staging', tag: dockerize_server.getDeployTag(), waitTime: '60')
 
               // deploys to staging by default
               marathonDeploy(serviceName: 'secondary-watcher-mirror-citus-alpha', tag: SECONDARY_DOCKER_TAG)
