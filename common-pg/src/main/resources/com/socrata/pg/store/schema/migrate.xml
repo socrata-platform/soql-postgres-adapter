@@ -33,4 +33,5 @@
     <include file="com/socrata/pg/store/schema/20220718-create-dummy-resync-table.xml"/>
     <include file="com/socrata/pg/store/schema/20220907-create-rollup-relationship-map.xml"/>
     <include file="com/socrata/pg/store/schema/20221116-create-rollup-table-name-seq.xml"/>
+    <include file="com/socrata/pg/store/schema/20230607-create-jsonb-aggregates.xml"/>
 </databaseChangeLog>

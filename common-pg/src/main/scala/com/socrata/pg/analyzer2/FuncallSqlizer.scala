@@ -260,21 +260,36 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
       (d" FILTER (WHERE" ++ Doc.lineSep ++ expr.compressed.sql).nest(2) ++ Doc.lineCat ++ d")"
     }.getOrElse { Doc.empty }.group
 
-  protected def sqlizeNormalAggregateFuncall(sqlFunctionName: String) = afs { (e, args, filter, ctx) =>
-    assert(args.length >= e.function.minArity)
-    assert(e.function.allParameters.startsWith(args.map(_.typ)))
+  protected def sqlizeNormalAggregateFuncall(sqlFunctionName: String, jsonbWorkaround: Boolean = false) = {
+    val jsonbVariant = "jsonb_" + sqlFunctionName
+    afs { (e, args, filter, ctx) =>
+      assert(args.length >= e.function.minArity)
+      assert(e.function.allParameters.startsWith(args.map(_.typ)))
 
-    val sql = (
-      Doc(sqlFunctionName) ++
-        d"(" ++
-        (if(e.distinct) d"DISTINCT" ++ Doc.lineSep else Doc.empty) ++
-        args.map(_.compressed.sql).commaSep
-    ).nest(2) ++
-      Doc.lineCat ++
-      d")" ++
-      sqlizeFilter(filter)
+      val effectiveSqlFunctionName =
+        if(jsonbWorkaround) {
+          assert(args.length == 1)
+          if(ctx.repFor(args(0).typ).expandedColumnCount > 1) {
+            jsonbVariant
+          } else {
+            sqlFunctionName
+          }
+        } else {
+          sqlFunctionName
+        }
 
-    ExprSql(sql.group, e)
+      val sql = (
+        Doc(effectiveSqlFunctionName) ++
+          d"(" ++
+          (if(e.distinct) d"DISTINCT" ++ Doc.lineSep else Doc.empty) ++
+          args.map(_.compressed.sql).commaSep
+      ).nest(2) ++
+        Doc.lineCat ++
+        d")" ++
+        sqlizeFilter(filter)
+
+      ExprSql(sql.group, e)
+    }
   }
 
   // aggregate functions with syntactic support

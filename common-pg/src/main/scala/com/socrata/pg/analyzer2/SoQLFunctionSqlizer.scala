@@ -262,8 +262,8 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
 
   val aggregateFunctionMap = (
     Seq[(Function[CT], AggregateFunctionSqlizer)](
-      Max -> sqlizeNormalAggregateFuncall("max"),
-      Min -> sqlizeNormalAggregateFuncall("max"),
+      Max -> sqlizeNormalAggregateFuncall("max", jsonbWorkaround = true),
+      Min -> sqlizeNormalAggregateFuncall("min", jsonbWorkaround = true),
       CountStar -> numericize(sqlizeCountStar _),
       Count -> numericize(sqlizeNormalAggregateFuncall("count")),
       CountDistinct -> numericize(sqlizeCountDistinct _),

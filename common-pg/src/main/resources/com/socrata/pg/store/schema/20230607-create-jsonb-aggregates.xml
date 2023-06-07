@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+    <changeSet author="robertm" id="20230607-create-jsonb-aggregates.xml">
+        <sql splitStatements="false">
+            create or replace function jsonb_greatest(jsonb, jsonb) returns jsonb as $$
+              select greatest($1, $2);
+            $$ language sql immutable parallel safe;
+            create or replace aggregate jsonb_max(jsonb) (
+              sfunc = jsonb_greatest,
+              stype = jsonb,
+              combinefunc = jsonb_greatest,
+              parallel = safe
+            );
+
+            create or replace function jsonb_least(jsonb, jsonb) returns jsonb as $$
+              select least($1, $2);
+            $$ language sql immutable parallel safe;
+            create or replace aggregate jsonb_min(jsonb) (
+              sfunc = jsonb_least,
+              stype = jsonb,
+              combinefunc = jsonb_least,
+              parallel = safe
+            );
+        </sql>
+        <rollback>
+            <sql>
+                drop aggregate jsonb_min(jsonb);
+                drop function jsonb_least(jsonb, jsonb);
+                drop aggregate jsonb_max(jsonb);
+                drop function jsonb_greatest(jsonb, jsonb);
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
