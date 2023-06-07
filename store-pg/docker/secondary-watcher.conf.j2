@@ -47,6 +47,9 @@ com.socrata.coordinator.secondary-watcher {
   }
 
   metrics {
+    {% if SECONDARY_WATCHER_METRICS_PREFIX is defined -%}
+    prefix = "{{ SECONDARY_WATCHER_METRICS_PREFIX }}"
+    {%- endif %}
     enable-graphite = {{ ENABLE_GRAPHITE }}
     graphite-host = "{{ GRAPHITE_HOST }}"
     graphite-port = "{{ GRAPHITE_PORT }}"

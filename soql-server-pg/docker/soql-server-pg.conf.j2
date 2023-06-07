@@ -8,6 +8,9 @@ com.socrata.soql-server-pg {
   liveness-check.port = 6091
 
   metrics {
+    {% if SOQL_SERVER_METRICS_PREFIX is defined -%}
+    prefix = "{{ SOQL_SERVER_METRICS_PREFIX }}"
+    {%- endif %}
     enable-graphite = {{ ENABLE_GRAPHITE }}
     graphite-host = "{{ GRAPHITE_HOST }}"
     graphite-port = "{{ GRAPHITE_PORT }}"
