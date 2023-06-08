@@ -5,12 +5,14 @@ import java.io.InputStream
 import com.socrata.soql.analyzer2.SoQLAnalysis
 import com.socrata.soql.analyzer2.rewrite.Pass
 import com.socrata.soql.serialize.{ReadBuffer, Readable}
+import com.socrata.soql.sql.Debug
 
 object Deserializer extends {
   case class Request(
     analysis: SoQLAnalysis[InputMetaTypes],
     context: Map[String, String],
-    passes: Seq[Seq[Pass]]
+    passes: Seq[Seq[Pass]],
+    debug: Option[Debug]
   )
   object Request {
     implicit def deserialize(implicit ev: Readable[SoQLAnalysis[InputMetaTypes]]) = new Readable[Request] {
@@ -20,7 +22,8 @@ object Deserializer extends {
             Request(
               buffer.read[SoQLAnalysis[InputMetaTypes]](),
               buffer.read[Map[String, String]](),
-              buffer.read[Seq[Seq[Pass]]]()
+              buffer.read[Seq[Seq[Pass]]](),
+              buffer.read[Option[Debug]]()
             )
           case other =>
             throw new Exception(s"Unknown request version $other")

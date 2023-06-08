@@ -6,4 +6,5 @@ sealed abstract class SqlizeAnnotation[MT <: MetaTypes] extends SqlizerUniverse[
 
 object SqlizeAnnotation {
   case class Expression[MT <: MetaTypes](expr: Expr[MT]) extends SqlizeAnnotation[MT]
+  case class Table[MT <: MetaTypes](table: AutoTableLabel) extends SqlizeAnnotation[MT]
 }

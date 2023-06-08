@@ -4,7 +4,8 @@ name := "soql-server-pg"
 
 libraryDependencies ++= Seq(
   secondarylib,
-  socrataHttpCuratorBroker
+  socrataHttpCuratorBroker,
+  soqlUtils
 )
 
 assembly/test := {}

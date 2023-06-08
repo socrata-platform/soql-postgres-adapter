@@ -190,9 +190,9 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
   def newQuery(req: HttpRequest): HttpResponse = {
     val rs = req.resourceScope
 
-    val analyzer2.Deserializer.Request(analysis, systemContext, passes) = analyzer2.Deserializer(req.inputStream)
+    val parsed = analyzer2.Deserializer(req.inputStream)
 
-    analyzer2.ProcessQuery(analysis, systemContext, passes, openPgu(dsInfo, None, rs), req.precondition, rs)
+    analyzer2.ProcessQuery(parsed, openPgu(dsInfo, None, rs), req.precondition, rs)
   }
 
   def etagFromCopy(datasetInternalName: String, copy: CopyInfo, etagInfo: Option[String], debug: Boolean = false): EntityTag = {

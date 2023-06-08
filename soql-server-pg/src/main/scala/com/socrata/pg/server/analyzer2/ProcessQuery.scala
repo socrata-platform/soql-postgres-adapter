@@ -5,7 +5,8 @@ import scala.collection.{mutable => scm}
 import java.sql.{Connection, PreparedStatement}
 
 import com.rojoma.json.v3.ast.{JArray, JString, JValue}
-import com.rojoma.json.v3.io.CompactJsonWriter
+import com.rojoma.json.v3.interpolation._
+import com.rojoma.json.v3.io.{CompactJsonWriter, JsonReader}
 import com.rojoma.json.v3.util.{AutomaticJsonEncode, JsonUtil}
 import com.rojoma.simplearm.v2._
 import org.joda.time.DateTime
@@ -16,17 +17,18 @@ import com.socrata.http.server.responses._
 import com.socrata.http.server.implicits._
 import com.socrata.http.server.util.{EntityTag, Precondition}
 import com.socrata.prettyprint.prelude._
-import com.socrata.prettyprint.SimpleDocStream
+import com.socrata.prettyprint.{SimpleDocStream, SimpleDocTree, tree => doctree}
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.ColumnName
+import com.socrata.soql.environment.{ColumnName, ResourceName}
 import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLID, SoQLVersion}
 import com.socrata.soql.types.obfuscation.CryptProvider
+import com.socrata.soql.sql.Debug
 import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
 import com.socrata.datacoordinator.common.soql.SoQLRep
 
-import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer}
+import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse}
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils}
 import com.socrata.pg.server.CJSONWriter
 
@@ -35,13 +37,15 @@ object ProcessQuery {
   val log = LoggerFactory.getLogger(classOf[ProcessQuery])
 
   def apply(
-    analysis: SoQLAnalysis[InputMetaTypes],
-    systemContext: Map[String, String],
-    passes: Seq[Seq[rewrite.Pass]],
+    request: Deserializer.Request,
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     precondition: Precondition,
     rs: ResourceScope
   ): HttpResponse = {
+    val analysis = request.analysis
+    val passes = request.passes
+    val systemContext = request.context
+
     locally {
       import InputMetaTypes.DebugHelper._
       implicit def cpp = CryptProviderProvider.empty
@@ -89,6 +93,30 @@ object ProcessQuery {
     val etag = ETagify(renderedSql, copyCache.orderedVersions, systemContext)
     val lastModified = copyCache.mostRecentlyModifiedAt.getOrElse(new DateTime(0L))
 
+    val debugFields =
+      request.debug.map { debug =>
+        Seq(
+          debug.sql.map { fmt =>
+            val s =
+              fmt match {
+                case Debug.Sql.Format.Compact =>
+                  renderedSql
+                case Debug.Sql.Format.Pretty =>
+                  prettierSql(nameAnalysis, sql)
+              }
+            JString(s)
+          }.map("sql" -> _),
+          debug.explain.map { case Debug.Explain(analyze, format) =>
+            format match {
+              case Debug.Explain.Format.Text =>
+                JString(explainText(pgu, renderedSql, analyze))
+              case Debug.Explain.Format.Json =>
+                explainJson(pgu, renderedSql, analyze)
+            }
+          }.map("explain" -> _)
+        ).flatten.toMap
+      }
+
     precondition.check(Some(etag), sideEffectFree = true) match {
       case Precondition.Passed =>
         fulfillRequest(
@@ -102,6 +130,8 @@ object ProcessQuery {
           cryptProviders,
           extractor,
           lastModified,
+          debugFields,
+          request.debug.fold(false)(_.inhibitRun),
           rs
         )
       case Precondition.FailedBecauseMatch(_) =>
@@ -113,6 +143,44 @@ object ProcessQuery {
     }
   }
 
+  def explainText(
+    pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+    query: String,
+    analyze: Boolean
+  ): String = {
+    for {
+      stmt <- managed(pgu.conn.createStatement())
+      rs <- managed(stmt.executeQuery(s"EXPLAIN (analyze $analyze, format text) $query"))
+    } {
+      val sb = new StringBuilder
+      var didOne = false
+      while(rs.next()) {
+        if(didOne) sb.append('\n')
+        else didOne = true
+        sb.append(rs.getString(1))
+      }
+      sb.toString
+    }
+  }
+
+  def explainJson(
+    pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+    query: String,
+    analyze: Boolean
+  ): JValue = {
+    for {
+      stmt <- managed(pgu.conn.createStatement())
+      rs <- managed(stmt.executeQuery(s"EXPLAIN (analyse $analyze, format json) $query"))
+    } {
+      val sb = new StringBuilder
+      var didOne = false
+      if(!rs.next()) {
+        throw new Exception("Should've gotten a row for the explanation")
+      }
+      JsonReader.fromString(rs.getString(1))
+    }
+  }
+
   def fulfillRequest(
     systemContext: Option[Map[String, String]],
     copyCache: CopyCache,
@@ -121,29 +189,36 @@ object ProcessQuery {
     laidOutSql: SimpleDocStream[com.socrata.pg.analyzer2.SqlizeAnnotation[DatabaseNamesMetaTypes]],
     renderedSql: String,
     nameAnalysis: com.socrata.soql.analyzer2.SoQLAnalysis[DatabaseNamesMetaTypes],
-    cryptProviders: com.socrata.pg.analyzer2.CryptProviderProvider,
-    extractor: com.socrata.pg.analyzer2.ResultExtractor[DatabaseNamesMetaTypes],
+    cryptProviders: CryptProviderProvider,
+    extractor: ResultExtractor[DatabaseNamesMetaTypes],
     lastModified: DateTime,
+    debugFields: Option[Map[String, JValue]],
+    inhibitRun: Boolean,
     rs: ResourceScope
   ): HttpResponse = {
     val locale = "en_US"
 
-    systemContext.foreach(setupSystemContext(pgu.conn, _))
-    val stmt = rs.open(pgu.conn.createStatement())
-
-    val resultSet =
-      try { rs.open(stmt.executeQuery(renderedSql)) }
-      catch {
-        case e: org.postgresql.util.PSQLException =>
-          log.error("Exception running query", e)
-          // Sadness: PG _doesn't_ report position info for runtime errors
-          // so this position info isn't actually useful :(
-          val posInfo = com.socrata.pg.analyzer2.Sqlizer.positionInfo(laidOutSql)
-          return InternalServerError
+    val rows =
+      if(inhibitRun) {
+        Iterator.empty
+      } else {
+        try {
+          runQuery(pgu.conn, renderedSql, systemContext, cryptProviders, extractor, rs)
+        } catch {
+          case e: org.postgresql.util.PSQLException =>
+            log.error("Exception running query", e)
+            // Sadness: PG _doesn't_ report position info for runtime errors
+            // so this position info isn't actually useful :(
+            val posInfo = com.socrata.pg.analyzer2.Sqlizer.positionInfo(laidOutSql)
+            return InternalServerError
+        }
       }
 
     ETag(etag) ~> LastModified(lastModified) ~> Write("application/json; content-type=utf-8") { writer =>
       writer.write("[{")
+      for(debugFields <- debugFields) {
+        writer.write("\"debug\":%s\n ,".format(JsonUtil.renderJson(debugFields, pretty = false)))
+      }
       writer.write("\"last_modified\":%s\n ,".format(JString(CJSONWriter.dateTimeFormat.print(lastModified))))
       writer.write("\"locale\":%s\n ,".format(JString(locale)))
       writer.write("\"schema\":")
@@ -158,11 +233,38 @@ object ProcessQuery {
       JsonUtil.writeJson(writer, reformattedSchema)
       writer.write("\n }")
 
-      val width = reformattedSchema.length
-      var idReps = new scm.HashMap[Option[String], JsonColumnWriteRep[SoQLType, SoQLValue]]
-      var versionReps = new scm.HashMap[Option[String], JsonColumnWriteRep[SoQLType, SoQLValue]]
+      for(row <- rows) {
+        writer.write("\n,")
+        CompactJsonWriter.toWriter(writer, JArray(row))
+      }
 
-      def rep(typ: SoQLType, value: SoQLValue): JsonColumnWriteRep[SoQLType, SoQLValue] = {
+      writer.write("\n]\n")
+    }
+  }
+
+  def runQuery(
+    conn: Connection,
+    sql: String,
+    systemContext: Option[Map[String, String]],
+    cryptProviders: CryptProviderProvider,
+    extractor: ResultExtractor[DatabaseNamesMetaTypes],
+    rs: ResourceScope
+  ): Iterator[Array[JValue]] = {
+    systemContext.foreach(setupSystemContext(conn, _))
+
+    new Iterator[Array[JValue]] {
+      private val stmt = rs.open(conn.createStatement())
+      private val resultSet = rs.open(stmt.executeQuery(sql))
+      private var done = false
+      private var ready = false
+
+      private var idReps = new scm.HashMap[Option[String], JsonColumnWriteRep[SoQLType, SoQLValue]]
+      private var versionReps = new scm.HashMap[Option[String], JsonColumnWriteRep[SoQLType, SoQLValue]]
+
+      private val types = extractor.schema.values.toArray
+      private val width = types.length
+
+      private def rep(typ: SoQLType, value: SoQLValue): JsonColumnWriteRep[SoQLType, SoQLValue] = {
         value match {
           case id: SoQLID =>
             idReps.get(id.provenance) match {
@@ -184,21 +286,30 @@ object ProcessQuery {
         }
       }
 
-      while(resultSet.next()) {
+      override def hasNext: Boolean = {
+        if(done) return false
+        if(ready) return true
+
+        ready = resultSet.next()
+        done = !ready
+        ready
+      }
+
+      def next(): Array[JValue] = {
+        if(!hasNext) return Iterator.empty.next()
+        ready = false
+
         val result = new Array[JValue](width)
         val row = extractor.extractRow(resultSet)
 
         var i = 0
         while(i != width) {
-          result(i) = rep(reformattedSchema(i).t, row(i)).toJValue(row(i))
+          result(i) = rep(types(i), row(i)).toJValue(row(i))
           i += 1
         }
 
-        writer.write("\n,")
-        CompactJsonWriter.toWriter(writer, JArray(result))
+        result
       }
-
-      writer.write("\n]\n")
     }
   }
 
@@ -234,5 +345,126 @@ object ProcessQuery {
         stmt.executeQuery().close()
       }
     }
+  }
+
+  def prettierSql[MT <: MetaTypes](analysis: SoQLAnalysis[MT], doc: Doc[SqlizeAnnotation[MT]]): String = {
+    val sb = new StringBuilder
+
+    val map = new LabelMap(analysis)
+
+    def walk(tree: SimpleDocTree[SqlizeAnnotation[MT]]): Unit = {
+      tree match {
+        case doctree.Empty =>
+          // nothing
+        case doctree.Char(c) =>
+          sb.append(c)
+        case doctree.Text(s) =>
+          sb.append(s)
+        case doctree.Line(n) =>
+          sb.append('\n')
+          var i = 0
+          while(i < n) {
+            sb.append(' ')
+            i += 1
+          }
+        case doctree.Ann(a, doc) if doc.isInstanceOf[doctree.Ann[_]] =>
+          walk(doc)
+        case doctree.Ann(a, doc) =>
+          a match {
+            case SqlizeAnnotation.Expression(VirtualColumn(tLabel, cLabel, _)) =>
+              walk(doc)
+              for((rn, cn) <- map.virtualColumnNames.get((tLabel, cLabel))) {
+                sb.append(" /* ")
+                for(rn <- rn) {
+                  sb.append(rn.name)
+                  sb.append('.')
+                }
+                sb.append(cn.name)
+                sb.append(" */")
+              }
+            case SqlizeAnnotation.Expression(PhysicalColumn(tLabel, _, cLabel, _)) =>
+              walk(doc)
+              for((rn, cn) <- map.physicalColumnNames.get((tLabel, cLabel))) {
+                sb.append(" /* ")
+                for(rn <- rn) {
+                  sb.append(rn.name)
+                  sb.append('.')
+                }
+                sb.append(cn.name)
+                sb.append(" */")
+              }
+            case SqlizeAnnotation.Table(tLabel) =>
+              walk(doc)
+              for {
+                rn <- map.tableNames.get(tLabel)
+                rn <- rn
+              } {
+                sb.append(" /* ")
+                sb.append(rn.name)
+                sb.append(" */")
+              }
+            case _=>
+              walk(doc)
+          }
+        case doctree.Concat(elems) =>
+          elems.foreach(walk)
+      }
+    }
+    walk(doc.layoutSmart().asTree)
+
+    sb.toString
+  }
+
+  class LabelMap[MT <: MetaTypes](analysis: SoQLAnalysis[MT]) extends SqlizerUniverse[MT] {
+    val tableNames = new scm.HashMap[AutoTableLabel, Option[ResourceName]]
+    val virtualColumnNames = new scm.HashMap[(AutoTableLabel, ColumnLabel), (Option[ResourceName], ColumnName)]
+    val physicalColumnNames = new scm.HashMap[(AutoTableLabel, DatabaseColumnName), (Option[ResourceName], ColumnName)]
+
+    walkStmt(analysis.statement, None)
+
+    private def walkStmt(stmt: Statement, currentLabel: Option[(AutoTableLabel, Option[ResourceName])]): Unit =
+      stmt match {
+        case CombinedTables(_, left, right) =>
+          walkStmt(left, currentLabel)
+          walkStmt(right, None)
+        case CTE(defLbl, defAlias, defQ, _matHint, useQ) =>
+          walkStmt(defQ, Some((defLbl, defAlias)))
+          walkStmt(useQ, currentLabel)
+        case v: Values =>
+          for {
+            (tl, rn) <- currentLabel
+            (cl, schemaEntry) <- v.schema
+          } {
+            virtualColumnNames += (tl, cl) -> (rn, schemaEntry.name)
+          }
+        case sel: Select =>
+          walkFrom(sel.from)
+          for {
+            (tl, rn) <- currentLabel
+            (cl, ne) <- sel.selectList
+          } {
+            virtualColumnNames += (tl, cl) -> (rn, ne.name)
+          }
+      }
+
+    private def walkFrom(from: From): Unit =
+      from.reduce[Unit](
+        walkAtomicFrom,
+        { (_, join) => walkAtomicFrom(join.right) }
+      )
+
+    private def walkAtomicFrom(from: AtomicFrom): Unit =
+      from match {
+        case ft: FromTable =>
+          tableNames += ft.label -> Some(ft.definiteResourceName.name)
+          for((dcn, ne) <- ft.columns) {
+            physicalColumnNames += (ft.label, dcn) -> (Some(ft.definiteResourceName.name), ne.name)
+          }
+        case fsr: FromSingleRow =>
+          tableNames += fsr.label -> None
+        case fs: FromStatement =>
+          tableNames += fs.label -> fs.resourceName.map(_.name)
+          walkStmt(fs.statement, Some((fs.label, fs.resourceName.map(_.name))))
+      }
   }
 }

@@ -529,7 +529,7 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   private def sqlizeAtomicFrom(from: AtomicFrom, availableSchemas: AvailableSchemas, dynamicContext: FuncallSqlizer.DynamicContext[MT]): (Doc, AvailableSchemas) = {
     val (sql, schema: AugmentedSchema) =
       from match {
-        case FromTable(name, _cn, _rn, _alias, _label, columns, _pks) =>
+        case FromTable(name, _cn, _rn, _alias, label, columns, _pks) =>
           (
             namespace.databaseTableName(name),
             OrderedMap() ++ columns.iterator.map { case (dcn, nameEntry) =>
@@ -545,7 +545,7 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
           (d"(SELECT)", OrderedMap.empty)
       }
 
-    (sql +#+ d"AS" +#+ namespace.tableLabel(from.label), availableSchemas + (from.label -> schema))
+    (sql.annotate[SqlizeAnnotation](SqlizeAnnotation.Table(from.label)) +#+ d"AS" +#+ namespace.tableLabel(from.label), availableSchemas + (from.label -> schema))
   }
 
   private def deSelectListReferenceWrappedToplevelExprs(selectList: Vector[Expr], distinct: Distinctiveness): Distinctiveness =
@@ -594,6 +594,8 @@ object Sqlizer {
           for(i <- 0 until indent) builder += p
         case tree.Ann(SqlizeAnnotation.Expression(e), subtree) =>
           processNode(subtree, e.position.physicalPosition)
+        case tree.Ann(SqlizeAnnotation.Table(_), subtree) =>
+          processNode(subtree, p)
         case tree.Concat(elems) =>
           for(elem <- elems) {
             processNode(elem, p)
