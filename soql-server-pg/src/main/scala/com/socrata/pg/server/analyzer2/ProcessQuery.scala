@@ -17,18 +17,18 @@ import com.socrata.http.server.responses._
 import com.socrata.http.server.implicits._
 import com.socrata.http.server.util.{EntityTag, Precondition}
 import com.socrata.prettyprint.prelude._
-import com.socrata.prettyprint.SimpleDocStream
+import com.socrata.prettyprint.{SimpleDocStream, SimpleDocTree, tree => doctree}
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.ColumnName
+import com.socrata.soql.environment.{ColumnName, ResourceName}
 import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLID, SoQLVersion}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.sql.Debug
 import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
 import com.socrata.datacoordinator.common.soql.SoQLRep
 
-import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor}
+import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse}
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils}
 import com.socrata.pg.server.CJSONWriter
 
@@ -102,7 +102,7 @@ object ProcessQuery {
                 case Debug.Sql.Format.Compact =>
                   renderedSql
                 case Debug.Sql.Format.Pretty =>
-                  sql.toString
+                  prettierSql(nameAnalysis, sql)
               }
             JString(s)
           }.map("sql" -> _),
@@ -345,5 +345,126 @@ object ProcessQuery {
         stmt.executeQuery().close()
       }
     }
+  }
+
+  def prettierSql[MT <: MetaTypes](analysis: SoQLAnalysis[MT], doc: Doc[SqlizeAnnotation[MT]]): String = {
+    val sb = new StringBuilder
+
+    val map = new LabelMap(analysis)
+
+    def walk(tree: SimpleDocTree[SqlizeAnnotation[MT]]): Unit = {
+      tree match {
+        case doctree.Empty =>
+          // nothing
+        case doctree.Char(c) =>
+          sb.append(c)
+        case doctree.Text(s) =>
+          sb.append(s)
+        case doctree.Line(n) =>
+          sb.append('\n')
+          var i = 0
+          while(i < n) {
+            sb.append(' ')
+            i += 1
+          }
+        case doctree.Ann(a, doc) if doc.isInstanceOf[doctree.Ann[_]] =>
+          walk(doc)
+        case doctree.Ann(a, doc) =>
+          a match {
+            case SqlizeAnnotation.Expression(VirtualColumn(tLabel, cLabel, _)) =>
+              walk(doc)
+              for((rn, cn) <- map.virtualColumnNames.get((tLabel, cLabel))) {
+                sb.append(" /* ")
+                for(rn <- rn) {
+                  sb.append(rn.name)
+                  sb.append('.')
+                }
+                sb.append(cn.name)
+                sb.append(" */")
+              }
+            case SqlizeAnnotation.Expression(PhysicalColumn(tLabel, _, cLabel, _)) =>
+              walk(doc)
+              for((rn, cn) <- map.physicalColumnNames.get((tLabel, cLabel))) {
+                sb.append(" /* ")
+                for(rn <- rn) {
+                  sb.append(rn.name)
+                  sb.append('.')
+                }
+                sb.append(cn.name)
+                sb.append(" */")
+              }
+            case SqlizeAnnotation.Table(tLabel) =>
+              walk(doc)
+              for {
+                rn <- map.tableNames.get(tLabel)
+                rn <- rn
+              } {
+                sb.append(" /* ")
+                sb.append(rn.name)
+                sb.append(" */")
+              }
+            case _=>
+              walk(doc)
+          }
+        case doctree.Concat(elems) =>
+          elems.foreach(walk)
+      }
+    }
+    walk(doc.layoutSmart().asTree)
+
+    sb.toString
+  }
+
+  class LabelMap[MT <: MetaTypes](analysis: SoQLAnalysis[MT]) extends SqlizerUniverse[MT] {
+    val tableNames = new scm.HashMap[AutoTableLabel, Option[ResourceName]]
+    val virtualColumnNames = new scm.HashMap[(AutoTableLabel, ColumnLabel), (Option[ResourceName], ColumnName)]
+    val physicalColumnNames = new scm.HashMap[(AutoTableLabel, DatabaseColumnName), (Option[ResourceName], ColumnName)]
+
+    walkStmt(analysis.statement, None)
+
+    private def walkStmt(stmt: Statement, currentLabel: Option[(AutoTableLabel, Option[ResourceName])]): Unit =
+      stmt match {
+        case CombinedTables(_, left, right) =>
+          walkStmt(left, currentLabel)
+          walkStmt(right, None)
+        case CTE(defLbl, defAlias, defQ, _matHint, useQ) =>
+          walkStmt(defQ, Some((defLbl, defAlias)))
+          walkStmt(useQ, currentLabel)
+        case v: Values =>
+          for {
+            (tl, rn) <- currentLabel
+            (cl, schemaEntry) <- v.schema
+          } {
+            virtualColumnNames += (tl, cl) -> (rn, schemaEntry.name)
+          }
+        case sel: Select =>
+          walkFrom(sel.from)
+          for {
+            (tl, rn) <- currentLabel
+            (cl, ne) <- sel.selectList
+          } {
+            virtualColumnNames += (tl, cl) -> (rn, ne.name)
+          }
+      }
+
+    private def walkFrom(from: From): Unit =
+      from.reduce[Unit](
+        walkAtomicFrom,
+        { (_, join) => walkAtomicFrom(join.right) }
+      )
+
+    private def walkAtomicFrom(from: AtomicFrom): Unit =
+      from match {
+        case ft: FromTable =>
+          tableNames += ft.label -> Some(ft.definiteResourceName.name)
+          for((dcn, ne) <- ft.columns) {
+            physicalColumnNames += (ft.label, dcn) -> (Some(ft.definiteResourceName.name), ne.name)
+          }
+        case fsr: FromSingleRow =>
+          tableNames += fsr.label -> None
+        case fs: FromStatement =>
+          tableNames += fs.label -> fs.resourceName.map(_.name)
+          walkStmt(fs.statement, Some((fs.label, fs.resourceName.map(_.name))))
+      }
   }
 }

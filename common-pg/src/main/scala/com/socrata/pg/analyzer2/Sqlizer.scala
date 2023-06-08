@@ -529,9 +529,9 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   private def sqlizeAtomicFrom(from: AtomicFrom, availableSchemas: AvailableSchemas, dynamicContext: FuncallSqlizer.DynamicContext[MT]): (Doc, AvailableSchemas) = {
     val (sql, schema: AugmentedSchema) =
       from match {
-        case FromTable(name, _cn, _rn, _alias, _label, columns, _pks) =>
+        case FromTable(name, _cn, _rn, _alias, label, columns, _pks) =>
           (
-            namespace.databaseTableName(name),
+            namespace.databaseTableName(name).annotate[SqlizeAnnotation](SqlizeAnnotation.Table(label)),
             OrderedMap() ++ columns.iterator.map { case (dcn, nameEntry) =>
               (dcn -> AugmentedType[MT](nameEntry.typ, isExpanded = true))
             }
@@ -594,6 +594,8 @@ object Sqlizer {
           for(i <- 0 until indent) builder += p
         case tree.Ann(SqlizeAnnotation.Expression(e), subtree) =>
           processNode(subtree, e.position.physicalPosition)
+        case tree.Ann(SqlizeAnnotation.Table(_), subtree) =>
+          processNode(subtree, p)
         case tree.Concat(elems) =>
           for(elem <- elems) {
             processNode(elem, p)
