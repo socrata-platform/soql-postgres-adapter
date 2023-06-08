@@ -60,6 +60,7 @@ object Dependencies {
   val socrataHttpCuratorBroker = "com.socrata" %% "socrata-http-curator-broker" % versions.socrataHttpCuratorBroker
 
   val soqlStdlib = "com.socrata" %% "soql-stdlib" % versions.soqlStdlib
+  val soqlUtils = "com.socrata" %% "soql-utils" % versions.soqlStdlib
 
   val typesafeConfig = "com.typesafe" % "config" % versions.typesafeConfig
 

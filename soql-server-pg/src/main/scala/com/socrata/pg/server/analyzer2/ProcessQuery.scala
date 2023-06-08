@@ -5,7 +5,8 @@ import scala.collection.{mutable => scm}
 import java.sql.{Connection, PreparedStatement}
 
 import com.rojoma.json.v3.ast.{JArray, JString, JValue}
-import com.rojoma.json.v3.io.CompactJsonWriter
+import com.rojoma.json.v3.interpolation._
+import com.rojoma.json.v3.io.{CompactJsonWriter, JsonReader}
 import com.rojoma.json.v3.util.{AutomaticJsonEncode, JsonUtil}
 import com.rojoma.simplearm.v2._
 import org.joda.time.DateTime
@@ -23,10 +24,11 @@ import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLID, SoQLVersion}
 import com.socrata.soql.types.obfuscation.CryptProvider
+import com.socrata.soql.sql.Debug
 import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
 import com.socrata.datacoordinator.common.soql.SoQLRep
 
-import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer}
+import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor}
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils}
 import com.socrata.pg.server.CJSONWriter
 
@@ -35,13 +37,15 @@ object ProcessQuery {
   val log = LoggerFactory.getLogger(classOf[ProcessQuery])
 
   def apply(
-    analysis: SoQLAnalysis[InputMetaTypes],
-    systemContext: Map[String, String],
-    passes: Seq[Seq[rewrite.Pass]],
+    request: Deserializer.Request,
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     precondition: Precondition,
     rs: ResourceScope
   ): HttpResponse = {
+    val analysis = request.analysis
+    val passes = request.passes
+    val systemContext = request.context
+
     locally {
       import InputMetaTypes.DebugHelper._
       implicit def cpp = CryptProviderProvider.empty
@@ -89,6 +93,30 @@ object ProcessQuery {
     val etag = ETagify(renderedSql, copyCache.orderedVersions, systemContext)
     val lastModified = copyCache.mostRecentlyModifiedAt.getOrElse(new DateTime(0L))
 
+    val debugFields =
+      request.debug.map { debug =>
+        Seq(
+          debug.sql.map { fmt =>
+            val s =
+              fmt match {
+                case Debug.Sql.Format.Compact =>
+                  renderedSql
+                case Debug.Sql.Format.Pretty =>
+                  sql.toString
+              }
+            JString(s)
+          }.map("sql" -> _),
+          debug.explain.map { case Debug.Explain(analyze, format) =>
+            format match {
+              case Debug.Explain.Format.Text =>
+                JString(explainText(pgu, renderedSql, analyze))
+              case Debug.Explain.Format.Json =>
+                explainJson(pgu, renderedSql, analyze)
+            }
+          }.map("explain" -> _)
+        ).flatten.toMap
+      }
+
     precondition.check(Some(etag), sideEffectFree = true) match {
       case Precondition.Passed =>
         fulfillRequest(
@@ -102,6 +130,8 @@ object ProcessQuery {
           cryptProviders,
           extractor,
           lastModified,
+          debugFields,
+          request.debug.fold(false)(_.inhibitRun),
           rs
         )
       case Precondition.FailedBecauseMatch(_) =>
@@ -113,6 +143,44 @@ object ProcessQuery {
     }
   }
 
+  def explainText(
+    pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+    query: String,
+    analyze: Boolean
+  ): String = {
+    for {
+      stmt <- managed(pgu.conn.createStatement())
+      rs <- managed(stmt.executeQuery(s"EXPLAIN (analyze $analyze, format text) $query"))
+    } {
+      val sb = new StringBuilder
+      var didOne = false
+      while(rs.next()) {
+        if(didOne) sb.append('\n')
+        else didOne = true
+        sb.append(rs.getString(1))
+      }
+      sb.toString
+    }
+  }
+
+  def explainJson(
+    pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+    query: String,
+    analyze: Boolean
+  ): JValue = {
+    for {
+      stmt <- managed(pgu.conn.createStatement())
+      rs <- managed(stmt.executeQuery(s"EXPLAIN (analyse $analyze, format json) $query"))
+    } {
+      val sb = new StringBuilder
+      var didOne = false
+      if(!rs.next()) {
+        throw new Exception("Should've gotten a row for the explanation")
+      }
+      JsonReader.fromString(rs.getString(1))
+    }
+  }
+
   def fulfillRequest(
     systemContext: Option[Map[String, String]],
     copyCache: CopyCache,
@@ -121,29 +189,36 @@ object ProcessQuery {
     laidOutSql: SimpleDocStream[com.socrata.pg.analyzer2.SqlizeAnnotation[DatabaseNamesMetaTypes]],
     renderedSql: String,
     nameAnalysis: com.socrata.soql.analyzer2.SoQLAnalysis[DatabaseNamesMetaTypes],
-    cryptProviders: com.socrata.pg.analyzer2.CryptProviderProvider,
-    extractor: com.socrata.pg.analyzer2.ResultExtractor[DatabaseNamesMetaTypes],
+    cryptProviders: CryptProviderProvider,
+    extractor: ResultExtractor[DatabaseNamesMetaTypes],
     lastModified: DateTime,
+    debugFields: Option[Map[String, JValue]],
+    inhibitRun: Boolean,
     rs: ResourceScope
   ): HttpResponse = {
     val locale = "en_US"
 
-    systemContext.foreach(setupSystemContext(pgu.conn, _))
-    val stmt = rs.open(pgu.conn.createStatement())
-
-    val resultSet =
-      try { rs.open(stmt.executeQuery(renderedSql)) }
-      catch {
-        case e: org.postgresql.util.PSQLException =>
-          log.error("Exception running query", e)
-          // Sadness: PG _doesn't_ report position info for runtime errors
-          // so this position info isn't actually useful :(
-          val posInfo = com.socrata.pg.analyzer2.Sqlizer.positionInfo(laidOutSql)
-          return InternalServerError
+    val rows =
+      if(inhibitRun) {
+        Iterator.empty
+      } else {
+        try {
+          runQuery(pgu.conn, renderedSql, systemContext, cryptProviders, extractor, rs)
+        } catch {
+          case e: org.postgresql.util.PSQLException =>
+            log.error("Exception running query", e)
+            // Sadness: PG _doesn't_ report position info for runtime errors
+            // so this position info isn't actually useful :(
+            val posInfo = com.socrata.pg.analyzer2.Sqlizer.positionInfo(laidOutSql)
+            return InternalServerError
+        }
       }
 
     ETag(etag) ~> LastModified(lastModified) ~> Write("application/json; content-type=utf-8") { writer =>
       writer.write("[{")
+      for(debugFields <- debugFields) {
+        writer.write("\"debug\":%s\n ,".format(JsonUtil.renderJson(debugFields, pretty = false)))
+      }
       writer.write("\"last_modified\":%s\n ,".format(JString(CJSONWriter.dateTimeFormat.print(lastModified))))
       writer.write("\"locale\":%s\n ,".format(JString(locale)))
       writer.write("\"schema\":")
@@ -158,11 +233,38 @@ object ProcessQuery {
       JsonUtil.writeJson(writer, reformattedSchema)
       writer.write("\n }")
 
-      val width = reformattedSchema.length
-      var idReps = new scm.HashMap[Option[String], JsonColumnWriteRep[SoQLType, SoQLValue]]
-      var versionReps = new scm.HashMap[Option[String], JsonColumnWriteRep[SoQLType, SoQLValue]]
+      for(row <- rows) {
+        writer.write("\n,")
+        CompactJsonWriter.toWriter(writer, JArray(row))
+      }
 
-      def rep(typ: SoQLType, value: SoQLValue): JsonColumnWriteRep[SoQLType, SoQLValue] = {
+      writer.write("\n]\n")
+    }
+  }
+
+  def runQuery(
+    conn: Connection,
+    sql: String,
+    systemContext: Option[Map[String, String]],
+    cryptProviders: CryptProviderProvider,
+    extractor: ResultExtractor[DatabaseNamesMetaTypes],
+    rs: ResourceScope
+  ): Iterator[Array[JValue]] = {
+    systemContext.foreach(setupSystemContext(conn, _))
+
+    new Iterator[Array[JValue]] {
+      private val stmt = rs.open(conn.createStatement())
+      private val resultSet = rs.open(stmt.executeQuery(sql))
+      private var done = false
+      private var ready = false
+
+      private var idReps = new scm.HashMap[Option[String], JsonColumnWriteRep[SoQLType, SoQLValue]]
+      private var versionReps = new scm.HashMap[Option[String], JsonColumnWriteRep[SoQLType, SoQLValue]]
+
+      private val types = extractor.schema.values.toArray
+      private val width = types.length
+
+      private def rep(typ: SoQLType, value: SoQLValue): JsonColumnWriteRep[SoQLType, SoQLValue] = {
         value match {
           case id: SoQLID =>
             idReps.get(id.provenance) match {
@@ -184,21 +286,30 @@ object ProcessQuery {
         }
       }
 
-      while(resultSet.next()) {
+      override def hasNext: Boolean = {
+        if(done) return false
+        if(ready) return true
+
+        ready = resultSet.next()
+        done = !ready
+        ready
+      }
+
+      def next(): Array[JValue] = {
+        if(!hasNext) return Iterator.empty.next()
+        ready = false
+
         val result = new Array[JValue](width)
         val row = extractor.extractRow(resultSet)
 
         var i = 0
         while(i != width) {
-          result(i) = rep(reformattedSchema(i).t, row(i)).toJValue(row(i))
+          result(i) = rep(types(i), row(i)).toJValue(row(i))
           i += 1
         }
 
-        writer.write("\n,")
-        CompactJsonWriter.toWriter(writer, JArray(result))
+        result
       }
-
-      writer.write("\n]\n")
     }
   }
 
