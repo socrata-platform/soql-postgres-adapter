@@ -531,7 +531,7 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
       from match {
         case FromTable(name, _cn, _rn, _alias, label, columns, _pks) =>
           (
-            namespace.databaseTableName(name).annotate[SqlizeAnnotation](SqlizeAnnotation.Table(label)),
+            namespace.databaseTableName(name),
             OrderedMap() ++ columns.iterator.map { case (dcn, nameEntry) =>
               (dcn -> AugmentedType[MT](nameEntry.typ, isExpanded = true))
             }
@@ -545,7 +545,7 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
           (d"(SELECT)", OrderedMap.empty)
       }
 
-    (sql +#+ d"AS" +#+ namespace.tableLabel(from.label), availableSchemas + (from.label -> schema))
+    (sql.annotate[SqlizeAnnotation](SqlizeAnnotation.Table(from.label)) +#+ d"AS" +#+ namespace.tableLabel(from.label), availableSchemas + (from.label -> schema))
   }
 
   private def deSelectListReferenceWrappedToplevelExprs(selectList: Vector[Expr], distinct: Distinctiveness): Distinctiveness =
