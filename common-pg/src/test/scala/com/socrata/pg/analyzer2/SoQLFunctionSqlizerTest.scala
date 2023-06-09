@@ -37,7 +37,7 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
 
     val cryptProvider = obfuscation.CryptProvider.zeros
 
-    override val repFor = new SoQLRepProvider[TestMT](_ => Some(cryptProvider), namespace) {
+    override val repFor = new SoQLRepProvider[TestMT](_ => Some(cryptProvider), namespace, Map.empty, Map.empty) {
       def mkStringLiteral(s: String) = Doc(JString(s).toString)
     }
 
