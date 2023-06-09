@@ -6,12 +6,14 @@ import com.socrata.prettyprint.prelude._
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.types.obfuscation.CryptProvider
 
-import com.socrata.pg.analyzer2.{Sqlizer, SqlNamespaces, SoQLRepProvider, SoQLFunctionSqlizer, Rep, CryptProviderProvider, ResultExtractor, SoQLRewriteSearch}
+import com.socrata.pg.analyzer2.{Sqlizer, SqlNamespaces, SoQLRepProvider, SoQLFunctionSqlizer, Rep, CryptProviderProvider, ResultExtractor, SoQLRewriteSearch, SqlizerUniverse}
 
 class ActualSqlizer(
   escapeString: String => String,
   cryptProviderProvider: CryptProviderProvider,
-  override val systemContext: Map[String, String]
+  override val systemContext: Map[String, String],
+  locationSubcolumns: ActualSqlizer.LocationSubcolumns,
+  physicalTableFor: Map[AutoTableLabel, types.DatabaseTableName[DatabaseNamesMetaTypes]]
 ) extends Sqlizer[DatabaseNamesMetaTypes] {
   override val namespace = new SqlNamespaces {
     def databaseTableName(dtn: DatabaseTableName) = {
@@ -24,7 +26,7 @@ class ActualSqlizer(
     }
   }
 
-  override val repFor: Rep.Provider[DatabaseNamesMetaTypes] = new SoQLRepProvider[DatabaseNamesMetaTypes](cryptProviderProvider, namespace) {
+  override val repFor: Rep.Provider[DatabaseNamesMetaTypes] = new SoQLRepProvider[DatabaseNamesMetaTypes](cryptProviderProvider, namespace, locationSubcolumns, physicalTableFor) {
     def mkStringLiteral(text: String): Doc =
       d"'" ++ Doc(escapeString(text)) ++ d"'"
   }
@@ -34,7 +36,8 @@ class ActualSqlizer(
   override val rewriteSearch = ActualSqlizer.rewriteSearch
 }
 
-object ActualSqlizer {
+object ActualSqlizer extends SqlizerUniverse[DatabaseNamesMetaTypes] {
+  type LocationSubcolumns = Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]]
   private val funcallSqlizer = new SoQLFunctionSqlizer[DatabaseNamesMetaTypes]
   private val rewriteSearch = new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true)
 }

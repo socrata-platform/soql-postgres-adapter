@@ -80,7 +80,11 @@ object ProcessQuery {
       log.debug("Statement after applying all rewrites:\n{}", Lazy(nameAnalysis.statement.debugStr))
     }
 
-    val sqlizer = new ActualSqlizer(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext)
+    val physicalTableFor: Map[AutoTableLabel, types.DatabaseTableName[DatabaseNamesMetaTypes]] =
+      if(request.locationSubcolumns.isEmpty) Map.empty
+      else physicalTableMap(nameAnalysis)
+
+    val sqlizer = new ActualSqlizer(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, rewriteSubcolumns(request.locationSubcolumns, copyCache), physicalTableFor)
     val Sqlizer.Result(sql, extractor, nonliteralSystemContextLookupFound) = sqlizer(nameAnalysis.statement, OrderedMap.empty)
     log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
     val laidOutSql = sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded))
@@ -345,6 +349,59 @@ object ProcessQuery {
         stmt.executeQuery().close()
       }
     }
+  }
+
+  def rewriteSubcolumns(
+    colMap: Map[types.DatabaseTableName[InputMetaTypes], Map[types.DatabaseColumnName[InputMetaTypes], Seq[Option[types.DatabaseColumnName[InputMetaTypes]]]]],
+    copyCache: CopyCache
+  ): Map[types.DatabaseTableName[DatabaseNamesMetaTypes], Map[types.DatabaseColumnName[DatabaseNamesMetaTypes], Seq[Option[types.DatabaseColumnName[DatabaseNamesMetaTypes]]]]] = {
+    colMap.map { case (dtn, cols) =>
+      val (copyInfo, newColMap) = copyCache(dtn).get // TODO proper error
+      DatabaseTableName(copyInfo.dataTableName) -> cols.map { case (DatabaseColumnName(mainCol), auxCols) =>
+        val rewrittenMainCol = DatabaseColumnName(newColMap.get(mainCol).get.physicalColumnBase) // TODO proper error
+        val rewrittenAuxCols = auxCols.map {
+          case Some(DatabaseColumnName(auxCol)) =>
+            Some(DatabaseColumnName(newColMap.get(auxCol).get.physicalColumnBase)) // TODO proper error
+          case None =>
+            None
+        }
+        rewrittenMainCol -> rewrittenAuxCols
+      }
+    }
+  }
+
+  def physicalTableMap[MT <: MetaTypes](analysis: SoQLAnalysis[MT]): Map[AutoTableLabel, types.DatabaseTableName[MT]] = {
+    object Go extends SqlizerUniverse[MT] {
+      type Acc = Map[AutoTableLabel, DatabaseTableName]
+      def walkStatement(stmt: Statement, acc: Acc): Acc =
+        stmt match {
+          case CombinedTables(_, left, right) =>
+            walkStatement(left, walkStatement(right, acc))
+          case CTE(_defLbl, _defAlias, defQ, _matHint, useQ) =>
+            walkStatement(defQ, walkStatement(useQ, acc))
+          case Values(_, _) =>
+            acc
+          case s: Select =>
+            walkFrom(s.from, acc)
+        }
+
+      def walkFrom(from: From, acc: Acc): Acc =
+        from.reduce[Acc](
+          walkAtomicFrom(_, acc),
+          { (acc, join) => walkAtomicFrom(join.right, acc) }
+        )
+
+      def walkAtomicFrom(from: AtomicFrom, acc: Acc): Acc =
+        from match {
+          case fs: FromStatement =>
+            walkStatement(fs.statement, acc)
+          case fsr: FromSingleRow =>
+            acc
+          case ft: FromTable =>
+            acc + (ft.label -> ft.tableName)
+        }
+    }
+    Go.walkStatement(analysis.statement, Map.empty)
   }
 
   def prettierSql[MT <: MetaTypes](analysis: SoQLAnalysis[MT], doc: Doc[SqlizeAnnotation[MT]]): String = {
