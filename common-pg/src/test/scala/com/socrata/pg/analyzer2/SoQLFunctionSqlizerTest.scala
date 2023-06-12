@@ -55,7 +55,14 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
     new MockTableFinder[TestMT](items.toMap)
   val analyzer = new SoQLAnalyzer[TestMT](SoQLTypeInfo, SoQLFunctionInfo)
   def analyze(soqlexpr: String): String = {
-    analyzeStatement(s"SELECT ($soqlexpr)")
+    val s = analyzeStatement(s"SELECT ($soqlexpr)")
+    val prefix = "SELECT "
+    val suffix = " AS i1 FROM table1 AS x1"
+    if(s.startsWith(prefix) && s.endsWith(suffix)) {
+      s.dropRight(suffix.length).drop(prefix.length)
+    } else {
+      s
+    }
   }
   def analyzeStatement(stmt: String, useSelectListReferences: Boolean = false) = {
     val tf = MockTableFinder[TestMT](
@@ -106,15 +113,28 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
   }
 
   test("lead/lag gets its int cast") {
-    analyze("lead(text, 5) OVER ()") must equal ("SELECT lead(x1.text, (5 :: numeric) :: int) OVER () AS i1 FROM table1 AS x1")
+    analyze("lead(text, 5) OVER ()") must equal ("lead(x1.text, (5 :: numeric) :: int) OVER ()")
+  }
+
+  test("left_pad/right_pad get their int casts") {
+    analyze("left_pad(text, 5, 'x')") must equal ("""lpad(x1.text, (5 :: numeric) :: int, text "x")""")
+    analyze("right_pad(text, 5, 'x')") must equal ("""rpad(x1.text, (5 :: numeric) :: int, text "x")""")
   }
 
   test("convex_hull gets its buffer wrapper") {
-    analyze("convex_hull(geom)") must equal ("SELECT st_asbinary(st_multi(st_buffer(st_convexhull(x1.geom), 0.0))) AS i1 FROM table1 AS x1")
+    analyze("convex_hull(geom)") must equal ("st_asbinary(st_multi(st_buffer(st_convexhull(x1.geom), 0.0)))")
   }
 
   test("concave_hull gets its buffer wrapper") {
-    analyze("concave_hull(geom,3.0)") must equal ("SELECT st_asbinary(st_multi(st_buffer(st_concavehull(x1.geom, 3.0 :: numeric), 0.0))) AS i1 FROM table1 AS x1")
+    analyze("concave_hull(geom,3.0)") must equal ("st_asbinary(st_multi(st_buffer(st_concavehull(x1.geom, 3.0 :: numeric), 0.0)))")
+  }
+
+  test("epoch_seconds") {
+    analyze("epoch_seconds('2001-01-01T12:34:56.123Z')") must equal ("""round(extract(epoch from (timestamp with time zone "2001-01-01T12:34:56.123Z")) :: numeric, 3)""")
+  }
+
+  test("timestamp_diff_d") {
+    analyze("date_diff_d('2001-01-01T12:34:56.123' :: floating_timestamp, '2020-05-06T21:43:04.321')") must equal ("""trunc((extract(epoch from (timestamp without time zone "2001-01-01T12:34:56.123")) - extract(epoch from (timestamp without time zone "2020-05-06T21:43:04.321")) :: numeric) / 86400)""")
   }
 
   test("things get correctly de-select-list-referenced") {
@@ -125,41 +145,41 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
   }
 
   test("case - else") {
-    analyze("case when 1=1 then 'hello' when 1=2 then 'world' else 'otherwise' end") must equal ("SELECT CASE WHEN (1 :: numeric) = (1 :: numeric) THEN text \"hello\" WHEN (1 :: numeric) = (2 :: numeric) THEN text \"world\" ELSE text \"otherwise\" END AS i1 FROM table1 AS x1")
+    analyze("case when 1=1 then 'hello' when 1=2 then 'world' else 'otherwise' end") must equal ("""CASE WHEN (1 :: numeric) = (1 :: numeric) THEN text "hello" WHEN (1 :: numeric) = (2 :: numeric) THEN text "world" ELSE text "otherwise" END""")
   }
 
   test("case - no else") {
-    analyze("case when 1=1 then 'hello' when 1=2 then 'world' end") must equal ("SELECT CASE WHEN (1 :: numeric) = (1 :: numeric) THEN text \"hello\" WHEN (1 :: numeric) = (2 :: numeric) THEN text \"world\" END AS i1 FROM table1 AS x1")
+    analyze("case when 1=1 then 'hello' when 1=2 then 'world' end") must equal ("""CASE WHEN (1 :: numeric) = (1 :: numeric) THEN text "hello" WHEN (1 :: numeric) = (2 :: numeric) THEN text "world" END""")
   }
 
   test("iif") {
-    analyze("iif(1 = 1, 2, 3)") must equal ("SELECT CASE WHEN (1 :: numeric) = (1 :: numeric) THEN 2 :: numeric ELSE 3 :: numeric END AS i1 FROM table1 AS x1")
+    analyze("iif(1 = 1, 2, 3)") must equal ("CASE WHEN (1 :: numeric) = (1 :: numeric) THEN 2 :: numeric ELSE 3 :: numeric END")
   }
 
   test("uncased works") {
-    analyze("caseless_eq(text,'bleh')") must equal ("""SELECT (upper(x1.text)) = (upper(text "bleh")) AS i1 FROM table1 AS x1""")
+    analyze("caseless_eq(text,'bleh')") must equal ("""(upper(x1.text)) = (upper(text "bleh"))""")
   }
 
   test("contains") {
-    analyze("contains(text,'bleh')") must equal ("""SELECT position((text "bleh") in (x1.text)) <> 0 AS i1 FROM table1 AS x1""")
+    analyze("contains(text,'bleh')") must equal ("""position((text "bleh") in (x1.text)) <> 0""")
   }
 
   test("count gets cast to numeric") {
-    analyze("count(*)") must equal ("""SELECT count(*) :: numeric AS i1 FROM table1 AS x1""")
-    analyze("count(text)") must equal ("""SELECT count(x1.text) :: numeric AS i1 FROM table1 AS x1""")
-    analyze("count(distinct text)") must equal ("""SELECT count(DISTINCT x1.text) :: numeric AS i1 FROM table1 AS x1""")
+    analyze("count(*)") must equal ("""count(*) :: numeric""")
+    analyze("count(text)") must equal ("""count(x1.text) :: numeric""")
+    analyze("count(distinct text)") must equal ("""count(DISTINCT x1.text) :: numeric""")
   }
 
   test("get_context known literal") {
-    analyze("get_context('hello')") must equal ("""SELECT text "world" AS i1 FROM table1 AS x1""")
+    analyze("get_context('hello')") must equal ("""text "world"""")
   }
 
   test("get_context unknown literal") {
-    analyze("get_context('goodbye')") must equal ("""SELECT null :: text AS i1 FROM table1 AS x1""")
+    analyze("get_context('goodbye')") must equal ("""null :: text""")
   }
 
   test("get_context non-literal") {
-    analyze("get_context(text)") must equal ("""SELECT current_setting('socrata_system.a' || md5(x1.text), true) AS i1 FROM table1 AS x1""")
+    analyze("get_context(text)") must equal ("""current_setting('socrata_system.a' || md5(x1.text), true)""")
   }
 
   test("Functions are correctly classified") {

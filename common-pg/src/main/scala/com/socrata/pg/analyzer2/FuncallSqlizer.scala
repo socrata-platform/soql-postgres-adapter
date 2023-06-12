@@ -107,13 +107,16 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     }
   }
 
-  protected def sqlizeNormalOrdinaryFuncall(sqlFunctionName: String, prefixArgs: Seq[Doc] = Nil, suffixArgs: Seq[Doc] = Nil) = ofs { (e, args, ctx) =>
-    assert(args.length >= e.function.minArity)
-    assert(e.function.allParameters.startsWith(args.map(_.typ)))
+  protected def sqlizeNormalOrdinaryFuncall(sqlFunctionName: String, prefixArgs: Seq[Doc] = Nil, suffixArgs: Seq[Doc] = Nil) = {
+    val funcName = Doc(sqlFunctionName)
+    ofs { (e, args, ctx) =>
+      assert(args.length >= e.function.minArity)
+      assert(e.function.allParameters.startsWith(args.map(_.typ)))
 
-    val sql = (prefixArgs ++ args.map(_.compressed.sql) ++ suffixArgs).funcall(Doc(sqlFunctionName))
+      val sql = (prefixArgs ++ args.map(_.compressed.sql) ++ suffixArgs).funcall(funcName)
 
-    ExprSql(sql.group, e)
+      ExprSql(sql.group, e)
+    }
   }
 
   protected def sqlizeSubcol(typ: CT, field: String) = {
