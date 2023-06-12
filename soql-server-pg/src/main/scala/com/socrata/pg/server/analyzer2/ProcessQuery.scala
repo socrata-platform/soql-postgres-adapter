@@ -61,6 +61,13 @@ object ProcessQuery {
     // Then we'll rewrite that analysis in terms of actual physical
     // database names, after building our crypt providers.
     implicit val cryptProviders = CryptProvidersByCanonicalName(metadataAnalysis.statement)
+
+    // but first. produce a string of the analysis for etagging purposes
+    val stringifiedAnalysis = locally {
+      import InputMetaTypes.DebugHelper._
+      analysis.statement.debugDoc.layoutPretty(LayoutOptions(PageWidth.Unbounded)).toString
+    }
+
     val nameAnalysis = passes.foldLeft(DatabaseNamesMetaTypes.rewriteFrom(metadataAnalysis)) { (nameAnalysis, batch) =>
       locally {
         import DatabaseNamesMetaTypes.DebugHelper._
@@ -90,11 +97,13 @@ object ProcessQuery {
     val laidOutSql = sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded))
     val renderedSql = laidOutSql.toString
 
-    // Our etag will be the hash of:
-    //  * this SQL
-    //  * the versions
-    //  * the provided system context (since it's not guaranteed that all values will occur in the SQL)
-    val etag = ETagify(renderedSql, copyCache.orderedVersions, systemContext)
+    // Our etag will be the hash of the inputs that affect the result of the query
+    val etag = ETagify(stringifiedAnalysis, copyCache.orderedVersions, systemContext, request.locationSubcolumns)
+
+    // "last modified" is problematic because it doesn't include
+    // modification times of saved views.  At least, at higher levels
+    // that actually know about saved views as things that exist and
+    // can change over time.
     val lastModified = copyCache.mostRecentlyModifiedAt.getOrElse(new DateTime(0L))
 
     val debugFields =
