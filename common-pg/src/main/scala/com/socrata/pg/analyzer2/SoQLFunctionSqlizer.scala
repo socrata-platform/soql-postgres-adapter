@@ -12,6 +12,18 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
   def wrap(e: Expr, exprSql: ExprSql, wrapper: String, additionalWrapperArgs: Doc*) =
     ExprSql((exprSql.compressed.sql +: additionalWrapperArgs).funcall(Doc(wrapper)), e)
 
+  def numericize(sqlizer: AggregateFunctionSqlizer) = afs { (f, args, filter, ctx) =>
+    val e = sqlizer(f, args, filter, ctx)
+    assert(e.typ == SoQLNumber)
+    ExprSql(e.compressed.sql +#+ d":: numeric", f)
+  }
+
+  def numericize(sqlizer: OrdinaryFunctionSqlizer) = ofs { (f, args, ctx) =>
+    val e = sqlizer(f, args, ctx)
+    assert(e.typ == SoQLNumber)
+    ExprSql(e.compressed.sql +#+ d":: numeric", f)
+  }
+
   def sqlizeNormalOrdinaryWithWrapper(name: String, wrapper: String) = ofs { (f, args, ctx) =>
     val exprSql = sqlizeNormalOrdinaryFuncall(name)(f, args, ctx)
     wrap(f, exprSql, wrapper)
@@ -125,6 +137,47 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     }
   }
 
+  def sqlizePad(name: String) = {
+    val underlyingSqlizer = Doc(name)
+    ofs { (f, args, ctx) =>
+      assert(args.length == 3)
+      ExprSql(
+        Seq(
+          args(0).compressed.sql,
+          args(1).compressed.sql.parenthesized +#+ d":: int",
+          args(2).compressed.sql
+        ).funcall(underlyingSqlizer),
+        f
+      )
+    }
+  }
+
+  def sqlizeEpochSeconds = ofs { (f, args, ctx) =>
+    assert(args.length == 1)
+    val sql =
+      Seq(
+        Seq(d"epoch from" +#+ args(0).compressed.sql.parenthesized).funcall(d"extract") +#+ d":: numeric",
+        d"3"
+      ).funcall(d"round")
+    ExprSql(sql, f)
+  }
+
+  def sqlizeTimestampDiffD = ofs { (f, args, ctx) =>
+    assert(args.length == 2)
+
+    val delta =
+      (
+        Seq(d"epoch from" +#+ args(0).compressed.sql.parenthesized).funcall(d"extract") +#+
+          d"-" +#+ Seq(d"epoch from" +#+ args(1).compressed.sql.parenthesized).funcall(d"extract")
+      ).group
+
+    val sql =
+      Seq(
+        (delta +#+ d":: numeric").parenthesized +#+ d"/" +#+ d"86400"
+      ).funcall(d"trunc")
+    ExprSql(sql, f)
+  }
+
   // Given an ordinary function sqlizer, returns a new ordinary
   // function sqlizer that upcases all of its text arguments
   def uncased(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
@@ -178,6 +231,8 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       CaselessStartsWith -> uncased(sqlizeNormalOrdinaryFuncall("starts_with")),
       Contains -> sqlizeContains,
       CaselessContains -> uncased(sqlizeContains),
+      LeftPad -> sqlizePad("lpad"),
+      RightPad -> sqlizePad("rpad"),
 
       UnaryPlus -> sqlizeUnaryOp("+"),
       UnaryMinus -> sqlizeUnaryOp("-"),
@@ -205,6 +260,8 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       FloatingTimeStampTruncYmd -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'day'")),
       FloatingTimeStampTruncYm -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'month'")),
       FloatingTimeStampTruncY -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'year'")),
+      EpochSeconds -> sqlizeEpochSeconds,
+      TimeStampDiffD -> sqlizeTimestampDiffD,
 
       TextToPoint -> sqlizeGeomCast("st_pointfromtext"),
       TextToMultiPoint -> sqlizeGeomCast("st_mpointfromtext"),
@@ -223,6 +280,18 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       GeoMultiLineFromLine -> sqlizeNormalOrdinaryFuncall("st_multi"),
       GeoMultiPointFromPoint -> sqlizeNormalOrdinaryFuncall("st_multi"),
       NumberOfPoints -> sqlizeNormalOrdinaryFuncall("st_npoints"),
+      PointToLatitude -> numericize(sqlizeNormalOrdinaryFuncall("st_y")),
+      PointToLongitude -> numericize(sqlizeNormalOrdinaryFuncall("st_x")),
+      NumberOfPoints -> numericize(sqlizeNormalOrdinaryFuncall("st_npoints")),
+      Crosses -> sqlizeNormalOrdinaryFuncall("st_crosses"),
+      Overlaps -> sqlizeNormalOrdinaryFuncall("st_overlaps"),
+      Intersects -> sqlizeNormalOrdinaryFuncall("st_overlaps"),
+      ReducePrecision -> sqlizeNormalOrdinaryFuncall("st_reduceprecision"),
+      // https://postgis.net/docs/ST_ReducePrecision.html - Polygons
+      // can become multipolygons when reduced, so we force them to do
+      // so.
+      ReducePolyPrecision -> sqlizeNormalOrdinaryWithWrapper("st_reduceprecision", "st_multi"),
+      Intersection -> sqlizeMultiBuffered("st_intersection"),
 
       ConcaveHull -> sqlizeMultiBuffered("st_concavehull"),
       ConvexHull -> sqlizeMultiBuffered("st_convexhull"),
@@ -252,12 +321,6 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
   // count_distinct is a separate function for legacy reasons; rewrite it into count(distinct ...)
   def sqlizeCountDistinct(e: AggregateFunctionCall, args: Seq[ExprSql], filter: Option[ExprSql], ctx: DynamicContext) = {
     sqlizeNormalAggregateFuncall("count")(e.copy(distinct = true)(e.position), args, filter, ctx)
-  }
-
-  def numericize(sqlizer: AggregateFunctionSqlizer) = afs { (f, args, filter, ctx) =>
-    val e = sqlizer(f, args, filter, ctx)
-    assert(e.typ == SoQLNumber)
-    ExprSql(e.compressed.sql +#+ d":: numeric", f)
   }
 
   val aggregateFunctionMap = (
