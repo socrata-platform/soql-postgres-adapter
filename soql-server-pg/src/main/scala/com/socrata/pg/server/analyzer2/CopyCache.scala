@@ -34,7 +34,7 @@ class CopyCache(pgu: PGSecondaryUniverse[InputMetaTypes#ColumnType, InputMetaTyp
   // All the dataVersions of all the datasets involved, in some
   // arbitrary but consistent order.
   def orderedVersions =
-    map.valuesIterator.map(_._1).toSeq.sortBy { copyInfo =>
-      (copyInfo.datasetInfo.systemId.underlying, copyInfo.copyNumber)
-    }.map(_.dataVersion)
+    map.to.toSeq.sortBy { case (DatabaseTableName((DatasetInternalName(instance, dsId), Stage(stage))), (copyInfo, _)) =>
+      (instance, dsId.underlying, stage, copyInfo.copyNumber)
+    }.map { case (_dtn, (copyInfo, _colInfos)) => copyInfo.dataVersion }
 }
