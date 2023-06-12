@@ -178,6 +178,93 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     ExprSql(sql, f)
   }
 
+  def sqlizeLocationPoint = ofs { (f, args, ctx) =>
+    assert(args.length == 1)
+    assert(args(0).typ == SoQLLocation)
+
+    val pointSubcolumnSql =
+      args(0) match {
+        case expanded: ExprSql.Expanded[MT] =>
+          expanded.sqls.head
+        case compressed: ExprSql.Compressed[MT] =>
+          Seq(compressed.sql +#+ d"-> 0").funcall(d"st_geomfromgeojson")
+      }
+
+    ExprSql(pointSubcolumnSql, f)
+  }
+
+  def sqlizeLocationPointSubcol(accessor: String) = {
+    val accFunc = Doc(accessor)
+    ofs { (f, args, ctx) =>
+      assert(args.length == 1)
+      assert(args(0).typ == SoQLLocation)
+
+      val pointSubcolumnSql =
+        args(0) match {
+          case expanded: ExprSql.Expanded[MT] =>
+            expanded.sqls.head
+          case compressed: ExprSql.Compressed[MT] =>
+            Seq(compressed.sql +#+ d"-> 0").funcall(d"st_geomfromgeojson")
+        }
+
+      ExprSql(Seq(pointSubcolumnSql).funcall(accFunc) +#+ d":: numeric", f)
+    }
+  }
+
+  def sqlizeLocationHumanAddress = ofs { (f, args, ctx) =>
+    assert(args.length == 1)
+    assert(args(0).typ == SoQLLocation)
+
+    def asJson(rawTextSubcol: Doc) = {
+      val jsonifiedSubcol = Seq(rawTextSubcol).funcall(d"to_jsonb") +#+ d":: text"
+      Seq(jsonifiedSubcol, d"'null'").funcall(d"coalesce")
+    }
+
+    val Seq(addr, city, state, zip) = (args(0) match {
+      case expanded: ExprSql.Expanded[MT] =>
+        expanded.sqls.drop(1)
+      case compressed: ExprSql.Compressed[MT] =>
+        (1 to 4).map { i => compressed.sql +#+ d"->>" +#+ Doc(i) }
+    }).map(asJson)
+
+    // Ugh ok.  So this is pretending that the "human address" subcol
+    // is a single thing and more specifically that if all the
+    // phyiscal subcolumns that make it up are null, then the whole
+    // homan address is null.
+    val nullCheck = (args(0) match {
+      case expanded: ExprSql.Expanded[MT] =>
+        expanded.sqls.drop(1)
+      case compressed: ExprSql.Compressed[MT] =>
+        (1 to 4).map { i => compressed.sql.parenthesized +#+ d"->>" +#+ Doc(i) }
+    }).
+      map { s => (s.parenthesized +#+ d"is null").parenthesized }.
+      reduceLeft { (l, r) => l +#+ d"and" +#+ r }.
+      group
+
+    val resultIfNotNull = d"""'{"address":' ||""" +#+ addr +#+ d"""|| ',"city":' ||""" +#+ city +#+ d"""|| ',"state":' ||""" +#+ state +#+ d"""|| ',"zip":' ||""" +#+ zip +#+ d"""|| '}'"""
+
+    val clauses = Seq(
+      ((d"WHEN" +#+ nullCheck).nest(2).group ++ Doc.lineSep ++ d"THEN NULL :: text").nest(2).group,
+      (d"ELSE" +#+ resultIfNotNull).nest(2).group
+    )
+
+    val doc = (d"CASE" ++ Doc.lineSep ++ clauses.vsep).nest(2) ++ Doc.lineSep ++ d"END"
+
+    ExprSql(doc.group, f)
+  }
+
+  def sqlizeLocation = ofs { (f, args, ctx) =>
+    assert(f.typ == SoQLLocation)
+    assert(args.length == 5)
+    assert(args(0).typ == SoQLPoint)
+    for(i <- 1 to 4) {
+      assert(args(i).typ == SoQLText)
+    }
+    // We're given the five subcolumns that make up a fake-location,
+    // so just pass them on through.
+    ExprSql(args.map(_.compressed.sql), f)(ctx.repFor, ctx.gensymProvider)
+  }
+
   // Given an ordinary function sqlizer, returns a new ordinary
   // function sqlizer that upcases all of its text arguments
   def uncased(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
@@ -257,12 +344,15 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Ceiling -> sqlizeNormalOrdinaryFuncall("ceil"),
       Floor -> sqlizeNormalOrdinaryFuncall("floor"),
 
+      // Timestamps
+      ToFloatingTimestamp -> sqlizeBinaryOp("at time zone"),
       FloatingTimeStampTruncYmd -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'day'")),
       FloatingTimeStampTruncYm -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'month'")),
       FloatingTimeStampTruncY -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'year'")),
       EpochSeconds -> sqlizeEpochSeconds,
       TimeStampDiffD -> sqlizeTimestampDiffD,
 
+      // Geo-casts
       TextToPoint -> sqlizeGeomCast("st_pointfromtext"),
       TextToMultiPoint -> sqlizeGeomCast("st_mpointfromtext"),
       TextToLine -> sqlizeGeomCast("st_linefromtext"),
@@ -270,6 +360,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       TextToPolygon -> sqlizeGeomCast("st_polygonfromtext"),
       TextToMultiPolygon -> sqlizeGeomCast("st_mpolyfromtext"),
 
+      // Geo
       Union2Pt -> sqlizeNormalOrdinaryWithWrapper("st_union", "st_multi"),
       Union2Line -> sqlizeNormalOrdinaryWithWrapper("st_union", "st_multi"),
       Union2Poly -> sqlizeNormalOrdinaryWithWrapper("st_union", "st_multi"),
@@ -296,8 +387,22 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       ConcaveHull -> sqlizeMultiBuffered("st_concavehull"),
       ConvexHull -> sqlizeMultiBuffered("st_convexhull"),
 
+      // Fake location
+      LocationToLatitude -> sqlizeLocationPointSubcol("st_y"),
+      LocationToLongitude -> sqlizeLocationPointSubcol("st_x"),
+      LocationToAddress -> sqlizeLocationHumanAddress,
+      LocationToPoint -> sqlizeLocationPoint,
+      Location -> sqlizeLocation,
+
+      // URL
       UrlToUrl -> sqlizeSubcol(SoQLUrl, "url"),
       UrlToDescription -> sqlizeSubcol(SoQLUrl, "description"),
+
+      // json
+      JsonProp -> sqlizeBinaryOp("->"),
+      JsonIndex -> sqlizeBinaryOp("->"),
+      TextToJson -> sqlizeCast("jsonb"),
+      JsonToText -> sqlizeCast("text"),
 
       // conditional
       Nullif -> sqlizeNormalOrdinaryFuncall("nullif"),
@@ -311,6 +416,12 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       SoQLRewriteSearch.ToTsVector -> sqlizeNormalOrdinaryFuncall("to_tsvector"),
       SoQLRewriteSearch.ToTsQuery -> sqlizeNormalOrdinaryFuncall("to_tsquery"),
       SoQLRewriteSearch.TsSearch -> sqlizeBinaryOp("@@"),
+
+      // simple casts
+      TextToBool -> sqlizeCast("boolean"),
+      BoolToText -> sqlizeCast("text"),
+      TextToNumber -> sqlizeCast("numeric"),
+      NumberToText -> sqlizeCast("text")
     ) ++ castIdentities.map { f =>
       f -> sqlizeIdentity _
     }

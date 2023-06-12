@@ -81,6 +81,13 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     ExprSql(lhs.parenthesized +#+ Doc(operator) +#+ rhs.parenthesized, e)
   }
 
+  protected def sqlizeCast(toType: String) = ofs { (e, args, ctx) =>
+    assert(args.length == 1)
+    assert(args.map(_.typ) == e.function.allParameters)
+
+    ExprSql(args(0).compressed.sql.parenthesized +#+ d"::" +#+ Doc(toType), e)
+  }
+
   protected def sqlizeProvenancedBinaryOp(operator: String) = ofs { (e, args, ctx) =>
     assert(args.length == 2)
     assert(args.map(_.typ) == e.function.allParameters)
