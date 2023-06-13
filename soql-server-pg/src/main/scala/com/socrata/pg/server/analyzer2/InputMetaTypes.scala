@@ -11,8 +11,6 @@ import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.functions.{MonomorphicFunction, SoQLFunctionInfo}
 
-case class Stage(underlying: String)
-
 final abstract class InputMetaTypes extends MetaTypes {
   override type ResourceNameScope = Int
   override type ColumnType = SoQLType
