@@ -5,6 +5,8 @@ import java.nio.charset.StandardCharsets
 import java.nio.ByteBuffer
 
 import com.rojoma.json.v3.ast.JString
+import com.rojoma.json.v3.util.JsonUtil
+import com.rojoma.json.v3.util.OrJNull.implicits._
 import org.slf4j.LoggerFactory
 
 import com.socrata.datacoordinator.id.{DatasetInternalName, UserColumnId}
@@ -18,92 +20,58 @@ final abstract class ETagify
 object ETagify extends SqlizerUniverse[InputMetaTypes] {
   private val log = LoggerFactory.getLogger(classOf[ETagify])
 
-  private val chars = "0123456789abcdef".toCharArray
-  private val nonUTF8 = 0xff.toByte   // Neither of these byte appear in
-  private val nonUTF8_2 = 0xfe.toByte // valid UTF-8
+  private implicit object datasetInternalNameOrdering extends Ordering[DatasetInternalName] {
+    def compare(a: DatasetInternalName, b: DatasetInternalName) =
+      a.instance.compare(b.instance) match {
+        case 0 => a.datasetId.underlying.compare(b.datasetId.underlying)
+        case n => n
+      }
+  }
+  private implicit object userColumnIdOrdering extends Ordering[UserColumnId] {
+    def compare(a: UserColumnId, b: UserColumnId) = {
+      a.underlying.compare(b.underlying)
+    }
+  }
+  private implicit object dtnOrdering extends Ordering[DatabaseTableName] {
+    private val ord = Ordering[InputMetaTypes#DatabaseTableNameImpl]
+    def compare(a: DatabaseTableName, b: DatabaseTableName) = {
+      ord.compare(a.name, b.name)
+    }
+  }
+  private implicit object dcnOrdering extends Ordering[DatabaseColumnName] {
+    private val ord = Ordering[InputMetaTypes#DatabaseColumnNameImpl]
+    def compare(a: DatabaseColumnName, b: DatabaseColumnName) = {
+      ord.compare(a.name, b.name)
+    }
+  }
 
   def apply(
     query: String,
     dataVersions: Seq[Long],
     systemContext: Map[String, String],
-    fakeCompoundMap: Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]]
+    fakeCompoundMap: Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]],
+    passes: Seq[Seq[rewrite.Pass]]
   ): EntityTag = {
-    val md = MessageDigest.getInstance("SHA-256")
+    val hasher = Hasher.newSha256()
 
     log.debug("Mixing in query: {}", JString(query))
-    md.update(query.getBytes(StandardCharsets.UTF_8))
-    md.update(nonUTF8)
+    hasher.hash(query)
 
-    val buffer = ByteBuffer.allocate(8 * (dataVersions.size + 1))
+    log.debug("Mixing in copy versions: {}", dataVersions)
+    hasher.hash(dataVersions)
 
-    locally {
-      log.debug("Mixing in copy versions: {}", dataVersions)
-      val longBuffer = buffer.asLongBuffer
-      longBuffer.put(dataVersions.size)
-      for(dataVersion <- dataVersions) {
-        longBuffer.put(dataVersion)
-      }
-    }
-    md.update(buffer)
+    log.debug("Mixing in system context: {}", Lazy(JsonUtil.renderJson(systemContext, pretty = true)))
+    hasher.hash(systemContext)
 
-    val canonicalizedSystemContext = systemContext.toSeq.sorted
-    buffer.clear()
-    buffer.asLongBuffer.put(canonicalizedSystemContext.size)
-    md.update(buffer)
-    for((k, v) <- canonicalizedSystemContext) {
-      log.debug("Mixing in system context item: {}: {}", JString(k) : Any, JString(v))
-      md.update(k.getBytes(StandardCharsets.UTF_8))
-      md.update(nonUTF8)
-      md.update(v.getBytes(StandardCharsets.UTF_8))
-      md.update(nonUTF8)
-    }
+    log.debug("Mixing in fake compound columns: {}", Lazy(JsonUtil.renderJson(fakeCompoundMap.mapValues(_.mapValues(_.map(_.orJNull)).toSeq).toSeq, pretty = true)))
+    hasher.hash(fakeCompoundMap)
 
-    val canonicalizedFakeCompoundMap = fakeCompoundMap.toSeq.sortBy {
-      case (DatabaseTableName((DatasetInternalName(instance, dsid), Stage(stage))), _cols) =>
-        (instance, dsid.underlying, stage)
-    }
-    buffer.clear()
-    buffer.asLongBuffer.put(canonicalizedFakeCompoundMap.size)
-    md.update(buffer)
-    for((DatabaseTableName((datasetInternalName, Stage(stage))), cols) <- canonicalizedFakeCompoundMap) {
-      log.debug("Mixing in fake compound columns for dataset {}/{}", datasetInternalName : Any, JString(stage))
-
-      md.update(datasetInternalName.underlying.getBytes(StandardCharsets.UTF_8))
-      md.update(nonUTF8)
-      md.update(stage.getBytes(StandardCharsets.UTF_8))
-      md.update(nonUTF8)
-
-      val canonicalizedCols = cols.toSeq.sortBy {
-        case (DatabaseColumnName(col), _subcols) =>
-          col.underlying
-      }
-      buffer.clear()
-      buffer.asLongBuffer.put(canonicalizedCols.size)
-      md.update(buffer)
-      for((DatabaseColumnName(col), subcols) <- canonicalizedCols) {
-        log.debug("Mixing in fake compound columns for column {}: {}", col : Any, subcols)
-
-        md.update(col.underlying.getBytes(StandardCharsets.UTF_8))
-        md.update(nonUTF8)
-
-        buffer.clear()
-        buffer.asLongBuffer.put(subcols.size)
-        md.update(buffer)
-        for(subcol <- subcols) {
-          subcol match {
-            case Some(DatabaseColumnName(ucid)) =>
-              md.update(ucid.underlying.getBytes(StandardCharsets.UTF_8))
-              md.update(nonUTF8)
-            case None =>
-              md.update(nonUTF8_2)
-          }
-        }
-      }
-    }
+    log.debug("Mixing in rewrite passes: {}", Lazy(JsonUtil.renderJson(passes, pretty = true)))
+    hasher.hash(passes)
 
     // Should this be strong or weak?  I'm choosing weak here because
     // I don't think we actually guarantee two calls will be
     // byte-for-byte identical...
-    WeakEntityTag(md.digest())
+    WeakEntityTag(hasher.digest())
   }
 }
