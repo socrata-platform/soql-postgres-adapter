@@ -2,7 +2,7 @@ package com.socrata.pg.analyzer2
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.FunctionName
-import com.socrata.soql.functions.{MonomorphicFunction, SoQLFunctions, SoQLTypeInfo}
+import com.socrata.soql.functions.{Function, MonomorphicFunction, SoQLFunctions, SoQLTypeInfo}
 import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLText, SoQLBoolean, SoQLUrl}
 
 class SoQLRewriteSearch[MT <: MetaTypes with ({type ColumnType = SoQLType; type ColumnValue = SoQLValue})](override val searchBeforeQuery: Boolean) extends RewriteSearch[MT] {
@@ -68,7 +68,7 @@ object SoQLRewriteSearch {
     varargs: Seq[SoQLType],
     result: SoQLType
   ) =
-    new MonomorphicFunction(identity, name, params, varargs, result, isAggregate = false, needsWindow = false)("").function
+    new MonomorphicFunction(identity, name, params, varargs, result, isAggregate = false, needsWindow = false)(Function.Doc.empty).function
 
   // These result types are lies (they should be SoQLTSVector and
   // SoQLTSQuery respectively), but since users can't name these
