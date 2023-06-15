@@ -12,6 +12,8 @@ import org.slf4j.LoggerFactory
 import com.socrata.datacoordinator.id.{DatasetInternalName, UserColumnId}
 import com.socrata.http.server.util.{EntityTag, WeakEntityTag}
 import com.socrata.soql.analyzer2._
+import com.socrata.soql.environment.ColumnName
+import com.socrata.soql.sql.Debug
 
 import com.socrata.pg.analyzer2.SqlizerUniverse
 
@@ -46,13 +48,18 @@ object ETagify extends SqlizerUniverse[InputMetaTypes] {
   }
 
   def apply(
+    outputColumns: Seq[ColumnName],
     query: String,
     dataVersions: Seq[Long],
     systemContext: Map[String, String],
     fakeCompoundMap: Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]],
-    passes: Seq[Seq[rewrite.Pass]]
+    passes: Seq[Seq[rewrite.Pass]],
+    debug: Option[Debug]
   ): EntityTag = {
     val hasher = Hasher.newSha256()
+
+    log.debug("Mixing in output column names: {}", Lazy(JsonUtil.renderJson(outputColumns, pretty = false)))
+    hasher.hash(outputColumns)
 
     log.debug("Mixing in query: {}", JString(query))
     hasher.hash(query)
@@ -68,6 +75,9 @@ object ETagify extends SqlizerUniverse[InputMetaTypes] {
 
     log.debug("Mixing in rewrite passes: {}", Lazy(JsonUtil.renderJson(passes, pretty = true)))
     hasher.hash(passes)
+
+    log.debug("Mixing in debug: {}", debug)
+    hasher.hash(debug)
 
     // Should this be strong or weak?  I'm choosing weak here because
     // I don't think we actually guarantee two calls will be

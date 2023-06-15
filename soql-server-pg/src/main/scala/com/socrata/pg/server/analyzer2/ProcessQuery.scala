@@ -116,7 +116,15 @@ object ProcessQuery {
     val renderedSql = laidOutSql.toString
 
     // Our etag will be the hash of the inputs that affect the result of the query
-    val etag = ETagify(stringifiedAnalysis, copyCache.orderedVersions, systemContext, request.locationSubcolumns, passes)
+    val etag = ETagify(
+      analysis.statement.schema.valuesIterator.map(_.name).toSeq,
+      stringifiedAnalysis,
+      copyCache.orderedVersions,
+      systemContext,
+      request.locationSubcolumns,
+      passes,
+      request.debug
+    )
 
     // "last modified" is problematic because it doesn't include
     // modification times of saved views.  At least, at higher levels

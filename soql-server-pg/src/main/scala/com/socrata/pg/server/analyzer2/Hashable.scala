@@ -2,6 +2,8 @@ package com.socrata.pg.server.analyzer2
 
 import com.socrata.datacoordinator.id.{DatasetInternalName, UserColumnId}
 import com.socrata.soql.analyzer2._
+import com.socrata.soql.environment.ColumnName
+import com.socrata.soql.sql.Debug
 
 trait Hashable[T] {
   def hash(hasher: Hasher, value: T): Unit
@@ -12,6 +14,10 @@ trait Hashable[T] {
 }
 
 object Hashable {
+  implicit object boolean extends Hashable[Boolean] {
+    override def hash(hasher: Hasher, value: Boolean) = hasher.hashByte(if(value) 1 else 0)
+  }
+
   implicit object byte extends Hashable[Byte] {
     override def hash(hasher: Hasher, value: Byte) = hasher.hashByte(value)
   }
@@ -63,7 +69,7 @@ object Hashable {
       }
     }
 
-  implicit def hash[T](implicit ev: Hashable[T]): Hashable[Option[T]] = {
+  implicit def option[T](implicit ev: Hashable[T]): Hashable[Option[T]] = {
     new Hashable[Option[T]] {
       override def hash(hasher: Hasher, value: Option[T]) = {
         value match {
@@ -119,5 +125,45 @@ object Hashable {
           hasher.hash(lim)
           hasher.hash(off)
       }
+  }
+
+  implicit object columnName extends Hashable[ColumnName] {
+    override def hash(hasher: Hasher, value: ColumnName) = hasher.hash(value.name)
+    override def isString = true
+  }
+
+  implicit object debug extends Hashable[Debug] {
+    private implicit val sqlFormat = new Hashable[Debug.Sql.Format] {
+      override def hash(hasher: Hasher, value: Debug.Sql.Format) = {
+        value match {
+          case Debug.Sql.Format.Compact => hasher.hash(0)
+          case Debug.Sql.Format.Pretty => hasher.hash(1)
+        }
+      }
+    }
+
+    private implicit val explain = new Hashable[Debug.Explain] {
+      private implicit val explainFormat = new Hashable[Debug.Explain.Format] {
+        override def hash(hasher: Hasher, value: Debug.Explain.Format) = {
+          value match {
+            case Debug.Explain.Format.Text => hasher.hash(0)
+            case Debug.Explain.Format.Json => hasher.hash(1)
+          }
+        }
+      }
+
+      override def hash(hasher: Hasher, value: Debug.Explain) = {
+        val Debug.Explain(analyze, format) = value
+        hasher.hash(analyze)
+        hasher.hash(format)
+      }
+    }
+
+    override def hash(hasher: Hasher, value: Debug) = {
+      val Debug(sql, explainSpec, inhibitRun) = value
+      hasher.hash(sql)
+      hasher.hash(explainSpec)
+      hasher.hash(inhibitRun)
+    }
   }
 }
