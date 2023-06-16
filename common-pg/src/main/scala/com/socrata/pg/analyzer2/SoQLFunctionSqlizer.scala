@@ -4,7 +4,7 @@ import com.socrata.prettyprint.prelude._
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.types._
 import com.socrata.soql.functions.SoQLFunctions._
-import com.socrata.soql.functions.{Function, SoQLTypeInfo}
+import com.socrata.soql.functions.{Function, MonomorphicFunction, SoQLTypeInfo}
 
 class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; type ColumnValue = SoQLValue })] extends FuncallSqlizer[MT] {
   import SoQLTypeInfo.hasType
@@ -152,14 +152,17 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     }
   }
 
-  def sqlizeEpochSeconds = ofs { (f, args, ctx) =>
-    assert(args.length == 1)
-    val sql =
-      Seq(
-        Seq(d"epoch from" +#+ args(0).compressed.sql.parenthesized).funcall(d"extract") +#+ d":: numeric",
-        d"3"
-      ).funcall(d"round")
-    ExprSql(sql, f)
+  def sqlizeExtractTimestampField(field: String) = {
+    val fieldDoc = Doc(field)
+    ofs { (f, args, ctx) =>
+      assert(args.length == 1)
+      val sql =
+        Seq(
+          Seq(fieldDoc +#+ d"from" +#+ args(0).compressed.sql.parenthesized).funcall(d"extract") +#+ d":: numeric",
+          d"3"
+        ).funcall(d"round")
+      ExprSql(sql, f)
+    }
   }
 
   def sqlizeTimestampDiffD = ofs { (f, args, ctx) =>
@@ -178,65 +181,56 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     ExprSql(sql, f)
   }
 
+  def pointSqlFromLocationSql(sql: ExprSql): Doc = {
+    assert(sql.typ == SoQLLocation)
+    sql match {
+      case expanded: ExprSql.Expanded[MT] =>
+        expanded.sqls.head
+      case compressed: ExprSql.Compressed[MT] =>
+        Seq(compressed.sql +#+ d"-> 0").funcall(d"st_geomfromgeojson")
+    }
+  }
+
   def sqlizeLocationPoint = ofs { (f, args, ctx) =>
     assert(args.length == 1)
     assert(args(0).typ == SoQLLocation)
 
-    val pointSubcolumnSql =
-      args(0) match {
-        case expanded: ExprSql.Expanded[MT] =>
-          expanded.sqls.head
-        case compressed: ExprSql.Compressed[MT] =>
-          Seq(compressed.sql +#+ d"-> 0").funcall(d"st_geomfromgeojson")
-      }
+    val pointSubcolumnSql = pointSqlFromLocationSql(args(0))
 
     ExprSql(pointSubcolumnSql, f)
   }
 
-  def sqlizeLocationPointSubcol(accessor: String) = {
-    val accFunc = Doc(accessor)
+  // Like "sqlNormalOrdinaryFunction" but it extracts the point
+  // subcolumn from any locations passed in.
+  def sqlizeLocationPointOrdinaryFunction(sqlFunctionName: String, prefixArgs: Seq[Doc] = Nil, suffixArgs: Seq[Doc] = Nil) = {
+    val funcName = Doc(sqlFunctionName)
     ofs { (f, args, ctx) =>
-      assert(args.length == 1)
-      assert(args(0).typ == SoQLLocation)
+      assert(args.length >= f.function.minArity)
+      assert(f.function.allParameters.startsWith(args.map(_.typ)))
 
-      val pointSubcolumnSql =
-        args(0) match {
-          case expanded: ExprSql.Expanded[MT] =>
-            expanded.sqls.head
-          case compressed: ExprSql.Compressed[MT] =>
-            Seq(compressed.sql +#+ d"-> 0").funcall(d"st_geomfromgeojson")
+      val pointExtractedArgs = args.map { e =>
+        e.typ match {
+          case SoQLLocation => pointSqlFromLocationSql(e)
+          case _ => e.compressed.sql
         }
+      }
+      val sql = (prefixArgs ++ pointExtractedArgs ++ suffixArgs).funcall(funcName)
 
-      ExprSql(Seq(pointSubcolumnSql).funcall(accFunc) +#+ d":: numeric", f)
+      ExprSql(sql.group, f)
     }
   }
 
-  def sqlizeLocationHumanAddress = ofs { (f, args, ctx) =>
-    assert(args.length == 1)
-    assert(args(0).typ == SoQLLocation)
+  def textSqlAsJson(textColOrSubcolSql: Doc): Doc = {
+    val jsonifiedSubcol = Seq(textColOrSubcolSql).funcall(d"to_jsonb") +#+ d":: text"
+    Seq(jsonifiedSubcol, d"'null'").funcall(d"coalesce")
+  }
 
-    def asJson(rawTextSubcol: Doc) = {
-      val jsonifiedSubcol = Seq(rawTextSubcol).funcall(d"to_jsonb") +#+ d":: text"
-      Seq(jsonifiedSubcol, d"'null'").funcall(d"coalesce")
-    }
+  def textSqlsAsHumanAddressSql(textSqls: Seq[Doc]): Doc = {
+    val Seq(addr, city, state, zip) = textSqls.map(textSqlAsJson)
 
-    val Seq(addr, city, state, zip) = (args(0) match {
-      case expanded: ExprSql.Expanded[MT] =>
-        expanded.sqls.drop(1)
-      case compressed: ExprSql.Compressed[MT] =>
-        (1 to 4).map { i => compressed.sql +#+ d"->>" +#+ Doc(i) }
-    }).map(asJson)
-
-    // Ugh ok.  So this is pretending that the "human address" subcol
-    // is a single thing and more specifically that if all the
-    // phyiscal subcolumns that make it up are null, then the whole
-    // homan address is null.
-    val nullCheck = (args(0) match {
-      case expanded: ExprSql.Expanded[MT] =>
-        expanded.sqls.drop(1)
-      case compressed: ExprSql.Compressed[MT] =>
-        (1 to 4).map { i => compressed.sql.parenthesized +#+ d"->>" +#+ Doc(i) }
-    }).
+    // Ugh ok.  If all the physical (sub)columns that make up this
+    // "human address" are null, then the whole human address is null.
+    val nullCheck = textSqls.
       map { s => (s.parenthesized +#+ d"is null").parenthesized }.
       reduceLeft { (l, r) => l +#+ d"and" +#+ r }.
       group
@@ -250,7 +244,29 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
 
     val doc = (d"CASE" ++ Doc.lineSep ++ clauses.vsep).nest(2) ++ Doc.lineSep ++ d"END"
 
-    ExprSql(doc.group, f)
+    doc.group
+  }
+
+  def sqlizeLocationHumanAddress = ofs { (f, args, ctx) =>
+    assert(args.length == 1)
+    assert(args(0).typ == SoQLLocation)
+    assert(f.typ == SoQLText)
+
+    val sqls = args(0) match {
+      case expanded: ExprSql.Expanded[MT] =>
+        expanded.sqls.drop(1)
+      case compressed: ExprSql.Compressed[MT] =>
+        (1 to 4).map { i => compressed.sql +#+ d"->>" +#+ Doc(i) }
+    }
+
+    ExprSql(textSqlsAsHumanAddressSql(sqls), f)
+  }
+
+  def sqlizeHumanAddress = ofs { (f, args, ctx) =>
+    assert(args.length == 4)
+    assert(args.forall(_.typ == SoQLText))
+    assert(f.typ == SoQLText)
+    ExprSql(textSqlsAsHumanAddressSql(args.map(_.compressed.sql)), f)
   }
 
   def sqlizeLocation = ofs { (f, args, ctx) =>
@@ -263,6 +279,27 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     // We're given the five subcolumns that make up a fake-location,
     // so just pass them on through.
     ExprSql(args.map(_.compressed.sql), f)(ctx.repFor, ctx.gensymProvider)
+  }
+
+  def sqlizeUrl = ofs { (f, args, ctx) =>
+    assert(f.typ == SoQLUrl)
+    assert(args.length == 2)
+    assert(args(0).typ == SoQLText)
+    assert(args.forall(_.typ == SoQLText))
+    // We're given both the subcolumns that make up a url, so just
+    // pass them on through.
+    ExprSql(args.map(_.compressed.sql), f)(ctx.repFor, ctx.gensymProvider)
+  }
+
+  def sqlizeChr = ofs { (f, args, ctx) =>
+    assert(f.typ == SoQLText)
+    assert(args.length == 1)
+    assert(args(0).typ == SoQLNumber)
+
+    ExprSql(
+      Seq(args(0).compressed.sql +#+ d":: int").funcall(d"chr"),
+      f
+    )
   }
 
   // Given an ordinary function sqlizer, returns a new ordinary
@@ -284,6 +321,9 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       IsNull -> sqlizeIsNull,
       IsNotNull -> sqlizeIsNotNull,
       Not -> sqlizeUnaryOp("NOT"),
+
+      Between -> sqlizeTrinaryOp("between", "and"),
+      NotBetween -> sqlizeTrinaryOp("not between", "and"),
 
       In -> sqlizeInlike("IN"),
       CaselessOneOf -> uncased(sqlizeInlike("IN")),
@@ -320,6 +360,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       CaselessContains -> uncased(sqlizeContains),
       LeftPad -> sqlizePad("lpad"),
       RightPad -> sqlizePad("rpad"),
+      Chr -> sqlizeChr,
 
       UnaryPlus -> sqlizeUnaryOp("+"),
       UnaryMinus -> sqlizeUnaryOp("-"),
@@ -349,8 +390,23 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       FloatingTimeStampTruncYmd -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'day'")),
       FloatingTimeStampTruncYm -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'month'")),
       FloatingTimeStampTruncY -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'year'")),
-      EpochSeconds -> sqlizeEpochSeconds,
+      FixedTimeStampZTruncYmd -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'day'")),
+      FixedTimeStampZTruncYm -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'month'")),
+      FixedTimeStampZTruncY -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'year'")),
+      FloatingTimeStampExtractY -> sqlizeExtractTimestampField("year"),
+      FloatingTimeStampExtractM -> sqlizeExtractTimestampField("month"),
+      FloatingTimeStampExtractD -> sqlizeExtractTimestampField("day"),
+      FloatingTimeStampExtractHh -> sqlizeExtractTimestampField("hour"),
+      FloatingTimeStampExtractMm -> sqlizeExtractTimestampField("minute"),
+      FloatingTimeStampExtractSs -> sqlizeExtractTimestampField("second"),
+      FloatingTimeStampExtractDow -> sqlizeExtractTimestampField("dow"),
+      FloatingTimeStampExtractWoy -> sqlizeExtractTimestampField("week"),
+      FloatingTimestampExtractIsoY -> sqlizeExtractTimestampField("isoyear"),
+      EpochSeconds -> sqlizeExtractTimestampField("epoch"),
       TimeStampDiffD -> sqlizeTimestampDiffD,
+      TimeStampAdd -> sqlizeBinaryOp("+"),  // These two are exactly
+      TimeStampPlus -> sqlizeBinaryOp("+"), // the same function??
+      TimeStampMinus -> sqlizeBinaryOp("-"),
 
       // Geo-casts
       TextToPoint -> sqlizeGeomCast("st_pointfromtext"),
@@ -383,20 +439,24 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       // so.
       ReducePolyPrecision -> sqlizeNormalOrdinaryWithWrapper("st_reduceprecision", "st_multi"),
       Intersection -> sqlizeMultiBuffered("st_intersection"),
+      WithinPolygon -> sqlizeNormalOrdinaryFuncall("st_within"),
 
       ConcaveHull -> sqlizeMultiBuffered("st_concavehull"),
       ConvexHull -> sqlizeMultiBuffered("st_convexhull"),
 
       // Fake location
-      LocationToLatitude -> sqlizeLocationPointSubcol("st_y"),
-      LocationToLongitude -> sqlizeLocationPointSubcol("st_x"),
+      LocationToLatitude -> numericize(sqlizeLocationPointOrdinaryFunction("st_y")),
+      LocationToLongitude -> numericize(sqlizeLocationPointOrdinaryFunction("st_x")),
       LocationToAddress -> sqlizeLocationHumanAddress,
       LocationToPoint -> sqlizeLocationPoint,
       Location -> sqlizeLocation,
+      HumanAddress -> sqlizeHumanAddress,
+      LocationWithinPolygon -> sqlizeLocationPointOrdinaryFunction("st_within"),
 
       // URL
       UrlToUrl -> sqlizeSubcol(SoQLUrl, "url"),
       UrlToDescription -> sqlizeSubcol(SoQLUrl, "description"),
+      Url -> sqlizeUrl,
 
       // json
       JsonProp -> sqlizeBinaryOp("->"),

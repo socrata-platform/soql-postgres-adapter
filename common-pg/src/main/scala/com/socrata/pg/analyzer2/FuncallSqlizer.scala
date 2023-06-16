@@ -71,14 +71,32 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     ExprSql(Doc(operator) ++ cmp.sql.parenthesized, e)
   }
 
-  protected def sqlizeBinaryOp(operator: String) = ofs { (e, args, ctx) =>
-    assert(args.length == 2)
-    assert(args.map(_.typ) == e.function.allParameters)
+  protected def sqlizeBinaryOp(operator: String) = {
+    val op = Doc(operator)
+    ofs { (e, args, ctx) =>
+      assert(args.length == 2)
+      assert(args.map(_.typ) == e.function.allParameters)
 
-    val lhs = args(0).compressed.sql
-    val rhs = args(1).compressed.sql
+      val lhs = args(0).compressed.sql.parenthesized
+      val rhs = args(1).compressed.sql.parenthesized
 
-    ExprSql(lhs.parenthesized +#+ Doc(operator) +#+ rhs.parenthesized, e)
+      ExprSql(lhs +#+ op +#+ rhs, e)
+    }
+  }
+
+  protected def sqlizeTrinaryOp(oper1: String, oper2: String) = {
+    val op1 = Doc(oper1)
+    val op2 = Doc(oper2)
+    ofs { (e, args, ctx) =>
+      assert(args.length == 3)
+      assert(args.map(_.typ) == e.function.allParameters)
+
+      val arg0 = args(0).compressed.sql.parenthesized
+      val arg1 = args(1).compressed.sql.parenthesized
+      val arg2 = args(2).compressed.sql.parenthesized
+
+      ExprSql(arg0 +#+ op1 +#+ arg1 +#+ op2 +#+ arg2, e)
+    }
   }
 
   protected def sqlizeCast(toType: String) = ofs { (e, args, ctx) =>
