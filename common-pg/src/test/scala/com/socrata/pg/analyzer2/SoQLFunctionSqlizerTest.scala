@@ -182,6 +182,14 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
     analyze("get_context(text)") must equal ("""current_setting('socrata_system.a' || md5(x1.text), true)""")
   }
 
+  test("url(x, y).url == x") {
+    analyze("url('x','y').url") must equal ("""text "x"""")
+  }
+
+  test("url(x, y).description == y") {
+    analyze("url('x','y').description") must equal ("""text "y"""")
+  }
+
   test("Functions are correctly classified") {
     // The "contains" check is because of the TsVector fake functions
     // that search gets rewritten into
