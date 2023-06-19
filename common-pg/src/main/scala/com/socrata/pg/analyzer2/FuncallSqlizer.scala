@@ -342,6 +342,15 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
 
   // Window functions
 
+  protected def sqlizeCountStarWindowed(e: WindowedFunctionCall, args: Seq[ExprSql], filter: Option[ExprSql], partitionBy: Seq[ExprSql], orderBy: Seq[OrderBySql], ctx: DynamicContext) = {
+    assert(args.length >= e.function.minArity)
+    assert(e.function.allParameters.startsWith(args.map(_.typ)))
+
+    val sql = d"count(*)" ++ sqlizeFilter(filter) ++ sqlizeWindow(partitionBy, orderBy, e.frame)
+
+    ExprSql(sql, e)
+  }
+
   protected def sqlizeFrameContext(context: FrameContext) =
     context match {
       case FrameContext.Range => d"RANGE"
@@ -405,14 +414,29 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     }
   }
 
-  protected def sqlizeNormalWindowedFuncall(sqlFunctionName: String) = { (e: WindowedFunctionCall, args: Seq[ExprSql], filter: Option[ExprSql], partitionBy: Seq[ExprSql], orderBy: Seq[OrderBySql], ctx: DynamicContext) =>
-    assert(args.length >= e.function.minArity)
-    assert(e.function.allParameters.startsWith(args.map(_.typ)))
+  protected def sqlizeNormalWindowedFuncall(sqlFunctionName: String, jsonbWorkaround: Boolean = false) = {
+    val jsonbVariant = "jsonb_" + sqlFunctionName
+    wfs { (e, args, filter, partitionBy, orderBy, ctx) =>
+      assert(args.length >= e.function.minArity)
+      assert(e.function.allParameters.startsWith(args.map(_.typ)))
 
-    val sql = args.map(_.compressed.sql).funcall(Doc(sqlFunctionName)) ++
-      sqlizeFilter(filter) ++
-      sqlizeWindow(partitionBy, orderBy, e.frame)
+      val effectiveSqlFunctionName =
+        if(jsonbWorkaround) {
+          assert(args.length == 1)
+          if(ctx.repFor(args(0).typ).expandedColumnCount > 1) {
+            jsonbVariant
+          } else {
+            sqlFunctionName
+          }
+        } else {
+          sqlFunctionName
+        }
 
-    ExprSql(sql.group, e)
+      val sql = args.map(_.compressed.sql).funcall(Doc(effectiveSqlFunctionName)) ++
+        sqlizeFilter(filter) ++
+        sqlizeWindow(partitionBy, orderBy, e.frame)
+
+      ExprSql(sql.group, e)
+    }
   }
 }

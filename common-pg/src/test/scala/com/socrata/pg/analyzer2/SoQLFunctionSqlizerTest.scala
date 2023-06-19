@@ -204,8 +204,8 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
     }
 
     for(f <- sqlizer.funcallSqlizer.windowedFunctionMap.keysIterator) {
-      SoQLFunctions.functionsByIdentity(f).isAggregate must be (false)
-      SoQLFunctions.functionsByIdentity(f).needsWindow must be (true)
+      val function = SoQLFunctions.functionsByIdentity(f)
+      (function.isAggregate || function.needsWindow) must be (true)
     }
   }
 
@@ -213,6 +213,14 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
     for(f <- SoQLFunctions.allFunctions) {
       if(!(sqlizer.funcallSqlizer.ordinaryFunctionMap.contains(f.identity) || sqlizer.funcallSqlizer.aggregateFunctionMap.contains(f.identity) || sqlizer.funcallSqlizer.windowedFunctionMap.contains(f.identity))) {
         println("Not implemented: " + f.identity)
+      }
+    }
+  }
+
+  test("All aggregate functions are also window functions") {
+    for(f <- SoQLFunctions.allFunctions if f.isAggregate) {
+      if(!sqlizer.funcallSqlizer.windowedFunctionMap.contains(f.identity)) {
+        println("Not implemented in windowed form: " + f.identity)
       }
     }
   }
