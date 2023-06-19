@@ -1,5 +1,7 @@
 package com.socrata.pg.analyzer2
 
+import org.joda.time.DateTime
+
 import com.socrata.soql.analyzer2._
 import com.socrata.prettyprint.prelude._
 
@@ -8,12 +10,16 @@ object FuncallSqlizer {
     repFor: Rep.Provider[MT],
     systemContext: Map[String, String],
     gensymProvider: GensymProvider,
-    provTracker: ProvenanceTracker[MT]
+    provTracker: ProvenanceTracker[MT],
+    now: DateTime
   ) {
     // This is kinda icky, but it lets us only set system context
     // settings if absolutely necessary, which in practice it should
     // never be.
     var nonliteralSystemContextLookupFound = false
+    // This is also kinda icky, but it lets us only mix the current
+    // timestamp into etag-generation when necessary.
+    var nowUsed = false
   }
 }
 

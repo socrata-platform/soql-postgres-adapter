@@ -7,6 +7,7 @@ import java.nio.ByteBuffer
 import com.rojoma.json.v3.ast.JString
 import com.rojoma.json.v3.util.JsonUtil
 import com.rojoma.json.v3.util.OrJNull.implicits._
+import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
 import com.socrata.datacoordinator.id.{DatasetInternalName, UserColumnId}
@@ -54,7 +55,8 @@ object ETagify extends SqlizerUniverse[InputMetaTypes] {
     systemContext: Map[String, String],
     fakeCompoundMap: Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]],
     passes: Seq[Seq[rewrite.Pass]],
-    debug: Option[Debug]
+    debug: Option[Debug],
+    now: Option[DateTime]
   ): EntityTag = {
     val hasher = Hasher.newSha256()
 
@@ -78,6 +80,9 @@ object ETagify extends SqlizerUniverse[InputMetaTypes] {
 
     log.debug("Mixing in debug: {}", debug)
     hasher.hash(debug)
+
+    log.debug("Mixing in now: {}", now)
+    hasher.hash(now.map(_.getMillis))
 
     // Should this be strong or weak?  I'm choosing weak here because
     // I don't think we actually guarantee two calls will be

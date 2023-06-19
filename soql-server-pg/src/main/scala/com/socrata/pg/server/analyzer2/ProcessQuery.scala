@@ -110,7 +110,7 @@ object ProcessQuery {
       else physicalTableMap(nameAnalysis)
 
     val sqlizer = new ActualSqlizer(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, rewriteSubcolumns(request.locationSubcolumns, copyCache), physicalTableFor)
-    val Sqlizer.Result(sql, extractor, nonliteralSystemContextLookupFound) = sqlizer(nameAnalysis.statement, OrderedMap.empty)
+    val Sqlizer.Result(sql, extractor, nonliteralSystemContextLookupFound, now) = sqlizer(nameAnalysis.statement, OrderedMap.empty)
     log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
     val laidOutSql = sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded))
     val renderedSql = laidOutSql.toString
@@ -123,7 +123,8 @@ object ProcessQuery {
       systemContext,
       request.locationSubcolumns,
       passes,
-      request.debug
+      request.debug,
+      now
     )
 
     // "last modified" is problematic because it doesn't include

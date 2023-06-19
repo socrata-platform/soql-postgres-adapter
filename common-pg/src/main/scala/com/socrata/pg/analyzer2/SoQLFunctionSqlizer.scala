@@ -302,6 +302,16 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     )
   }
 
+  def sqlizeGetUtcDate = ofs { (f, args, ctx) =>
+    assert(f.typ == SoQLFixedTimestamp)
+    assert(args.length == 0)
+
+    ctx.nowUsed = true
+    ctx.repFor(f.typ).
+      literal(LiteralValue[MT](SoQLFixedTimestamp(ctx.now))(AtomicPositionInfo.None))(ctx.gensymProvider).
+      withExpr(f)
+  }
+
   // Given an ordinary function sqlizer, returns a new ordinary
   // function sqlizer that upcases all of its text arguments
   def uncased(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
@@ -407,6 +417,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       TimeStampAdd -> sqlizeBinaryOp("+"),  // These two are exactly
       TimeStampPlus -> sqlizeBinaryOp("+"), // the same function??
       TimeStampMinus -> sqlizeBinaryOp("-"),
+      GetUtcDate -> sqlizeGetUtcDate,
 
       // Geo-casts
       TextToPoint -> sqlizeGeomCast("st_pointfromtext"),

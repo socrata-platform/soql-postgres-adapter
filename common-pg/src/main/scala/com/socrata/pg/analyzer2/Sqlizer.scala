@@ -4,6 +4,8 @@ import scala.collection.mutable.Stack
 import scala.util.parsing.input.{Position, NoPosition}
 import scala.reflect.ClassTag
 
+import org.joda.time.{DateTime, DateTimeZone}
+
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.pg.analyzer2.iterutil._
@@ -89,17 +91,20 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
 
   def apply(stmt: Statement, availableSchemas: AvailableSchemas)(implicit ct: ClassTag[CV]): Sqlizer.Result[MT] = {
     val rewritten = rewriteSearch(stmt)
+    val now = DateTime.now(DateTimeZone.UTC).withMillisOfSecond(0)
     val dynamicContext = FuncallSqlizer.DynamicContext[MT](
       repFor,
       systemContext,
       namespace,
-      ProvenanceTracker(rewritten, e => repFor(e.typ).provenanceOf(e))
+      ProvenanceTracker(rewritten, e => repFor(e.typ).provenanceOf(e)),
+      now
     )
     val (sql, augmentedSchema) = sqlizeStatement(rewritten, availableSchemas, dynamicContext, true)
     Sqlizer.Result(
       sql,
       new ResultExtractor(augmentedSchema, repFor),
-      dynamicContext.nonliteralSystemContextLookupFound
+      dynamicContext.nonliteralSystemContextLookupFound,
+      if(dynamicContext.nowUsed) Some(now) else None
     )
   }
 
@@ -606,6 +611,7 @@ object Sqlizer {
   case class Result[MT <: MetaTypes](
     sql: Doc[SqlizeAnnotation[MT]],
     resultExtractor: ResultExtractor[MT],
-    nonliteralSystemContextLookupFound: Boolean
+    nonliteralSystemContextLookupFound: Boolean,
+    nowUsed: Option[DateTime]
   )
 }
