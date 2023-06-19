@@ -505,6 +505,20 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     sqlizeNormalAggregateFuncall("count")(e.copy(distinct = true)(e.position), args, filter, ctx)
   }
 
+  def sqlizeMedianAgg(aggFunc: String, percentileFunc: String) = {
+    val aggFuncSqlizer = sqlizeNormalAggregateFuncall(aggFunc)
+    val percentileFuncName = Doc(percentileFunc)
+    afs { (f, args, filter, ctx) =>
+      if(f.distinct) {
+        aggFuncSqlizer(f, args, filter, ctx)
+      } else { // this is faster but there's no way to specify "distinct" with it
+        val baseSql =
+          (percentileFuncName ++ d"(.50) within group (" ++ Doc.lineCat ++ d"order by" +#+ args(0).compressed.sql).nest(2) ++ Doc.lineCat ++ d")"
+        ExprSql(baseSql ++ sqlizeFilter(filter), f)
+      }
+    }
+  }
+
   val aggregateFunctionMap = (
     Seq[(Function[CT], AggregateFunctionSqlizer)](
       Max -> sqlizeNormalAggregateFuncall("max", jsonbWorkaround = true),
@@ -514,10 +528,10 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       CountDistinct -> numericize(sqlizeCountDistinct _),
       Sum -> sqlizeNormalAggregateFuncall("sum"),
       Avg -> sqlizeNormalAggregateFuncall("avg"),
-      // Median
-      // Median_disc
-      // RegrIntercept
-      // RegrSlope
+      Median -> sqlizeMedianAgg("median_ulib_agg", "percentile_cont"),
+      MedianDisc -> sqlizeMedianAgg("median_disc_ulib_agg", "percentile_disc"),
+      RegrIntercept -> sqlizeNormalAggregateFuncall("regr_intercept"),
+      RegrSlope -> sqlizeNormalAggregateFuncall("regr_slope"),
       StddevPop -> sqlizeNormalAggregateFuncall("stddev_pop"),
       StddevSamp -> sqlizeNormalAggregateFuncall("stddev_samp"),
 
