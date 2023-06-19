@@ -12,14 +12,20 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
   def wrap(e: Expr, exprSql: ExprSql, wrapper: String, additionalWrapperArgs: Doc*) =
     ExprSql((exprSql.compressed.sql +: additionalWrapperArgs).funcall(Doc(wrapper)), e)
 
+  def numericize(sqlizer: OrdinaryFunctionSqlizer) = ofs { (f, args, ctx) =>
+    val e = sqlizer(f, args, ctx)
+    assert(e.typ == SoQLNumber)
+    ExprSql(e.compressed.sql +#+ d":: numeric", f)
+  }
+
   def numericize(sqlizer: AggregateFunctionSqlizer) = afs { (f, args, filter, ctx) =>
     val e = sqlizer(f, args, filter, ctx)
     assert(e.typ == SoQLNumber)
     ExprSql(e.compressed.sql +#+ d":: numeric", f)
   }
 
-  def numericize(sqlizer: OrdinaryFunctionSqlizer) = ofs { (f, args, ctx) =>
-    val e = sqlizer(f, args, ctx)
+  def numericize(sqlizer: WindowedFunctionSqlizer) = wfs { (f, args, filter, partitionBy, orderBy, ctx) =>
+    val e = sqlizer(f, args, filter, partitionBy, orderBy, ctx)
     assert(e.typ == SoQLNumber)
     ExprSql(e.compressed.sql +#+ d":: numeric", f)
   }
@@ -31,6 +37,11 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
 
   def sqlizeNormalAggregateWithWrapper(name: String, wrapper: String) = afs { (f, args, filter, ctx) =>
     val exprSql = sqlizeNormalAggregateFuncall(name)(f, args, filter, ctx)
+    wrap(f, exprSql, wrapper)
+  }
+
+  def sqlizeNormalWindowedWithWrapper(name: String, wrapper: String) = wfs { (f, args, filter, partitionBy, orderBy, ctx) =>
+    val exprSql = sqlizeNormalWindowedFuncall(name)(f, args, filter, partitionBy, orderBy, ctx)
     wrap(f, exprSql, wrapper)
   }
 
@@ -590,7 +601,27 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Lag -> sqlizeLeadLag("lag"),
       LagOffset -> sqlizeLeadLag("lag"),
       LagOffsetDefault -> sqlizeLeadLag("lag"),
-      Ntile -> sqlizeLeadLag("ntile")
+      Ntile -> sqlizeLeadLag("ntile"),
+
+      // aggregate functions, used in a windowed way
+      Max -> sqlizeNormalWindowedFuncall("max", jsonbWorkaround = true),
+      Min -> sqlizeNormalWindowedFuncall("min", jsonbWorkaround = true),
+      CountStar -> numericize(sqlizeCountStarWindowed _),
+      Count -> numericize(sqlizeNormalWindowedFuncall("count")),
+      // count distinct is not an aggregatable function
+      Sum -> sqlizeNormalWindowedFuncall("sum"),
+      Avg -> sqlizeNormalWindowedFuncall("avg"),
+      Median -> sqlizeNormalWindowedFuncall("median_ulib_agg"),          // have to use the custom aggregate function
+      MedianDisc -> sqlizeNormalWindowedFuncall("median_disc_ulib_agg"), // when in a windowed context
+      RegrIntercept -> sqlizeNormalWindowedFuncall("regr_intercept"),
+      RegrSlope -> sqlizeNormalWindowedFuncall("regr_slope"),
+      StddevPop -> sqlizeNormalWindowedFuncall("stddev_pop"),
+      StddevSamp -> sqlizeNormalWindowedFuncall("stddev_samp"),
+
+      UnionAggPt -> sqlizeNormalWindowedWithWrapper("st_union", "st_multi"),
+      UnionAggLine -> sqlizeNormalWindowedWithWrapper("st_union", "st_multi"),
+      UnionAggPoly -> sqlizeNormalWindowedWithWrapper("st_union", "st_multi"),
+      Extent -> sqlizeNormalWindowedWithWrapper("st_extent", "st_multi")
     )
   ).map { case (f, sqlizer) =>
     f.identity -> sqlizer
@@ -625,8 +656,9 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     orderBy: Seq[OrderBySql],
     ctx: DynamicContext
   ): ExprSql = {
-    assert(!e.function.isAggregate)
-    assert(e.function.needsWindow)
+    // either the function is a window function or it's an aggregate
+    // function being used in a windowed way.
+    assert(e.function.needsWindow || e.function.isAggregate)
     windowedFunctionMap(e.function.function.identity)(e, args, filter, partitionBy, orderBy, ctx)
   }
 }
