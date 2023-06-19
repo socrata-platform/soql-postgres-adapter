@@ -302,6 +302,19 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     )
   }
 
+  def sqlizeRound = ofs { (f, args, ctx) =>
+    assert(args.length == 2)
+    assert(args.forall(_.typ == SoQLNumber))
+    assert(f.typ == SoQLNumber)
+
+    val sql = Seq(
+      args(0).compressed.sql,
+      Seq(args(1).compressed.sql.parenthesized +#+ d"as int").funcall(d"cast")
+    ).funcall(d"round")
+
+    ExprSql(sql, f)
+  }
+
   def sqlizeGetUtcDate = ofs { (f, args, ctx) =>
     assert(f.typ == SoQLFixedTimestamp)
     assert(args.length == 0)
@@ -394,6 +407,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Absolute -> sqlizeNormalOrdinaryFuncall("abs"),
       Ceiling -> sqlizeNormalOrdinaryFuncall("ceil"),
       Floor -> sqlizeNormalOrdinaryFuncall("floor"),
+      Round -> sqlizeRound,
 
       // Timestamps
       ToFloatingTimestamp -> sqlizeBinaryOp("at time zone"),
