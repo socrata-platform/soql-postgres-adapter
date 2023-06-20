@@ -358,7 +358,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     // from st_isempty is a little weird and annoying.
     val sql = args(0).expr match {
       case _ : LiteralValue | _ : Column =>
-        // this way we _might_ be able to us an index
+        // this way we _might_ be able to use an index
         base +#+ d"or" +#+ args(0).compressed.sql.parenthesized +#+ d"is null"
       case _ =>
         // this keeps us from evaluating whatever the non-trivial expr
@@ -389,7 +389,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
   def preserveMulti(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
     ofs { (f, args, ctx) =>
       val exprSql = sqlizer(f, args, ctx)
-      if(args.exists { arg => arg.typ == SoQLMultiPolygon || arg.typ == SoQLMultiLine }) {
+      if(args.exists { arg => arg.typ == SoQLMultiPolygon || arg.typ == SoQLMultiLine || arg.typ == SoQLMultiPoint }) {
         ExprSql(Seq(exprSql.compressed.sql).funcall(d"st_multi"), f)
       } else {
         exprSql
