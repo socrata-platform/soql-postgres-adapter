@@ -433,6 +433,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Ceiling -> sqlizeNormalOrdinaryFuncall("ceil"),
       Floor -> sqlizeNormalOrdinaryFuncall("floor"),
       Round -> sqlizeRound,
+      WidthBucket -> numericize(sqlizeNormalOrdinaryFuncall("width_bucket")),
 
       // Timestamps
       ToFloatingTimestamp -> sqlizeBinaryOp("at time zone"),
