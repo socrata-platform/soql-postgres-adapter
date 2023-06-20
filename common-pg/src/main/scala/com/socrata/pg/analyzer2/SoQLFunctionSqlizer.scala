@@ -352,11 +352,19 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     assert(f.typ == SoQLBoolean)
     assert(args.length == 1)
 
-    // why the coalesce??? - this is how the other sqlizer does this, more or less.
-    val sql = Seq(
-      Seq(args(0).compressed.sql).funcall(d"st_isempty"),
-      d"true"
-    ).funcall(d"coalesce")
+    val base = Seq(args(0).compressed.sql).funcall(d"st_isempty")
+
+    // That our is_empty function has different null semantics
+    // from st_isempty is a little weird and annoying.
+    val sql = args(0).expr match {
+      case _ : LiteralValue | _ : Column =>
+        // this way we _might_ be able to us an index
+        base +#+ d"or" +#+ args(0).compressed.sql.parenthesized +#+ d"is null"
+      case _ =>
+        // this keeps us from evaluating whatever the non-trivial expr
+        // was more than once.
+        Seq(base, d"true").funcall(d"coalesce")
+    }
 
     ExprSql(sql, f)
   }
@@ -373,6 +381,19 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
         ExprSql(Seq(expr.compressed.sql).funcall(Doc("upper")).group, expr.expr)
       case _ =>
         expr
+    }
+
+  // if one of the args is a multi-geometry, wrap in st_multi (this is
+  // used when a function can _sometimes_ turn a multithing into a
+  // thing)
+  def preserveMulti(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
+    ofs { (f, args, ctx) =>
+      val exprSql = sqlizer(f, args, ctx)
+      if(args.exists { arg => arg.typ == SoQLMultiPolygon || arg.typ == SoQLMultiLine }) {
+        ExprSql(Seq(exprSql.compressed.sql).funcall(d"st_multi"), f)
+      } else {
+        exprSql
+      }
     }
 
   val ordinaryFunctionMap = (
@@ -505,6 +526,9 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Intersection -> sqlizeMultiBuffered("st_intersection"),
       WithinPolygon -> sqlizeNormalOrdinaryFuncall("st_within"),
       IsEmpty -> sqlizeIsEmpty,
+      Simplify -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplify")),
+      SimplifyPreserveTopology -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplifypreservetopology")),
+      SnapToGrid -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_snaptogrid")),
 
       ConcaveHull -> sqlizeMultiBuffered("st_concavehull"),
       ConvexHull -> sqlizeMultiBuffered("st_convexhull"),
