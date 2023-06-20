@@ -313,6 +313,18 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     )
   }
 
+  def sqlizeSubstr(n: Int) = ofs { (f, args, ctx) =>
+    assert(f.typ == SoQLText)
+    assert(args.length == 1 + n)
+    assert(args(0).typ == SoQLText)
+    assert(args.tail.forall(_.typ == SoQLNumber))
+
+    ExprSql(
+      (args(0).compressed.sql +: args.tail.map(_.compressed.sql +#+ d":: int")).funcall(d"substring"),
+      f
+    )
+  }
+
   def sqlizeRound = ofs { (f, args, ctx) =>
     assert(args.length == 2)
     assert(args.forall(_.typ == SoQLNumber))
@@ -395,6 +407,8 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       LeftPad -> sqlizePad("lpad"),
       RightPad -> sqlizePad("rpad"),
       Chr -> sqlizeChr,
+      Substr2 -> sqlizeSubstr(1),
+      Substr3 -> sqlizeSubstr(2),
 
       UnaryPlus -> sqlizeUnaryOp("+"),
       UnaryMinus -> sqlizeUnaryOp("-"),
