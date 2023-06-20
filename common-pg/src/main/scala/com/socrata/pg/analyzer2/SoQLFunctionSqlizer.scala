@@ -570,6 +570,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Median -> sqlizeMedianAgg("median_ulib_agg", "percentile_cont"),
       MedianDisc -> sqlizeMedianAgg("median_disc_ulib_agg", "percentile_disc"),
       RegrIntercept -> sqlizeNormalAggregateFuncall("regr_intercept"),
+      RegrR2 -> sqlizeNormalAggregateFuncall("regr_r2"),
       RegrSlope -> sqlizeNormalAggregateFuncall("regr_slope"),
       StddevPop -> sqlizeNormalAggregateFuncall("stddev_pop"),
       StddevSamp -> sqlizeNormalAggregateFuncall("stddev_samp"),
@@ -628,6 +629,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Median -> sqlizeNormalWindowedFuncall("median_ulib_agg"),          // have to use the custom aggregate function
       MedianDisc -> sqlizeNormalWindowedFuncall("median_disc_ulib_agg"), // when in a windowed context
       RegrIntercept -> sqlizeNormalWindowedFuncall("regr_intercept"),
+      RegrR2 -> sqlizeNormalWindowedFuncall("regr_r2"),
       RegrSlope -> sqlizeNormalWindowedFuncall("regr_slope"),
       StddevPop -> sqlizeNormalWindowedFuncall("stddev_pop"),
       StddevSamp -> sqlizeNormalWindowedFuncall("stddev_samp"),
