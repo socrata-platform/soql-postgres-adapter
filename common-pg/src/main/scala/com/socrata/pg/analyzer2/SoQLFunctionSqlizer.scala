@@ -348,6 +348,27 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       withExpr(f)
   }
 
+  def sqlizeIsEmpty = ofs { (f, args, ctx) =>
+    assert(f.typ == SoQLBoolean)
+    assert(args.length == 1)
+
+    val base = Seq(args(0).compressed.sql).funcall(d"st_isempty")
+
+    // That our is_empty function has different null semantics
+    // from st_isempty is a little weird and annoying.
+    val sql = args(0).expr match {
+      case _ : LiteralValue | _ : Column =>
+        // this way we _might_ be able to use an index
+        base +#+ d"or" +#+ args(0).compressed.sql.parenthesized +#+ d"is null"
+      case _ =>
+        // this keeps us from evaluating whatever the non-trivial expr
+        // was more than once.
+        Seq(base, d"true").funcall(d"coalesce")
+    }
+
+    ExprSql(sql, f)
+  }
+
   // Given an ordinary function sqlizer, returns a new ordinary
   // function sqlizer that upcases all of its text arguments
   def uncased(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
@@ -360,6 +381,19 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
         ExprSql(Seq(expr.compressed.sql).funcall(Doc("upper")).group, expr.expr)
       case _ =>
         expr
+    }
+
+  // if one of the args is a multi-geometry, wrap in st_multi (this is
+  // used when a function can _sometimes_ turn a multithing into a
+  // thing)
+  def preserveMulti(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
+    ofs { (f, args, ctx) =>
+      val exprSql = sqlizer(f, args, ctx)
+      if(args.exists { arg => arg.typ == SoQLMultiPolygon || arg.typ == SoQLMultiLine || arg.typ == SoQLMultiPoint }) {
+        ExprSql(Seq(exprSql.compressed.sql).funcall(d"st_multi"), f)
+      } else {
+        exprSql
+      }
     }
 
   val ordinaryFunctionMap = (
@@ -433,6 +467,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Ceiling -> sqlizeNormalOrdinaryFuncall("ceil"),
       Floor -> sqlizeNormalOrdinaryFuncall("floor"),
       Round -> sqlizeRound,
+      WidthBucket -> numericize(sqlizeNormalOrdinaryFuncall("width_bucket")),
 
       // Timestamps
       ToFloatingTimestamp -> sqlizeBinaryOp("at time zone"),
@@ -490,6 +525,10 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       ReducePolyPrecision -> sqlizeNormalOrdinaryWithWrapper("st_reduceprecision", "st_multi"),
       Intersection -> sqlizeMultiBuffered("st_intersection"),
       WithinPolygon -> sqlizeNormalOrdinaryFuncall("st_within"),
+      IsEmpty -> sqlizeIsEmpty,
+      Simplify -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplify")),
+      SimplifyPreserveTopology -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplifypreservetopology")),
+      SnapToGrid -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_snaptogrid")),
 
       ConcaveHull -> sqlizeMultiBuffered("st_concavehull"),
       ConvexHull -> sqlizeMultiBuffered("st_convexhull"),
@@ -570,6 +609,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Median -> sqlizeMedianAgg("median_ulib_agg", "percentile_cont"),
       MedianDisc -> sqlizeMedianAgg("median_disc_ulib_agg", "percentile_disc"),
       RegrIntercept -> sqlizeNormalAggregateFuncall("regr_intercept"),
+      RegrR2 -> sqlizeNormalAggregateFuncall("regr_r2"),
       RegrSlope -> sqlizeNormalAggregateFuncall("regr_slope"),
       StddevPop -> sqlizeNormalAggregateFuncall("stddev_pop"),
       StddevSamp -> sqlizeNormalAggregateFuncall("stddev_samp"),
@@ -628,6 +668,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Median -> sqlizeNormalWindowedFuncall("median_ulib_agg"),          // have to use the custom aggregate function
       MedianDisc -> sqlizeNormalWindowedFuncall("median_disc_ulib_agg"), // when in a windowed context
       RegrIntercept -> sqlizeNormalWindowedFuncall("regr_intercept"),
+      RegrR2 -> sqlizeNormalWindowedFuncall("regr_r2"),
       RegrSlope -> sqlizeNormalWindowedFuncall("regr_slope"),
       StddevPop -> sqlizeNormalWindowedFuncall("stddev_pop"),
       StddevSamp -> sqlizeNormalWindowedFuncall("stddev_samp"),
