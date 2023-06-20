@@ -348,6 +348,19 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       withExpr(f)
   }
 
+  def sqlizeIsEmpty = ofs { (f, args, ctx) =>
+    assert(f.typ == SoQLBoolean)
+    assert(args.length == 1)
+
+    // why the coalesce??? - this is how the other sqlizer does this, more or less.
+    val sql = Seq(
+      Seq(args(0).compressed.sql).funcall(d"st_isempty"),
+      d"true"
+    ).funcall(d"coalesce")
+
+    ExprSql(sql, f)
+  }
+
   // Given an ordinary function sqlizer, returns a new ordinary
   // function sqlizer that upcases all of its text arguments
   def uncased(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
@@ -491,6 +504,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       ReducePolyPrecision -> sqlizeNormalOrdinaryWithWrapper("st_reduceprecision", "st_multi"),
       Intersection -> sqlizeMultiBuffered("st_intersection"),
       WithinPolygon -> sqlizeNormalOrdinaryFuncall("st_within"),
+      IsEmpty -> sqlizeIsEmpty,
 
       ConcaveHull -> sqlizeMultiBuffered("st_concavehull"),
       ConvexHull -> sqlizeMultiBuffered("st_convexhull"),
