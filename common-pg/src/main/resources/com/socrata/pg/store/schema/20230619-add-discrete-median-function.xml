@@ -70,7 +70,7 @@
             -- * Choose the element at (or just above) the arithmetical "middle" of the array (i.e., the same
             --   way percentile_disc works) rather than averaging the two closest when there is no true middle
             --
-w            CREATE OR REPLACE FUNCTION _final_median_disc_ulib_agg(anycompatiblearray) RETURNS anycompatible AS $$
+            CREATE OR REPLACE FUNCTION _final_median_disc_ulib_agg(anycompatiblearray) RETURNS anycompatible AS $$
               WITH q AS
               (
                 SELECT val
