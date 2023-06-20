@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+    <changeSet author="Paul Maksimovich" id="20230620-citus-distribution-shim-create-table">
+        <sql>
+            create table citus_distribution_map
+            (
+              resource_name varchar(128) primary key,
+              column_name text not null
+            );
+        </sql>
+        <rollback>
+            <sql>
+                drop table citus_distribution_map;
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
