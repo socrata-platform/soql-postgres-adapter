@@ -74,6 +74,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     Length -> nary("length") _,
     SplitPart -> formatCall("split_part(%s, %s, %s::int)") _,
     Substring -> substring _,
+    Substr2 -> formatCall("substring(%s, %s::int)") _,
+    Substr3 -> formatCall("substring(%s, %s::int, %s::int)") _,
     Chr -> formatCall("chr(%s::int)") _,
     Replace -> nary("replace") _,
     TrimLeading -> nary("ltrim") _,
