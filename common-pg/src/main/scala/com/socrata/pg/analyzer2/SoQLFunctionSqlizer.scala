@@ -408,7 +408,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       RightPad -> sqlizePad("rpad"),
       Chr -> sqlizeChr,
       Substr2 -> sqlizeSubstr(1),
-      Substr2 -> sqlizeSubstr(2),
+      Substr3 -> sqlizeSubstr(2),
 
       UnaryPlus -> sqlizeUnaryOp("+"),
       UnaryMinus -> sqlizeUnaryOp("-"),
