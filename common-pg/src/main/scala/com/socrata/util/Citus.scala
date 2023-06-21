@@ -3,27 +3,46 @@ package com.socrata.util
 import com.rojoma.simplearm.v2.using
 import com.socrata.soql.environment.{ResourceName, TableName}
 import com.socrata.util.Citus.Constant.IS_CITUS
+import org.slf4j.Logger
 
-import java.sql.{Connection, ResultSet}
+import java.sql.{Connection, ResultSet, SQLException}
 
 object Citus {
 
-  private def distributeTable(conn: Connection, resourceName: ResourceName, tableName: TableName): String = {
-    "select create_distributed_table('%s', '%s');".format(tableName, getDistributionColumnOfDataset(conn, resourceName))
+  val log: Logger = org.slf4j.LoggerFactory.getLogger(Citus.getClass)
+
+  def shouldUseCitusDistribution: Boolean = {
+    sys.env.contains(IS_CITUS)
+  }
+
+  private def distributeTable(conn: Connection, resourceName: ResourceName, tableName: TableName): Option[String] = {
+    getDistributionColumnOfDataset(conn, resourceName).map { column =>
+      "select create_distributed_table('%s', '%s');".format(tableName, column)
+    }
   }
 
   private def getDistributionColumnOfDataset(conn: Connection, resourceName: ResourceName): Option[String] = {
     using(conn.prepareStatement("select column_name from citus_distribution_map where resource_name=?")) { stmt =>
       stmt.setString(1, resourceName.name)
-      extractCitusDistributionColumnName(stmt.executeQuery())
+      extractCitusDistributionColumnName(stmt.executeQuery()) match {
+        case Left(columnNameOptional) => columnNameOptional
+        case Right(e) => {
+          log.error("Error determining citus distribution key for dataset %s".format(resourceName.name),e)
+          None
+        }
+      }
     }
   }
 
-  private def extractCitusDistributionColumnName(rs: ResultSet): Option[String] = {
+  private def extractCitusDistributionColumnName(rs: ResultSet): Either[Option[String], SQLException] = {
     if (rs.next()) {
-      Some(rs.getString("column_name"))
+      try {
+        Left(Some(rs.getString("column_name")))
+      } catch {
+        case e: SQLException => Right(e)
+      }
     } else {
-      None
+      Left(None)
     }
   }
 
@@ -31,14 +50,10 @@ object Citus {
     val IS_CITUS = "IS_CITUS"
   }
 
-  def shouldUseCitusDistribution: Boolean = {
-    sys.env.contains(IS_CITUS)
-  }
-
   object MaybeDistribute {
     def sql(conn: Connection, resourceName: Option[String], tableName: String): Option[String] = {
       if (shouldUseCitusDistribution) {
-        resourceName.map { resource => Citus.distributeTable(conn, new ResourceName(resource), TableName(tableName)) }
+        resourceName.flatMap { resource => Citus.distributeTable(conn, new ResourceName(resource), TableName(tableName)) }
       } else {
         None
       }
