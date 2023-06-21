@@ -47,7 +47,7 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
       stmt.execute(
         "CREATE TABLE " + copyInfo.dataTableName + " ()" + tablespaceSqlPart(ts) + ";" +
           ChangeOwner.sql(conn, copyInfo.dataTableName) +
-          Citus.MaybeDistribute.sql(conn,copyInfo.datasetInfo.resourceName,copyInfo.dataTableName)
+          Citus.MaybeDistribute.sql(conn,copyInfo.datasetInfo.resourceName,copyInfo.dataTableName).getOrElse("")
       )
     }
     dsLogger.workingCopyCreated(copyInfo)
