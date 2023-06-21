@@ -1,4 +1,4 @@
-git package com.socrata.pg.store
+package com.socrata.pg.store
 
 import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.truth.loader.sql.{ChangeOwner, RepBasedPostgresSchemaLoader}
