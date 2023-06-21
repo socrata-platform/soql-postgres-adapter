@@ -22,9 +22,9 @@ object Citus {
         resourceNameOptional.flatMap { resourceName =>
           generate(conn, new ResourceName(resourceName), TableName(tableName)) match {
             case Left(x@Some(_)) => x
-            case Left(None) => log.info("No distribution key configured for %s", resourceName)
+            case Left(None) => log.info("No distribution key configured for dataset '%s'", resourceName)
               None
-            case Right(e) => log.error("Error while determining citus distribution key for dataset %s".format(resourceName), e)
+            case Right(e) => log.error("Error while determining citus distribution key for dataset '%s'".format(resourceName), e)
               None
           }
         }
