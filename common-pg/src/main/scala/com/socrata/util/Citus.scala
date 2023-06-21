@@ -18,15 +18,19 @@ object Citus {
   object MaybeDistribute {
 
     def sql(conn: Connection, resourceNameOptional: Option[String], tableName: String): Option[String] = {
+      resourceNameOptional.flatMap { resourceName =>
+        sql(conn, new ResourceName(resourceName), TableName(tableName))
+      }
+    }
+
+    def sql(conn: Connection, resourceName: ResourceName, tableName: TableName): Option[String] = {
       if (shouldUseCitusDistribution) {
-        resourceNameOptional.flatMap { resourceName =>
-          generate(conn, new ResourceName(resourceName), TableName(tableName)) match {
-            case Left(x@Some(_)) => x
-            case Left(None) => log.info("No distribution key configured for dataset '%s'", resourceName)
-              None
-            case Right(e) => log.error("Error while determining citus distribution key for dataset '%s'".format(resourceName), e)
-              None
-          }
+        generate(conn, resourceName, tableName) match {
+          case Left(x@Some(_)) => x
+          case Left(None) => log.info("No distribution key configured for dataset '%s'", resourceName)
+            None
+          case Right(e) => log.error("Error while determining citus distribution key for dataset '%s'".format(resourceName), e)
+            None
         }
       } else {
         None
