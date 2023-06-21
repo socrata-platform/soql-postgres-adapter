@@ -4,8 +4,9 @@ import com.socrata.datacoordinator.truth.metadata.{CopyInfo, DatasetInfo, Datase
 import com.socrata.datacoordinator.secondary.ResyncSecondaryException
 import com.socrata.pg.store.{RollupManager, PGSecondaryLogger, PGSecondaryUniverse}
 import com.socrata.soql.types.{SoQLType, SoQLValue}
+import com.socrata.pg.config.DbType
 
-case class CopyDroppedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) {
+case class CopyDroppedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo)(implicit val dbType: DbType) {
   val rm = new RollupManager(pgu, copyInfo)
   rm.dropRollups(immediate = false)
   pgu.datasetMapWriter.deleteRollupRelationships(copyInfo)
@@ -19,7 +20,7 @@ case class TruncateHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyIn
   pgu.truncator.truncate(copyInfo, pgu.logger(copyInfo.datasetInfo, "not-used"))
 }
 
-case class WorkingCopyDroppedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInfo: DatasetInfo) {
+case class WorkingCopyDroppedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInfo: DatasetInfo)(implicit val dbType: DbType) {
   pgu.datasetMapReader.unpublished(datasetInfo) match {
     case Some(copyInfo) =>
       CopyDroppedHandler(pgu, copyInfo)

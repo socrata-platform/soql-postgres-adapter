@@ -6,8 +6,9 @@ import com.socrata.pg.store.{RollupManager, PGSecondaryUniverse}
 import com.socrata.soql.types.{SoQLValue, SoQLType}
 import com.rojoma.simplearm.v2._
 import org.slf4j.LoggerFactory
+import com.socrata.pg.config.DbType
 
-class RowsChangedPreviewHandler(config: RowsChangedPreviewConfig) {
+class RowsChangedPreviewHandler(config: RowsChangedPreviewConfig)(implicit val dbType: DbType) {
   val log = LoggerFactory.getLogger(classOf[RowsChangedPreviewHandler])
 
   // A change is "sufficiently large" to swap out a copy if it is at least 100k rows and

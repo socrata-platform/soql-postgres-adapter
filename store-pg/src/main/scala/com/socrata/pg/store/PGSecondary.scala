@@ -41,6 +41,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
   logger.info(BuildInfo.toJson)
 
   val storeConfig = new StoreConfig(config, "")
+  implicit val dbType = storeConfig.dbType
   override val dsConfig =  storeConfig.database
 
   private val dsInfo = DataSourceFromConfig.unmanaged(dsConfig)

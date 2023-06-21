@@ -18,13 +18,14 @@ import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.datacoordinator.util.TimingReport
 import com.socrata.soql.environment.{ColumnName, ResourceName}
 import com.socrata.util.Citus
+import com.socrata.pg.config.DbType
 
 class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
                                     repFor: ColumnInfo[CT] => SqlColumnRep[CT, CV] with Indexable[CT],
                                     tablespace: String => Option[String],
                                     fullTextSearch: FullTextSearch[CT],
                                     sqlErrorHandler: SqlErrorHandler,
-                                    time: TimingReport) extends
+                                    time: TimingReport)(implicit val dbType: DbType) extends
   RepBasedPostgresSchemaLoader[CT, CV](conn, dsLogger, repFor, tablespace) {
 
   import SecondarySchemaLoader._
@@ -47,7 +48,7 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
       stmt.execute(
         "CREATE TABLE " + copyInfo.dataTableName + " ()" + tablespaceSqlPart(ts) + ";" +
           ChangeOwner.sql(conn, copyInfo.dataTableName) +
-          Citus.MaybeDistribute.sql(conn,copyInfo.datasetInfo.resourceName,copyInfo.dataTableName).getOrElse("")
+          Citus().MaybeDistribute.sql(conn,copyInfo.datasetInfo.resourceName,copyInfo.dataTableName).getOrElse("")
       )
     }
     dsLogger.workingCopyCreated(copyInfo)

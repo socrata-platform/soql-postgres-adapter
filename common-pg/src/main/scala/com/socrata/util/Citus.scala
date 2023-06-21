@@ -3,21 +3,17 @@ package com.socrata.util
 import com.rojoma.simplearm.v2.using
 import com.socrata.datacoordinator.id.RollupName
 import com.socrata.soql.environment.{ResourceName, TableName}
-import com.socrata.util.Citus.Constant.IS_CITUS
 import liquibase.database.Database
 import liquibase.exception.CustomPreconditionFailedException
 import liquibase.precondition.CustomPrecondition
 import org.slf4j.Logger
+import com.socrata.pg.config.{DbType, Citus => CitusDBType}
 
 import java.sql.{Connection, ResultSet, SQLException}
 
-object Citus {
+case class Citus()(implicit val dbType: DbType) {
 
   val log: Logger = org.slf4j.LoggerFactory.getLogger(Citus.getClass)
-
-  object Constant {
-    val IS_CITUS = "IS_CITUS"
-  }
 
   object MaybeDistribute {
 
@@ -46,7 +42,7 @@ object Citus {
     }
 
     def isCitus: Boolean = {
-      sys.env.get(IS_CITUS).exists { raw => raw.toBoolean }
+      dbType == CitusDBType
     }
 
     private def generate(conn: Connection, resourceName: ResourceName, tableName: TableName): Either[Option[String], SQLException] = {

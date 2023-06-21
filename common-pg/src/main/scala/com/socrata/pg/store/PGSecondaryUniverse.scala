@@ -22,6 +22,7 @@ import com.socrata.datacoordinator.truth.metadata.DatasetInfo
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
+import com.socrata.pg.config.DbType
 
 class PGSecondaryUniverse[SoQLType, SoQLValue](
   val conn: Connection,
@@ -80,7 +81,7 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
     )
   }
 
-  def schemaLoader(logger: Logger[SoQLType, SoQLValue]): SecondarySchemaLoader[SoQLType,SoQLValue] =
+  def schemaLoader(logger: Logger[SoQLType, SoQLValue])(implicit dbType: DbType): SecondarySchemaLoader[SoQLType,SoQLValue] =
     new SecondarySchemaLoader(conn, logger, repForIndex, tablespace, commonSupport, RowSizeBufferSqlErrorContinue, timingReport)
 
   def datasetContentsCopier(logger: Logger[SoQLType, SoQLValue]): DatasetContentsCopier[SoQLType] =

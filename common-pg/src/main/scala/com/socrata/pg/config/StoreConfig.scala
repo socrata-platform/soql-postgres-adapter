@@ -28,7 +28,18 @@ class StoreConfig(config: Config, root: String) extends ConfigClass(config, root
   val secondaryMetrics = SecondaryMetricsConfig(config, path("secondary-metrics"))
 
   val transparentCopyFunction = optionally(getString("transparent-copy-function"))
+
+  val dbType: DbType = optionally(getString("db-type")) match {
+    case Some("postgres") => PG
+    case Some("citus") => Citus
+    case _ => PG
+  }
 }
+
+sealed trait DbType
+case object PG extends DbType
+case object Citus extends DbType
+
 
 case class SecondaryMetricsConfig(config: Config, root: String) extends ConfigClass(config, root) {
   val enabled = optionally(getBoolean("enabled")).getOrElse(false)

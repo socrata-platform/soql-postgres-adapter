@@ -25,12 +25,15 @@ import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.Logger
 import org.scalatest.Matchers.fail
+import com.socrata.pg.config.PG
 
 /**
  * Recreate test databases of truth and secondary.
  * Provide the tools for creating a dataset and replicated to secondary.
  */
 trait DatabaseTestBase {
+
+  implicit val dbType = PG
 
   val dcInstance: String // alpha
 

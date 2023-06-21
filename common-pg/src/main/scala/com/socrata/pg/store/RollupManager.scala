@@ -32,11 +32,12 @@ import com.socrata.soql.ast.{JoinFunc, JoinQuery, JoinTable, Select}
 import com.socrata.soql.parsing.StandaloneParser
 import com.socrata.soql.typed.Qualifier
 import com.socrata.util.{Citus, Timing}
+import com.socrata.pg.config.DbType
 
 import java.time.{Clock, LocalDateTime, ZoneId}
 
 // scalastyle:off multiple.string.literals
-class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo) extends SecondaryManagerBase(pgu, copyInfo) {
+class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: CopyInfo)(implicit dbType: DbType) extends SecondaryManagerBase(pgu, copyInfo) {
   import RollupManager.logger
 
   // put rollups in the same tablespace as the copy
@@ -255,7 +256,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
         stmt.execute(
           createSql +
             ChangeOwner.sql(pgu.conn, rollupInfo.tableName) +
-            Citus.MaybeDistribute.sql(pgu.conn,copyInfo.datasetInfo.resourceName,rollupInfo.tableName,rollupInfo.name).getOrElse("")
+            Citus().MaybeDistribute.sql(pgu.conn,copyInfo.datasetInfo.resourceName,rollupInfo.tableName,rollupInfo.name).getOrElse("")
         )
         // sadly the COMMENT statement can't use prepared statement params...
         val commentSql = s"COMMENT ON TABLE ${rollupInfo.tableName} IS '" +
