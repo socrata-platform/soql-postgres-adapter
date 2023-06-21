@@ -12,7 +12,7 @@ object Citus {
   val log: Logger = org.slf4j.LoggerFactory.getLogger(Citus.getClass)
 
   def shouldUseCitusDistribution: Boolean = {
-    sys.env.contains(IS_CITUS)
+    sys.env.get(IS_CITUS).map{raw=>}.getOrElse(false)
   }
 
   private def distributeTable(conn: Connection, resourceName: ResourceName, tableName: TableName): Option[String] = {
