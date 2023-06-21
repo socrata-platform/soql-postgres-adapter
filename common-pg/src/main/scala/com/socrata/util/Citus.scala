@@ -11,51 +11,55 @@ object Citus {
 
   val log: Logger = org.slf4j.LoggerFactory.getLogger(Citus.getClass)
 
-  def shouldUseCitusDistribution: Boolean = {
-    sys.env.get(IS_CITUS).map{raw=>}.getOrElse(false)
-  }
-
-  private def distributeTable(conn: Connection, resourceName: ResourceName, tableName: TableName): Option[String] = {
-    getDistributionColumnOfDataset(conn, resourceName).map { column =>
-      "select create_distributed_table('%s', '%s');".format(tableName, column)
-    }
-  }
-
-  private def getDistributionColumnOfDataset(conn: Connection, resourceName: ResourceName): Option[String] = {
-    using(conn.prepareStatement("select column_name from citus_distribution_map where resource_name=?")) { stmt =>
-      stmt.setString(1, resourceName.name)
-      extractCitusDistributionColumnName(stmt.executeQuery()) match {
-        case Left(columnNameOptional) => columnNameOptional
-        case Right(e) => {
-          log.error("Error determining citus distribution key for dataset %s".format(resourceName.name),e)
-          None
-        }
-      }
-    }
-  }
-
-  private def extractCitusDistributionColumnName(rs: ResultSet): Either[Option[String], SQLException] = {
-    if (rs.next()) {
-      try {
-        Left(Some(rs.getString("column_name")))
-      } catch {
-        case e: SQLException => Right(e)
-      }
-    } else {
-      Left(None)
-    }
-  }
-
   object Constant {
     val IS_CITUS = "IS_CITUS"
   }
 
   object MaybeDistribute {
-    def sql(conn: Connection, resourceName: Option[String], tableName: String): Option[String] = {
+
+    def sql(conn: Connection, resourceNameOptional: Option[String], tableName: String): Option[String] = {
       if (shouldUseCitusDistribution) {
-        resourceName.flatMap { resource => Citus.distributeTable(conn, new ResourceName(resource), TableName(tableName)) }
+        resourceNameOptional.flatMap { resourceName =>
+          generate(conn, new ResourceName(resourceName), TableName(tableName)) match {
+            case Left(x@Some(_)) => x
+            case Left(None) => log.info("No distribution key configured for %s", resourceName)
+              None
+            case Right(e) => log.error("Error while determining citus distribution key for dataset %s".format(resourceName), e)
+              None
+          }
+        }
       } else {
         None
+      }
+    }
+
+    def shouldUseCitusDistribution: Boolean = {
+      sys.env.get(IS_CITUS).exists { raw => raw.toBoolean }
+    }
+
+    private def generate(conn: Connection, resourceName: ResourceName, tableName: TableName): Either[Option[String], SQLException] = {
+      getDistributionColumnOfDataset(conn, resourceName) match {
+        case Left(Some(columnName)) => Left(Some("select create_distributed_table('%s', '%s');".format(tableName, columnName)))
+        case x@_ => x
+      }
+    }
+
+    private def getDistributionColumnOfDataset(conn: Connection, resourceName: ResourceName): Either[Option[String], SQLException] = {
+      using(conn.prepareStatement("select column_name from citus_distribution_map where resource_name=?")) { stmt =>
+        stmt.setString(1, resourceName.name)
+        extractCitusDistributionColumnName(stmt.executeQuery())
+      }
+    }
+
+    private def extractCitusDistributionColumnName(rs: ResultSet): Either[Option[String], SQLException] = {
+      try {
+        if (rs.next()) {
+          Left(Some(rs.getString("column_name")))
+        } else {
+          Left(None)
+        }
+      } catch {
+        case e: SQLException => Right(e)
       }
     }
   }
