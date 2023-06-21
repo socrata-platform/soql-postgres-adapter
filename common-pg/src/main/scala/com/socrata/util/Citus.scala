@@ -3,6 +3,9 @@ package com.socrata.util
 import com.rojoma.simplearm.v2.using
 import com.socrata.soql.environment.{ResourceName, TableName}
 import com.socrata.util.Citus.Constant.IS_CITUS
+import liquibase.database.Database
+import liquibase.exception.CustomPreconditionFailedException
+import liquibase.precondition.CustomPrecondition
 import org.slf4j.Logger
 
 import java.sql.{Connection, ResultSet, SQLException}
@@ -37,8 +40,12 @@ object Citus {
       }
     }
 
-    def shouldUseCitusDistribution: Boolean = {
+    def isCitus: Boolean = {
       sys.env.get(IS_CITUS).exists { raw => raw.toBoolean }
+    }
+
+    def shouldUseCitusDistribution: Boolean = {
+      isCitus
     }
 
     private def generate(conn: Connection, resourceName: ResourceName, tableName: TableName): Either[Option[String], SQLException] = {
@@ -64,6 +71,14 @@ object Citus {
         }
       } catch {
         case e: SQLException => Right(e)
+      }
+    }
+
+    class CitusPrecondition extends CustomPrecondition{
+      override def check(database: Database): Unit = {
+        if(!isCitus){
+          throw new CustomPreconditionFailedException("Not a citus node")
+        }
       }
     }
   }

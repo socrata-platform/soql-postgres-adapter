@@ -4,6 +4,9 @@
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
     http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
     <changeSet author="Paul Maksimovich" id="20230620-citus-distribution-shim-create-table">
+        <preConditions onFail="MARK_RAN">
+            <customPrecondition className="com.socrata.util.Citus.MaybeDistribute.CitusPrecondition"/>
+        </preConditions>
         <sql>
             create table citus_distribution_map
             (
