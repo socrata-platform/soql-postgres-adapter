@@ -16,7 +16,8 @@ import com.rojoma.json.v3.ast.{JBoolean, JObject}
 import com.rojoma.json.v3.util.JsonUtil
 import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.datacoordinator.util.TimingReport
-import com.socrata.soql.environment.ColumnName
+import com.socrata.soql.environment.{ColumnName, ResourceName}
+import com.socrata.util.Citus
 
 class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
                                     repFor: ColumnInfo[CT] => SqlColumnRep[CT, CV] with Indexable[CT],
@@ -43,8 +44,11 @@ class SecondarySchemaLoader[CT, CV](conn: Connection, dsLogger: Logger[CT, CV],
     val ts: Option[String] = tablespace(copyInfo.dataTableName)
 
     using(conn.createStatement()) { stmt =>
-      stmt.execute("CREATE TABLE " + copyInfo.dataTableName + " ()" + tablespaceSqlPart(ts) + ";" +
-                   ChangeOwner.sql(conn, copyInfo.dataTableName))
+      stmt.execute(
+        "CREATE TABLE " + copyInfo.dataTableName + " ()" + tablespaceSqlPart(ts) + ";" +
+          ChangeOwner.sql(conn, copyInfo.dataTableName) +
+          Citus.MaybeDistribute.sql(conn,copyInfo.datasetInfo.resourceName,copyInfo.dataTableName).getOrElse("")
+      )
     }
     dsLogger.workingCopyCreated(copyInfo)
   }
