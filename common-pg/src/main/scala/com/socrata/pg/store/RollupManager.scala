@@ -31,7 +31,7 @@ import com.socrata.pg.query.QueryServerHelper
 import com.socrata.soql.ast.{JoinFunc, JoinQuery, JoinTable, Select}
 import com.socrata.soql.parsing.StandaloneParser
 import com.socrata.soql.typed.Qualifier
-import com.socrata.util.{Citus, Timing}
+import com.socrata.util.Timing
 
 import java.time.{Clock, LocalDateTime, ZoneId}
 
@@ -252,11 +252,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
            "shapeVersion" -> copyInfo.dataShapeVersion,
            "rollupName" -> rollupInfo.name.underlying,
            "sql" -> createSql) {
-        stmt.execute(
-          createSql +
-            ChangeOwner.sql(pgu.conn, rollupInfo.tableName) +
-            Citus.MaybeDistribute.sql(pgu.conn,copyInfo.datasetInfo.resourceName,rollupInfo.tableName,rollupInfo.name).getOrElse("")
-        )
+        stmt.execute(createSql + ChangeOwner.sql(pgu.conn, rollupInfo.tableName))
         // sadly the COMMENT statement can't use prepared statement params...
         val commentSql = s"COMMENT ON TABLE ${rollupInfo.tableName} IS '" +
           SqlUtils.escapeString(pgu.conn, rollupInfo.name.underlying + " = " + rollupInfo.soql) + "'"
