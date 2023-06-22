@@ -369,6 +369,60 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     ExprSql(sql, f)
   }
 
+  def doSqlizeWithinCircle(f: Expr, scrutineeSql: Doc, lat: ExprSql, lon: ExprSql, radius: ExprSql): ExprSql = {
+    assert(lat.typ == SoQLNumber)
+    assert(lon.typ == SoQLNumber)
+    assert(radius.typ == SoQLNumber)
+    val sql = Seq(
+      scrutineeSql,
+      Seq(
+        Seq(lon.compressed.sql, lat.compressed.sql).funcall(d"st_makepoint") +#+ d":: geography",
+        radius.compressed.sql
+      ).funcall(d"st_buffer") +#+ d":: geometry"
+    ).funcall(d"st_within")
+
+    ExprSql(sql, f)
+  }
+
+  def sqlizeWithinCircle = ofs { (f, args, ctx) =>
+    val Seq(scrutinee, lat, lon, radius) = args
+    doSqlizeWithinCircle(f, scrutinee.compressed.sql, lat, lon, radius)
+  }
+
+  def sqlizeLocationWithinCircle = ofs { (f, args, ctx) =>
+    val Seq(scrutinee, lat, lon, radius) = args
+    doSqlizeWithinCircle(f, pointSqlFromLocationSql(scrutinee), lat, lon, radius)
+  }
+
+  def doSqlizeWithinBox(f: Expr, scrutineeSql: Doc, topLeftLat: ExprSql, topLeftLon: ExprSql, bottomRightLat: ExprSql, bottomRightLon: ExprSql): ExprSql = {
+    assert(topLeftLat.typ == SoQLNumber)
+    assert(topLeftLon.typ == SoQLNumber)
+    assert(bottomRightLat.typ == SoQLNumber)
+    assert(bottomRightLon.typ == SoQLNumber)
+
+    // st_makeenvelope takes (xmin, ymin, xmax, ymax, srid) so permute
+    // our lat/lon based coords appropriately
+    val sql = Seq(
+      topLeftLon.compressed.sql,
+      bottomRightLat.compressed.sql,
+      bottomRightLon.compressed.sql,
+      topLeftLat.compressed.sql,
+      defaultSRIDLiteral
+    ).funcall(d"st_makeenvelope") +#+ d"~" +#+ scrutineeSql.parenthesized
+
+    ExprSql(sql, f)
+  }
+
+  def sqlizeWithinBox = ofs { (f, args, ctx) =>
+    val Seq(scrutinee, topLeftLat, topLeftLon, bottomRightLat, bottomRightLon) = args
+    doSqlizeWithinBox(f, scrutinee.compressed.sql, topLeftLat, topLeftLon, bottomRightLat, bottomRightLon)
+  }
+
+  def sqlizeLocationWithinBox = ofs { (f, args, ctx) =>
+    val Seq(scrutinee, topLeftLat, topLeftLon, bottomRightLat, bottomRightLon) = args
+    doSqlizeWithinBox(f, pointSqlFromLocationSql(scrutinee), topLeftLat, topLeftLon, bottomRightLat, bottomRightLon)
+  }
+
   // Given an ordinary function sqlizer, returns a new ordinary
   // function sqlizer that upcases all of its text arguments
   def uncased(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
@@ -525,6 +579,8 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       ReducePolyPrecision -> sqlizeNormalOrdinaryWithWrapper("st_reduceprecision", "st_multi"),
       Intersection -> sqlizeMultiBuffered("st_intersection"),
       WithinPolygon -> sqlizeNormalOrdinaryFuncall("st_within"),
+      WithinCircle -> sqlizeWithinCircle,
+      WithinBox -> sqlizeWithinBox,
       IsEmpty -> sqlizeIsEmpty,
       Simplify -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplify")),
       SimplifyPreserveTopology -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplifypreservetopology")),
@@ -541,6 +597,8 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Location -> sqlizeLocation,
       HumanAddress -> sqlizeHumanAddress,
       LocationWithinPolygon -> sqlizeLocationPointOrdinaryFunction("st_within"),
+      LocationWithinCircle -> sqlizeLocationWithinCircle,
+      LocationWithinBox -> sqlizeLocationWithinBox,
 
       // URL
       UrlToUrl -> sqlizeSubcol(SoQLUrl, "url"),
