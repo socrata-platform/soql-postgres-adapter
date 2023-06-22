@@ -249,7 +249,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     }
 
     if (tooManyAlready) {
-      logger.warn(s"Rejecting request for dataset $datasetId, already processing limit of $QueryServer.config.maxConcurrentRequestsPerDataset concurrent requests per dataset")
+      logger.warn(s"Rejecting request for dataset $datasetId, already processing limit of ${QueryServer.config.maxConcurrentRequestsPerDataset} concurrent requests per dataset")
       TooManyRequests(resp)
     } else {
       try {
