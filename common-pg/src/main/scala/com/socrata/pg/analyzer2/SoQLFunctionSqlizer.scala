@@ -483,6 +483,39 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     ExprSql(sql, f)
   }
 
+  def sqlizeSignedMagnitude10 = ofs { (f, args, ctx) =>
+    assert(args.length == 1)
+    assert(args(0).typ == SoQLNumber)
+
+    val argSql = args(0).compressed.sql
+
+    val sql = Seq(argSql).funcall(d"sign") +#+ d"*" +#+
+      Seq(Seq(Seq(argSql).funcall(d"abs")).funcall(d"floor") +#+ d":: text").funcall(d"length")
+
+    ExprSql(sql, f)
+  }
+
+  def sqlizeSignedMagnitudeLinear = ofs { (f, args, ctx) =>
+    assert(args.length == 2)
+    assert(args(0).typ == SoQLNumber)
+    assert(args(1).typ == SoQLNumber)
+
+    val argSql0 = args(0).compressed.sql
+    val argSql1 = args(1).compressed.sql
+
+    // "case when ? = 1 then floor(?) else sign(?) * floor(abs(?)/? + 1) end"
+    //            ^1               ^0           ^0             ^0 ^1
+
+    val clauses = Seq(
+      ((d"WHEN" +#+ argSql1.parenthesized +#+ d"= 1").nest(2).group ++ Doc.lineSep ++ (d"THEN" +#+ Seq(argSql0).funcall(d"floor")).nest(2).group).nest(2).group,
+      (d"ELSE" +#+ Seq(argSql0).funcall(d"sign") +#+ d"*" +#+ Seq(Seq(argSql0).funcall(d"abs") +#+ d"/" +#+ argSql1.parenthesized +#+ d"+ 1").funcall(d"floor")).nest(2).group
+    )
+
+    val sql = (d"CASE" ++ Doc.lineSep ++ clauses.vsep).nest(2) ++ Doc.lineSep ++ d"END"
+
+    ExprSql(sql.group, f)
+  }
+
   // Given an ordinary function sqlizer, returns a new ordinary
   // function sqlizer that upcases all of its text arguments
   def uncased(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
@@ -582,6 +615,8 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Floor -> sqlizeNormalOrdinaryFuncall("floor"),
       Round -> sqlizeRound,
       WidthBucket -> numericize(sqlizeNormalOrdinaryFuncall("width_bucket")),
+      SignedMagnitude10 -> sqlizeSignedMagnitude10,
+      SignedMagnitudeLinear -> sqlizeSignedMagnitudeLinear,
 
       // Timestamps
       ToFloatingTimestamp -> sqlizeBinaryOp("at time zone"),
@@ -651,9 +686,10 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Area -> sqlizeArea,
       DistanceInMeters -> sqlizeArea,
       VisibleAt -> sqlizeVisibleAt,
-
+      GeoMakeValid -> sqlizeNormalOrdinaryFuncall("st_makevalid"),
       ConcaveHull -> sqlizeMultiBuffered("st_concavehull"),
       ConvexHull -> sqlizeMultiBuffered("st_convexhull"),
+      CuratedRegionTest -> sqlizeCuratedRegionTest,
 
       // Fake location
       LocationToLatitude -> numericize(sqlizeLocationPointOrdinaryFunction("st_y")),
@@ -705,7 +741,12 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       TextToBool -> sqlizeCast("boolean"),
       BoolToText -> sqlizeCast("text"),
       TextToNumber -> sqlizeCast("numeric"),
-      NumberToText -> sqlizeCast("text")
+      NumberToText -> sqlizeCast("text"),
+      TextToFixedTimestamp -> sqlizeCast("timestamp with time zone"),
+      TextToFloatingTimestamp -> sqlizeCast("timestamp without time zone"),
+      TextToInterval -> sqlizeCast("interval"),
+      TextToBlob -> sqlizeTypechangingIdentityCast,
+      TextToPhoto -> sqlizeTypechangingIdentityCast
     ) ++ castIdentities.map { f =>
       f -> sqlizeIdentity _
     }
