@@ -452,6 +452,23 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     doDistanceInMeters(f, pointSqlFromLocationSql(args(0)), pointSqlFromLocationSql(args(1)))
   }
 
+  def sqlizeVisibleAt = ofs { (f, args, ctx) =>
+    assert(args.length == 2)
+
+    val Seq(geom, number) = args.map(_.compressed.sql)
+
+    // what a weird function!  I wonder what it's for!
+    val sql = (d"NOT" +#+ Seq(geom).funcall(d"st_isempty")).parenthesized +#+ d"and" +#+
+      Seq(
+        Seq(geom).funcall(d"st_geometrytype") +#+ d"=" +#+ d"'ST_Point'",
+        Seq(geom).funcall(d"st_geometrytype") +#+ d"=" +#+ d"'ST_MultiPoint'",
+        Seq(geom).funcall(d"st_xmax") +#+ d"-" +#+ Seq(geom).funcall(d"st_xmin") +#+ d">=" +#+ number.parenthesized,
+        Seq(geom).funcall(d"st_ymax") +#+ d"-" +#+ Seq(geom).funcall(d"st_ymin") +#+ d">=" +#+ number.parenthesized,
+      ).concatWith { (l, r) => l ++ Doc.lineSep ++ d"or" +#+ r }.parenthesized
+
+    ExprSql(sql, f)
+  }
+
   // Given an ordinary function sqlizer, returns a new ordinary
   // function sqlizer that upcases all of its text arguments
   def uncased(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
@@ -616,6 +633,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       SnapToGrid -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_snaptogrid")),
       Area -> sqlizeArea,
       DistanceInMeters -> sqlizeArea,
+      VisibleAt -> sqlizeVisibleAt,
 
       ConcaveHull -> sqlizeMultiBuffered("st_concavehull"),
       ConvexHull -> sqlizeMultiBuffered("st_convexhull"),
