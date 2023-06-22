@@ -422,6 +422,36 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     doSqlizeWithinBox(f, pointSqlFromLocationSql(scrutinee), topLeftLat, topLeftLon, bottomRightLat, bottomRightLon)
   }
 
+  def sqlizeArea = ofs { (f, args, ctx) =>
+    // annoyingly this geography cast means this can't just be 'numericize(sqlizeOrdinary("st_area"))'
+    assert(args.length == 1)
+
+    val sql = Seq(
+      args(0).compressed.sql.parenthesized +#+ d":: geography"
+    ).funcall(d"st_area") +#+ d":: numeric"
+
+    ExprSql(sql, f)
+  }
+
+  def doDistanceInMeters(f: Expr, aSql: Doc, bSql: Doc): ExprSql = {
+    val sql = Seq(
+      aSql.parenthesized +#+ d":: geography",
+      bSql.parenthesized +#+ d":: geography"
+    ).funcall(d"st_distance") +#+ d":: numeric"
+
+    ExprSql(sql, f)
+  }
+
+  def sqlizeDistanceInMeters = ofs { (f, args, ctx) =>
+    assert(args.length == 2)
+    doDistanceInMeters(f, args(0).compressed.sql, args(1).compressed.sql)
+  }
+
+  def sqlizeLocationDistanceInMeters = ofs { (f, args, ctx) =>
+    assert(args.length == 2)
+    doDistanceInMeters(f, pointSqlFromLocationSql(args(0)), pointSqlFromLocationSql(args(1)))
+  }
+
   // Given an ordinary function sqlizer, returns a new ordinary
   // function sqlizer that upcases all of its text arguments
   def uncased(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
@@ -584,6 +614,8 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Simplify -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplify")),
       SimplifyPreserveTopology -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplifypreservetopology")),
       SnapToGrid -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_snaptogrid")),
+      Area -> sqlizeArea,
+      DistanceInMeters -> sqlizeArea,
 
       ConcaveHull -> sqlizeMultiBuffered("st_concavehull"),
       ConvexHull -> sqlizeMultiBuffered("st_convexhull"),
@@ -598,6 +630,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       LocationWithinPolygon -> sqlizeLocationPointOrdinaryFunction("st_within"),
       LocationWithinCircle -> sqlizeLocationWithinCircle,
       LocationWithinBox -> sqlizeLocationWithinBox,
+      LocationDistanceInMeters -> sqlizeLocationDistanceInMeters,
 
       // URL
       UrlToUrl -> sqlizeSubcol(SoQLUrl, "url"),
