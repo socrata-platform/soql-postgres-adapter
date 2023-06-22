@@ -182,6 +182,31 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     }
   }
 
+  protected def sqlizeJsonSubcol(typ: CT, fieldSql: String, resultType: CT) = {
+    ofs { (e, args, ctx) =>
+      val sourceRep = ctx.repFor(typ)
+      assert(sourceRep.expandedColumnCount == 1)
+
+      val targetRep = ctx.repFor(resultType)
+      assert(targetRep.expandedColumnCount == 1)
+
+      assert(e.function.minArity == 1 && !e.function.isVariadic)
+      assert(e.function.parameters.head == typ)
+      assert(e.function.result == resultType)
+      assert(args.length == 1)
+
+      val arg = args.head
+      assert(arg.typ == typ)
+
+      ExprSql(
+        // This is kinda icky and fragile, but it'll work in practice
+        // for the subcolumn type (text) that we have.
+        arg.compressed.sql.parenthesized ++ d"->>" ++ Doc(fieldSql),
+        e
+      )
+    }
+  }
+
   protected def sqlizeIdentity(e: FunctionCall, args: Seq[ExprSql], ctx: DynamicContext): ExprSql = {
     assert(e.function.minArity == 1 && !e.function.isVariadic)
     assert(args.lengthCompare(1) == 0)

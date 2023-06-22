@@ -677,6 +677,11 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       PhoneToPhoneType -> sqlizeSubcol(SoQLPhone, "phone_type"),
       Phone -> sqlizeSimpleCompoundColumn(SoQLPhone),
 
+      // Document
+      DocumentToFilename  -> sqlizeJsonSubcol(SoQLDocument, "'filename'", SoQLText),
+      DocumentToFileId -> sqlizeJsonSubcol(SoQLDocument, "'file_id'", SoQLText),
+      DocumentToContentType -> sqlizeJsonSubcol(SoQLDocument, "'content_type'", SoQLText),
+
       // json
       JsonProp -> sqlizeBinaryOp("->"),
       JsonIndex -> sqlizeBinaryOp("->"),

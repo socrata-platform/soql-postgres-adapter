@@ -259,6 +259,21 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
       }
     },
 
+    SoQLDocument -> new SingleColumnRep(SoQLDocument, d"jsonb") {
+      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = ??? // no such thing as a doc liteal
+      protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
+        Option(rs.getString(dbCol)) match {
+          case Some(s) =>
+            JsonUtil.parseJson[SoQLDocument](s) match {
+              case Right(doc) => doc
+              case Left(err) => throw new Exception("Unexpected document json from database: " + err.english)
+            }
+          case None =>
+            SoQLNull
+        }
+      }
+    },
+
     SoQLPoint -> new GeometryRep(SoQLPoint, SoQLPoint(_), "point"),
     SoQLMultiPoint -> new GeometryRep(SoQLMultiPoint, SoQLMultiPoint(_), "mpoint"),
     SoQLLine -> new GeometryRep(SoQLLine, SoQLLine(_), "line"),
