@@ -190,6 +190,14 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
     analyze("url('x','y').description") must equal ("""text "y"""")
   }
 
+  test("phone(x, y).phone_number == x") {
+    analyze("phone('x','y').phone_number") must equal ("""text "x"""")
+  }
+
+  test("phone(x, y).phone_type == y") {
+    analyze("phone('x','y').phone_type") must equal ("""text "y"""")
+  }
+
   test("Functions are correctly classified") {
     // The "contains" check is because of the TsVector fake functions
     // that search gets rewritten into

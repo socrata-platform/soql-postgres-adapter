@@ -292,12 +292,11 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     ExprSql(args.map(_.compressed.sql), f)(ctx.repFor, ctx.gensymProvider)
   }
 
-  def sqlizeUrl = ofs { (f, args, ctx) =>
-    assert(f.typ == SoQLUrl)
-    assert(args.length == 2)
-    assert(args(0).typ == SoQLText)
+  def sqlizeSimpleCompoundColumn(typ: SoQLType) = ofs { (f, args, ctx) =>
+    assert(f.typ == typ)
+    assert(args.length == ctx.repFor(typ).expandedColumnCount)
     assert(args.forall(_.typ == SoQLText))
-    // We're given both the subcolumns that make up a url, so just
+    // We're given both the subcolumns that make up a `typ`, so just
     // pass them on through.
     ExprSql(args.map(_.compressed.sql), f)(ctx.repFor, ctx.gensymProvider)
   }
@@ -603,7 +602,12 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       // URL
       UrlToUrl -> sqlizeSubcol(SoQLUrl, "url"),
       UrlToDescription -> sqlizeSubcol(SoQLUrl, "description"),
-      Url -> sqlizeUrl,
+      Url -> sqlizeSimpleCompoundColumn(SoQLUrl),
+
+      // Phone
+      PhoneToPhoneNumber -> sqlizeSubcol(SoQLPhone, "phone_number"),
+      PhoneToPhoneType -> sqlizeSubcol(SoQLPhone, "phone_type"),
+      Phone -> sqlizeSimpleCompoundColumn(SoQLPhone),
 
       // json
       JsonProp -> sqlizeBinaryOp("->"),
