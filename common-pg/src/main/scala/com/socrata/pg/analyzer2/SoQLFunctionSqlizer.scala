@@ -394,6 +394,35 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     doSqlizeWithinCircle(f, pointSqlFromLocationSql(scrutinee), lat, lon, radius)
   }
 
+  def doSqlizeWithinBox(f: Expr, scrutineeSql: Doc, topLeftLat: ExprSql, topLeftLon: ExprSql, bottomRightLat: ExprSql, bottomRightLon: ExprSql): ExprSql = {
+    assert(topLeftLat.typ == SoQLNumber)
+    assert(topLeftLon.typ == SoQLNumber)
+    assert(bottomRightLat.typ == SoQLNumber)
+    assert(bottomRightLon.typ == SoQLNumber)
+
+    // st_makeenvelope takes (xmin, ymin, xmax, ymax, srid) so permute
+    // our lat/lon based coords appropriately
+    val sql = Seq(
+      topLeftLon.compressed.sql,
+      bottomRightLat.compressed.sql,
+      bottomRightLon.compressed.sql,
+      topLeftLat.compressed.sql,
+      defaultSRIDLiteral
+    ).funcall(d"st_makeenvelope") +#+ d"~" +#+ scrutineeSql.parenthesized
+
+    ExprSql(sql, f)
+  }
+
+  def sqlizeWithinBox = ofs { (f, args, ctx) =>
+    val Seq(scrutinee, topLeftLat, topLeftLon, bottomRightLat, bottomRightLon) = args
+    doSqlizeWithinBox(f, scrutinee.compressed.sql, topLeftLat, topLeftLon, bottomRightLat, bottomRightLon)
+  }
+
+  def sqlizeLocationWithinBox = ofs { (f, args, ctx) =>
+    val Seq(scrutinee, topLeftLat, topLeftLon, bottomRightLat, bottomRightLon) = args
+    doSqlizeWithinBox(f, pointSqlFromLocationSql(scrutinee), topLeftLat, topLeftLon, bottomRightLat, bottomRightLon)
+  }
+
   // Given an ordinary function sqlizer, returns a new ordinary
   // function sqlizer that upcases all of its text arguments
   def uncased(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
@@ -551,6 +580,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Intersection -> sqlizeMultiBuffered("st_intersection"),
       WithinPolygon -> sqlizeNormalOrdinaryFuncall("st_within"),
       WithinCircle -> sqlizeWithinCircle,
+      WithinBox -> sqlizeWithinBox,
       IsEmpty -> sqlizeIsEmpty,
       Simplify -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplify")),
       SimplifyPreserveTopology -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplifypreservetopology")),
@@ -568,6 +598,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       HumanAddress -> sqlizeHumanAddress,
       LocationWithinPolygon -> sqlizeLocationPointOrdinaryFunction("st_within"),
       LocationWithinCircle -> sqlizeLocationWithinCircle,
+      LocationWithinBox -> sqlizeLocationWithinBox,
 
       // URL
       UrlToUrl -> sqlizeSubcol(SoQLUrl, "url"),
