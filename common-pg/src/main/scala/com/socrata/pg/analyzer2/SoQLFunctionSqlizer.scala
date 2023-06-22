@@ -469,6 +469,20 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     ExprSql(sql, f)
   }
 
+  def sqlizeTruncFixedTimestampAtTimeZone(truncpointSql: String) = ofs { (f, args, ctx) =>
+    assert(f.typ == SoQLFloatingTimestamp)
+    assert(args.length == 2)
+    assert(args(0).typ == SoQLFixedTimestamp)
+    assert(args(1).typ == SoQLText)
+
+    val sql = Seq(
+      Doc(truncpointSql),
+      args(0).compressed.sql.parenthesized +#+ d"at time zone" +#+ args(1).compressed.sql.parenthesized
+    ).funcall(d"date_trunc")
+
+    ExprSql(sql, f)
+  }
+
   // Given an ordinary function sqlizer, returns a new ordinary
   // function sqlizer that upcases all of its text arguments
   def uncased(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
@@ -577,6 +591,9 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       FixedTimeStampZTruncYmd -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'day'")),
       FixedTimeStampZTruncYm -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'month'")),
       FixedTimeStampZTruncY -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'year'")),
+      FixedTimeStampTruncYmdAtTimeZone -> sqlizeTruncFixedTimestampAtTimeZone("'day'"),
+      FixedTimeStampTruncYmAtTimeZone -> sqlizeTruncFixedTimestampAtTimeZone("'month'"),
+      FixedTimeStampTruncYAtTimeZone -> sqlizeTruncFixedTimestampAtTimeZone("'year'"),
       FloatingTimeStampExtractY -> sqlizeExtractTimestampField("year"),
       FloatingTimeStampExtractM -> sqlizeExtractTimestampField("month"),
       FloatingTimeStampExtractD -> sqlizeExtractTimestampField("day"),
