@@ -369,6 +369,31 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     ExprSql(sql, f)
   }
 
+  def doSqlizeWithinCircle(f: Expr, scrutineeSql: Doc, lat: ExprSql, lon: ExprSql, radius: ExprSql): ExprSql = {
+    assert(lat.typ == SoQLNumber)
+    assert(lon.typ == SoQLNumber)
+    assert(radius.typ == SoQLNumber)
+    val sql = Seq(
+      scrutineeSql,
+      Seq(
+        Seq(lon.compressed.sql, lat.compressed.sql).funcall(d"st_makepoint") +#+ d":: geography",
+        radius.compressed.sql
+      ).funcall(d"st_buffer") +#+ d":: geometry"
+    ).funcall(d"st_within")
+
+    ExprSql(sql, f)
+  }
+
+  def sqlizeWithinCircle = ofs { (f, args, ctx) =>
+    val Seq(scrutinee, lat, lon, radius) = args
+    doSqlizeWithinCircle(f, scrutinee.compressed.sql, lat, lon, radius)
+  }
+
+  def sqlizeLocationWithinCircle = ofs { (f, args, ctx) =>
+    val Seq(scrutinee, lat, lon, radius) = args
+    doSqlizeWithinCircle(f, pointSqlFromLocationSql(scrutinee), lat, lon, radius)
+  }
+
   // Given an ordinary function sqlizer, returns a new ordinary
   // function sqlizer that upcases all of its text arguments
   def uncased(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
@@ -525,6 +550,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       ReducePolyPrecision -> sqlizeNormalOrdinaryWithWrapper("st_reduceprecision", "st_multi"),
       Intersection -> sqlizeMultiBuffered("st_intersection"),
       WithinPolygon -> sqlizeNormalOrdinaryFuncall("st_within"),
+      WithinCircle -> sqlizeWithinCircle,
       IsEmpty -> sqlizeIsEmpty,
       Simplify -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplify")),
       SimplifyPreserveTopology -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplifypreservetopology")),
@@ -541,6 +567,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Location -> sqlizeLocation,
       HumanAddress -> sqlizeHumanAddress,
       LocationWithinPolygon -> sqlizeLocationPointOrdinaryFunction("st_within"),
+      LocationWithinCircle -> sqlizeLocationWithinCircle,
 
       // URL
       UrlToUrl -> sqlizeSubcol(SoQLUrl, "url"),
