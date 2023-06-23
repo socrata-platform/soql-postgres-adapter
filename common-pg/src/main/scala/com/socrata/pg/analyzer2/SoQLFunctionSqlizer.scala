@@ -2,6 +2,7 @@ package com.socrata.pg.analyzer2
 
 import com.socrata.prettyprint.prelude._
 import com.socrata.soql.analyzer2._
+import com.socrata.soql.collection.NonEmptySeq
 import com.socrata.soql.types._
 import com.socrata.soql.functions.SoQLFunctions._
 import com.socrata.soql.functions.{Function, MonomorphicFunction, SoQLTypeInfo}
@@ -15,19 +16,19 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
   def numericize(sqlizer: OrdinaryFunctionSqlizer) = ofs { (f, args, ctx) =>
     val e = sqlizer(f, args, ctx)
     assert(e.typ == SoQLNumber)
-    ExprSql(e.compressed.sql +#+ d":: numeric", f)
+    ExprSql(e.compressed.sql.parenthesized +#+ d":: numeric", f)
   }
 
   def numericize(sqlizer: AggregateFunctionSqlizer) = afs { (f, args, filter, ctx) =>
     val e = sqlizer(f, args, filter, ctx)
     assert(e.typ == SoQLNumber)
-    ExprSql(e.compressed.sql +#+ d":: numeric", f)
+    ExprSql(e.compressed.sql.parenthesized +#+ d":: numeric", f)
   }
 
   def numericize(sqlizer: WindowedFunctionSqlizer) = wfs { (f, args, filter, partitionBy, orderBy, ctx) =>
     val e = sqlizer(f, args, filter, partitionBy, orderBy, ctx)
     assert(e.typ == SoQLNumber)
-    ExprSql(e.compressed.sql +#+ d":: numeric", f)
+    ExprSql(e.compressed.sql.parenthesized +#+ d":: numeric", f)
   }
 
   def sqlizeNormalOrdinaryWithWrapper(name: String, wrapper: String) = ofs { (f, args, ctx) =>
@@ -78,22 +79,30 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
 
     def sqlizeCondition(conditionConsequent: Seq[ExprSql]) = {
       val Seq(condition, consequent) = conditionConsequent
-      ((d"WHEN" +#+ condition.compressed.sql).nest(2).group ++ Doc.lineSep ++ (d"THEN" +#+ consequent.compressed.sql).nest(2).group).nest(2).group
+      new CaseClause(condition.compressed.sql, consequent.compressed.sql)
     }
 
-    val clauses =
+    val caseBuilder =
       lastCase.head.expr match {
-        case LiteralValue(SoQLBoolean(true)) =>
+        case LiteralValue(SoQLBoolean(true)) if args.length > 2 =>
           val initialCases = args.dropRight(2)
           val otherwise = lastCase(1)
-          initialCases.grouped(2).map(sqlizeCondition).toSeq :+ (d"ELSE" +#+ otherwise.compressed.sql).nest(2).group
+          new CaseBuilder(
+            NonEmptySeq.fromSeq(initialCases.grouped(2).map(sqlizeCondition).toSeq).getOrElse {
+              throw new Exception("NonEmptySeq failed but I've checked that there are enough cases")
+            },
+            Some(new ElseClause(otherwise.compressed.sql))
+          )
         case _ =>
-          args.grouped(2).map(sqlizeCondition).toSeq
+          new CaseBuilder(
+            NonEmptySeq.fromSeq(args.grouped(2).map(sqlizeCondition).toSeq).getOrElse {
+              throw new Exception("NonEmptySeq failed but I've checked that there are enough cases")
+            },
+            None
+          )
       }
 
-    val doc = (d"CASE" ++ Doc.lineSep ++ clauses.vsep).nest(2) ++ Doc.lineSep ++ d"END"
-
-    ExprSql(doc.group, f)
+    ExprSql(caseBuilder.sql, f)
   }
 
   def sqlizeContains = ofs { (f, args, ctx) =>
@@ -106,14 +115,9 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     assert(f.function.function eq Iif)
     assert(args.length == 3)
 
-    val clauses = Seq(
-      ((d"WHEN" +#+ args(0).compressed.sql).nest(2).group ++ Doc.lineSep ++ (d"THEN" +#+ args(1).compressed.sql).nest(2).group).nest(2).group,
-      (d"ELSE" +#+ args(2).compressed.sql).nest(2).group
-    )
+    val sql = caseBuilder(args(0).compressed.sql -> args(1).compressed.sql).withElse(args(2).compressed.sql)
 
-    val doc = (d"CASE" ++ Doc.lineSep ++ clauses.vsep).nest(2) ++ Doc.lineSep ++ d"END"
-
-    ExprSql(doc.group, f)
+    ExprSql(sql.sql, f)
   }
 
   def sqlizeGetContext = ofs { (f, args, ctx) =>
@@ -187,7 +191,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
 
     val sql =
       Seq(
-        (delta +#+ d":: numeric").parenthesized +#+ d"/" +#+ d"86400"
+        (delta.parenthesized +#+ d":: numeric").parenthesized +#+ d"/" +#+ d"86400"
       ).funcall(d"trunc")
     ExprSql(sql, f)
   }
@@ -248,14 +252,11 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
 
     val resultIfNotNull = d"""'{"address":' ||""" +#+ addr +#+ d"""|| ',"city":' ||""" +#+ city +#+ d"""|| ',"state":' ||""" +#+ state +#+ d"""|| ',"zip":' ||""" +#+ zip +#+ d"""|| '}'"""
 
-    val clauses = Seq(
-      ((d"WHEN" +#+ nullCheck).nest(2).group ++ Doc.lineSep ++ d"THEN NULL :: text").nest(2).group,
-      (d"ELSE" +#+ resultIfNotNull).nest(2).group
-    )
+    val sql = caseBuilder(
+      nullCheck -> d"NULL :: text"
+    ).withElse(resultIfNotNull)
 
-    val doc = (d"CASE" ++ Doc.lineSep ++ clauses.vsep).nest(2) ++ Doc.lineSep ++ d"END"
-
-    doc.group
+    sql.sql
   }
 
   def sqlizeLocationHumanAddress = ofs { (f, args, ctx) =>
@@ -292,12 +293,11 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     ExprSql(args.map(_.compressed.sql), f)(ctx.repFor, ctx.gensymProvider)
   }
 
-  def sqlizeUrl = ofs { (f, args, ctx) =>
-    assert(f.typ == SoQLUrl)
-    assert(args.length == 2)
-    assert(args(0).typ == SoQLText)
+  def sqlizeSimpleCompoundColumn(typ: SoQLType) = ofs { (f, args, ctx) =>
+    assert(f.typ == typ)
+    assert(args.length == ctx.repFor(typ).expandedColumnCount)
     assert(args.forall(_.typ == SoQLText))
-    // We're given both the subcolumns that make up a url, so just
+    // We're given both the subcolumns that make up a `typ`, so just
     // pass them on through.
     ExprSql(args.map(_.compressed.sql), f)(ctx.repFor, ctx.gensymProvider)
   }
@@ -308,7 +308,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     assert(args(0).typ == SoQLNumber)
 
     ExprSql(
-      Seq(args(0).compressed.sql +#+ d":: int").funcall(d"chr"),
+      Seq(args(0).compressed.sql.parenthesized +#+ d":: int").funcall(d"chr"),
       f
     )
   }
@@ -320,7 +320,20 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     assert(args.tail.forall(_.typ == SoQLNumber))
 
     ExprSql(
-      (args(0).compressed.sql +: args.tail.map(_.compressed.sql +#+ d":: int")).funcall(d"substring"),
+      (args(0).compressed.sql +: args.tail.map(_.compressed.sql.parenthesized +#+ d":: int")).funcall(d"substring"),
+      f
+    )
+  }
+
+  def sqlizeSplitPart = ofs { (f, args, ctx) =>
+    assert(f.typ == SoQLText)
+    assert(args.length == 3)
+    assert(args(0).typ == SoQLText)
+    assert(args(1).typ == SoQLText)
+    assert(args(2).typ == SoQLNumber)
+
+    ExprSql(
+      Seq(args(0).compressed.sql, args(1).compressed.sql, args(2).compressed.sql.parenthesized +#+ d":: int").funcall(d"split_part"),
       f
     )
   }
@@ -423,6 +436,129 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     doSqlizeWithinBox(f, pointSqlFromLocationSql(scrutinee), topLeftLat, topLeftLon, bottomRightLat, bottomRightLon)
   }
 
+  def sqlizeArea = ofs { (f, args, ctx) =>
+    // annoyingly this geography cast means this can't just be 'numericize(sqlizeOrdinary("st_area"))'
+    assert(args.length == 1)
+
+    val sql = Seq(
+      args(0).compressed.sql.parenthesized +#+ d":: geography"
+    ).funcall(d"st_area") +#+ d":: numeric"
+
+    ExprSql(sql, f)
+  }
+
+  def doDistanceInMeters(f: Expr, aSql: Doc, bSql: Doc): ExprSql = {
+    val sql = Seq(
+      aSql.parenthesized +#+ d":: geography",
+      bSql.parenthesized +#+ d":: geography"
+    ).funcall(d"st_distance") +#+ d":: numeric"
+
+    ExprSql(sql, f)
+  }
+
+  def sqlizeDistanceInMeters = ofs { (f, args, ctx) =>
+    assert(args.length == 2)
+    doDistanceInMeters(f, args(0).compressed.sql, args(1).compressed.sql)
+  }
+
+  def sqlizeLocationDistanceInMeters = ofs { (f, args, ctx) =>
+    assert(args.length == 2)
+    doDistanceInMeters(f, pointSqlFromLocationSql(args(0)), pointSqlFromLocationSql(args(1)))
+  }
+
+  def sqlizeVisibleAt = ofs { (f, args, ctx) =>
+    assert(args.length == 2)
+
+    val Seq(geom, number) = args.map(_.compressed.sql)
+
+    // what a weird function!  I wonder what it's for!
+    val sql = (d"NOT" +#+ Seq(geom).funcall(d"st_isempty")).parenthesized +#+ d"and" +#+
+      Seq(
+        Seq(geom).funcall(d"st_geometrytype") +#+ d"=" +#+ d"'ST_Point'",
+        Seq(geom).funcall(d"st_geometrytype") +#+ d"=" +#+ d"'ST_MultiPoint'",
+        Seq(geom).funcall(d"st_xmax") +#+ d"-" +#+ Seq(geom).funcall(d"st_xmin") +#+ d">=" +#+ number.parenthesized,
+        Seq(geom).funcall(d"st_ymax") +#+ d"-" +#+ Seq(geom).funcall(d"st_ymin") +#+ d">=" +#+ number.parenthesized,
+      ).concatWith { (l, r) => l ++ Doc.lineSep ++ d"or" +#+ r }.parenthesized
+
+    ExprSql(sql, f)
+  }
+
+  def sqlizeTruncFixedTimestampAtTimeZone(truncpointSql: String) = ofs { (f, args, ctx) =>
+    assert(f.typ == SoQLFloatingTimestamp)
+    assert(args.length == 2)
+    assert(args(0).typ == SoQLFixedTimestamp)
+    assert(args(1).typ == SoQLText)
+
+    val sql = Seq(
+      Doc(truncpointSql),
+      args(0).compressed.sql.parenthesized +#+ d"at time zone" +#+ args(1).compressed.sql.parenthesized
+    ).funcall(d"date_trunc")
+
+    ExprSql(sql, f)
+  }
+
+  def sqlizeSignedMagnitude10 = ofs { (f, args, ctx) =>
+    assert(args.length == 1)
+    assert(args(0).typ == SoQLNumber)
+
+    val argSql = args(0).compressed.sql
+
+    val sql = Seq(argSql).funcall(d"sign") +#+ d"*" +#+
+      Seq(Seq(Seq(argSql).funcall(d"abs")).funcall(d"floor") +#+ d":: text").funcall(d"length")
+
+    ExprSql(sql, f)
+  }
+
+  def sqlizeSignedMagnitudeLinear = ofs { (f, args, ctx) =>
+    assert(args.length == 2)
+    assert(args(0).typ == SoQLNumber)
+    assert(args(1).typ == SoQLNumber)
+
+    val argSql0 = args(0).compressed.sql
+    val argSql1 = args(1).compressed.sql
+
+    // "case when ? = 1 then floor(?) else sign(?) * floor(abs(?)/? + 1) end"
+    //            ^1               ^0           ^0             ^0 ^1
+
+    val sql = caseBuilder(
+      (argSql1.parenthesized +#+ d"= 1") -> Seq(argSql0).funcall(d"floor")
+    ).withElse(
+      Seq(argSql0).funcall(d"sign") +#+ d"*" +#+ Seq(Seq(argSql0).funcall(d"abs") +#+ d"/" +#+ argSql1.parenthesized +#+ d"+ 1").funcall(d"floor")
+    )
+
+    ExprSql(sql.sql, f)
+  }
+
+  def sqlizeCuratedRegionTest = ofs { (f, args, ctx) =>
+    assert(args.length == 2)
+    assert(args(1).typ == SoQLNumber)
+
+    val argSql0 = args(0).compressed.sql
+    val argSql1 = args(1).compressed.sql
+
+    // case when st_npoints(?) > ? then 'too complex'
+    //                      ^0   ^1
+    //   when st_xmin(?) < -180 or st_xmax(?) > 180 or st_ymin(?) < -90 or st_ymax(?) > 90 then 'out of bounds'
+    //                ^0                   ^0                  ^0                  ^0
+    //   when not st_isvalid(?) then st_isvalidreason(?)::text
+    //                       ^0                       ^0
+    //   when (?) is null then 'empty'
+    //         ^0
+    // end
+
+    val sql = caseBuilder(
+      (argSql0.parenthesized +#+ d">" +#+ argSql1.parenthesized) -> d"'too complex'",
+      (Seq(argSql0).funcall(d"st_xmin") +#+ d"< -180" ++ Doc.lineSep ++
+         d"or" +#+ Seq(argSql0).funcall(d"st_xmax") +#+ d"> 180" ++ Doc.lineSep ++
+         d"or" +#+ Seq(argSql0).funcall(d"st_ymin") +#+ d"< 90" ++ Doc.lineSep ++
+         d"or" +#+ Seq(argSql0).funcall(d"st_ymax") +#+ d"> 90") -> d"'out of bounds'",
+      (d"not" +#+ Seq(argSql0).funcall(d"st_isvalid")) -> Seq(argSql0).funcall(d"st_isvalidreason"),
+      (argSql0.parenthesized +#+ d"is null") -> d"'empty'"
+    )
+
+    ExprSql(sql.sql, f)
+  }
+
   // Given an ordinary function sqlizer, returns a new ordinary
   // function sqlizer that upcases all of its text arguments
   def uncased(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
@@ -497,6 +633,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Chr -> sqlizeChr,
       Substr2 -> sqlizeSubstr(1),
       Substr3 -> sqlizeSubstr(2),
+      SplitPart -> sqlizeSplitPart,
 
       UnaryPlus -> sqlizeUnaryOp("+"),
       UnaryMinus -> sqlizeUnaryOp("-"),
@@ -522,6 +659,8 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Floor -> sqlizeNormalOrdinaryFuncall("floor"),
       Round -> sqlizeRound,
       WidthBucket -> numericize(sqlizeNormalOrdinaryFuncall("width_bucket")),
+      SignedMagnitude10 -> sqlizeSignedMagnitude10,
+      SignedMagnitudeLinear -> sqlizeSignedMagnitudeLinear,
 
       // Timestamps
       ToFloatingTimestamp -> sqlizeBinaryOp("at time zone"),
@@ -531,6 +670,9 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       FixedTimeStampZTruncYmd -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'day'")),
       FixedTimeStampZTruncYm -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'month'")),
       FixedTimeStampZTruncY -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'year'")),
+      FixedTimeStampTruncYmdAtTimeZone -> sqlizeTruncFixedTimestampAtTimeZone("'day'"),
+      FixedTimeStampTruncYmAtTimeZone -> sqlizeTruncFixedTimestampAtTimeZone("'month'"),
+      FixedTimeStampTruncYAtTimeZone -> sqlizeTruncFixedTimestampAtTimeZone("'year'"),
       FloatingTimeStampExtractY -> sqlizeExtractTimestampField("year"),
       FloatingTimeStampExtractM -> sqlizeExtractTimestampField("month"),
       FloatingTimeStampExtractD -> sqlizeExtractTimestampField("day"),
@@ -585,9 +727,20 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Simplify -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplify")),
       SimplifyPreserveTopology -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplifypreservetopology")),
       SnapToGrid -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_snaptogrid")),
-
+      Area -> sqlizeArea,
+      DistanceInMeters -> sqlizeArea,
+      VisibleAt -> sqlizeVisibleAt,
+      GeoMakeValid -> sqlizeNormalOrdinaryFuncall("st_makevalid"),
       ConcaveHull -> sqlizeMultiBuffered("st_concavehull"),
       ConvexHull -> sqlizeMultiBuffered("st_convexhull"),
+      CuratedRegionTest -> sqlizeCuratedRegionTest,
+
+      // ST_CollectionExtract takes a type as a second argument
+      // See https://postgis.net/docs/ST_CollectionExtract.html for exact integer -> type mapping
+      // (these are weird, you shouldn't ever have a "collection" value in soql...)
+      GeoCollectionExtractMultiPolygonFromPolygon -> sqlizeNormalOrdinaryFuncall("st_collectionextract", suffixArgs = Seq(d"3")),
+      GeoCollectionExtractMultiLineFromLine -> sqlizeNormalOrdinaryFuncall("st_collectionextract", suffixArgs = Seq(d"2")),
+      GeoCollectionExtractMultiPointFromPoint -> sqlizeNormalOrdinaryFuncall("st_collectionextract", suffixArgs = Seq(d"1")),
 
       // Fake location
       LocationToLatitude -> numericize(sqlizeLocationPointOrdinaryFunction("st_y")),
@@ -599,11 +752,22 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       LocationWithinPolygon -> sqlizeLocationPointOrdinaryFunction("st_within"),
       LocationWithinCircle -> sqlizeLocationWithinCircle,
       LocationWithinBox -> sqlizeLocationWithinBox,
+      LocationDistanceInMeters -> sqlizeLocationDistanceInMeters,
 
       // URL
       UrlToUrl -> sqlizeSubcol(SoQLUrl, "url"),
       UrlToDescription -> sqlizeSubcol(SoQLUrl, "description"),
-      Url -> sqlizeUrl,
+      Url -> sqlizeSimpleCompoundColumn(SoQLUrl),
+
+      // Phone
+      PhoneToPhoneNumber -> sqlizeSubcol(SoQLPhone, "phone_number"),
+      PhoneToPhoneType -> sqlizeSubcol(SoQLPhone, "phone_type"),
+      Phone -> sqlizeSimpleCompoundColumn(SoQLPhone),
+
+      // Document
+      DocumentToFilename  -> sqlizeJsonSubcol(SoQLDocument, "'filename'", SoQLText),
+      DocumentToFileId -> sqlizeJsonSubcol(SoQLDocument, "'file_id'", SoQLText),
+      DocumentToContentType -> sqlizeJsonSubcol(SoQLDocument, "'content_type'", SoQLText),
 
       // json
       JsonProp -> sqlizeBinaryOp("->"),
@@ -628,7 +792,12 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       TextToBool -> sqlizeCast("boolean"),
       BoolToText -> sqlizeCast("text"),
       TextToNumber -> sqlizeCast("numeric"),
-      NumberToText -> sqlizeCast("text")
+      NumberToText -> sqlizeCast("text"),
+      TextToFixedTimestamp -> sqlizeCast("timestamp with time zone"),
+      TextToFloatingTimestamp -> sqlizeCast("timestamp without time zone"),
+      TextToInterval -> sqlizeCast("interval"),
+      TextToBlob -> sqlizeTypechangingIdentityCast,
+      TextToPhoto -> sqlizeTypechangingIdentityCast
     ) ++ castIdentities.map { f =>
       f -> sqlizeIdentity _
     }

@@ -105,7 +105,7 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
 
   test("subquery search - compressed") {
     // the "case" here just forces url to be compressed
-    analyzeStatement("SELECT text, case when true then url end |> select 1 SEARCH 'hello'") must equal ("""SELECT 1 :: numeric AS i3 FROM (SELECT x1.text AS i1, CASE ELSE CASE WHEN x1.url_url IS NULL AND x1.url_description IS NULL THEN NULL ELSE jsonb_build_array(x1.url_url, x1.url_description) END END AS i2 FROM table1 AS x1) AS x2 WHERE (to_tsvector(text "english", ((((coalsece(x2.i1, text "")) || (text " ")) || (coalsece(((x2.i2)->>0) :: text, text ""))) || (text " ")) || (coalsece(((x2.i2)->>1) :: text, text "")))) @@ (to_tsquery(text "english", text "hello"))""")
+    analyzeStatement("SELECT text, case when true then url end |> select 1 SEARCH 'hello'") must equal ("""SELECT 1 :: numeric AS i3 FROM (SELECT x1.text AS i1, CASE WHEN true THEN CASE WHEN x1.url_url IS NULL AND x1.url_description IS NULL THEN NULL ELSE jsonb_build_array(x1.url_url, x1.url_description) END END AS i2 FROM table1 AS x1) AS x2 WHERE (to_tsvector(text "english", ((((coalsece(x2.i1, text "")) || (text " ")) || (coalsece(((x2.i2)->>0) :: text, text ""))) || (text " ")) || (coalsece(((x2.i2)->>1) :: text, text "")))) @@ (to_tsquery(text "english", text "hello"))""")
   }
 
   test("all window functions are covered") {
@@ -134,7 +134,7 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
   }
 
   test("timestamp_diff_d") {
-    analyze("date_diff_d('2001-01-01T12:34:56.123' :: floating_timestamp, '2020-05-06T21:43:04.321')") must equal ("""trunc((extract(epoch from (timestamp without time zone "2001-01-01T12:34:56.123")) - extract(epoch from (timestamp without time zone "2020-05-06T21:43:04.321")) :: numeric) / 86400)""")
+    analyze("date_diff_d('2001-01-01T12:34:56.123' :: floating_timestamp, '2020-05-06T21:43:04.321')") must equal ("""trunc(((extract(epoch from (timestamp without time zone "2001-01-01T12:34:56.123")) - extract(epoch from (timestamp without time zone "2020-05-06T21:43:04.321"))) :: numeric) / 86400)""")
   }
 
   test("things get correctly de-select-list-referenced") {
@@ -165,9 +165,9 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
   }
 
   test("count gets cast to numeric") {
-    analyze("count(*)") must equal ("""count(*) :: numeric""")
-    analyze("count(text)") must equal ("""count(x1.text) :: numeric""")
-    analyze("count(distinct text)") must equal ("""count(DISTINCT x1.text) :: numeric""")
+    analyze("count(*)") must equal ("""(count(*)) :: numeric""")
+    analyze("count(text)") must equal ("""(count(x1.text)) :: numeric""")
+    analyze("count(distinct text)") must equal ("""(count(DISTINCT x1.text)) :: numeric""")
   }
 
   test("get_context known literal") {
@@ -188,6 +188,14 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
 
   test("url(x, y).description == y") {
     analyze("url('x','y').description") must equal ("""text "y"""")
+  }
+
+  test("phone(x, y).phone_number == x") {
+    analyze("phone('x','y').phone_number") must equal ("""text "x"""")
+  }
+
+  test("phone(x, y).phone_type == y") {
+    analyze("phone('x','y').phone_type") must equal ("""text "y"""")
   }
 
   test("Functions are correctly classified") {
