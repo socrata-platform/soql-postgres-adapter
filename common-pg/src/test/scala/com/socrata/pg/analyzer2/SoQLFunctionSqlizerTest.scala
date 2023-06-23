@@ -134,7 +134,7 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
   }
 
   test("timestamp_diff_d") {
-    analyze("date_diff_d('2001-01-01T12:34:56.123' :: floating_timestamp, '2020-05-06T21:43:04.321')") must equal ("""trunc((extract(epoch from (timestamp without time zone "2001-01-01T12:34:56.123")) - extract(epoch from (timestamp without time zone "2020-05-06T21:43:04.321")) :: numeric) / 86400)""")
+    analyze("date_diff_d('2001-01-01T12:34:56.123' :: floating_timestamp, '2020-05-06T21:43:04.321')") must equal ("""trunc(((extract(epoch from (timestamp without time zone "2001-01-01T12:34:56.123")) - extract(epoch from (timestamp without time zone "2020-05-06T21:43:04.321"))) :: numeric) / 86400)""")
   }
 
   test("things get correctly de-select-list-referenced") {
@@ -165,9 +165,9 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
   }
 
   test("count gets cast to numeric") {
-    analyze("count(*)") must equal ("""count(*) :: numeric""")
-    analyze("count(text)") must equal ("""count(x1.text) :: numeric""")
-    analyze("count(distinct text)") must equal ("""count(DISTINCT x1.text) :: numeric""")
+    analyze("count(*)") must equal ("""(count(*)) :: numeric""")
+    analyze("count(text)") must equal ("""(count(x1.text)) :: numeric""")
+    analyze("count(distinct text)") must equal ("""(count(DISTINCT x1.text)) :: numeric""")
   }
 
   test("get_context known literal") {

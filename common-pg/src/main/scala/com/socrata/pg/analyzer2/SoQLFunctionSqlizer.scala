@@ -16,19 +16,19 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
   def numericize(sqlizer: OrdinaryFunctionSqlizer) = ofs { (f, args, ctx) =>
     val e = sqlizer(f, args, ctx)
     assert(e.typ == SoQLNumber)
-    ExprSql(e.compressed.sql +#+ d":: numeric", f)
+    ExprSql(e.compressed.sql.parenthesized +#+ d":: numeric", f)
   }
 
   def numericize(sqlizer: AggregateFunctionSqlizer) = afs { (f, args, filter, ctx) =>
     val e = sqlizer(f, args, filter, ctx)
     assert(e.typ == SoQLNumber)
-    ExprSql(e.compressed.sql +#+ d":: numeric", f)
+    ExprSql(e.compressed.sql.parenthesized +#+ d":: numeric", f)
   }
 
   def numericize(sqlizer: WindowedFunctionSqlizer) = wfs { (f, args, filter, partitionBy, orderBy, ctx) =>
     val e = sqlizer(f, args, filter, partitionBy, orderBy, ctx)
     assert(e.typ == SoQLNumber)
-    ExprSql(e.compressed.sql +#+ d":: numeric", f)
+    ExprSql(e.compressed.sql.parenthesized +#+ d":: numeric", f)
   }
 
   def sqlizeNormalOrdinaryWithWrapper(name: String, wrapper: String) = ofs { (f, args, ctx) =>
@@ -191,7 +191,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
 
     val sql =
       Seq(
-        (delta +#+ d":: numeric").parenthesized +#+ d"/" +#+ d"86400"
+        (delta.parenthesized +#+ d":: numeric").parenthesized +#+ d"/" +#+ d"86400"
       ).funcall(d"trunc")
     ExprSql(sql, f)
   }
@@ -308,7 +308,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     assert(args(0).typ == SoQLNumber)
 
     ExprSql(
-      Seq(args(0).compressed.sql +#+ d":: int").funcall(d"chr"),
+      Seq(args(0).compressed.sql.parenthesized +#+ d":: int").funcall(d"chr"),
       f
     )
   }
@@ -320,7 +320,20 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     assert(args.tail.forall(_.typ == SoQLNumber))
 
     ExprSql(
-      (args(0).compressed.sql +: args.tail.map(_.compressed.sql +#+ d":: int")).funcall(d"substring"),
+      (args(0).compressed.sql +: args.tail.map(_.compressed.sql.parenthesized +#+ d":: int")).funcall(d"substring"),
+      f
+    )
+  }
+
+  def sqlizeSplitPart = ofs { (f, args, ctx) =>
+    assert(f.typ == SoQLText)
+    assert(args.length == 3)
+    assert(args(0).typ == SoQLText)
+    assert(args(1).typ == SoQLText)
+    assert(args(2).typ == SoQLNumber)
+
+    ExprSql(
+      Seq(args(0).compressed.sql, args(1).compressed.sql, args(2).compressed.sql.parenthesized +#+ d":: int").funcall(d"split_part"),
       f
     )
   }
@@ -620,6 +633,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Chr -> sqlizeChr,
       Substr2 -> sqlizeSubstr(1),
       Substr3 -> sqlizeSubstr(2),
+      SplitPart -> sqlizeSplitPart,
 
       UnaryPlus -> sqlizeUnaryOp("+"),
       UnaryMinus -> sqlizeUnaryOp("-"),
