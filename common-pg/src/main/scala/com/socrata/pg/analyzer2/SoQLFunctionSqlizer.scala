@@ -735,6 +735,13 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       ConvexHull -> sqlizeMultiBuffered("st_convexhull"),
       CuratedRegionTest -> sqlizeCuratedRegionTest,
 
+      // ST_CollectionExtract takes a type as a second argument
+      // See https://postgis.net/docs/ST_CollectionExtract.html for exact integer -> type mapping
+      // (these are weird, you shouldn't ever have a "collection" value in soql...)
+      GeoCollectionExtractMultiPolygonFromPolygon -> sqlizeNormalOrdinaryFuncall("st_collectionextract", suffixArgs = Seq(d"3")),
+      GeoCollectionExtractMultiLineFromLine -> sqlizeNormalOrdinaryFuncall("st_collectionextract", suffixArgs = Seq(d"2")),
+      GeoCollectionExtractMultiPointFromPoint -> sqlizeNormalOrdinaryFuncall("st_collectionextract", suffixArgs = Seq(d"1")),
+
       // Fake location
       LocationToLatitude -> numericize(sqlizeLocationPointOrdinaryFunction("st_y")),
       LocationToLongitude -> numericize(sqlizeLocationPointOrdinaryFunction("st_x")),
