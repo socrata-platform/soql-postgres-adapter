@@ -2,6 +2,7 @@ package com.socrata.pg.analyzer2
 
 import org.joda.time.DateTime
 
+import com.socrata.soql.collection.NonEmptySeq
 import com.socrata.soql.analyzer2._
 import com.socrata.prettyprint.prelude._
 
@@ -64,6 +65,32 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     ctx: DynamicContext
   ): ExprSql
   protected def wfs(f: WindowedFunctionSqlizer) = f
+
+  // Helpers for CASE
+
+  protected class CaseClause(testSql: Doc, consequentSql: Doc) {
+    def sql =
+      ((d"WHEN" +#+ testSql).nest(2).group ++ Doc.lineSep ++ (d"THEN" +#+ consequentSql).nest(2).group).nest(2).group
+  }
+
+  protected class ElseClause(elseSql: Doc) {
+    def sql = (d"ELSE" +#+ elseSql).nest(2).group
+  }
+
+  protected class CaseBuilder(caseClauses: NonEmptySeq[CaseClause], elseClause: Option[ElseClause]) {
+    def sql = {
+      val allClauses = caseClauses.map(_.sql) ++ elseClause.map(_.sql)
+      ((d"CASE" ++ Doc.lineSep ++ allClauses.toSeq.vsep).nest(2) ++ Doc.lineSep ++ d"END").group
+    }
+
+    def withElse(clause: Doc) =
+      new CaseBuilder(caseClauses, Some(new ElseClause(clause)))
+  }
+
+  protected def caseBuilder(clause: (Doc, Doc), clauses: (Doc, Doc)*): CaseBuilder = {
+    val thenCs = NonEmptySeq(clause, clauses).map { case (t, c) => new CaseClause(t, c) }
+    new CaseBuilder(thenCs, None)
+  }
 
   // These helpers don't care about the specific functions involved,
   // they're purely syntactic.
@@ -210,7 +237,18 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   protected def sqlizeIdentity(e: FunctionCall, args: Seq[ExprSql], ctx: DynamicContext): ExprSql = {
     assert(e.function.minArity == 1 && !e.function.isVariadic)
     assert(args.lengthCompare(1) == 0)
+    assert(e.typ == args(0).typ)
     args(0)
+  }
+
+  protected def sqlizeTypechangingIdentityCast(e: FunctionCall, args: Seq[ExprSql], ctx: DynamicContext): ExprSql = {
+    assert(e.function.minArity == 1 && !e.function.isVariadic)
+    assert(args.lengthCompare(1) == 0)
+
+    args(0) match {
+      case compressed: ExprSql.Compressed[MT] => ExprSql(compressed.sql, e)
+      case expanded: ExprSql.Expanded[MT] => ExprSql(expanded.sqls, e)(ctx.repFor, ctx.gensymProvider)
+    }
   }
 
   // These helpers don't care about the particulars of the types in

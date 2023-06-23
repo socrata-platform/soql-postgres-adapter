@@ -2,6 +2,7 @@ package com.socrata.pg.analyzer2
 
 import com.socrata.prettyprint.prelude._
 import com.socrata.soql.analyzer2._
+import com.socrata.soql.collection.NonEmptySeq
 import com.socrata.soql.types._
 import com.socrata.soql.functions.SoQLFunctions._
 import com.socrata.soql.functions.{Function, MonomorphicFunction, SoQLTypeInfo}
@@ -78,22 +79,30 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
 
     def sqlizeCondition(conditionConsequent: Seq[ExprSql]) = {
       val Seq(condition, consequent) = conditionConsequent
-      ((d"WHEN" +#+ condition.compressed.sql).nest(2).group ++ Doc.lineSep ++ (d"THEN" +#+ consequent.compressed.sql).nest(2).group).nest(2).group
+      new CaseClause(condition.compressed.sql, consequent.compressed.sql)
     }
 
-    val clauses =
+    val caseBuilder =
       lastCase.head.expr match {
-        case LiteralValue(SoQLBoolean(true)) =>
+        case LiteralValue(SoQLBoolean(true)) if args.length > 2 =>
           val initialCases = args.dropRight(2)
           val otherwise = lastCase(1)
-          initialCases.grouped(2).map(sqlizeCondition).toSeq :+ (d"ELSE" +#+ otherwise.compressed.sql).nest(2).group
+          new CaseBuilder(
+            NonEmptySeq.fromSeq(initialCases.grouped(2).map(sqlizeCondition).toSeq).getOrElse {
+              throw new Exception("NonEmptySeq failed but I've checked that there are enough cases")
+            },
+            Some(new ElseClause(otherwise.compressed.sql))
+          )
         case _ =>
-          args.grouped(2).map(sqlizeCondition).toSeq
+          new CaseBuilder(
+            NonEmptySeq.fromSeq(args.grouped(2).map(sqlizeCondition).toSeq).getOrElse {
+              throw new Exception("NonEmptySeq failed but I've checked that there are enough cases")
+            },
+            None
+          )
       }
 
-    val doc = (d"CASE" ++ Doc.lineSep ++ clauses.vsep).nest(2) ++ Doc.lineSep ++ d"END"
-
-    ExprSql(doc.group, f)
+    ExprSql(caseBuilder.sql, f)
   }
 
   def sqlizeContains = ofs { (f, args, ctx) =>
@@ -106,14 +115,9 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     assert(f.function.function eq Iif)
     assert(args.length == 3)
 
-    val clauses = Seq(
-      ((d"WHEN" +#+ args(0).compressed.sql).nest(2).group ++ Doc.lineSep ++ (d"THEN" +#+ args(1).compressed.sql).nest(2).group).nest(2).group,
-      (d"ELSE" +#+ args(2).compressed.sql).nest(2).group
-    )
+    val sql = caseBuilder(args(0).compressed.sql -> args(1).compressed.sql).withElse(args(2).compressed.sql)
 
-    val doc = (d"CASE" ++ Doc.lineSep ++ clauses.vsep).nest(2) ++ Doc.lineSep ++ d"END"
-
-    ExprSql(doc.group, f)
+    ExprSql(sql.sql, f)
   }
 
   def sqlizeGetContext = ofs { (f, args, ctx) =>
@@ -248,14 +252,11 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
 
     val resultIfNotNull = d"""'{"address":' ||""" +#+ addr +#+ d"""|| ',"city":' ||""" +#+ city +#+ d"""|| ',"state":' ||""" +#+ state +#+ d"""|| ',"zip":' ||""" +#+ zip +#+ d"""|| '}'"""
 
-    val clauses = Seq(
-      ((d"WHEN" +#+ nullCheck).nest(2).group ++ Doc.lineSep ++ d"THEN NULL :: text").nest(2).group,
-      (d"ELSE" +#+ resultIfNotNull).nest(2).group
-    )
+    val sql = caseBuilder(
+      nullCheck -> d"NULL :: text"
+    ).withElse(resultIfNotNull)
 
-    val doc = (d"CASE" ++ Doc.lineSep ++ clauses.vsep).nest(2) ++ Doc.lineSep ++ d"END"
-
-    doc.group
+    sql.sql
   }
 
   def sqlizeLocationHumanAddress = ofs { (f, args, ctx) =>
@@ -506,14 +507,43 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     // "case when ? = 1 then floor(?) else sign(?) * floor(abs(?)/? + 1) end"
     //            ^1               ^0           ^0             ^0 ^1
 
-    val clauses = Seq(
-      ((d"WHEN" +#+ argSql1.parenthesized +#+ d"= 1").nest(2).group ++ Doc.lineSep ++ (d"THEN" +#+ Seq(argSql0).funcall(d"floor")).nest(2).group).nest(2).group,
-      (d"ELSE" +#+ Seq(argSql0).funcall(d"sign") +#+ d"*" +#+ Seq(Seq(argSql0).funcall(d"abs") +#+ d"/" +#+ argSql1.parenthesized +#+ d"+ 1").funcall(d"floor")).nest(2).group
+    val sql = caseBuilder(
+      (argSql1.parenthesized +#+ d"= 1") -> Seq(argSql0).funcall(d"floor")
+    ).withElse(
+      Seq(argSql0).funcall(d"sign") +#+ d"*" +#+ Seq(Seq(argSql0).funcall(d"abs") +#+ d"/" +#+ argSql1.parenthesized +#+ d"+ 1").funcall(d"floor")
     )
 
-    val sql = (d"CASE" ++ Doc.lineSep ++ clauses.vsep).nest(2) ++ Doc.lineSep ++ d"END"
+    ExprSql(sql.sql, f)
+  }
 
-    ExprSql(sql.group, f)
+  def sqlizeCuratedRegionTest = ofs { (f, args, ctx) =>
+    assert(args.length == 2)
+    assert(args(1).typ == SoQLNumber)
+
+    val argSql0 = args(0).compressed.sql
+    val argSql1 = args(1).compressed.sql
+
+    // case when st_npoints(?) > ? then 'too complex'
+    //                      ^0   ^1
+    //   when st_xmin(?) < -180 or st_xmax(?) > 180 or st_ymin(?) < -90 or st_ymax(?) > 90 then 'out of bounds'
+    //                ^0                   ^0                  ^0                  ^0
+    //   when not st_isvalid(?) then st_isvalidreason(?)::text
+    //                       ^0                       ^0
+    //   when (?) is null then 'empty'
+    //         ^0
+    // end
+
+    val sql = caseBuilder(
+      (argSql0.parenthesized +#+ d">" +#+ argSql1.parenthesized) -> d"'too complex'",
+      (Seq(argSql0).funcall(d"st_xmin") +#+ d"< -180" ++ Doc.lineSep ++
+         d"or" +#+ Seq(argSql0).funcall(d"st_xmax") +#+ d"> 180" ++ Doc.lineSep ++
+         d"or" +#+ Seq(argSql0).funcall(d"st_ymin") +#+ d"< 90" ++ Doc.lineSep ++
+         d"or" +#+ Seq(argSql0).funcall(d"st_ymax") +#+ d"> 90") -> d"'out of bounds'",
+      (d"not" +#+ Seq(argSql0).funcall(d"st_isvalid")) -> Seq(argSql0).funcall(d"st_isvalidreason"),
+      (argSql0.parenthesized +#+ d"is null") -> d"'empty'"
+    )
+
+    ExprSql(sql.sql, f)
   }
 
   // Given an ordinary function sqlizer, returns a new ordinary
