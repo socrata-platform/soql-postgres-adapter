@@ -51,8 +51,6 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     wrap(f, wrap(f, exprSql, "st_buffer", d"0.0"), "st_multi")
   }
 
-  val defaultSRIDLiteral = d"4326"
-
   def sqlizeGeomCast(sqlFunctionName: String) = ofs { (f, args, ctx) =>
     // Just like a normal ordinary function call, but with an
     // additional synthetic parameter for SRID
@@ -65,7 +63,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     assert(f.function.minArity == 1 && !f.function.isVariadic)
     assert(f.function.allParameters == args.map(_.typ))
 
-    val sql = (args.map(_.compressed.sql) :+ defaultSRIDLiteral).funcall(Doc(sqlFunctionName))
+    val sql = (args.map(_.compressed.sql) :+ Geo.defaultSRIDLiteral).funcall(Doc(sqlFunctionName))
 
     ExprSql(sql.group, f)
   }
@@ -426,8 +424,8 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       ReducePolyPrecision -> sqlizeNormalOrdinaryWithWrapper("st_reduceprecision", "st_multi"),
       Intersection -> sqlizeMultiBuffered("st_intersection"),
       WithinPolygon -> sqlizeNormalOrdinaryFuncall("st_within"),
-      WithinCircle -> sqlizeNormalOrdinaryFuncall("soql_within_circle"),
-      WithinBox -> sqlizeNormalOrdinaryFuncall("soql_within_box", suffixArgs = Seq(defaultSRIDLiteral)),
+      WithinCircle -> sqlizeNormalOrdinaryFuncall("soql_within_circle", suffixArgs = Seq(Geo.defaultSRIDLiteral)),
+      WithinBox -> sqlizeNormalOrdinaryFuncall("soql_within_box", suffixArgs = Seq(Geo.defaultSRIDLiteral)),
       IsEmpty -> sqlizeIsEmpty,
       Simplify -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplify")),
       SimplifyPreserveTopology -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplifypreservetopology")),
@@ -455,8 +453,8 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Location -> sqlizeLocation,
       HumanAddress -> sqlizeNormalOrdinaryFuncall("soql_human_address"),
       LocationWithinPolygon -> sqlizeLocationPointOrdinaryFunction("st_within"),
-      LocationWithinCircle -> sqlizeLocationPointOrdinaryFunction("soql_within_circle"),
-      LocationWithinBox -> sqlizeLocationPointOrdinaryFunction("soql_within_box", suffixArgs = Seq(defaultSRIDLiteral)),
+      LocationWithinCircle -> sqlizeLocationPointOrdinaryFunction("soql_within_circle", suffixArgs = Seq(Geo.defaultSRIDLiteral)),
+      LocationWithinBox -> sqlizeLocationPointOrdinaryFunction("soql_within_box", suffixArgs = Seq(Geo.defaultSRIDLiteral)),
       LocationDistanceInMeters -> sqlizeLocationPointOrdinaryFunction("soql_distance_in_meters"),
 
       // URL

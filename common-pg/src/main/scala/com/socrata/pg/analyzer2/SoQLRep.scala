@@ -26,7 +26,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
 
     def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
       val SoQLText(s) = e.value
-      ExprSql(mkStringLiteral(s).funcall(open), e)
+      ExprSql(Seq(mkStringLiteral(s).funcall(open), Geo.defaultSRIDLiteral).funcall(d"st_setsrid"), e)
     }
 
     override def hasTopLevelWrapper = true

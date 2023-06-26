@@ -103,8 +103,8 @@
           PARALLEL SAFE
           RETURNS NULL ON NULL INPUT;
 
-          CREATE OR REPLACE FUNCTION soql_within_circle(scrutinee geometry, lat numeric, lon numeric, radius numeric) RETURNS boolean AS $$
-            select st_within(scrutinee, st_buffer(st_makepoint(lon, lat) :: geography, radius) :: geometry);
+          CREATE OR REPLACE FUNCTION soql_within_circle(scrutinee geometry, lat numeric, lon numeric, radius numeric, srid int) RETURNS boolean AS $$
+            select st_within(scrutinee, st_buffer(st_setsrid(st_makepoint(lon, lat), srid) :: geography, radius) :: geometry);
           $$ LANGUAGE SQL
           IMMUTABLE
           PARALLEL SAFE
@@ -186,7 +186,7 @@
               DROP FUNCTION soql_distance_in_meters(geometry, geometry);
               DROP FUNCTION soql_area(geometry);
               DROP FUNCTION soql_within_box(geometry, numeric, numeric, numeric, numeric, int);
-              DROP FUNCTION soql_within_circle(geometry, numeric, numeric, numeric);
+              DROP FUNCTION soql_within_circle(geometry, numeric, numeric, numeric, int);
               DROP FUNCTION soql_timestamp_diff_d(timestamp without time zone, timestamp without time zone);
               DROP FUNCTION soql_timestamp_diff_d(timestamp with time zone, timestamp with time zone);
               DROP FUNCTION soql_epoch_seconds(timestamp with time zone);
