@@ -105,7 +105,7 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
 
   test("subquery search - compressed") {
     // the "case" here just forces url to be compressed
-    analyzeStatement("SELECT text, case when true then url end |> select 1 SEARCH 'hello'") must equal ("""SELECT 1 :: numeric AS i3 FROM (SELECT x1.text AS i1, soql_compress_compound(x1.url_url, x1.url_description) AS i2 FROM table1 AS x1) AS x2 WHERE (to_tsvector(text "english", ((((coalsece(x2.i1, text "")) || (text " ")) || (coalsece(((x2.i2)->>0) :: text, text ""))) || (text " ")) || (coalsece(((x2.i2)->>1) :: text, text "")))) @@ (to_tsquery(text "english", text "hello"))""")
+    analyzeStatement("SELECT text, case when true then url end |> select 1 SEARCH 'hello'") must equal ("""SELECT 1 :: numeric AS i3 FROM (SELECT x1.text AS i1, soql_compress_compound(x1.url_url, x1.url_description) AS i2 FROM table1 AS x1) AS x2 WHERE (to_tsvector(text "english", ((((coalsece(x2.i1, text "")) || (text " ")) || (coalsece((x2.i2) ->> 0, text ""))) || (text " ")) || (coalsece((x2.i2) ->> 1, text "")))) @@ (to_tsquery(text "english", text "hello"))""")
   }
 
   test("all window functions are covered") {

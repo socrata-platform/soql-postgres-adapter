@@ -319,8 +319,8 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
 
       def subcolInfo(field: String) =
         field match {
-          case "phone_number" => SubcolInfo[MT](0, "text", SoQLText)
-          case "phone_type" => SubcolInfo[MT](1, "text", SoQLText)
+          case "phone_number" => SubcolInfo[MT](SoQLPhone, 0, "text", SoQLText, _.parenthesized +#+ d"->> 0")
+          case "phone_type" => SubcolInfo[MT](SoQLPhone, 1, "text", SoQLText, _.parenthesized +#+ d"->> 1")
         }
 
       private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.PhoneRep("")
@@ -383,13 +383,11 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
 
       def subcolInfo(field: String) =
         field match {
-          // point is special (since it's actually a geojson value
-          // when compressed), and so not handled by an ordinary
-          // subcol extractor
-          case "address" => SubcolInfo[MT](1, "text", SoQLText)
-          case "city" => SubcolInfo[MT](2, "text", SoQLText)
-          case "state" => SubcolInfo[MT](3, "text", SoQLText)
-          case "zip" => SubcolInfo[MT](4, "text", SoQLText)
+          case "point" => SubcolInfo[MT](SoQLLocation, 0, "geometry", SoQLPoint, { e => Seq(e.parenthesized +#+ d"-> 0").funcall(d"st_geomfromgeojson") })
+          case "address" => SubcolInfo[MT](SoQLLocation, 1, "text", SoQLText, _.parenthesized +#+ d"->> 1")
+          case "city" => SubcolInfo[MT](SoQLLocation, 2, "text", SoQLText, _.parenthesized +#+ d"->> 2")
+          case "state" => SubcolInfo[MT](SoQLLocation, 3, "text", SoQLText, _.parenthesized +#+ d"->> 3")
+          case "zip" => SubcolInfo[MT](SoQLLocation, 4, "text", SoQLText, _.parenthesized +#+ d"->> 4")
         }
 
       override def hasTopLevelWrapper = true
@@ -492,8 +490,8 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
 
       def subcolInfo(field: String) =
         field match {
-          case "url" => SubcolInfo[MT](0, "text", SoQLText)
-          case "description" => SubcolInfo[MT](1, "text", SoQLText)
+          case "url" => SubcolInfo[MT](SoQLUrl, 0, "text", SoQLText, _.parenthesized +#+ d"->> 0")
+          case "description" => SubcolInfo[MT](SoQLUrl, 1, "text", SoQLText, _.parenthesized +#+ d"->> 1")
         }
 
       private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.UrlRep("")

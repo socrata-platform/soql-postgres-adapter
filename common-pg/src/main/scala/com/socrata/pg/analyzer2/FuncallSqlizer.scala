@@ -191,21 +191,10 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
       val arg = args.head
       assert(arg.typ == typ)
 
-      arg match {
-        case cmp: ExprSql.Compressed[MT] =>
-          ExprSql(
-            // This is kinda icky and fragile, but it'll work in
-            // practice for the subcolumn types (text and number) that
-            // we have.
-            d"((" ++ cmp.sql ++ d")->>" ++ Doc(subcolInfo.index) ++ d") ::" +#+ Doc(subcolInfo.sqlType),
-            e
-          )
-        case exp: ExprSql.Expanded[MT] =>
-          ExprSql(
-            exp.sqls(subcolInfo.index),
-            e
-          )
-      }
+      ExprSql(
+        subcolInfo.extractor(arg),
+        e
+      )
     }
   }
 

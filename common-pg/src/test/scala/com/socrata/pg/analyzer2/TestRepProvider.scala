@@ -106,8 +106,8 @@ class TestRepProvider(override val namespace: SqlNamespaces[SqlizerTest.TestMT])
 
       def subcolInfo(field: String) =
         field match {
-          case "a" => SubcolInfo[TestMT](0, "text", TestText)
-          case "b" => SubcolInfo[TestMT](1, "numeric", TestNumber)
+          case "a" => SubcolInfo[TestMT](TestCompound, 0, "text", TestText, _.parenthesized +#+ d"->> 0")
+          case "b" => SubcolInfo[TestMT](TestCompound, 1, "numeric", TestNumber, { e => (e.parenthesized +#+ d"->> 1").parenthesized +#+ d":: numeric" }) // ->> because it handles jsonb null => sql null
         }
 
       protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {

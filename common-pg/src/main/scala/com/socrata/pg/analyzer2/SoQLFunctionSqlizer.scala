@@ -156,23 +156,8 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     }
   }
 
-  def pointSqlFromLocation(sql: ExprSql): Doc = {
-    assert(sql.typ == SoQLLocation)
-    sql match {
-      case expanded: ExprSql.Expanded[MT] =>
-        expanded.sqls.head
-      case compressed: ExprSql.Compressed[MT] =>
-        Seq(compressed.sql +#+ d"-> 0").funcall(d"st_geomfromgeojson")
-    }
-  }
-
-  def sqlizeLocationPoint = ofs { (f, args, ctx) =>
-    assert(args.length == 1)
-    assert(args(0).typ == SoQLLocation)
-
-    val pointSubcolumnSql = pointSqlFromLocation(args(0))
-
-    ExprSql(pointSubcolumnSql, f)
+  def pointSqlFromLocation(sql: ExprSql, ctx: DynamicContext): Doc = {
+    ctx.repFor(SoQLLocation).subcolInfo("point").extractor(sql)
   }
 
   // Like "sqlNormalOrdinaryFunction" but it extracts the point
@@ -185,7 +170,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
 
       val pointExtractedArgs = args.map { e =>
         e.typ match {
-          case SoQLLocation => pointSqlFromLocation(e)
+          case SoQLLocation => pointSqlFromLocation(e, ctx)
           case _ => e.compressed.sql
         }
       }
@@ -449,7 +434,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       LocationToLatitude -> numericize(sqlizeLocationPointOrdinaryFunction("st_y")),
       LocationToLongitude -> numericize(sqlizeLocationPointOrdinaryFunction("st_x")),
       LocationToAddress -> sqlizeLocationHumanAddress,
-      LocationToPoint -> sqlizeLocationPoint,
+      LocationToPoint -> sqlizeSubcol(SoQLLocation, "point"),
       Location -> sqlizeLocation,
       HumanAddress -> sqlizeNormalOrdinaryFuncall("soql_human_address"),
       LocationWithinPolygon -> sqlizeLocationPointOrdinaryFunction("st_within"),
