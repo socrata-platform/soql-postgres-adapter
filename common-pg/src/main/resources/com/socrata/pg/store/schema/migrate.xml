@@ -35,4 +35,6 @@
     <include file="com/socrata/pg/store/schema/20221116-create-rollup-table-name-seq.xml"/>
     <include file="com/socrata/pg/store/schema/20230607-create-jsonb-aggregates.xml"/>
     <include file="com/socrata/pg/store/schema/20230619-add-discrete-median-function.xml"/>
+    <include file="com/socrata/pg/store/schema/20230626-nontrivial-soql-functions.xml"/>
+    <include file="com/socrata/pg/store/schema/20230626-soql-compress-compound.xml"/>
 </databaseChangeLog>

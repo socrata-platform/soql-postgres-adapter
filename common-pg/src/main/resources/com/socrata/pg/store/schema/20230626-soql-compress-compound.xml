@@ -1,0 +1,39 @@
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+    <changeSet author="robertm" id="20230626-soql-compress-compound" runOnChange="true">
+        <sql splitStatements="false"><![CDATA[
+          -- ID and VERSION columns
+          CREATE OR REPLACE FUNCTION soql_compress_compound(a text, b bigint) RETURNS jsonb AS $$
+            select case when a is null and b is null then null
+                   else jsonb_build_array(a, b) end;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE;
+
+          -- URL and PHONE columns
+          CREATE OR REPLACE FUNCTION soql_compress_compound(a text, b text) RETURNS jsonb AS $$
+            select case when a is null and b is null then null
+                   else jsonb_build_array(a, b) end;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE;
+
+          -- LOCATION columns
+          CREATE OR REPLACE FUNCTION soql_compress_compound(a geometry, b text, c text, d text, e text) RETURNS jsonb AS $$
+            select case when a is null and b is null and c is null and d is null and e is null then null
+                   else jsonb_build_array(a, b, c, d, e) end;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE;
+        ]]></sql>
+        <rollback>
+            <sql>
+              DROP FUNCTION soql_compress_compound(geometry, text, text, text, text);
+              DROP FUNCTION soql_compress_compound(text, text);
+              DROP FUNCTION soql_compress_compound(text, bigint);
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
