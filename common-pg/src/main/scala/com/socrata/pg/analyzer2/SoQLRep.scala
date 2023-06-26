@@ -26,7 +26,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
 
     def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
       val geo = downcast(e.value)
-      ExprSql(Seq(d"bytea" +#+ mkStringLiteral(t.WkbRep(geo).iterator.map { b => "%02x".format(b & 0xff) }.mkString("\\x","","")), Geo.defaultSRIDLiteral).funcall(open), e)
+      ExprSql(Seq(mkByteaLiteral(t.WkbRep(geo)), Geo.defaultSRIDLiteral).funcall(open), e)
     }
 
     protected def downcast(v: SoQLValue): T
@@ -61,7 +61,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
         val provenanceLit =
           rawId.provenance match {
             case None => d"null :: text"
-            case Some(s) => mkStringLiteral(s) +#+ d":: text"
+            case Some(s) => mkTextLiteral(s)
           }
         val numLit =
           rawId.provenance.map(CanonicalName(_)).flatMap(cryptProviders) match {
@@ -123,7 +123,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
         val provenanceLit =
           rawId.provenance match {
             case None => d"null :: text"
-            case Some(s) => mkStringLiteral(s) +#+ d":: text"
+            case Some(s) => mkTextLiteral(s)
           }
         val numLit =
           rawId.provenance.map(CanonicalName(_)).flatMap(cryptProviders) match {
@@ -175,7 +175,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
     SoQLText -> new SingleColumnRep(SoQLText, d"text") {
       def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
         val SoQLText(s) = e.value
-        ExprSql(sqlType +#+ mkStringLiteral(s), e)
+        ExprSql(mkTextLiteral(s), e)
       }
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getString(dbCol)) match {
@@ -319,11 +319,11 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
             ExprSql(d"null :: jsonb", e)
           case SoQLPhone(phNum, phTyp) =>
             val numberLit = phNum match {
-              case Some(n) => mkStringLiteral(n)
+              case Some(n) => mkTextLiteral(n)
               case None => d"null :: text"
             }
             val typLit = phTyp match {
-              case Some(t) => mkStringLiteral(t)
+              case Some(t) => mkTextLiteral(t)
               case None => d"null :: text"
             }
 
@@ -490,11 +490,11 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
             ExprSql.Expanded[MT](Seq(d"null :: text", d"null :: text"), e)
           case SoQLUrl(urlUrl, urlDesc) =>
             val urlLit = urlUrl match {
-              case Some(n) => mkStringLiteral(n)
+              case Some(n) => mkTextLiteral(n)
               case None => d"null :: text"
             }
             val descLit = urlDesc match {
-              case Some(t) => mkStringLiteral(t)
+              case Some(t) => mkTextLiteral(t)
               case None => d"null :: text"
             }
 

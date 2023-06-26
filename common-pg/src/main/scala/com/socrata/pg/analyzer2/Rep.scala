@@ -50,6 +50,11 @@ object Rep {
 
     def mkStringLiteral(name: String): Doc
 
+    def mkTextLiteral(s: String): Doc =
+      d"text" +#+ mkStringLiteral(s)
+    def mkByteaLiteral(bytes: Array[Byte]): Doc =
+      d"bytea" +#+ mkStringLiteral(bytes.iterator.map { b => "%02x".format(b & 0xff) }.mkString("\\x", "", ""))
+
     protected abstract class SingleColumnRep(val typ: CT, val sqlType: Doc) extends Rep {
       def physicalColumnRef(col: PhysicalColumn)(implicit gensymProvider: GensymProvider) =
         ExprSql(Seq(namespace.tableLabel(col.table) ++ d"." ++ compressedDatabaseColumn(col.column)), col)
