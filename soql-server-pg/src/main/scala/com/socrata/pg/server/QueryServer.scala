@@ -695,7 +695,7 @@ object QueryServer extends DynamicPortMap {
   }
 
   val config = try {
-    QueryServerConfig.apply(withDefaultAddress(ConfigFactory.load()), "com.socrata.soql-server-pg")
+    QueryServerConfig(withDefaultAddress(ConfigFactory.load()), "com.socrata.soql-server-pg")
   } catch {
     case e: Exception =>
       e.printStackTrace()
@@ -744,6 +744,7 @@ object QueryServer extends DynamicPortMap {
                        withPoolOptions(SocrataServerJetty.Pool(config.threadpool)).
                        withBroker(curatorBroker))
       logger.info("starting pg query server")
+      logger.info("Configuration:\n" + config.debugString)
       server.run()
     }
     logger.info("pg query server exited")

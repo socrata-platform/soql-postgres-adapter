@@ -21,16 +21,9 @@ class QueryServerConfig private(val config: Config, val root: String) extends Co
   val maxConcurrentRequestsPerDataset = getInt("max-concurrent-requests-per-dataset")
   val leadingSearch = getBoolean("leading-search")
   val httpQueryTimeoutDelta = getDuration("http-query-timeout-delta")
+  val debugString = QueryServerConfig.removePasswords(config.root.render)
 }
 
 object QueryServerConfig {
   private val removePasswords: String => String = _.replaceAll("""(\".*password.*\" : \")(.*?)(\")""", "$1***$3")
-  private val logger = Logger[QueryServerConfig]
-  def apply(config: Config, root: String): QueryServerConfig = {
-    val queryServerConfig = new QueryServerConfig(config, root)
-    println("TEST")
-    logger.info("TEST")
-    logger.info("Configuration:\n" + removePasswords(config.root.render))
-    queryServerConfig
-  }
 }
