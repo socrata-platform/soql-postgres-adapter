@@ -28,6 +28,8 @@ object QueryServerConfig {
   private val logger = Logger[QueryServerConfig]
   def apply(config: Config, root: String): QueryServerConfig = {
     val queryServerConfig = new QueryServerConfig(config, root)
+    println("TEST")
+    logger.info("TEST")
     logger.info("Configuration:\n" + removePasswords(config.root.render))
     queryServerConfig
   }
