@@ -156,10 +156,6 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     }
   }
 
-  def pointSqlFromLocation(sql: ExprSql, ctx: DynamicContext): Doc = {
-    ctx.repFor(SoQLLocation).subcolInfo("point").extractor(sql)
-  }
-
   // Like "sqlNormalOrdinaryFunction" but it extracts the point
   // subcolumn from any locations passed in.
   def sqlizeLocationPointOrdinaryFunction(sqlFunctionName: String, prefixArgs: Seq[Doc] = Nil, suffixArgs: Seq[Doc] = Nil) = {
@@ -170,7 +166,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
 
       val pointExtractedArgs = args.map { e =>
         e.typ match {
-          case SoQLLocation => pointSqlFromLocation(e, ctx)
+          case SoQLLocation => ctx.repFor(SoQLLocation).subcolInfo("point").extractor(e)
           case _ => e.compressed.sql
         }
       }
