@@ -27,9 +27,17 @@
           $$ LANGUAGE SQL
           IMMUTABLE
           PARALLEL SAFE;
+
+          CREATE OR REPLACE FUNCTION soql_extract_compressed_location_point(loc jsonb) RETURNS geometry as $$
+            select case when loc->0 = jsonb 'null' then null else st_geomfromgeojson(loc->0) end;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
         ]]></sql>
         <rollback>
             <sql>
+              DROP FUNCTION soql_extract_compressed_location_point(jsonb);
               DROP FUNCTION soql_compress_compound(geometry, text, text, text, text);
               DROP FUNCTION soql_compress_compound(text, text);
               DROP FUNCTION soql_compress_compound(text, bigint);
