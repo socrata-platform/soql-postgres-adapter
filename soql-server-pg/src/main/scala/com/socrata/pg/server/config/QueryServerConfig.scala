@@ -6,8 +6,9 @@ import com.socrata.pg.config.{StoreConfig}
 import com.socrata.curator.{CuratorConfig, DiscoveryConfig}
 import com.socrata.thirdparty.metrics.MetricsOptions
 import com.socrata.thirdparty.typesafeconfig.ConfigClass
+import com.typesafe.scalalogging.Logger
 
-class QueryServerConfig(val config: Config, val root: String) extends ConfigClass(config, root) {
+class QueryServerConfig private(val config: Config, val root: String) extends ConfigClass(config, root) {
   val log4j = getRawConfig("log4j")
   val store = new StoreConfig(config, path("store"))
   val port = getInt("port")
@@ -20,4 +21,14 @@ class QueryServerConfig(val config: Config, val root: String) extends ConfigClas
   val maxConcurrentRequestsPerDataset = getInt("max-concurrent-requests-per-dataset")
   val leadingSearch = getBoolean("leading-search")
   val httpQueryTimeoutDelta = getDuration("http-query-timeout-delta")
+}
+
+object QueryServerConfig {
+  private val removePasswords: String => String = _.replaceAll("""(\"password\" : \")(.*?)(\")""", "$1***$3")
+  private val logger = Logger[QueryServerConfig]
+  def apply(config: Config, root: String) {
+    val queryServerConfig = new QueryServerConfig(config, root)
+    logger.info("Configuration:\n" + removePasswords(queryServerConfig.root.render))
+    queryServerConfig
+  }
 }

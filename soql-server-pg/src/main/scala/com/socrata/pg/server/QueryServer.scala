@@ -695,7 +695,7 @@ object QueryServer extends DynamicPortMap {
   }
 
   val config = try {
-    new QueryServerConfig(withDefaultAddress(ConfigFactory.load()), "com.socrata.soql-server-pg")
+    QueryServerConfig(withDefaultAddress(ConfigFactory.load()), "com.socrata.soql-server-pg")
   } catch {
     case e: Exception =>
       e.printStackTrace()
