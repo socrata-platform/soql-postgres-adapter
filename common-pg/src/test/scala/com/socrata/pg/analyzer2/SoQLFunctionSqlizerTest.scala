@@ -183,7 +183,7 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
 
   test("geo literal") {
     // st_asbinary because this is the output expression for a soql string
-    analyze("'POINT(10 10)'::point") must equal ("""st_asbinary(st_pointfromtext("POINT (10 10)", 4326))""")
+    analyze("'POINT(10 10)'::point") must equal ("""st_asbinary(st_pointfromwkb(bytea "\\x000000000140240000000000004024000000000000", 4326))""")
   }
 
   test("Functions are correctly classified") {

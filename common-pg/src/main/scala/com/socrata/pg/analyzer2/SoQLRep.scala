@@ -22,11 +22,11 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
   def apply(typ: SoQLType) = reps(typ)
 
   abstract class GeometryRep[T <: Geometry](t: SoQLType with SoQLGeometryLike[T], ctor: T => CV, name: String) extends SingleColumnRep(t, d"geometry") {
-    private val open = d"st_${name}fromtext"
+    private val open = d"st_${name}fromwkb"
 
     def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
       val geo = downcast(e.value)
-      ExprSql(Seq(mkStringLiteral(t.WktRep(geo)), Geo.defaultSRIDLiteral).funcall(open), e)
+      ExprSql(Seq(d"bytea" +#+ mkStringLiteral(t.WkbRep(geo).iterator.map { b => "%02x".format(b & 0xff) }.mkString("\\x","","")), Geo.defaultSRIDLiteral).funcall(open), e)
     }
 
     protected def downcast(v: SoQLValue): T
