@@ -24,7 +24,7 @@ class QueryServerConfig private(val config: Config, val root: String) extends Co
 }
 
 object QueryServerConfig {
-  private val removePasswords: String => String = _.replaceAll("""(\"password\" : \")(.*?)(\")""", "$1***$3")
+  private val removePasswords: String => String = _.replaceAll("""(\".*password.*\" : \")(.*?)(\")""", "$1***$3")
   private val logger = Logger[QueryServerConfig]
   def apply(config: Config, root: String) {
     val queryServerConfig = new QueryServerConfig(config, root)
