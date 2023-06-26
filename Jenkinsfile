@@ -7,7 +7,7 @@ def project_wd_server = 'soql-server-pg'
 def service_secondary = 'secondary-watcher-pg'
 def project_wd_secondary = 'store-pg'
 
-def isPr = env.CHANGE_ID != null;
+def isPr = env.CHANGE_ID != false;
 
 // instanciate libraries
 def sbtbuild = new com.socrata.SBTBuild(steps, service_server, '.', [project_wd_server, project_wd_secondary])
