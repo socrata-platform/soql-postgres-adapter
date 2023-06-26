@@ -181,6 +181,11 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
     analyze("phone('x','y').phone_type") must equal ("""text "y"""")
   }
 
+  test("geo literal") {
+    // st_asbinary because this is the output expression for a soql string
+    analyze("'POINT(10 10)'::point") must equal ("""st_asbinary(st_pointfromtext("POINT (10 10)", 4326))""")
+  }
+
   test("Functions are correctly classified") {
     // The "contains" check is because of the TsVector fake functions
     // that search gets rewritten into

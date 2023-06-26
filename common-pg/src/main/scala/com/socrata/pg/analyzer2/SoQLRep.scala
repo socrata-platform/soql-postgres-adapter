@@ -21,13 +21,15 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
 ) extends Rep.Provider[MT] {
   def apply(typ: SoQLType) = reps(typ)
 
-  class GeometryRep[T <: Geometry](t: SoQLType with SoQLGeometryLike[T], ctor: T => CV, name: String) extends SingleColumnRep(t, d"geometry") {
+  abstract class GeometryRep[T <: Geometry](t: SoQLType with SoQLGeometryLike[T], ctor: T => CV, name: String) extends SingleColumnRep(t, d"geometry") {
     private val open = d"st_${name}fromtext"
 
     def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
-      val SoQLText(s) = e.value
-      ExprSql(Seq(mkStringLiteral(s).funcall(open), Geo.defaultSRIDLiteral).funcall(d"st_setsrid"), e)
+      val geo = downcast(e.value)
+      ExprSql(Seq(mkStringLiteral(t.WktRep(geo)), Geo.defaultSRIDLiteral).funcall(open), e)
     }
+
+    protected def downcast(v: SoQLValue): T
 
     override def hasTopLevelWrapper = true
     override def wrapTopLevel(raw: ExprSql) = {
@@ -274,12 +276,24 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
       }
     },
 
-    SoQLPoint -> new GeometryRep(SoQLPoint, SoQLPoint(_), "point"),
-    SoQLMultiPoint -> new GeometryRep(SoQLMultiPoint, SoQLMultiPoint(_), "mpoint"),
-    SoQLLine -> new GeometryRep(SoQLLine, SoQLLine(_), "line"),
-    SoQLMultiLine -> new GeometryRep(SoQLMultiLine, SoQLMultiLine(_), "mline"),
-    SoQLPolygon -> new GeometryRep(SoQLPolygon, SoQLPolygon(_), "polygon"),
-    SoQLMultiPolygon -> new GeometryRep(SoQLMultiPolygon, SoQLMultiPolygon(_), "mpoly"),
+    SoQLPoint -> new GeometryRep(SoQLPoint, SoQLPoint(_), "point") {
+      override def downcast(v: SoQLValue) = v.asInstanceOf[SoQLPoint].value
+    },
+    SoQLMultiPoint -> new GeometryRep(SoQLMultiPoint, SoQLMultiPoint(_), "mpoint") {
+      override def downcast(v: SoQLValue) = v.asInstanceOf[SoQLMultiPoint].value
+    },
+    SoQLLine -> new GeometryRep(SoQLLine, SoQLLine(_), "line") {
+      override def downcast(v: SoQLValue) = v.asInstanceOf[SoQLLine].value
+    },
+    SoQLMultiLine -> new GeometryRep(SoQLMultiLine, SoQLMultiLine(_), "mline") {
+      override def downcast(v: SoQLValue) = v.asInstanceOf[SoQLMultiLine].value
+    },
+    SoQLPolygon -> new GeometryRep(SoQLPolygon, SoQLPolygon(_), "polygon") {
+      override def downcast(v: SoQLValue) = v.asInstanceOf[SoQLPolygon].value
+    },
+    SoQLMultiPolygon -> new GeometryRep(SoQLMultiPolygon, SoQLMultiPolygon(_), "mpoly") {
+      override def downcast(v: SoQLValue) = v.asInstanceOf[SoQLMultiPolygon].value
+    },
 
     // COMPOUND REPS
 
