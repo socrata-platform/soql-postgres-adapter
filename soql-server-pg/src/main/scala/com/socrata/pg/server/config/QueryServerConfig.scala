@@ -8,7 +8,7 @@ import com.socrata.thirdparty.metrics.MetricsOptions
 import com.socrata.thirdparty.typesafeconfig.ConfigClass
 import com.typesafe.scalalogging.Logger
 
-class QueryServerConfig private(val config: Config, val root: String) extends ConfigClass(config, root) {
+class QueryServerConfig(val config: Config, val root: String) extends ConfigClass(config, root) {
   val log4j = getRawConfig("log4j")
   val store = new StoreConfig(config, path("store"))
   val port = getInt("port")
