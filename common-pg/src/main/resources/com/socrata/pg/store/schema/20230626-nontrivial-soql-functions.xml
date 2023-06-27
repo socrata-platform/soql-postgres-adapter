@@ -54,21 +54,21 @@
           RETURNS NULL ON NULL INPUT;
 
           CREATE OR REPLACE FUNCTION soql_round(num numeric, prec numeric) RETURNS numeric AS $$
-            select round(num, prec :: int);
+            select round(num, prec :: int) :: numeric;
           $$ LANGUAGE SQL
           IMMUTABLE
           PARALLEL SAFE
           RETURNS NULL ON NULL INPUT;
 
           CREATE OR REPLACE FUNCTION soql_signed_magnitude_10(num numeric) RETURNS numeric AS $$
-            select sign(num) * length(floor(abs(num)) :: text);
+            select (sign(num) * length(floor(abs(num)) :: text)) :: numeric;
           $$ LANGUAGE SQL
           IMMUTABLE
           PARALLEL SAFE
           RETURNS NULL ON NULL INPUT;
 
           CREATE OR REPLACE FUNCTION soql_signed_magnitude_linear(num numeric, scale numeric) RETURNS numeric AS $$
-            select case when scale = 1 then floor(num) else sign(num) * floor(abs(num)/scale + 1) end;
+            select (case when scale = 1 then floor(num) else sign(num) * floor(abs(num)/scale + 1) end) :: numeric;
           $$ LANGUAGE SQL
           IMMUTABLE
           PARALLEL SAFE
@@ -82,14 +82,14 @@
           RETURNS NULL ON NULL INPUT;
 
           CREATE OR REPLACE FUNCTION soql_epoch_seconds(ts timestamp with time zone) RETURNS numeric AS $$
-            select round(extract('epoch' from ts) :: numeric, 3);
+            select round(extract('epoch' from ts) :: numeric, 3) :: numeric;
           $$ LANGUAGE SQL
           IMMUTABLE
           PARALLEL SAFE
           RETURNS NULL ON NULL INPUT;
 
           CREATE OR REPLACE FUNCTION soql_timestamp_diff_d(a timestamp with time zone, b timestamp with time zone) RETURNS numeric AS $$
-            select trunc((extract('epoch' from a) - extract('epoch' from b)) :: numeric / 86400);
+            select trunc((extract('epoch' from a) - extract('epoch' from b)) :: numeric / 86400) :: numeric;
           $$ LANGUAGE SQL
           IMMUTABLE
           PARALLEL SAFE
@@ -97,7 +97,7 @@
 
           CREATE OR REPLACE FUNCTION soql_timestamp_diff_d(a timestamp without time zone, b timestamp without time zone) RETURNS numeric AS $$
             -- ick, "epoch" from a timestamp-without-time-zone
-            select trunc((extract('epoch' from a) - extract('epoch' from b)) :: numeric / 86400);
+            select trunc((extract('epoch' from a) - extract('epoch' from b)) :: numeric / 86400) :: numeric;
           $$ LANGUAGE SQL
           IMMUTABLE
           PARALLEL SAFE
