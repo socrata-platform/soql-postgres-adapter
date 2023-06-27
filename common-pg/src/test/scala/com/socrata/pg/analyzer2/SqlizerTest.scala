@@ -148,7 +148,7 @@ class SqlizerTest extends FunSuite with MustMatchers with SqlizerUniverse[Sqlize
     val soql = "select num, compress(compound) from @table1 union select number, other_compound from @table2"
     val sqlish = analyze(tf, soql).layoutSingleLine.toString
 
-    sqlish must equal ("(SELECT x1.num AS i1, CASE WHEN x1.compound_a IS NULL AND x1.compound_b IS NULL THEN NULL ELSE jsonb_build_array(x1.compound_a, x1.compound_b) END AS i2 FROM table1 AS x1) UNION (SELECT g1.i3 AS i3, CASE WHEN g1.i4_a IS NULL AND g1.i4_b IS NULL THEN NULL ELSE jsonb_build_array(g1.i4_a, g1.i4_b) END AS i4 FROM (SELECT x3.number AS i3, x3.other_compound_a AS i4_a, x3.other_compound_b AS i4_b FROM table2 AS x3) AS g1)")
+    sqlish must equal ("(SELECT x1.num AS i1, soql_compress_compound(x1.compound_a, x1.compound_b) AS i2 FROM table1 AS x1) UNION (SELECT g1.i3 AS i3, soql_compress_compound(g1.i4_a, g1.i4_b) AS i4 FROM (SELECT x3.number AS i3, x3.other_compound_a AS i4_a, x3.other_compound_b AS i4_b FROM table2 AS x3) AS g1)")
   }
 
   test("table op - right compression induces left compression") {
@@ -168,7 +168,7 @@ class SqlizerTest extends FunSuite with MustMatchers with SqlizerUniverse[Sqlize
     val soql = "select num, compound from @table1 union select number, compress(other_compound) from @table2"
     val sqlish = analyze(tf, soql).layoutSingleLine.toString
 
-    sqlish must equal ("(SELECT g1.i1 AS i1, CASE WHEN g1.i2_a IS NULL AND g1.i2_b IS NULL THEN NULL ELSE jsonb_build_array(g1.i2_a, g1.i2_b) END AS i2 FROM (SELECT x1.num AS i1, x1.compound_a AS i2_a, x1.compound_b AS i2_b FROM table1 AS x1) AS g1) UNION (SELECT x3.number AS i3, CASE WHEN x3.other_compound_a IS NULL AND x3.other_compound_b IS NULL THEN NULL ELSE jsonb_build_array(x3.other_compound_a, x3.other_compound_b) END AS i4 FROM table2 AS x3)")
+    sqlish must equal ("(SELECT g1.i1 AS i1, soql_compress_compound(g1.i2_a, g1.i2_b) AS i2 FROM (SELECT x1.num AS i1, x1.compound_a AS i2_a, x1.compound_b AS i2_b FROM table1 AS x1) AS g1) UNION (SELECT x3.number AS i3, soql_compress_compound(x3.other_compound_a, x3.other_compound_b) AS i4 FROM table2 AS x3)")
   }
 
   test("table op - both compression induces nothing compression") {
@@ -188,7 +188,7 @@ class SqlizerTest extends FunSuite with MustMatchers with SqlizerUniverse[Sqlize
     val soql = "select num, compress(compound) from @table1 union select number, compress(other_compound) from @table2"
     val sqlish = analyze(tf, soql).layoutSingleLine.toString
 
-    sqlish must equal ("(SELECT x1.num AS i1, CASE WHEN x1.compound_a IS NULL AND x1.compound_b IS NULL THEN NULL ELSE jsonb_build_array(x1.compound_a, x1.compound_b) END AS i2 FROM table1 AS x1) UNION (SELECT x3.number AS i3, CASE WHEN x3.other_compound_a IS NULL AND x3.other_compound_b IS NULL THEN NULL ELSE jsonb_build_array(x3.other_compound_a, x3.other_compound_b) END AS i4 FROM table2 AS x3)")
+    sqlish must equal ("(SELECT x1.num AS i1, soql_compress_compound(x1.compound_a, x1.compound_b) AS i2 FROM table1 AS x1) UNION (SELECT x3.number AS i3, soql_compress_compound(x3.other_compound_a, x3.other_compound_b) AS i4 FROM table2 AS x3)")
   }
 
   test("provenance - simple") {
@@ -227,7 +227,7 @@ class SqlizerTest extends FunSuite with MustMatchers with SqlizerUniverse[Sqlize
 
     val soql = "select :id from @table1 where :id = compress('row-qwer-tyui-2345')"
     val sqlish = analyze(tf, soql).layoutSingleLine.toString
-    sqlish must equal ("SELECT \"table1\" :: text AS i1_provenance, x1.:id AS i1 FROM table1 AS x1 WHERE (CASE WHEN \"table1\" :: text IS NULL AND x1.:id IS NULL THEN NULL ELSE jsonb_build_array(\"table1\" :: text, x1.:id) END) = (CASE WHEN \"table1\" :: text IS NULL AND 1200459281559959 :: bigint IS NULL THEN NULL ELSE jsonb_build_array(\"table1\" :: text, 1200459281559959 :: bigint) END)")
+    sqlish must equal ("SELECT \"table1\" :: text AS i1_provenance, x1.:id AS i1 FROM table1 AS x1 WHERE (soql_compress_compound(\"table1\" :: text, x1.:id)) = (soql_compress_compound(\"table1\" :: text, 1200459281559959 :: bigint))")
   }
 
   test("provenance - order by physical column does not include the provenance") {

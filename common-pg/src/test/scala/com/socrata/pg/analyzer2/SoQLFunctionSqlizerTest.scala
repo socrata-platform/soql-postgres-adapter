@@ -105,7 +105,7 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
 
   test("subquery search - compressed") {
     // the "case" here just forces url to be compressed
-    analyzeStatement("SELECT text, case when true then url end |> select 1 SEARCH 'hello'") must equal ("""SELECT 1 :: numeric AS i3 FROM (SELECT x1.text AS i1, CASE WHEN true THEN CASE WHEN x1.url_url IS NULL AND x1.url_description IS NULL THEN NULL ELSE jsonb_build_array(x1.url_url, x1.url_description) END END AS i2 FROM table1 AS x1) AS x2 WHERE (to_tsvector(text "english", ((((coalsece(x2.i1, text "")) || (text " ")) || (coalsece(((x2.i2)->>0) :: text, text ""))) || (text " ")) || (coalsece(((x2.i2)->>1) :: text, text "")))) @@ (to_tsquery(text "english", text "hello"))""")
+    analyzeStatement("SELECT text, case when true then url end |> select 1 SEARCH 'hello'") must equal ("""SELECT 1 :: numeric AS i3 FROM (SELECT x1.text AS i1, soql_compress_compound(x1.url_url, x1.url_description) AS i2 FROM table1 AS x1) AS x2 WHERE (to_tsvector(text "english", ((((coalsece(x2.i1, text "")) || (text " ")) || (coalsece((x2.i2) ->> 0, text ""))) || (text " ")) || (coalsece((x2.i2) ->> 1, text "")))) @@ (to_tsquery(text "english", text "hello"))""")
   }
 
   test("all window functions are covered") {
@@ -116,25 +116,12 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
     analyze("lead(text, 5) OVER ()") must equal ("lead(x1.text, (5 :: numeric) :: int) OVER ()")
   }
 
-  test("left_pad/right_pad get their int casts") {
-    analyze("left_pad(text, 5, 'x')") must equal ("""lpad(x1.text, (5 :: numeric) :: int, text "x")""")
-    analyze("right_pad(text, 5, 'x')") must equal ("""rpad(x1.text, (5 :: numeric) :: int, text "x")""")
-  }
-
   test("convex_hull gets its buffer wrapper") {
     analyze("convex_hull(geom)") must equal ("st_asbinary(st_multi(st_buffer(st_convexhull(x1.geom), 0.0)))")
   }
 
   test("concave_hull gets its buffer wrapper") {
     analyze("concave_hull(geom,3.0)") must equal ("st_asbinary(st_multi(st_buffer(st_concavehull(x1.geom, 3.0 :: numeric), 0.0)))")
-  }
-
-  test("epoch_seconds") {
-    analyze("epoch_seconds('2001-01-01T12:34:56.123Z')") must equal ("""round(extract(epoch from (timestamp with time zone "2001-01-01T12:34:56.123Z")) :: numeric, 3)""")
-  }
-
-  test("timestamp_diff_d") {
-    analyze("date_diff_d('2001-01-01T12:34:56.123' :: floating_timestamp, '2020-05-06T21:43:04.321')") must equal ("""trunc(((extract(epoch from (timestamp without time zone "2001-01-01T12:34:56.123")) - extract(epoch from (timestamp without time zone "2020-05-06T21:43:04.321"))) :: numeric) / 86400)""")
   }
 
   test("things get correctly de-select-list-referenced") {
@@ -158,10 +145,6 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
 
   test("uncased works") {
     analyze("caseless_eq(text,'bleh')") must equal ("""(upper(x1.text)) = (upper(text "bleh"))""")
-  }
-
-  test("contains") {
-    analyze("contains(text,'bleh')") must equal ("""position((text "bleh") in (x1.text)) <> 0""")
   }
 
   test("count gets cast to numeric") {
@@ -196,6 +179,11 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
 
   test("phone(x, y).phone_type == y") {
     analyze("phone('x','y').phone_type") must equal ("""text "y"""")
+  }
+
+  test("geo literal") {
+    // st_asbinary because this is the output expression for a soql string
+    analyze("'POINT(10 10)'::point") must equal ("""st_asbinary(st_pointfromwkb(bytea "\\x000000000140240000000000004024000000000000", 4326))""")
   }
 
   test("Functions are correctly classified") {

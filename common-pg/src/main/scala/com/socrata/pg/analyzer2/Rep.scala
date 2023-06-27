@@ -4,7 +4,15 @@ import java.sql.ResultSet
 import com.socrata.soql.analyzer2._
 import com.socrata.prettyprint.prelude._
 
-case class SubcolInfo[MT <: MetaTypes](index: Int, sqlType: String, soqlType: types.ColumnType[MT])
+case class SubcolInfo[MT <: MetaTypes](compoundType: types.ColumnType[MT], index: Int, sqlType: String, soqlType: types.ColumnType[MT], compressedExtractor: Doc[SqlizeAnnotation[MT]] => Doc[SqlizeAnnotation[MT]]) {
+  def extractor(e: ExprSql[MT]): Doc[SqlizeAnnotation[MT]] = {
+    assert(e.typ == compoundType)
+    e match {
+      case expanded: ExprSql.Expanded[MT] => expanded.sqls(index)
+      case cmp: ExprSql.Compressed[MT] => compressedExtractor(cmp.sql)
+    }
+  }
+}
 
 trait Rep[MT <: MetaTypes] extends ExpressionUniverse[MT] {
   def typ: CT
@@ -41,6 +49,11 @@ object Rep {
     val namespace: SqlNamespaces
 
     def mkStringLiteral(name: String): Doc
+
+    def mkTextLiteral(s: String): Doc =
+      d"text" +#+ mkStringLiteral(s)
+    def mkByteaLiteral(bytes: Array[Byte]): Doc =
+      d"bytea" +#+ mkStringLiteral(bytes.iterator.map { b => "%02x".format(b & 0xff) }.mkString("\\x", "", ""))
 
     protected abstract class SingleColumnRep(val typ: CT, val sqlType: Doc) extends Rep {
       def physicalColumnRef(col: PhysicalColumn)(implicit gensymProvider: GensymProvider) =

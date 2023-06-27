@@ -1,0 +1,207 @@
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+    <changeSet author="robertm" id="20230626-nontrivial-soql-functions" runOnChange="true">
+        <sql splitStatements="false"><![CDATA[
+          CREATE OR REPLACE FUNCTION soql_left_pad(string text, length numeric, fill text) RETURNS text AS $$
+            select lpad(string, length :: int, fill);
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          CREATE OR REPLACE FUNCTION soql_right_pad(string text, length numeric, fill text) RETURNS text AS $$
+            select rpad(string, length :: int, fill);
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          CREATE OR REPLACE FUNCTION soql_contains(haystack text, needle text) RETURNS boolean AS $$
+            select position(needle in haystack) <> 0;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          CREATE OR REPLACE FUNCTION soql_chr(codepoint numeric) RETURNS text AS $$
+            select chr(codepoint :: int);
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          CREATE OR REPLACE FUNCTION soql_substring(string text, start numeric) RETURNS text AS $$
+            select substring(string, start :: int);
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          CREATE OR REPLACE FUNCTION soql_substring(string text, start numeric, len numeric) RETURNS text AS $$
+            select substring(string, start :: int, len:: int);
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          CREATE OR REPLACE FUNCTION soql_split_part(string text, delimiter text, n numeric) RETURNS text AS $$
+            select split_part(string, delimiter, n:: int);
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          CREATE OR REPLACE FUNCTION soql_round(num numeric, prec numeric) RETURNS numeric AS $$
+            select round(num, prec :: int) :: numeric;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          CREATE OR REPLACE FUNCTION soql_signed_magnitude_10(num numeric) RETURNS numeric AS $$
+            select (sign(num) * length(floor(abs(num)) :: text)) :: numeric;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          CREATE OR REPLACE FUNCTION soql_signed_magnitude_linear(num numeric, scale numeric) RETURNS numeric AS $$
+            select (case when scale = 1 then floor(num) else sign(num) * floor(abs(num)/scale + 1) end) :: numeric;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          CREATE OR REPLACE FUNCTION soql_extract_timestamp_field(field text, ts timestamp without time zone) RETURNS numeric AS $$
+            select extract(field from ts) :: numeric;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          CREATE OR REPLACE FUNCTION soql_epoch_seconds(ts timestamp with time zone) RETURNS numeric AS $$
+            select round(extract('epoch' from ts) :: numeric, 3) :: numeric;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          CREATE OR REPLACE FUNCTION soql_timestamp_diff_d(a timestamp with time zone, b timestamp with time zone) RETURNS numeric AS $$
+            select trunc((extract('epoch' from a) - extract('epoch' from b)) :: numeric / 86400) :: numeric;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          CREATE OR REPLACE FUNCTION soql_timestamp_diff_d(a timestamp without time zone, b timestamp without time zone) RETURNS numeric AS $$
+            -- ick, "epoch" from a timestamp-without-time-zone
+            select trunc((extract('epoch' from a) - extract('epoch' from b)) :: numeric / 86400) :: numeric;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          CREATE OR REPLACE FUNCTION soql_within_circle(scrutinee geometry, lat numeric, lon numeric, radius numeric, srid int) RETURNS boolean AS $$
+            select st_within(scrutinee, st_buffer(st_setsrid(st_makepoint(lon, lat), srid) :: geography, radius) :: geometry);
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          CREATE OR REPLACE FUNCTION soql_within_box(scrutinee geometry, top_left_lat numeric, top_left_lon numeric, bottom_right_lat numeric, bottom_right_lon numeric, srid int) RETURNS boolean AS $$
+            -- st_makeenvelope takes (xmin, ymin, xmax, ymax, srid) so permute
+            -- our lat/lon based coords appropriately
+            select st_makeenvelope(top_left_lon, bottom_right_lat, bottom_right_lon, top_left_lat, srid) ~ scrutinee;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          CREATE OR REPLACE FUNCTION soql_area(scrutinee geometry) RETURNS numeric AS $$
+            select st_area(scrutinee :: geography) :: numeric;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          CREATE OR REPLACE FUNCTION soql_distance_in_meters(a geometry, b geometry) RETURNS numeric AS $$
+            select st_distance(a :: geography, b :: geography) :: numeric;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+          -- This is NOT marked "returns null on null input" even though it probably should be
+          -- because that would be a semantic change from old-sqlizer, due to AND short-circuiting.
+          CREATE OR REPLACE FUNCTION soql_visible_at(geom geometry, n numeric) RETURNS boolean AS $$
+            -- what a weird function!  I wonder what it's for!
+            select (NOT ST_IsEmpty(geom)) AND (ST_GeometryType(geom) = 'ST_Point' OR ST_GeometryType(geom) = 'ST_MultiPoint' OR
+              (ST_XMax(geom) - ST_XMin(geom)) >= n OR (ST_YMax(geom) - ST_YMin(geom)) >= n);
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE;
+
+          CREATE OR REPLACE FUNCTION soql_curated_region_test(geom geometry, n numeric) RETURNS text AS $$
+            select case when st_npoints(geom) > n then 'too complex'
+              when st_xmin(geom) < -180 or st_xmax(geom) > 180 or st_ymin(geom) < -90 or st_ymax(geom) > 90 then 'out of bounds'
+              when not st_isvalid(geom) then st_isvalidreason(geom)::text
+              when geom is null then 'empty'
+            end;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE;
+
+          CREATE OR REPLACE FUNCTION soql_to_jsonb_null(string text) RETURNS jsonb AS $$
+            select coalesce(to_jsonb(string), 'null' :: jsonb);
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE;
+
+          CREATE OR REPLACE FUNCTION soql_human_address(address text, city text, state text, zip text) RETURNS text AS $$
+            select case when address is null and city is null and state is null and zip is null then
+                     null
+                   else
+                     '{"address":' || soql_to_jsonb_null(address)::text || ',"city":' || soql_to_jsonb_null(city)::text || ',"state":' || soql_to_jsonb_null(state)::text || ',"zip":' || soql_to_jsonb_null(zip)::text || '}'
+                   end;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE;
+
+          CREATE OR REPLACE FUNCTION soql_trunc_fixed_timestamp_at_timezone(truncpoint text, ts timestamp with time zone, tz text) RETURNS timestamp without time zone AS $$
+            select date_trunc(truncpoint, ts at time zone tz);
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+
+        ]]></sql>
+        <rollback>
+            <sql>
+              DROP FUNCTION soql_trunc_fixed_timestamp_at_timezone(text, timestamp with time zone, text);
+              DROP FUNCTION soql_human_address(text, text, text, text);
+              DROP FUNCTION soql_to_jsonb_null(text);
+              DROP FUNCTION soql_visible_at(geometry, numeric);
+              DROP FUNCTION soql_distance_in_meters(geometry, geometry);
+              DROP FUNCTION soql_area(geometry);
+              DROP FUNCTION soql_within_box(geometry, numeric, numeric, numeric, numeric, int);
+              DROP FUNCTION soql_within_circle(geometry, numeric, numeric, numeric, int);
+              DROP FUNCTION soql_timestamp_diff_d(timestamp without time zone, timestamp without time zone);
+              DROP FUNCTION soql_timestamp_diff_d(timestamp with time zone, timestamp with time zone);
+              DROP FUNCTION soql_epoch_seconds(timestamp with time zone);
+              DROP FUNCTION soql_extract_timestamp_field(text, timestamp without time zone);
+              DROP FUNCTION soql_signed_magnitude_linear(numeric, numeric);
+              DROP FUNCTION soql_signed_magnitude_10(numeric);
+              DROP FUNCTION soql_round(numeric, numeric);
+              DROP FUNCTION soql_split_part(text, text, numeric);
+              DROP FUNCTION soql_substring(text, numeric, numeric);
+              DROP FUNCTION soql_substring(text, numeric);
+              DROP FUNCTION soql_chr(text, text);
+              DROP FUNCTION soql_contains(text, text);
+              DROP FUNCTION soql_right_pad(text, numeric, text);
+              DROP FUNCTION soql_left_pad(text, numeric, text);
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

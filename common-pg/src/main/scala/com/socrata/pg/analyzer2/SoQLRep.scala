@@ -21,13 +21,15 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
 ) extends Rep.Provider[MT] {
   def apply(typ: SoQLType) = reps(typ)
 
-  class GeometryRep[T <: Geometry](t: SoQLType with SoQLGeometryLike[T], ctor: T => CV, name: String) extends SingleColumnRep(t, d"geometry") {
-    private val open = d"st_${name}fromtext"
+  abstract class GeometryRep[T <: Geometry](t: SoQLType with SoQLGeometryLike[T], ctor: T => CV, name: String) extends SingleColumnRep(t, d"geometry") {
+    private val open = d"st_${name}fromwkb"
 
     def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
-      val SoQLText(s) = e.value
-      ExprSql(mkStringLiteral(s).funcall(open), e)
+      val geo = downcast(e.value)
+      ExprSql(Seq(mkByteaLiteral(t.WkbRep(geo)), Geo.defaultSRIDLiteral).funcall(open), e)
     }
+
+    protected def downcast(v: SoQLValue): T
 
     override def hasTopLevelWrapper = true
     override def wrapTopLevel(raw: ExprSql) = {
@@ -59,7 +61,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
         val provenanceLit =
           rawId.provenance match {
             case None => d"null :: text"
-            case Some(s) => mkStringLiteral(s) +#+ d":: text"
+            case Some(s) => mkTextLiteral(s)
           }
         val numLit =
           rawId.provenance.map(CanonicalName(_)).flatMap(cryptProviders) match {
@@ -121,7 +123,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
         val provenanceLit =
           rawId.provenance match {
             case None => d"null :: text"
-            case Some(s) => mkStringLiteral(s) +#+ d":: text"
+            case Some(s) => mkTextLiteral(s)
           }
         val numLit =
           rawId.provenance.map(CanonicalName(_)).flatMap(cryptProviders) match {
@@ -173,7 +175,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
     SoQLText -> new SingleColumnRep(SoQLText, d"text") {
       def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
         val SoQLText(s) = e.value
-        ExprSql(sqlType +#+ mkStringLiteral(s), e)
+        ExprSql(mkTextLiteral(s), e)
       }
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getString(dbCol)) match {
@@ -274,12 +276,24 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
       }
     },
 
-    SoQLPoint -> new GeometryRep(SoQLPoint, SoQLPoint(_), "point"),
-    SoQLMultiPoint -> new GeometryRep(SoQLMultiPoint, SoQLMultiPoint(_), "mpoint"),
-    SoQLLine -> new GeometryRep(SoQLLine, SoQLLine(_), "line"),
-    SoQLMultiLine -> new GeometryRep(SoQLMultiLine, SoQLMultiLine(_), "mline"),
-    SoQLPolygon -> new GeometryRep(SoQLPolygon, SoQLPolygon(_), "polygon"),
-    SoQLMultiPolygon -> new GeometryRep(SoQLMultiPolygon, SoQLMultiPolygon(_), "mpoly"),
+    SoQLPoint -> new GeometryRep(SoQLPoint, SoQLPoint(_), "point") {
+      override def downcast(v: SoQLValue) = v.asInstanceOf[SoQLPoint].value
+    },
+    SoQLMultiPoint -> new GeometryRep(SoQLMultiPoint, SoQLMultiPoint(_), "mpoint") {
+      override def downcast(v: SoQLValue) = v.asInstanceOf[SoQLMultiPoint].value
+    },
+    SoQLLine -> new GeometryRep(SoQLLine, SoQLLine(_), "line") {
+      override def downcast(v: SoQLValue) = v.asInstanceOf[SoQLLine].value
+    },
+    SoQLMultiLine -> new GeometryRep(SoQLMultiLine, SoQLMultiLine(_), "mline") {
+      override def downcast(v: SoQLValue) = v.asInstanceOf[SoQLMultiLine].value
+    },
+    SoQLPolygon -> new GeometryRep(SoQLPolygon, SoQLPolygon(_), "polygon") {
+      override def downcast(v: SoQLValue) = v.asInstanceOf[SoQLPolygon].value
+    },
+    SoQLMultiPolygon -> new GeometryRep(SoQLMultiPolygon, SoQLMultiPolygon(_), "mpoly") {
+      override def downcast(v: SoQLValue) = v.asInstanceOf[SoQLMultiPolygon].value
+    },
 
     // COMPOUND REPS
 
@@ -305,11 +319,11 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
             ExprSql(d"null :: jsonb", e)
           case SoQLPhone(phNum, phTyp) =>
             val numberLit = phNum match {
-              case Some(n) => mkStringLiteral(n)
+              case Some(n) => mkTextLiteral(n)
               case None => d"null :: text"
             }
             val typLit = phTyp match {
-              case Some(t) => mkStringLiteral(t)
+              case Some(t) => mkTextLiteral(t)
               case None => d"null :: text"
             }
 
@@ -319,8 +333,8 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
 
       def subcolInfo(field: String) =
         field match {
-          case "phone_number" => SubcolInfo[MT](0, "text", SoQLText)
-          case "phone_type" => SubcolInfo[MT](1, "text", SoQLText)
+          case "phone_number" => SubcolInfo[MT](SoQLPhone, 0, "text", SoQLText, _.parenthesized +#+ d"->> 0")
+          case "phone_type" => SubcolInfo[MT](SoQLPhone, 1, "text", SoQLText, _.parenthesized +#+ d"->> 1")
         }
 
       private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.PhoneRep("")
@@ -383,13 +397,11 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
 
       def subcolInfo(field: String) =
         field match {
-          // point is special (since it's actually a geojson value
-          // when compressed), and so not handled by an ordinary
-          // subcol extractor
-          case "address" => SubcolInfo[MT](1, "text", SoQLText)
-          case "city" => SubcolInfo[MT](2, "text", SoQLText)
-          case "state" => SubcolInfo[MT](3, "text", SoQLText)
-          case "zip" => SubcolInfo[MT](4, "text", SoQLText)
+          case "point" => SubcolInfo[MT](SoQLLocation, 0, "geometry", SoQLPoint, { e => Seq(e.parenthesized).funcall(d"soql_extract_compressed_location_point") })
+          case "address" => SubcolInfo[MT](SoQLLocation, 1, "text", SoQLText, _.parenthesized +#+ d"->> 1")
+          case "city" => SubcolInfo[MT](SoQLLocation, 2, "text", SoQLText, _.parenthesized +#+ d"->> 2")
+          case "state" => SubcolInfo[MT](SoQLLocation, 3, "text", SoQLText, _.parenthesized +#+ d"->> 3")
+          case "zip" => SubcolInfo[MT](SoQLLocation, 4, "text", SoQLText, _.parenthesized +#+ d"->> 4")
         }
 
       override def hasTopLevelWrapper = true
@@ -478,11 +490,11 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
             ExprSql.Expanded[MT](Seq(d"null :: text", d"null :: text"), e)
           case SoQLUrl(urlUrl, urlDesc) =>
             val urlLit = urlUrl match {
-              case Some(n) => mkStringLiteral(n)
+              case Some(n) => mkTextLiteral(n)
               case None => d"null :: text"
             }
             val descLit = urlDesc match {
-              case Some(t) => mkStringLiteral(t)
+              case Some(t) => mkTextLiteral(t)
               case None => d"null :: text"
             }
 
@@ -492,8 +504,8 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
 
       def subcolInfo(field: String) =
         field match {
-          case "url" => SubcolInfo[MT](0, "text", SoQLText)
-          case "description" => SubcolInfo[MT](1, "text", SoQLText)
+          case "url" => SubcolInfo[MT](SoQLUrl, 0, "text", SoQLText, _.parenthesized +#+ d"->> 0")
+          case "description" => SubcolInfo[MT](SoQLUrl, 1, "text", SoQLText, _.parenthesized +#+ d"->> 1")
         }
 
       private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.UrlRep("")

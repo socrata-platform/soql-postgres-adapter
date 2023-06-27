@@ -32,24 +32,6 @@ object ExprSql {
     def withExpr(newExpr: Expr) = new Compressed(rawSql, newExpr)
   }
 
-  def compressSqls[T](databaseColumnRefOrLitSqls: Seq[Doc[T]])(implicit gensymProvider: GensymProvider): Doc[T] = {
-    val doc =
-      Seq(
-        d"CASE WHEN",
-        databaseColumnRefOrLitSqls.map { field =>
-          field +#+ d"IS NULL"
-        }.concatWith { (l: Doc[T], r: Doc[T]) => l +#+ d"AND" ++ Doc.lineSep ++ r }.group
-      ).vsep.nest(2) ++
-      Doc.lineSep ++
-      Seq(d"THEN", d"NULL").vsep.nest(2) ++
-      Doc.lineSep ++
-      Seq(d"ELSE", (Seq(d"jsonb_build_array(", databaseColumnRefOrLitSqls.commaSep).vcat.nest(2) ++ Doc.lineCat ++ d")").group).vsep.nest(2) ++
-      Doc.lineSep ++
-      d"END"
-
-    doc.group
-  }
-
   class Expanded[MT <: MetaTypes] private[ExprSql] (rawSqls: Seq[Doc[SqlizeAnnotation[MT]]], val expr: Expr[MT])(implicit repFor: Rep.Provider[MT], gensymProvider: GensymProvider) extends ExprSql[MT] {
     assert(rawSqls.lengthCompare(1) != 0)
 
@@ -60,20 +42,8 @@ object ExprSql {
         expr match {
           case _ : NullLiteral =>
             d"null :: jsonb"
-          case _ : Column | _ : LiteralValue =>
-            compressSqls(rawSqls) // No need for an intermediate table, it's just a column ref or literal
           case _ =>
-            val table = Doc(gensymProvider.gensym())
-            val fields = rawSqls.map { _ => Doc(gensymProvider.gensym()) }
-            d"(SELECT" +#+
-              compressSqls(fields.map { field => table ++ d"." ++ field }) +#+
-              d"FROM (SELECT" +#+
-              (rawSqls, fields).zipped.map { (sql, field) =>
-                sql +#+ d"AS" +#+ field
-              }.commaSep ++
-              d")" +#+
-              table ++
-              d")"
+            rawSqls.funcall(d"soql_compress_compound")
         }
 
       ExprSql(

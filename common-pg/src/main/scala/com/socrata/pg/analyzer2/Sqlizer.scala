@@ -199,7 +199,7 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
             val underlyingColumnSqls = rep.expandedDatabaseColumns(columnLabel).map { dbColName =>
               tmpTable ++ d"." ++ Doc(dbColName)
             }
-            Seq(ExprSql.compressSqls(underlyingColumnSqls) +#+ d"AS" +#+ Doc(rep.compressedDatabaseColumn(columnLabel)))
+            Seq(underlyingColumnSqls.funcall(d"soql_compress_compound") +#+ d"AS" +#+ Doc(rep.compressedDatabaseColumn(columnLabel)))
           } else if(schema(columnLabel).isExpanded) {
             rep.expandedDatabaseColumns(columnLabel).map { dbColName =>
               tmpTable ++ d"." ++ Doc(dbColName) +#+ d"AS" +#+ Doc(dbColName)
