@@ -3,6 +3,7 @@ package com.socrata.pg.server.analyzer2
 import scala.collection.{mutable => scm}
 
 import java.sql.{Connection, PreparedStatement}
+import java.util.Base64
 
 import com.rojoma.json.v3.ast.{JArray, JString, JValue}
 import com.rojoma.json.v3.interpolation._
@@ -259,6 +260,7 @@ object ProcessQuery {
       for(debugFields <- debugFields) {
         writer.write("\"debug\":%s\n ,".format(JsonUtil.renderJson(debugFields, pretty = false)))
       }
+      writer.write("\"fingerprint\":%s\n ,".format(JString(Base64.getUrlEncoder.withoutPadding.encodeToString(etag.asBytes))))
       writer.write("\"last_modified\":%s\n ,".format(JString(CJSONWriter.dateTimeFormat.print(lastModified))))
       writer.write("\"locale\":%s\n ,".format(JString(locale)))
       writer.write("\"schema\":")
