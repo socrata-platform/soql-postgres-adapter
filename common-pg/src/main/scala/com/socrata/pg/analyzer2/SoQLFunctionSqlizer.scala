@@ -133,14 +133,14 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     assert(f.typ == SoQLText)
 
     def nullLiteral =
-      ctx.repFor(SoQLText).nullLiteral(NullLiteral[MT](SoQLText)(f.position.asAtomic))(ctx.gensymProvider)
+      ctx.repFor(SoQLText).nullLiteral(NullLiteral[MT](SoQLText)(f.position.asAtomic))
         .withExpr(f)
 
     f.args(0) match {
       case lit@LiteralValue(SoQLText(key)) =>
         ctx.systemContext.get(key) match {
           case Some(value) =>
-            ctx.repFor(SoQLText).literal(LiteralValue[MT](SoQLText(value))(f.position.asAtomic))(ctx.gensymProvider)
+            ctx.repFor(SoQLText).literal(LiteralValue[MT](SoQLText(value))(f.position.asAtomic))
               .withExpr(f)
           case None =>
             nullLiteral
@@ -200,7 +200,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     }
     // We're given the five subcolumns that make up a fake-location,
     // so just pass them on through.
-    ExprSql(args.map(_.compressed.sql), f)(ctx.repFor, ctx.gensymProvider)
+    ExprSql(args.map(_.compressed.sql), f)
   }
 
   def sqlizeSimpleCompoundColumn(typ: SoQLType) = ofs { (f, args, ctx) =>
@@ -209,7 +209,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     assert(args.forall(_.typ == SoQLText))
     // We're given all the subcolumns that make up a `typ`, so just
     // pass them on through.
-    ExprSql(args.map(_.compressed.sql), f)(ctx.repFor, ctx.gensymProvider)
+    ExprSql(args.map(_.compressed.sql), f)
   }
 
   def sqlizeGetUtcDate = ofs { (f, args, ctx) =>
@@ -218,7 +218,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
 
     ctx.nowUsed = true
     ctx.repFor(f.typ).
-      literal(LiteralValue[MT](SoQLFixedTimestamp(ctx.now))(AtomicPositionInfo.None))(ctx.gensymProvider).
+      literal(LiteralValue[MT](SoQLFixedTimestamp(ctx.now))(AtomicPositionInfo.None)).
       withExpr(f)
   }
 
@@ -252,7 +252,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       args(0).expr match {
         case LiteralValue(SoQLNumber(n)) =>
           // move the negation into the literal
-          ctx.repFor(SoQLNumber).literal(LiteralValue[MT](SoQLNumber(n.negate))(new AtomicPositionInfo(f.position.functionNamePosition)))(ctx.gensymProvider).withExpr(f)
+          ctx.repFor(SoQLNumber).literal(LiteralValue[MT](SoQLNumber(n.negate))(new AtomicPositionInfo(f.position.functionNamePosition))).withExpr(f)
         case _ =>
           base(f, args, ctx)
       }

@@ -16,7 +16,7 @@ object ExprSql {
   def apply[MT <: MetaTypes](sql: Doc[SqlizeAnnotation[MT]], expr: Expr[MT]): Compressed[MT] =
     new Compressed(sql, expr)
 
-  def apply[MT <: MetaTypes](sqls: Seq[Doc[SqlizeAnnotation[MT]]], expr: Expr[MT])(implicit repFor: Rep.Provider[MT], gensymProvider: GensymProvider): ExprSql[MT] =
+  def apply[MT <: MetaTypes](sqls: Seq[Doc[SqlizeAnnotation[MT]]], expr: Expr[MT]): ExprSql[MT] =
     if(sqls.lengthCompare(1) == 0) {
       new Compressed(sqls.head, expr)
     } else {
@@ -32,7 +32,7 @@ object ExprSql {
     def withExpr(newExpr: Expr) = new Compressed(rawSql, newExpr)
   }
 
-  class Expanded[MT <: MetaTypes] private[ExprSql] (rawSqls: Seq[Doc[SqlizeAnnotation[MT]]], val expr: Expr[MT])(implicit repFor: Rep.Provider[MT], gensymProvider: GensymProvider) extends ExprSql[MT] {
+  class Expanded[MT <: MetaTypes] private[ExprSql] (rawSqls: Seq[Doc[SqlizeAnnotation[MT]]], val expr: Expr[MT]) extends ExprSql[MT] {
     assert(rawSqls.lengthCompare(1) != 0)
 
     def sqls = rawSqls.map(_.annotate(SqlizeAnnotation.Expression(expr)))
@@ -60,7 +60,7 @@ object ExprSql {
   }
 
   object Expanded {
-    def apply[MT <: MetaTypes](sqls: Seq[Doc[SqlizeAnnotation[MT]]], expr: Expr[MT])(implicit repFor: Rep.Provider[MT], gensymProvider: GensymProvider): Expanded[MT] =
+    def apply[MT <: MetaTypes](sqls: Seq[Doc[SqlizeAnnotation[MT]]], expr: Expr[MT]): Expanded[MT] =
       new Expanded(sqls.map(_.annotate(SqlizeAnnotation.Expression(expr))), expr)
   }
 }

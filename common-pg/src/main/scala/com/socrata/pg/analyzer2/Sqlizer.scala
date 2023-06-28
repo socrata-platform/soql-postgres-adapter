@@ -87,15 +87,12 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   val systemContext: Map[String, String]
   val rewriteSearch: RewriteSearch
 
-  private implicit def gensymProvider: GensymProvider = namespace
-
   def apply(stmt: Statement, availableSchemas: AvailableSchemas)(implicit ct: ClassTag[CV]): Sqlizer.Result[MT] = {
     val rewritten = rewriteSearch(stmt)
     val now = DateTime.now(DateTimeZone.UTC).withMillisOfSecond(0)
     val dynamicContext = FuncallSqlizer.DynamicContext[MT](
       repFor,
       systemContext,
-      namespace,
       ProvenanceTracker(rewritten, e => repFor(e.typ).provenanceOf(e)),
       now
     )

@@ -10,7 +10,6 @@ object FuncallSqlizer {
   case class DynamicContext[MT <: MetaTypes](
     repFor: Rep.Provider[MT],
     systemContext: Map[String, String],
-    gensymProvider: GensymProvider,
     provTracker: ProvenanceTracker[MT],
     now: DateTime
   ) {
@@ -236,7 +235,7 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
 
     args(0) match {
       case compressed: ExprSql.Compressed[MT] => ExprSql(compressed.sql, e)
-      case expanded: ExprSql.Expanded[MT] => ExprSql(expanded.sqls, e)(ctx.repFor, ctx.gensymProvider)
+      case expanded: ExprSql.Expanded[MT] => ExprSql(expanded.sqls, e)
     }
   }
 

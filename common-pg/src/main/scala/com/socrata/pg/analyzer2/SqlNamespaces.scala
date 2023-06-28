@@ -3,7 +3,7 @@ package com.socrata.pg.analyzer2
 import com.socrata.soql.analyzer2._
 import com.socrata.prettyprint.prelude._
 
-trait SqlNamespaces[MT <: MetaTypes] extends LabelUniverse[MT] with GensymProvider {
+trait SqlNamespaces[MT <: MetaTypes] extends LabelUniverse[MT] {
   private var counter = 0L
 
   // Returns an identifier that is guaranteed not to conflict with any

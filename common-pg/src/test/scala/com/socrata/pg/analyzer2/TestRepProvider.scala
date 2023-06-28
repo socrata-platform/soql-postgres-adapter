@@ -22,7 +22,7 @@ class TestRepProvider(override val namespace: SqlNamespaces[SqlizerTest.TestMT])
         rawId.provenance.map(CanonicalName(_)).toSet
       }
 
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val rawId = e.value.asInstanceOf[TestID]
 
         val provLit = rawId.provenance match {
@@ -43,7 +43,7 @@ class TestRepProvider(override val namespace: SqlNamespaces[SqlizerTest.TestMT])
       }
     },
     TestText -> new SingleColumnRep(TestText, d"text") {
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val TestText(s) = e.value
         ExprSql(mkStringLiteral(s), e)
       }
@@ -52,7 +52,7 @@ class TestRepProvider(override val namespace: SqlNamespaces[SqlizerTest.TestMT])
       }
     },
     TestNumber -> new SingleColumnRep(TestNumber, d"numeric") {
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val TestNumber(n) = e.value
         ExprSql(Doc(n.toString) +#+ d"::" +#+ sqlType, e)
       }
@@ -61,7 +61,7 @@ class TestRepProvider(override val namespace: SqlNamespaces[SqlizerTest.TestMT])
       }
     },
     TestBoolean -> new SingleColumnRep(TestBoolean, d"boolean") {
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val TestBoolean(b) = e.value
         ExprSql(if(b) d"true" else d"false", e)
       }
@@ -71,7 +71,7 @@ class TestRepProvider(override val namespace: SqlNamespaces[SqlizerTest.TestMT])
     },
 
     TestCompound -> new CompoundColumnRep(TestCompound) {
-      def nullLiteral(e: NullLiteral)(implicit gensymProvider: GensymProvider) =
+      def nullLiteral(e: NullLiteral) =
         ExprSql.Expanded[TestMT](Seq(d"null :: text", d"null :: numeric"), e)
 
       def expandedColumnCount = 2
@@ -84,7 +84,7 @@ class TestRepProvider(override val namespace: SqlNamespaces[SqlizerTest.TestMT])
       def compressedDatabaseColumn(name: ColumnLabel) =
         namespace.columnBase(name)
 
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val cmp@TestCompound(_, _) = e.value
 
         cmp match {
