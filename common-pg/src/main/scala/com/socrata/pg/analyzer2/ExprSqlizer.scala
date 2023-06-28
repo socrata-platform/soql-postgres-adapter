@@ -9,9 +9,7 @@ class ExprSqlizer[MT <: MetaTypes](
   selectListIndices: IndexedSeq[SelectListIndex],
   dynamicContext: FuncallSqlizer.DynamicContext[MT]
 ) extends StatementUniverse[MT] {
-  import sqlizer.{funcallSqlizer, namespace}
-  private implicit def gensymProvider: GensymProvider = namespace
-  private implicit def repFor = dynamicContext.repFor
+  import sqlizer.{funcallSqlizer, repFor}
 
   def sqlizeOrderBy(e: OrderBy): OrderBySql[MT] = {
     if(repFor(e.expr.typ).isProvenanced) {

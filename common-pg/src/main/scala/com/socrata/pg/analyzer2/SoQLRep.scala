@@ -24,7 +24,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
   abstract class GeometryRep[T <: Geometry](t: SoQLType with SoQLGeometryLike[T], ctor: T => CV, name: String) extends SingleColumnRep(t, d"geometry") {
     private val open = d"st_${name}fromwkb"
 
-    def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+    def literal(e: LiteralValue) = {
       val geo = downcast(e.value)
       ExprSql(Seq(mkByteaLiteral(t.WkbRep(geo)), Geo.defaultSRIDLiteral).funcall(open), e)
     }
@@ -51,7 +51,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
         rawId.provenance.map(CanonicalName(_)).toSet
       }
 
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val rawId = e.value.asInstanceOf[SoQLID]
         val rawFormatted = SoQLID.FormattedButUnobfuscatedStringRep(rawId)
         // ok, "rawFormatted" is the string as the user entered it.
@@ -113,7 +113,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
         rawId.provenance.map(CanonicalName(_)).toSet
       }
 
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val rawId = e.value.asInstanceOf[SoQLVersion]
         val rawFormatted = SoQLVersion.FormattedButUnobfuscatedStringRep(rawId)
         // ok, "rawFormatted" is the string as the user entered it.
@@ -173,7 +173,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
     // ATOMIC REPS
 
     SoQLText -> new SingleColumnRep(SoQLText, d"text") {
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val SoQLText(s) = e.value
         ExprSql(mkTextLiteral(s), e)
       }
@@ -185,7 +185,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
       }
     },
     SoQLNumber -> new SingleColumnRep(SoQLNumber, d"numeric") {
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val SoQLNumber(n) = e.value
         ExprSql(Doc(n.toString) +#+ d"::" +#+ sqlType, e)
       }
@@ -197,7 +197,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
       }
     },
     SoQLBoolean -> new SingleColumnRep(SoQLBoolean, d"boolean") {
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val SoQLBoolean(b) = e.value
         ExprSql(if(b) d"true" else d"false", e)
       }
@@ -211,7 +211,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
       }
     },
     SoQLFixedTimestamp -> new SingleColumnRep(SoQLFixedTimestamp, d"timestamp with time zone") {
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val SoQLFixedTimestamp(s) = e.value
         ExprSql(sqlType +#+ mkStringLiteral(SoQLFixedTimestamp.StringRep(s)), e)
       }
@@ -221,7 +221,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
       }
     },
     SoQLFloatingTimestamp -> new SingleColumnRep(SoQLFloatingTimestamp, d"timestamp without time zone") {
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val SoQLFloatingTimestamp(s) = e.value
         ExprSql(sqlType +#+ mkStringLiteral(SoQLFloatingTimestamp.StringRep(s)), e)
       }
@@ -231,7 +231,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
       }
     },
     SoQLDate -> new SingleColumnRep(SoQLDate, d"date") {
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val SoQLDate(s) = e.value
         ExprSql(sqlType +#+ mkStringLiteral(SoQLDate.StringRep(s)), e)
       }
@@ -241,7 +241,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
       }
     },
     SoQLTime -> new SingleColumnRep(SoQLTime, d"time without time zone") {
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val SoQLTime(s) = e.value
         ExprSql(sqlType +#+ mkStringLiteral(SoQLTime.StringRep(s)), e)
       }
@@ -251,7 +251,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
       }
     },
     SoQLJson -> new SingleColumnRep(SoQLJson, d"jsonb") {
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val SoQLJson(j) = e.value
         ExprSql(sqlType +#+ mkStringLiteral(CompactJsonWriter.toString(j)), e)
       }
@@ -262,7 +262,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
     },
 
     SoQLDocument -> new SingleColumnRep(SoQLDocument, d"jsonb") {
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = ??? // no such thing as a doc liteal
+      def literal(e: LiteralValue) = ??? // no such thing as a doc liteal
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getString(dbCol)) match {
           case Some(s) =>
@@ -298,7 +298,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
     // COMPOUND REPS
 
     SoQLPhone -> new CompoundColumnRep(SoQLPhone) {
-      def nullLiteral(e: NullLiteral)(implicit gensymProvider: GensymProvider) =
+      def nullLiteral(e: NullLiteral) =
         ExprSql.Expanded[MT](Seq(d"null :: text", d"null :: text"), e)
 
       def expandedColumnCount = 2
@@ -311,7 +311,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
       def compressedDatabaseColumn(name: ColumnLabel) =
         namespace.columnBase(name)
 
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val ph@SoQLPhone(_, _) = e.value
 
         ph match {
@@ -363,7 +363,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
     },
 
     SoQLLocation -> new CompoundColumnRep(SoQLLocation) {
-      override def physicalColumnRef(col: PhysicalColumn)(implicit gensymProvider: GensymProvider) = {
+      override def physicalColumnRef(col: PhysicalColumn) = {
         val colInfo: Seq[Option[DatabaseColumnName]] = locationSubcolumns(physicalTableFor(col.table))(col.column)
 
         ExprSql(
@@ -377,7 +377,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
           col)
       }
 
-      def nullLiteral(e: NullLiteral)(implicit gensymProvider: GensymProvider) =
+      def nullLiteral(e: NullLiteral) =
         ExprSql.Expanded[MT](Seq(d"null :: point", d"null :: text", d"null :: text", d"null :: text", d"null :: text"), e)
 
       def expandedColumnCount = 5
@@ -390,7 +390,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
       def compressedDatabaseColumn(name: ColumnLabel) =
         namespace.columnBase(name)
 
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val loc@SoQLLocation(_, _, _) = e.value
         ??? // No such thing as a location literal
       }
@@ -413,7 +413,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
           case expanded: ExprSql.Expanded[MT] =>
             val sqls = expanded.sqls
             assert(sqls.length == expandedColumnCount)
-            ExprSql.Expanded(Seq(sqls.head).funcall(d"st_asbinary") +: sqls.tail, expanded.expr)(SoQLRepProvider.this, namespace)
+            ExprSql.Expanded(Seq(sqls.head).funcall(d"st_asbinary") +: sqls.tail, expanded.expr)
         }
       }
 
@@ -469,7 +469,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
     },
 
     SoQLUrl -> new CompoundColumnRep(SoQLUrl) {
-      def nullLiteral(e: NullLiteral)(implicit gensymProvider: GensymProvider) =
+      def nullLiteral(e: NullLiteral) =
         ExprSql.Expanded[MT](Seq(d"null :: text", d"null :: text"), e)
 
       def expandedColumnCount = 2
@@ -482,7 +482,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
       def compressedDatabaseColumn(name: ColumnLabel) =
         namespace.columnBase(name)
 
-      def literal(e: LiteralValue)(implicit gensymProvider: GensymProvider) = {
+      def literal(e: LiteralValue) = {
         val url@SoQLUrl(_, _) = e.value
 
         url match {

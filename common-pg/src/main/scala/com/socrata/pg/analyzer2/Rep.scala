@@ -16,10 +16,10 @@ case class SubcolInfo[MT <: MetaTypes](compoundType: types.ColumnType[MT], index
 
 trait Rep[MT <: MetaTypes] extends ExpressionUniverse[MT] {
   def typ: CT
-  def physicalColumnRef(col: PhysicalColumn)(implicit gensymProvider: GensymProvider): ExprSql[MT]
-  def virtualColumnRef(col: VirtualColumn, isExpanded: Boolean)(implicit gensymProvider: GensymProvider): ExprSql[MT]
-  def nullLiteral(e: NullLiteral)(implicit gensymProvider: GensymProvider): ExprSql[MT]
-  def literal(value: LiteralValue)(implicit gensymProvider: GensymProvider): ExprSql[MT] // type of literal will be appropriate for this rep
+  def physicalColumnRef(col: PhysicalColumn): ExprSql[MT]
+  def virtualColumnRef(col: VirtualColumn, isExpanded: Boolean): ExprSql[MT]
+  def nullLiteral(e: NullLiteral): ExprSql[MT]
+  def literal(value: LiteralValue): ExprSql[MT] // type of literal will be appropriate for this rep
   def expandedColumnCount: Int
   def expandedDatabaseColumns(name: ColumnLabel): Seq[Doc[Nothing]]
   def compressedDatabaseColumn(name: ColumnLabel): Doc[Nothing]
@@ -56,10 +56,10 @@ object Rep {
       d"bytea" +#+ mkStringLiteral(bytes.iterator.map { b => "%02x".format(b & 0xff) }.mkString("\\x", "", ""))
 
     protected abstract class SingleColumnRep(val typ: CT, val sqlType: Doc) extends Rep {
-      def physicalColumnRef(col: PhysicalColumn)(implicit gensymProvider: GensymProvider) =
+      def physicalColumnRef(col: PhysicalColumn) =
         ExprSql(Seq(namespace.tableLabel(col.table) ++ d"." ++ compressedDatabaseColumn(col.column)), col)
 
-      def virtualColumnRef(col: VirtualColumn, isExpanded: Boolean)(implicit gensymProvider: GensymProvider) =
+      def virtualColumnRef(col: VirtualColumn, isExpanded: Boolean) =
         if(isExpanded) {
           ExprSql(Seq(namespace.tableLabel(col.table) ++ d"." ++ compressedDatabaseColumn(col.column)), col)
         } else {
@@ -72,7 +72,7 @@ object Rep {
 
       def compressedDatabaseColumn(name: ColumnLabel) = namespace.columnBase(name)
 
-      def nullLiteral(e: NullLiteral)(implicit gensymProvider: GensymProvider) =
+      def nullLiteral(e: NullLiteral) =
         ExprSql(d"null ::" +#+ sqlType, e)
 
       def subcolInfo(field: String) = throw new Exception(s"$typ has no sub-columns")
@@ -87,13 +87,13 @@ object Rep {
     }
 
     protected abstract class CompoundColumnRep(val typ: CT) extends Rep {
-      def physicalColumnRef(col: PhysicalColumn)(implicit gensymProvider: GensymProvider) =
+      def physicalColumnRef(col: PhysicalColumn) =
         genericColumnRef(col, true)
 
-      def virtualColumnRef(col: VirtualColumn, isExpanded: Boolean)(implicit gensymProvider: GensymProvider) =
+      def virtualColumnRef(col: VirtualColumn, isExpanded: Boolean) =
         genericColumnRef(col, isExpanded)
 
-      private def genericColumnRef(col: Column, isExpanded: Boolean)(implicit gensymProvider: GensymProvider): ExprSql = {
+      private def genericColumnRef(col: Column, isExpanded: Boolean): ExprSql = {
         val dbTable = namespace.tableLabel(col.table)
         if(isExpanded) {
           ExprSql(expandedDatabaseColumns(col.column).map { cn => dbTable ++ d"." ++ cn }, col)
@@ -127,7 +127,7 @@ object Rep {
       // with a table under your control to find out information about
       // intervals between IDs in tables you don't control.
 
-      def nullLiteral(e: NullLiteral)(implicit gensymProvider: GensymProvider) =
+      def nullLiteral(e: NullLiteral) =
         ExprSql.Expanded[MT](Seq(d"null :: text", d"null ::" +#+ primarySqlTyp), e)
 
       def expandedColumnCount = 2
@@ -140,7 +140,7 @@ object Rep {
       def compressedDatabaseColumn(name: ColumnLabel) =
         namespace.columnBase(name)
 
-      def physicalColumnRef(col: PhysicalColumn)(implicit gensymProvider: GensymProvider) = {
+      def physicalColumnRef(col: PhysicalColumn) = {
         // The "::text" is required so that the provenance is not a
         // literal by SQL's standards.  Otherwise this will have
         // trouble if you order or group by :id
@@ -148,7 +148,7 @@ object Rep {
         ExprSql.Expanded[MT](Seq(mkStringLiteral(col.tableCanonicalName.name) +#+ d":: text", dsTable ++ d"." ++ compressedDatabaseColumn(col.column)), col)
       }
 
-      def virtualColumnRef(col: VirtualColumn, isExpanded: Boolean)(implicit gensymProvider: GensymProvider) = {
+      def virtualColumnRef(col: VirtualColumn, isExpanded: Boolean) = {
         val dsTable = namespace.tableLabel(col.table)
         if(isExpanded) {
           ExprSql(expandedDatabaseColumns(col.column).map { cn => dsTable ++ d"." ++ cn }, col)
