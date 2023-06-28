@@ -181,6 +181,18 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
     analyze("phone('x','y').phone_type") must equal ("""text "y"""")
   }
 
+  test("negative literals get their operator folded in") {
+    analyze("-5") must equal ("""-5 :: numeric""")
+  }
+
+  test("negation operator is parenthesized") {
+    analyze("-num") must equal ("""-(x1.num)""")
+  }
+
+  test("positive operator is just dropped") {
+    analyze("+num") must equal ("""x1.num""")
+  }
+
   test("geo literal") {
     // st_asbinary because this is the output expression for a soql string
     analyze("'POINT(10 10)'::point") must equal ("""st_asbinary(st_pointfromwkb(bytea "\\x000000000140240000000000004024000000000000", 4326))""")

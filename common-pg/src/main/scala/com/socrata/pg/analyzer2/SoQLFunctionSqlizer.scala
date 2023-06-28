@@ -243,6 +243,29 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     ExprSql(sql, f)
   }
 
+  def sqlizeNegate = {
+    val base = sqlizeUnaryOp("-")
+
+    ofs { (f, args, ctx) =>
+      assert(args.length == 1)
+
+      args(0).expr match {
+        case LiteralValue(SoQLNumber(n)) =>
+          // move the negation into the literal
+          ctx.repFor(SoQLNumber).literal(LiteralValue[MT](SoQLNumber(n.negate))(new AtomicPositionInfo(f.position.functionNamePosition)))(ctx.gensymProvider).withExpr(f)
+        case _ =>
+          base(f, args, ctx)
+      }
+    }
+  }
+
+  def sqlizeAntinegate = ofs { (f, args, ctx) =>
+    assert(args.length == 1)
+    // this operator only exists for symmetry with unary -, so just
+    // get rid of it
+    args(0)
+  }
+
   // Given an ordinary function sqlizer, returns a new ordinary
   // function sqlizer that upcases all of its text arguments
   def uncased(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
@@ -319,8 +342,8 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       Substr3 -> sqlizeNormalOrdinaryFuncall("soql_substring"),
       SplitPart -> sqlizeNormalOrdinaryFuncall("soql_split_part"),
 
-      UnaryPlus -> sqlizeUnaryOp("+"),
-      UnaryMinus -> sqlizeUnaryOp("-"),
+      UnaryMinus -> sqlizeNegate,
+      UnaryPlus -> sqlizeAntinegate,
       BinaryPlus -> sqlizeBinaryOp("+"),
       BinaryMinus -> sqlizeBinaryOp("-"),
       TimesNumNum -> sqlizeBinaryOp("*"),
