@@ -2,12 +2,12 @@ package com.socrata.pg.analyzer2
 
 import java.sql.ResultSet
 
-import com.rojoma.json.v3.ast.{JNull, JValue}
+import com.rojoma.json.v3.ast.{JNull, JValue, JString}
 import com.rojoma.json.v3.io.CompactJsonWriter
 import com.rojoma.json.v3.interpolation._
 import com.rojoma.json.v3.util.JsonUtil
 import com.rojoma.json.v3.util.OrJNull.implicits._
-import com.vividsolutions.jts.geom.Geometry
+import com.vividsolutions.jts.geom.{Geometry, Point}
 
 import com.socrata.prettyprint.prelude._
 import com.socrata.soql.analyzer2._
@@ -421,15 +421,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
         def toBigDecimal = java.math.BigDecimal.valueOf(x)
       }
 
-      protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {
-        val point = Option(rs.getBytes(dbCol)).flatMap { bytes =>
-          SoQLPoint.WkbRep.unapply(bytes)
-        }
-        val address = Option(rs.getString(dbCol+1))
-        val city = Option(rs.getString(dbCol+2))
-        val state = Option(rs.getString(dbCol+3))
-        val zip = Option(rs.getString(dbCol+4))
-
+      private def locify(point: Option[Point], address: Option[String], city: Option[String], state: Option[String], zip: Option[String]): SoQLValue =
         if(address.isEmpty && city.isEmpty && state.isEmpty && zip.isEmpty) {
           if(point.isEmpty) {
             SoQLNull
@@ -440,26 +432,37 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
           SoQLLocation(
             point.map(_.getY.toBigDecimal), point.map(_.getX.toBigDecimal),
             Some(
-              CompactJsonWriter.toString(json"""{address: ${address.orJNull}, city: ${city.orJNull}, state: ${state.orJNull}, zip: ${zip.orJNull}}""")
+              // Building this as a string rather than a JValue to keep the formatting exactly the same as before
+              s"""{"address": ${JString(address.getOrElse(""))}, "city": ${JString(city.getOrElse(""))}, "state": ${JString(state.getOrElse(""))}, "zip": ${JString(zip.getOrElse(""))}}"""
             )
           )
         }
+
+      protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {
+        locify(
+          Option(rs.getBytes(dbCol)).flatMap { bytes =>
+            SoQLPoint.WkbRep.unapply(bytes)
+          },
+          Option(rs.getString(dbCol+1)),
+          Option(rs.getString(dbCol+2)),
+          Option(rs.getString(dbCol+3)),
+          Option(rs.getString(dbCol+4))
+        )
       }
+
       protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getString(dbCol)) match {
           case None =>
             SoQLNull
           case Some(v) =>
             JsonUtil.parseJson[(Either[JNull, JValue], Either[JNull, String], Either[JNull, String], Either[JNull, String], Either[JNull, String])](v) match {
-              case Right((Left(_), Left(_), Left(_), Left(_), Left(_))) =>
-                SoQLNull
               case Right((pt, address, city, state, zip)) =>
-                val point = pt.toOption.flatMap { ptJson => SoQLPoint.JsonRep.unapply(ptJson.toString) }
-                SoQLLocation(
-                  point.map(_.getY.toBigDecimal), point.map(_.getX.toBigDecimal),
-                  Some(
-                    CompactJsonWriter.toString(json"""{address: ${address.toOption.orJNull}, city: ${city.toOption.orJNull}, state: ${state.toOption.orJNull}, zip: ${zip.toOption.orJNull}}""")
-                  )
+                locify(
+                  pt.toOption.flatMap { ptJson => SoQLPoint.JsonRep.unapply(ptJson.toString) },
+                  address.toOption,
+                  city.toOption,
+                  state.toOption,
+                  zip.toOption
                 )
               case Left(err) =>
                 throw new Exception(err.english)
