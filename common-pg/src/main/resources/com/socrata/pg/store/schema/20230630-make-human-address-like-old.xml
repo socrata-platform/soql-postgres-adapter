@@ -1,0 +1,39 @@
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+    <changeSet author="robertm" id="20230626-nontrivial-soql-functions" runOnChange="true">
+        <sql splitStatements="false"><![CDATA[
+          CREATE OR REPLACE FUNCTION soql_to_jsonb_empty(string text) RETURNS jsonb AS $$
+            select to_jsonb(coalesce(string, ''));
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE;
+
+          CREATE OR REPLACE FUNCTION soql_human_address(address text, city text, state text, zip text) RETURNS text AS $$
+            select case when address is null and city is null and state is null and zip is null then
+                     null
+                   else
+                     '{"address": ' || soql_to_jsonb_empty(address)::text || ', "city": ' || soql_to_jsonb_empty(city)::text || ', "state": ' || soql_to_jsonb_empty(state)::text || ', "zip": ' || soql_to_jsonb_empty(zip)::text || '}'
+                   end;
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+              CREATE OR REPLACE FUNCTION soql_human_address(address text, city text, state text, zip text) RETURNS text AS $$
+                select case when address is null and city is null and state is null and zip is null then
+                         null
+                       else
+                         '{"address":' || soql_to_jsonb_null(address)::text || ',"city":' || soql_to_jsonb_null(city)::text || ',"state":' || soql_to_jsonb_null(state)::text || ',"zip":' || soql_to_jsonb_null(zip)::text || '}'
+                       end;
+              $$ LANGUAGE SQL
+              IMMUTABLE
+              PARALLEL SAFE;
+
+              DROP FUNCTION soql_to_jsonb_empty(text);
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
