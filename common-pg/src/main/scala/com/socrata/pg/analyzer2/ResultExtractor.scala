@@ -7,7 +7,10 @@ import java.sql.ResultSet
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.analyzer2._
 
-class ResultExtractor[MT <: MetaTypes](rawSchema: OrderedMap[types.ColumnLabel[MT], AugmentedType[MT]], repFor: Rep.Provider[MT])(implicit tag: ClassTag[MT#ColumnValue]) extends SqlizerUniverse[MT] {
+class ResultExtractor[MT <: MetaTypes](
+  rawSchema: OrderedMap[types.ColumnLabel[MT], AugmentedType[MT]],
+  repFor: Rep.Provider[MT]
+)(implicit tag: ClassTag[MT#ColumnValue]) extends SqlizerUniverse[MT] {
   private val extractors = rawSchema.valuesIterator.map { case AugmentedType(typ, isExpanded) =>
     repFor(typ).extractFrom(isExpanded)
   }.toArray
@@ -30,4 +33,11 @@ class ResultExtractor[MT <: MetaTypes](rawSchema: OrderedMap[types.ColumnLabel[M
 
     result
   }
+
+  def fetchSize =
+    if(schema.valuesIterator.exists(repFor(_).isPotentiallyLarge)) {
+      10
+    } else {
+      1000
+    }
 }

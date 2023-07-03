@@ -26,6 +26,16 @@ trait Rep[MT <: MetaTypes] extends ExpressionUniverse[MT] {
   def isProvenanced: Boolean = false
   def provenanceOf(value: LiteralValue): Set[CanonicalName]
 
+  // Postgresql's JDBC driver will read rows in fixed-size blocks; by
+  // default, it reads all the results into memory before returning
+  // them. You can make it stream by setting the fetch size (in rows),
+  // so we'll do that.
+  // Specifically, we'll set the fetch size based on the types of
+  // columns in the result - in particular geo types routinely use a
+  // lot of memory, so we'll consider such types as being "large" and
+  // set a small fetch size when one exists in the result.
+  def isPotentiallyLarge: Boolean = false
+
   // throws an exception if "field" is not a subcolumn of this type
   def subcolInfo(field: String): SubcolInfo[MT]
 

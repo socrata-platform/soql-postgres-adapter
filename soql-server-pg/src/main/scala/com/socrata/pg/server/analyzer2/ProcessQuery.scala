@@ -293,6 +293,7 @@ object ProcessQuery {
 
     new Iterator[Array[JValue]] {
       private val stmt = rs.open(conn.createStatement())
+      stmt.setFetchSize(extractor.fetchSize)
       private val resultSet = rs.open(stmt.executeQuery(sql))
       private var done = false
       private var ready = false
