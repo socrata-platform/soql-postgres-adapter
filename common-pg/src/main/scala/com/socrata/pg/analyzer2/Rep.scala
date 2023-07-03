@@ -145,7 +145,7 @@ object Rep {
         // literal by SQL's standards.  Otherwise this will have
         // trouble if you order or group by :id
         val dsTable = namespace.tableLabel(col.table)
-        ExprSql.Expanded[MT](Seq(mkStringLiteral(col.tableCanonicalName.name) +#+ d":: text", dsTable ++ d"." ++ compressedDatabaseColumn(col.column)), col)
+        ExprSql.Expanded[MT](Seq(mkTextLiteral(col.tableCanonicalName.name), dsTable ++ d"." ++ compressedDatabaseColumn(col.column)), col)
       }
 
       def virtualColumnRef(col: VirtualColumn, isExpanded: Boolean) = {

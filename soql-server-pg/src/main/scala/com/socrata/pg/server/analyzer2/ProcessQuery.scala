@@ -113,8 +113,6 @@ object ProcessQuery {
     val sqlizer = new ActualSqlizer(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, rewriteSubcolumns(request.locationSubcolumns, copyCache), physicalTableFor)
     val Sqlizer.Result(sql, extractor, nonliteralSystemContextLookupFound, now) = sqlizer(nameAnalysis.statement, OrderedMap.empty)
     log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
-    val laidOutSql = sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded))
-    val renderedSql = laidOutSql.toString
 
     // Our etag will be the hash of the inputs that affect the result of the query
     val etag = ETagify(
@@ -134,30 +132,6 @@ object ProcessQuery {
     // can change over time.
     val lastModified = copyCache.mostRecentlyModifiedAt.getOrElse(new DateTime(0L))
 
-    val debugFields =
-      request.debug.map { debug =>
-        Seq(
-          debug.sql.map { fmt =>
-            val s =
-              fmt match {
-                case Debug.Sql.Format.Compact =>
-                  renderedSql
-                case Debug.Sql.Format.Pretty =>
-                  prettierSql(nameAnalysis, sql)
-              }
-            JString(s)
-          }.map("sql" -> _),
-          debug.explain.map { case Debug.Explain(analyze, format) =>
-            format match {
-              case Debug.Explain.Format.Text =>
-                JString(explainText(pgu, renderedSql, analyze))
-              case Debug.Explain.Format.Json =>
-                explainJson(pgu, renderedSql, analyze)
-            }
-          }.map("explain" -> _)
-        ).flatten.toMap
-      }
-
     precondition.check(Some(etag), sideEffectFree = true) match {
       case Precondition.Passed =>
         fulfillRequest(
@@ -165,14 +139,12 @@ object ProcessQuery {
           copyCache,
           etag,
           pgu,
-          laidOutSql,
-          renderedSql,
+          sql,
           nameAnalysis,
           cryptProviders,
           extractor,
           lastModified,
-          debugFields,
-          request.debug.fold(false)(_.inhibitRun),
+          request.debug,
           rs
         )
       case Precondition.FailedBecauseMatch(_) =>
@@ -227,20 +199,45 @@ object ProcessQuery {
     copyCache: CopyCache,
     etag: EntityTag,
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-    laidOutSql: SimpleDocStream[com.socrata.pg.analyzer2.SqlizeAnnotation[DatabaseNamesMetaTypes]],
-    renderedSql: String,
+    sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]],
     nameAnalysis: com.socrata.soql.analyzer2.SoQLAnalysis[DatabaseNamesMetaTypes],
     cryptProviders: CryptProviderProvider,
     extractor: ResultExtractor[DatabaseNamesMetaTypes],
     lastModified: DateTime,
-    debugFields: Option[Map[String, JValue]],
-    inhibitRun: Boolean,
+    debug: Option[Debug],
     rs: ResourceScope
   ): HttpResponse = {
     val locale = "en_US"
 
+    val laidOutSql = sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded))
+    val renderedSql = laidOutSql.toString
+
+    val debugFields =
+      debug.map { debug =>
+        Seq(
+          debug.sql.map { fmt =>
+            val s =
+              fmt match {
+                case Debug.Sql.Format.Compact =>
+                  renderedSql
+                case Debug.Sql.Format.Pretty =>
+                  prettierSql(nameAnalysis, sql)
+              }
+            JString(s)
+          }.map("sql" -> _),
+          debug.explain.map { case Debug.Explain(analyze, format) =>
+            format match {
+              case Debug.Explain.Format.Text =>
+                JString(explainText(pgu, renderedSql, analyze))
+              case Debug.Explain.Format.Json =>
+                explainJson(pgu, renderedSql, analyze)
+            }
+          }.map("explain" -> _)
+        ).flatten.toMap
+      }
+
     val rows =
-      if(inhibitRun) {
+      if(debug.fold(false)(_.inhibitRun)) {
         Iterator.empty
       } else {
         try {
