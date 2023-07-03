@@ -281,18 +281,23 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
     },
     SoQLMultiPoint -> new GeometryRep(SoQLMultiPoint, SoQLMultiPoint(_), "mpoint") {
       override def downcast(v: SoQLValue) = v.asInstanceOf[SoQLMultiPoint].value
+      override def isPotentiallyLarge = true
     },
     SoQLLine -> new GeometryRep(SoQLLine, SoQLLine(_), "line") {
       override def downcast(v: SoQLValue) = v.asInstanceOf[SoQLLine].value
+      override def isPotentiallyLarge = true
     },
     SoQLMultiLine -> new GeometryRep(SoQLMultiLine, SoQLMultiLine(_), "mline") {
       override def downcast(v: SoQLValue) = v.asInstanceOf[SoQLMultiLine].value
+      override def isPotentiallyLarge = true
     },
     SoQLPolygon -> new GeometryRep(SoQLPolygon, SoQLPolygon(_), "polygon") {
       override def downcast(v: SoQLValue) = v.asInstanceOf[SoQLPolygon].value
+      override def isPotentiallyLarge = true
     },
     SoQLMultiPolygon -> new GeometryRep(SoQLMultiPolygon, SoQLMultiPolygon(_), "mpoly") {
       override def downcast(v: SoQLValue) = v.asInstanceOf[SoQLMultiPolygon].value
+      override def isPotentiallyLarge = true
     },
 
     // COMPOUND REPS
