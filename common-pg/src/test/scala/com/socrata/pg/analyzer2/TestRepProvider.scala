@@ -27,7 +27,7 @@ class TestRepProvider(override val namespace: SqlNamespaces[SqlizerTest.TestMT])
 
         val provLit = rawId.provenance match {
           case None => d"null :: text"
-          case Some(s) => mkStringLiteral(s) +#+ d":: text"
+          case Some(s) => mkTextLiteral(s)
         }
         val numLit = Doc(rawId.value) +#+ d":: bigint"
 
@@ -45,7 +45,7 @@ class TestRepProvider(override val namespace: SqlNamespaces[SqlizerTest.TestMT])
     TestText -> new SingleColumnRep(TestText, d"text") {
       def literal(e: LiteralValue) = {
         val TestText(s) = e.value
-        ExprSql(mkStringLiteral(s), e)
+        ExprSql(mkTextLiteral(s), e)
       }
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ???
@@ -92,7 +92,7 @@ class TestRepProvider(override val namespace: SqlNamespaces[SqlizerTest.TestMT])
             ExprSql.Expanded[TestMT](Seq(d"null :: text", d"null :: numeric"), e)
           case TestCompound(a, b) =>
             val aLit = a match {
-              case Some(n) => mkStringLiteral(n)
+              case Some(n) => mkTextLiteral(n)
               case None => d"null :: text"
             }
             val bLit = b match {
