@@ -1,6 +1,7 @@
 package com.socrata.pg.analyzer2
 
 import scala.collection.{mutable => scm}
+import scala.collection.compat.immutable
 import scala.{collection => sc}
 
 import com.socrata.soql.analyzer2._
@@ -25,7 +26,7 @@ object ProvenanceTracker {
     val exprs = new scm.HashMap[Expr, Set[CanonicalName]]
     val identifiers = new scm.HashMap[(AutoTableLabel, ColumnLabel), Set[CanonicalName]]
 
-    private val emptySLR = Array[Set[CanonicalName]]()
+    private val emptySLR = immutable.ArraySeq[Set[CanonicalName]]()
 
     def processStatement(s: Statement): Seq[Set[CanonicalName]] = {
       s match {
@@ -36,24 +37,27 @@ object ProvenanceTracker {
           processStatement(useQuery)
 
         case Values(labels, values) =>
-          val result = new Array[Set[CanonicalName]](labels.size)
+          val result = Array.fill(labels.size)(Set.empty[CanonicalName])
           for(row <- values) {
             for((col, i) <- row.iterator.zipWithIndex) {
               val prov = processExpr(col, emptySLR)
               result(i) ++= prov
             }
           }
-          result
+          immutable.ArraySeq.unsafeWrapArray(result) // safety: nothing else has a reference to "result"
 
         case Select(distinctiveness, selectList, from, where, groupBy, having, orderBy, limit, offset, search, hint) =>
           // Doing From first to populate identifiers
           processFrom(from)
 
           // Then selectList so that provs can be attached to selectListProvenances
-          val selectListProvenances = new Array[Set[CanonicalName]](selectList.size)
-          for((namedExpr, idx) <- selectList.valuesIterator.zipWithIndex) {
-            processExpr(namedExpr.expr, emptySLR)
-            selectListProvenances(idx) = exprs(namedExpr.expr)
+          val selectListProvenances = locally {
+            val result = new Array[Set[CanonicalName]](selectList.size)
+            for((namedExpr, idx) <- selectList.valuesIterator.zipWithIndex) {
+              result(idx) = processExpr(namedExpr.expr, emptySLR)
+            }
+
+            immutable.ArraySeq.unsafeWrapArray(result) // safety: nothing else has a reference to "result"
           }
 
           // now all the rest
@@ -112,7 +116,7 @@ object ProvenanceTracker {
       }
     }
 
-    def processExpr(e: Expr, selectList: Array[Set[CanonicalName]]): Set[CanonicalName] = {
+    def processExpr(e: Expr, selectList: immutable.ArraySeq[Set[CanonicalName]]): Set[CanonicalName] = {
       val prov: Set[CanonicalName] =
         e match {
           case l: LiteralValue =>
