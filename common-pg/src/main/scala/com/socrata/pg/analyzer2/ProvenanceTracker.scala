@@ -36,7 +36,7 @@ object ProvenanceTracker {
           processStatement(useQuery)
 
         case Values(labels, values) =>
-          val result = new Array[Set[CanonicalName]](labels.size)
+          val result = Array.fill(labels.size)(Set.empty[CanonicalName])
           for(row <- values) {
             for((col, i) <- row.iterator.zipWithIndex) {
               val prov = processExpr(col, emptySLR)
