@@ -484,7 +484,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
 
       // conditional
       Nullif -> sqlizeNormalOrdinaryFuncall("nullif"),
-      Coalesce -> sqlizeNormalOrdinaryFuncall("coalsece"),
+      Coalesce -> sqlizeNormalOrdinaryFuncall("coalesce"),
       Case -> sqlizeCase,
       Iif -> sqlizeIif,
 
