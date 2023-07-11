@@ -1,0 +1,33 @@
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+    <changeSet author="robertm" id="20230626-soql-compress-compound" runOnChange="true">
+        <sql splitStatements="false"><![CDATA[
+          CREATE OR REPLACE FUNCTION soql_text_to_location(loc text, srid integer) RETURNS jsonb AS $$
+            DECLARE
+              jloc jsonb = loc :: jsonb;
+              latitude numeric = (jloc ->> 'latitude') :: numeric;
+              longitude numeric = (jloc ->> 'longitude') :: numeric;
+              human_address jsonb = (jloc ->> 'human_address') :: jsonb;
+            BEGIN
+              RETURN soql_compress_compound(
+                st_setsrid(st_makepoint(longitude, latitude), srid),
+                human_address ->> 'address',
+                human_address ->> 'city',
+                human_address ->> 'state',
+                human_address ->> 'zip'
+              );
+            END;
+          $$ LANGUAGE plpgsql
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+        ]]></sql>
+        <rollback>
+            <sql>
+              DROP FUNCTION soql_text_to_location(text, integer);
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

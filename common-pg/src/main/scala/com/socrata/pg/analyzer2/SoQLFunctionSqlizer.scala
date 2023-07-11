@@ -403,6 +403,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       TextToMultiLine -> sqlizeGeomCast("st_mlinefromtext"),
       TextToPolygon -> sqlizeGeomCast("st_polygonfromtext"),
       TextToMultiPolygon -> sqlizeGeomCast("st_mpolyfromtext"),
+      TextToLocation -> sqlizeNormalOrdinaryFuncall("soql_text_to_location", suffixArgs = Seq(Geo.defaultSRIDLiteral)),
 
       // Geo
       Union2Pt -> sqlizeNormalOrdinaryWithWrapper("st_union", "st_multi"),
