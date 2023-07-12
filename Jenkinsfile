@@ -1,5 +1,5 @@
 // Set up the libraries
-@Library('socrata-pipeline-library@sarahs/EN-60862/return-tag-from-docker-build')
+@Library('socrata-pipeline-library')
 
 // set up service and project variables
 def service_server = 'soql-server-pg'
