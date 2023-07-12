@@ -1,5 +1,5 @@
 // Set up the libraries
-@Library('socrata-pipeline-library')
+@Library('socrata-pipeline-library@sarahs/EN-60862/return-tag-from-docker-build')
 
 // set up service and project variables
 def service_server = 'soql-server-pg'
@@ -80,8 +80,11 @@ pipeline {
           env.SERVICE_VERSION = sbtbuild.getServiceVersion()
           // set the SERVICE_SHA to the current head because it might not be the same as env.GIT_COMMIT
           env.SERVICE_SHA = sh(returnStdout: true, script: "git rev-parse HEAD").trim()
-          // set build description to be the same as the docker deploy tag
-          currentBuild.description = "${env.SERVICE}:${env.SERVICE_VERSION}_${env.BUILD_NUMBER}_${env.SERVICE_SHA.take(8)}"
+          if (params.RELEASE_BUILD) {
+            env.REGISTRY_PUSH = 'all'
+          } else {
+            env.REGISTRY_PUSH = 'internal'
+          }
         }
       }
     }
@@ -91,8 +94,8 @@ pipeline {
       }
       steps {
         script {
-          dockerize_server.docker_build(sbtbuild.getServiceVersion(), env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server))
-          env.DOCKER_TAG = dockerize_server.getDeployTag()
+          env.DOCKER_TAG = dockerize_server.docker_build(sbtbuild.getServiceVersion(), env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server), env.REGISTRY_PUSH)
+          currentBuild.description = env.DOCKER_TAG
         }
       }
       post {
@@ -111,8 +114,7 @@ pipeline {
       }
       steps {
         script {
-          dockerize_secondary.docker_build(sbtbuild.getServiceVersion(), env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_secondary), sbtbuild.getDockerArtifact(project_wd_secondary))
-          env.SECONDARY_DOCKER_TAG = dockerize_secondary.getDeployTag()
+          env.SECONDARY_DOCKER_TAG = dockerize_secondary.docker_build(sbtbuild.getServiceVersion(), env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_secondary), sbtbuild.getDockerArtifact(project_wd_secondary), env.REGISTRY_PUSH)
         }
       }
       post {
