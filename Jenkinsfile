@@ -77,6 +77,7 @@ pipeline {
           sbtbuild.setScalaVersion("2.12")
           sbtbuild.build()
 
+          // Set environment variables for dockerize stages
           env.SERVICE_VERSION = sbtbuild.getServiceVersion()
           // set the SERVICE_SHA to the current head because it might not be the same as env.GIT_COMMIT
           env.SERVICE_SHA = sh(returnStdout: true, script: "git rev-parse HEAD").trim()
@@ -94,7 +95,7 @@ pipeline {
       }
       steps {
         script {
-          env.DOCKER_TAG = dockerize_server.docker_build(sbtbuild.getServiceVersion(), env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server), env.REGISTRY_PUSH)
+          env.DOCKER_TAG = dockerize_server.docker_build(env.SERVICE_VERSION, env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server), env.REGISTRY_PUSH)
           currentBuild.description = env.DOCKER_TAG
         }
       }
@@ -114,7 +115,7 @@ pipeline {
       }
       steps {
         script {
-          env.SECONDARY_DOCKER_TAG = dockerize_secondary.docker_build(sbtbuild.getServiceVersion(), env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_secondary), sbtbuild.getDockerArtifact(project_wd_secondary), env.REGISTRY_PUSH)
+          env.SECONDARY_DOCKER_TAG = dockerize_secondary.docker_build(env.SERVICE_VERSION, env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_secondary), sbtbuild.getDockerArtifact(project_wd_secondary), env.REGISTRY_PUSH)
         }
       }
       post {
@@ -147,7 +148,7 @@ pipeline {
           steps {
             script {
               // deploys to staging by default
-              marathonDeploy(serviceName: env.SECONDARY_DEPLOY_PATTERN, tag: SECONDARY_DOCKER_TAG)
+              marathonDeploy(serviceName: env.SECONDARY_DEPLOY_PATTERN, tag: env.SECONDARY_DOCKER_TAG)
             }
           }
         }
@@ -155,11 +156,11 @@ pipeline {
           steps {
             script {
               // uses env.DOCKER_TAG and deploys to staging by default
-              marathonDeploy(serviceName: 'soql-server-mirror-control-pg1-staging', tag: dockerize_server.getDeployTag(), waitTime: '60')
+              marathonDeploy(serviceName: 'soql-server-mirror-control-pg1-staging', tag: env.DOCKER_TAG, waitTime: '60')
 
               // deploys to staging by default
-              marathonDeploy(serviceName: "secondary-watcher-mirror-control-pg-alpha", tag: SECONDARY_DOCKER_TAG)
-              marathonDeploy(serviceName: "secondary-watcher-mirror-control-pg-bravo", tag: SECONDARY_DOCKER_TAG)
+              marathonDeploy(serviceName: "secondary-watcher-mirror-control-pg-alpha", tag: env.SECONDARY_DOCKER_TAG)
+              marathonDeploy(serviceName: "secondary-watcher-mirror-control-pg-bravo", tag: env.SECONDARY_DOCKER_TAG)
             }
           }
         }
@@ -167,11 +168,11 @@ pipeline {
           steps {
             script {
               // uses env.DOCKER_TAG and deploys to staging by default
-              marathonDeploy(serviceName: 'soql-server-mirror-citus1-staging', tag: dockerize_server.getDeployTag(), waitTime: '60')
+              marathonDeploy(serviceName: 'soql-server-mirror-citus1-staging', tag: env.DOCKER_TAG, waitTime: '60')
 
               // deploys to staging by default
-              marathonDeploy(serviceName: 'secondary-watcher-mirror-citus-alpha', tag: SECONDARY_DOCKER_TAG)
-              marathonDeploy(serviceName: 'secondary-watcher-mirror-citus-bravo', tag: SECONDARY_DOCKER_TAG)
+              marathonDeploy(serviceName: 'secondary-watcher-mirror-citus-alpha', tag: env.SECONDARY_DOCKER_TAG)
+              marathonDeploy(serviceName: 'secondary-watcher-mirror-citus-bravo', tag: env.SECONDARY_DOCKER_TAG)
             }
           }
         }
