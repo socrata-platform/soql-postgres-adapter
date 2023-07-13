@@ -82,7 +82,6 @@ pipeline {
           // set the SERVICE_SHA to the current head because it might not be the same as env.GIT_COMMIT
           env.SERVICE_SHA = sh(returnStdout: true, script: "git rev-parse HEAD").trim()
           env.REGISTRY_PUSH = (params.RELEASE_BUILD) ? 'all' : 'internal'
-          }
         }
       }
     }
