@@ -5,7 +5,7 @@ import scala.collection.{mutable => scm}
 import java.sql.{Connection, PreparedStatement}
 import java.util.Base64
 
-import com.rojoma.json.v3.ast.{JArray, JString, JValue}
+import com.rojoma.json.v3.ast.{JArray, JString, JValue, JNull}
 import com.rojoma.json.v3.interpolation._
 import com.rojoma.json.v3.io.{CompactJsonWriter, JsonReader}
 import com.rojoma.json.v3.util.{AutomaticJsonEncode, JsonUtil}
@@ -23,7 +23,7 @@ import com.socrata.prettyprint.{SimpleDocStream, SimpleDocTree, tree => doctree}
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, ResourceName}
-import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLID, SoQLVersion}
+import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLID, SoQLVersion, SoQLNull}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.sql.Debug
 import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
@@ -304,7 +304,17 @@ object ProcessQuery {
       private val types = extractor.schema.values.toArray
       private val width = types.length
 
+      private def justNullRep(typ: SoQLType) =
+        new JsonColumnWriteRep[SoQLType, SoQLValue] {
+          override val representedType = typ
+          override def toJValue(value: SoQLValue) = {
+            assert(value == SoQLNull)
+            JNull
+          }
+        }
+
       private def rep(typ: SoQLType, value: SoQLValue): JsonColumnWriteRep[SoQLType, SoQLValue] = {
+        assert(value == SoQLNull || value.typ == typ)
         value match {
           case id: SoQLID =>
             idReps.get(id.provenance) match {
@@ -322,7 +332,8 @@ object ProcessQuery {
                 versionReps += ver.provenance -> rep
                 rep
             }
-          case other => SoQLRep.jsonRepsMinusIdAndVersion(typ)
+          case SoQLNull if SoQLID == typ || SoQLVersion == typ => justNullRep(typ)
+          case _notIdOrVersion => SoQLRep.jsonRepsMinusIdAndVersion(typ)
         }
       }
 
