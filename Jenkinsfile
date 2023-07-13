@@ -77,11 +77,11 @@ pipeline {
           sbtbuild.setScalaVersion("2.12")
           sbtbuild.build()
 
+          // Set environment variables for dockerize stages
           env.SERVICE_VERSION = sbtbuild.getServiceVersion()
           // set the SERVICE_SHA to the current head because it might not be the same as env.GIT_COMMIT
           env.SERVICE_SHA = sh(returnStdout: true, script: "git rev-parse HEAD").trim()
-          // set build description to be the same as the docker deploy tag
-          currentBuild.description = "${env.SERVICE}:${env.SERVICE_VERSION}_${env.BUILD_NUMBER}_${env.SERVICE_SHA.take(8)}"
+          env.REGISTRY_PUSH = (params.RELEASE_BUILD) ? 'all' : 'internal'
         }
       }
     }
@@ -91,8 +91,8 @@ pipeline {
       }
       steps {
         script {
-          dockerize_server.docker_build(sbtbuild.getServiceVersion(), env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server))
-          env.DOCKER_TAG = dockerize_server.getDeployTag()
+          env.DOCKER_TAG = dockerize_server.docker_build(env.SERVICE_VERSION, env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server), env.REGISTRY_PUSH)
+          currentBuild.description = env.DOCKER_TAG
         }
       }
       post {
@@ -111,8 +111,7 @@ pipeline {
       }
       steps {
         script {
-          dockerize_secondary.docker_build(sbtbuild.getServiceVersion(), env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_secondary), sbtbuild.getDockerArtifact(project_wd_secondary))
-          env.SECONDARY_DOCKER_TAG = dockerize_secondary.getDeployTag()
+          env.SECONDARY_DOCKER_TAG = dockerize_secondary.docker_build(env.SERVICE_VERSION, env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_secondary), sbtbuild.getDockerArtifact(project_wd_secondary), env.REGISTRY_PUSH)
         }
       }
       post {
@@ -145,7 +144,7 @@ pipeline {
           steps {
             script {
               // deploys to staging by default
-              marathonDeploy(serviceName: env.SECONDARY_DEPLOY_PATTERN, tag: SECONDARY_DOCKER_TAG)
+              marathonDeploy(serviceName: env.SECONDARY_DEPLOY_PATTERN, tag: env.SECONDARY_DOCKER_TAG)
             }
           }
         }
@@ -153,11 +152,11 @@ pipeline {
           steps {
             script {
               // uses env.DOCKER_TAG and deploys to staging by default
-              marathonDeploy(serviceName: 'soql-server-mirror-control-pg1-staging', tag: dockerize_server.getDeployTag(), waitTime: '60')
+              marathonDeploy(serviceName: 'soql-server-mirror-control-pg1-staging', tag: env.DOCKER_TAG, waitTime: '60')
 
               // deploys to staging by default
-              marathonDeploy(serviceName: "secondary-watcher-mirror-control-pg-alpha", tag: SECONDARY_DOCKER_TAG)
-              marathonDeploy(serviceName: "secondary-watcher-mirror-control-pg-bravo", tag: SECONDARY_DOCKER_TAG)
+              marathonDeploy(serviceName: "secondary-watcher-mirror-control-pg-alpha", tag: env.SECONDARY_DOCKER_TAG)
+              marathonDeploy(serviceName: "secondary-watcher-mirror-control-pg-bravo", tag: env.SECONDARY_DOCKER_TAG)
             }
           }
         }
@@ -165,11 +164,11 @@ pipeline {
           steps {
             script {
               // uses env.DOCKER_TAG and deploys to staging by default
-              marathonDeploy(serviceName: 'soql-server-mirror-citus1-staging', tag: dockerize_server.getDeployTag(), waitTime: '60')
+              marathonDeploy(serviceName: 'soql-server-mirror-citus1-staging', tag: env.DOCKER_TAG, waitTime: '60')
 
               // deploys to staging by default
-              marathonDeploy(serviceName: 'secondary-watcher-mirror-citus-alpha', tag: SECONDARY_DOCKER_TAG)
-              marathonDeploy(serviceName: 'secondary-watcher-mirror-citus-bravo', tag: SECONDARY_DOCKER_TAG)
+              marathonDeploy(serviceName: 'secondary-watcher-mirror-citus-alpha', tag: env.SECONDARY_DOCKER_TAG)
+              marathonDeploy(serviceName: 'secondary-watcher-mirror-citus-bravo', tag: env.SECONDARY_DOCKER_TAG)
             }
           }
         }
