@@ -507,6 +507,11 @@ object ProcessQuery {
                 sb.append(rn.name)
                 sb.append(" */")
               }
+            case SqlizeAnnotation.OutputName(name) =>
+              walk(doc)
+              sb.append(" /* ")
+              sb.append(name.name)
+              sb.append(" */")
             case _=>
               walk(doc)
           }
