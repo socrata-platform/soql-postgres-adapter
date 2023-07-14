@@ -8,6 +8,7 @@ import org.joda.time.{DateTime, DateTimeZone}
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.collection.OrderedMap
+import com.socrata.soql.environment.ColumnName
 import com.socrata.pg.analyzer2.iterutil._
 import com.socrata.prettyprint.prelude._
 import com.socrata.prettyprint.{SimpleDocStream, SimpleDocTree, tree}
@@ -238,10 +239,6 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     dynamicContext: FuncallSqlizer.DynamicContext[MT],
     topLevel: Boolean
   ): (Doc, AugmentedSchema) = {
-    val physicalSchema = values.schema.iterator.flatMap { case (label, nameEntry) =>
-      repFor(nameEntry.typ).expandedDatabaseColumns(label)
-    }
-
     val exprSqlizer = new ExprSqlizer(this, availableSchemas, Vector.empty, dynamicContext)
 
     // Ugh, why are valueses so weird?
@@ -249,13 +246,13 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     if(values.values.tail.isEmpty) {
       val row = values.values.head.iterator.map(exprSqlizer.sqlize).toVector
 
-      val physicalSchema = (values.labels, row).zipped.flatMap { (label, expr) =>
+      val physicalSchema = (values.labels, row, values.schema.values).zipped.flatMap { (label, expr, schemaEntry) =>
         val rep = repFor(expr.typ)
         expr match {
           case _ : ExprSql.Compressed[MT] =>
-            Seq(rep.compressedDatabaseColumn(label))
+            Seq(rep.compressedDatabaseColumn(label) -> schemaEntry.name)
           case _ : ExprSql.Expanded[MT] =>
-            rep.expandedDatabaseColumns(label)
+            rep.expandedDatabaseColumns(label).map(_ -> schemaEntry.name)
         }
       }
 
@@ -268,7 +265,9 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
           label -> AugmentedType(expr.typ, isExpanded)
         }
 
-      val names = physicalSchema.iterator.map(Doc(_))
+      val names = physicalSchema.iterator.map { case (label, name) =>
+        Doc(label).annotate(SqlizeAnnotation.OutputName[MT](name))
+      }
       val selectList = row.flatMap { expr =>
         expr match {
           case cmp: ExprSql.Compressed[MT] =>
@@ -309,15 +308,17 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
         }.toVector
       }
 
-      val physicalSchema: Seq[Doc] = values.schema.iterator.zipWithIndex.flatMap { case ((label, nameEntry), idx) =>
-        if(compressedColumnIndices(idx)) Seq(repFor(nameEntry.typ).compressedDatabaseColumn(label))
-        else repFor(nameEntry.typ).expandedDatabaseColumns(label)
-      }.map(Doc(_)).toVector
+      val physicalSchema: Seq[(Doc, ColumnName)] = values.schema.iterator.zipWithIndex.flatMap { case ((label, nameEntry), idx) =>
+        if(compressedColumnIndices(idx)) Seq(repFor(nameEntry.typ).compressedDatabaseColumn(label) -> nameEntry.name)
+        else repFor(nameEntry.typ).expandedDatabaseColumns(label).map(_ -> nameEntry.name)
+      }.map {
+        case (label, name) => Doc(label) -> name
+      }.toVector
 
       val valuesLabel = Doc(namespace.gensym())
 
-      val selection = physicalSchema.map { physicalColName =>
-        valuesLabel ++ d"." ++ Doc(physicalColName) +#+ d"AS" +#+ Doc(physicalColName)
+      val selection = physicalSchema.map { case (physicalColName, outputName) =>
+        valuesLabel ++ d"." ++ Doc(physicalColName) +#+ d"AS" +#+ Doc(physicalColName).annotate(SqlizeAnnotation.OutputName[MT](outputName))
       }.commaSep
 
       val rows = values.values.map { row =>
@@ -332,7 +333,7 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
       (
         Seq(
           Seq(d"SELECT", selection).vsep.nest(2),
-          Seq(d"FROM (VALUES", rows).vsep.nest(2) ++ Doc.lineCat ++ d") AS" +#+ valuesLabel +#+ physicalSchema.parenthesized
+          Seq(d"FROM (VALUES", rows).vsep.nest(2) ++ Doc.lineCat ++ d") AS" +#+ valuesLabel +#+ physicalSchema.map(_._1).parenthesized
         ).hsep,
         OrderedMap() ++ values.schema.iterator.zipWithIndex.map { case ((label, nameEntry), idx) =>
           label -> AugmentedType[MT](nameEntry.typ, isExpanded = !compressedColumnIndices(idx))
@@ -386,7 +387,7 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
 
     val (fromSql, availableSchemas) = sqlizeFrom(from, preSchemas, dynamicContext)
 
-    val selectListExprs: Vector[(AutoColumnLabel, ExprSql)] = {
+    val selectListExprs: Vector[(AutoColumnLabel, (ExprSql, ColumnName))] = {
       val exprSqlizer = new ExprSqlizer(this, availableSchemas, Vector.empty, dynamicContext)
       selectList.iterator.map { case (label, namedExpr) =>
         val sqlized = exprSqlizer.sqlize(namedExpr.expr)
@@ -396,11 +397,11 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
           } else {
             sqlized
           }
-        (label, wrapped)
+        (label, (wrapped, namedExpr.name))
       }.toVector
     }
 
-    val augmentedSchema = OrderedMap() ++ selectListExprs.iterator.map { case (label, expr) =>
+    val augmentedSchema = OrderedMap() ++ selectListExprs.iterator.map { case (label, (expr, _name)) =>
       val isExpanded =
         expr match {
           case _ : ExprSql.Compressed[_] => false
@@ -410,22 +411,22 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     }
 
     val selectListSql =
-      selectListExprs.flatMap { case (label, expr) =>
+      selectListExprs.flatMap { case (label, (expr, outputName)) =>
         expr match {
           case cmp: ExprSql.Compressed[MT] =>
-            Seq(cmp.sql +#+ d"AS" +#+ Doc(repFor(cmp.typ).compressedDatabaseColumn(label)))
+            Seq(cmp.sql +#+ d"AS" +#+ Doc(repFor(cmp.typ).compressedDatabaseColumn(label)).annotate(SqlizeAnnotation.OutputName[MT](outputName)))
           case exp: ExprSql.Expanded[MT] =>
             val sqls = exp.sqls
             val colNames = repFor(exp.typ).expandedDatabaseColumns(label)
             assert(sqls.length == colNames.length)
             (sqls, colNames).zipped.map { (sql, name) =>
-              sql +#+ d"AS" +#+ Doc(name)
+              sql +#+ d"AS" +#+ Doc(name).annotate(SqlizeAnnotation.OutputName[MT](outputName))
             }
         }
       }.commaSep
 
     val selectListIndices = selectListExprs.iterator.foldMap(1) { (idx, labelExpr) =>
-      val (_label, expr) = labelExpr
+      val (_label, (expr, _name)) = labelExpr
       (idx + expr.databaseExprCount, SelectListIndex(idx, isExpanded = false))
     }.toVector
 
@@ -596,7 +597,7 @@ object Sqlizer {
           for(i <- 0 until indent) builder += p
         case tree.Ann(SqlizeAnnotation.Expression(e), subtree) =>
           processNode(subtree, e.position.physicalPosition)
-        case tree.Ann(SqlizeAnnotation.Table(_), subtree) =>
+        case tree.Ann(SqlizeAnnotation.Table(_) | SqlizeAnnotation.OutputName(_), subtree) =>
           processNode(subtree, p)
         case tree.Concat(elems) =>
           for(elem <- elems) {
