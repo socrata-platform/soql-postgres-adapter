@@ -198,6 +198,10 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
     analyze("'POINT(10 10)'::point") must equal ("""st_asbinary(st_pointfromwkb(bytea "\\x000000000140240000000000004024000000000000", 4326))""")
   }
 
+  test("date extract special-case") {
+    analyze("date_extract_d('2001-01-01T12:34:56.789')") must equal ("""extract(day from (timestamp without time zone "2001-01-01T12:34:56.789"))""")
+  }
+
   test("Functions are correctly classified") {
     // The "contains" check is because of the TsVector fake functions
     // that search gets rewritten into
