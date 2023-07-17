@@ -1,0 +1,20 @@
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+    <changeSet author="robertm" id="20230717-remove-soql-extract-timestamp-field" runOnChange="true">
+        <sql splitStatements="false"><![CDATA[
+          DROP FUNCTION IF EXISTS soql_extract_timestamp_field(text, timestamp without time zone);
+        ]]></sql>
+        <rollback>
+            <sql>
+              CREATE OR REPLACE FUNCTION soql_extract_timestamp_field(field text, ts timestamp without time zone) RETURNS numeric AS $$
+                select extract(field from ts) :: numeric;
+              $$ LANGUAGE SQL
+              IMMUTABLE
+              PARALLEL SAFE
+              RETURNS NULL ON NULL INPUT;
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

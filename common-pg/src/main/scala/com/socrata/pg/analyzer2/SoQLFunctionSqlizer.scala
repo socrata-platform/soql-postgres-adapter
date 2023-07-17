@@ -266,6 +266,16 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
     args(0)
   }
 
+  def sqlizeExtractDateSubfield(field: Doc) = ofs { (f, args, ctx) =>
+    assert(args.length == 1)
+    assert(args(0).typ == SoQLFloatingTimestamp)
+    assert(f.typ == SoQLNumber)
+
+    // EXTRACT returns numeric; there's no need to cast to keep soqlnumber's representation correct
+    val sql = Seq(field +#+ d"from" +#+ args(0).compressed.sql.parenthesized).funcall(d"extract")
+    ExprSql(sql, f)
+  }
+
   // Given an ordinary function sqlizer, returns a new ordinary
   // function sqlizer that upcases all of its text arguments
   def uncased(sqlizer: OrdinaryFunctionSqlizer): OrdinaryFunctionSqlizer =
@@ -380,15 +390,15 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       FixedTimeStampTruncYmdAtTimeZone -> sqlizeNormalOrdinaryFuncall("soql_trunc_fixed_timestamp_at_timezone", prefixArgs = Seq(d"'day'")),
       FixedTimeStampTruncYmAtTimeZone -> sqlizeNormalOrdinaryFuncall("soql_trunc_fixed_timestamp_at_timezone", prefixArgs = Seq(d"'month'")),
       FixedTimeStampTruncYAtTimeZone -> sqlizeNormalOrdinaryFuncall("soql_trunc_fixed_timestamp_at_timezone", prefixArgs = Seq(d"'year'")),
-      FloatingTimeStampExtractY -> sqlizeNormalOrdinaryFuncall("soql_extract_timestamp_field", prefixArgs = Seq(d"'year'")),
-      FloatingTimeStampExtractM -> sqlizeNormalOrdinaryFuncall("soql_extract_timestamp_field", prefixArgs = Seq(d"'month'")),
-      FloatingTimeStampExtractD -> sqlizeNormalOrdinaryFuncall("soql_extract_timestamp_field", prefixArgs = Seq(d"'day'")),
-      FloatingTimeStampExtractHh -> sqlizeNormalOrdinaryFuncall("soql_extract_timestamp_field", prefixArgs = Seq(d"'hour'")),
-      FloatingTimeStampExtractMm -> sqlizeNormalOrdinaryFuncall("soql_extract_timestamp_field", prefixArgs = Seq(d"'minute'")),
-      FloatingTimeStampExtractSs -> sqlizeNormalOrdinaryFuncall("soql_extract_timestamp_field", prefixArgs = Seq(d"'second'")),
-      FloatingTimeStampExtractDow -> sqlizeNormalOrdinaryFuncall("soql_extract_timestamp_field", prefixArgs = Seq(d"'dow'")),
-      FloatingTimeStampExtractWoy -> sqlizeNormalOrdinaryFuncall("soql_extract_timestamp_field", prefixArgs = Seq(d"'week'")),
-      FloatingTimestampExtractIsoY -> sqlizeNormalOrdinaryFuncall("soql_extract_timestamp_field", prefixArgs = Seq(d"'isoyear'")),
+      FloatingTimeStampExtractY -> sqlizeExtractDateSubfield(d"year"),
+      FloatingTimeStampExtractM -> sqlizeExtractDateSubfield(d"month"),
+      FloatingTimeStampExtractD -> sqlizeExtractDateSubfield(d"day"),
+      FloatingTimeStampExtractHh -> sqlizeExtractDateSubfield(d"hour"),
+      FloatingTimeStampExtractMm -> sqlizeExtractDateSubfield(d"minute"),
+      FloatingTimeStampExtractSs -> sqlizeExtractDateSubfield(d"second"),
+      FloatingTimeStampExtractDow -> sqlizeExtractDateSubfield(d"dow"),
+      FloatingTimeStampExtractWoy -> sqlizeExtractDateSubfield(d"week"),
+      FloatingTimestampExtractIsoY -> sqlizeExtractDateSubfield(d"isoyear"),
       EpochSeconds -> sqlizeNormalOrdinaryFuncall("soql_epoch_seconds"),
       TimeStampDiffD -> sqlizeNormalOrdinaryFuncall("soql_timestamp_diff_d"),
       TimeStampAdd -> sqlizeBinaryOp("+"),  // These two are exactly
