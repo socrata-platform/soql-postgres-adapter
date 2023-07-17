@@ -8,6 +8,8 @@ import com.rojoma.json.v3.interpolation._
 import com.rojoma.json.v3.util.JsonUtil
 import com.rojoma.json.v3.util.OrJNull.implicits._
 import com.vividsolutions.jts.geom.{Geometry, Point}
+import org.joda.time.Period
+import org.postgresql.util.PGInterval
 
 import com.socrata.prettyprint.prelude._
 import com.socrata.soql.analyzer2._
@@ -270,6 +272,22 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
               case Right(doc) => doc
               case Left(err) => throw new Exception("Unexpected document json from database: " + err.english)
             }
+          case None =>
+            SoQLNull
+        }
+      }
+    },
+
+    SoQLInterval -> new SingleColumnRep(SoQLInterval, d"interval") {
+      def literal(e: LiteralValue) = {
+        val SoQLInterval(p) = e.value
+        ExprSql(d"interval" +#+ mkStringLiteral(SoQLInterval.StringRep(p)), e)
+      }
+      protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
+        Option(rs.getObject(dbCol).asInstanceOf[PGInterval]) match {
+          case Some(pgInterval) =>
+            val period = new Period(pgInterval.getYears, pgInterval.getMonths, 0, pgInterval.getDays, pgInterval.getHours, pgInterval.getMinutes, pgInterval.getWholeSeconds, pgInterval.getMicroSeconds / 1000)
+            SoQLInterval(period)
           case None =>
             SoQLNull
         }
