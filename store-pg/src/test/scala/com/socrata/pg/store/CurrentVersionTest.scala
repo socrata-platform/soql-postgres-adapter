@@ -13,7 +13,7 @@ class CurrentVersionTest extends PGSecondaryTestBase with PGSecondaryUniverseTes
       var version = f.dataVersion
       f.events foreach { e =>
         version = version + 1
-        f.pgs.doVersion(pgu, f.datasetInfo, version, version, None, Iterator(e))
+        f.pgs.doVersion(pgu, f.datasetInfo, version, version, None, Iterator(e), Nil)
       }
 
       f.pgs.doCurrentVersion(pgu, f.datasetInfo.internalName, None) shouldEqual version
@@ -26,7 +26,7 @@ class CurrentVersionTest extends PGSecondaryTestBase with PGSecondaryUniverseTes
 
       var version = f.dataVersion
       f.events foreach { e =>
-        f.pgs.doVersion(pgu, f.datasetInfo, version + 1, version + 10, None, Iterator(e))
+        f.pgs.doVersion(pgu, f.datasetInfo, version + 1, version + 10, None, Iterator(e), Nil)
         version = version + 10
       }
 

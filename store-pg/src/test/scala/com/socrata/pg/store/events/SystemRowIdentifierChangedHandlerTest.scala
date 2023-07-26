@@ -18,7 +18,7 @@ class SystemRowIdentifierChangedHandlerTest extends PGSecondaryTestBase with PGS
         ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, false, false, false, None)),
         SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":id")),  SoQLID, false, false, false, None))
       )
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, events.iterator, Nil)
 
       val truthCopyInfo = getTruthCopyInfo(pgu, f.datasetInfo)
       val schema = pgu.datasetMapReader.schema(truthCopyInfo)
@@ -36,7 +36,7 @@ class SystemRowIdentifierChangedHandlerTest extends PGSecondaryTestBase with PGS
         SystemRowIdentifierChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, false, false, false, None))
       )
       intercept[UnsupportedOperationException] {
-        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, events.iterator)
+        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, events.iterator, Nil)
       }
     }
   }

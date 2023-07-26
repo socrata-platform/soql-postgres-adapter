@@ -2,7 +2,7 @@ package com.socrata.pg.store
 
 import com.rojoma.simplearm.v2.using
 import com.socrata.datacoordinator.id.RollupName
-import com.socrata.datacoordinator.secondary.{DatasetInfo, Event, Secondary}
+import com.socrata.datacoordinator.secondary.{DatasetInfo, Event, Secondary, VersionInfo}
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo}
 
@@ -14,9 +14,18 @@ class PlaybackBase extends PGSecondaryTestBase with PGSecondaryUniverseTestBase 
 
   def executePlayback(struct: Seq[(DatasetInfo, Int, Seq[Event[SoQLType, SoQLValue]], () => Unit)]) = {
     val secondary = new PGSecondary(config)
-    struct.foldLeft(Option.empty[Secondary.Cookie]) { (cookie, struct) =>
-      val (dataset, version, events, fun) = struct
-      val newCookie = Some(secondary.version(dataset, version, version, cookie.orNull, events.iterator))
+    struct.foldLeft(Option.empty[Secondary.Cookie]) { (initialCookie, struct) =>
+      val (dataset, version, evs, fun) = struct
+      val newCookie = Some(secondary.version(
+                             new VersionInfo[SoQLType, SoQLValue] {
+                               override val datasetInfo = dataset
+                               override val initialDataVersion = version
+                               override val finalDataVersion = version
+                               override val cookie = initialCookie.orNull
+                               override val events = evs.iterator
+                               override val createdOrUpdatedRollups = Nil
+                             }
+                           ))
       fun()
       newCookie
     }

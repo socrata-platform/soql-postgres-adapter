@@ -285,7 +285,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       createSystemColumns(pgu, secondCopy, 400)
 
       val pgs = new PGSecondary(config)
-      pgs.doVersion(pgu, datasetInfo, secondCopy.dataVersion + 1, secondCopy.dataVersion + 1, None, Iterator(WorkingCopyDropped))
+      pgs.doVersion(pgu, datasetInfo, secondCopy.dataVersion + 1, secondCopy.dataVersion + 1, None, Iterator(WorkingCopyDropped), Nil)
 
       // Check that the rollup in the previous copy is still good.
       val previousCopy = getTruthCopyInfo(pgu, datasetInfo)

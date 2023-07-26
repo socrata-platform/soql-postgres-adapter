@@ -12,7 +12,7 @@ class FieldNameUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUn
     withPgu() { pgu =>
       val f = fieldNameUpdatedFixture
 
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, f.events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, f.events.iterator, Nil)
 
       val truthCopyInfo = getTruthCopyInfo(pgu, f.datasetInfo)
       val schema = pgu.datasetMapReader.schema(truthCopyInfo)

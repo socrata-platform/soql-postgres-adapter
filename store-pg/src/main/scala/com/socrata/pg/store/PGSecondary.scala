@@ -1,27 +1,31 @@
 package com.socrata.pg.store
 
+import scala.collection.immutable.SortedSet
+import scala.concurrent.duration._
+
 import java.io.Closeable
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import com.socrata.curator.CuratorFromConfig
 import com.socrata.pg.BuildInfo
 import com.mchange.v2.c3p0.DataSources
-import com.rojoma.json.v3.ast.JObject
+import com.rojoma.json.v3.ast.{JObject, JString}
 import com.rojoma.simplearm.v2._
-import com.socrata.datacoordinator.id.RollupName
+import com.socrata.datacoordinator.id.{RollupName, DatasetId}
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.secondary.Secondary.Cookie
 import com.socrata.datacoordinator.secondary.{ColumnInfo => SecondaryColumnInfo, CopyInfo => SecondaryCopyInfo, _}
 import com.socrata.datacoordinator.truth.loader.sql.SqlPrevettedLoader
-import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, DatasetCopyContext}
-import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo, IndexInfo => TruthIndexInfo, LifecycleStage => TruthLifecycleStage}
+import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, DatasetCopyContext, DatasetMapWriter, DatasetMapReader}
+import com.socrata.datacoordinator.truth.metadata.{DatasetInfo => TruthDatasetInfo, CopyInfo => TruthCopyInfo, IndexInfo => TruthIndexInfo, LifecycleStage => TruthLifecycleStage}
 import com.socrata.datacoordinator.truth.universe.sql.{C3P0WrappedPostgresCopyIn, PostgresCopyIn}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.SecondaryBase
 import com.socrata.pg.config.StoreConfig
 import com.socrata.pg.store.events.{ColumnCreatedHandler, WorkingCopyPublishedHandler, _}
 import com.socrata.pg.store.index._
+import com.socrata.soql.environment.ResourceName
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.socrata.thirdparty.typesafeconfig.C3P0Propertizer
 import com.typesafe.config.Config
@@ -202,6 +206,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         }
       case Some(dsId) =>
         pgu.datasetMapReader.datasetInfo(dsId).map { truthDatasetInfo =>
+          takeRollupLocks(pgu, truthDatasetInfo, Nil)
           pgu.datasetMapWriter.copyNumber(truthDatasetInfo, secondaryCopyInfo.copyNumber) match {
             case Some(copyInfo) =>
               // drop the copy
@@ -236,18 +241,89 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
     }
   }
 
-  def version(datasetInfo: DatasetInfo,
-              initialDataVersion: Long,
-              finalDataVersion: Long,
-              cookie: Secondary.Cookie,
-              events: Iterator[Event[SoQLType, SoQLValue]]): Secondary.Cookie = {
-    withPgu(dsInfo, Some(datasetInfo)) { pgu =>
-     val cookieOut = doVersion(pgu, datasetInfo, initialDataVersion, finalDataVersion, cookie, events)
-     pgu.commit()
-     cookieOut
+  def version(versionInfo: VersionInfo[SoQLType, SoQLValue]): Secondary.Cookie = {
+    withPgu(dsInfo, Some(versionInfo.datasetInfo)) { pgu =>
+      val cookieOut = doVersion(pgu, versionInfo.datasetInfo, versionInfo.initialDataVersion, versionInfo.finalDataVersion, versionInfo.cookie, versionInfo.events, versionInfo.createdOrUpdatedRollups)
+      pgu.commit()
+      cookieOut
     }
   }
 
+  def takeLocks(dmw: PGSecondaryDatasetMapWriter[SoQLType], dsIds: SortedSet[DatasetId]) = {
+    for(dsId <- dsIds) {
+      logger.debug("Locking updates against dataset {}", dsId)
+      val timeout = new WarnAfter(30.seconds, logger, s"Locking $dsId took more than 30 seconds")
+      try {
+        timeout.start()
+        if(dmw.datasetInfo(dsId, Duration.Inf).isEmpty) {
+          logger.warn("Was told that dataset {} would be involved, but couldn't find its datasetInfo", dsId)
+        }
+      } finally {
+        timeout.completed()
+      }
+    }
+  }
+
+  implicit object dsIdOrdering extends Ordering[DatasetId] {
+    def compare(a: DatasetId, b: DatasetId) = a.underlying.compareTo(b.underlying)
+  }
+
+  def tableNamesToDatasetIds(dmr: PGSecondaryDatasetMapReader[SoQLType], tableNames: Set[String]): SortedSet[DatasetId] = {
+    SortedSet() ++ tableNames.iterator.flatMap { name =>
+      dmr.datasetInfoByResourceName(new ResourceName(name)) match {
+        case Some(dsi) =>
+          Some(dsi.systemId)
+        case None =>
+          logger.warn("Told I have a rollup that references table {} but I can't find it", JString(name))
+          None
+      }
+    }
+  }
+
+  def relevantTableNames(rollup: RollupInfo): Set[String] = {
+    relevantTableNames(rollup.soql)
+  }
+
+  def relevantTableNames(rollup: LocalRollupInfo): Set[String] = {
+    relevantTableNames(rollup.soql)
+  }
+
+  def relevantTableNames(soql: String): Set[String] = {
+    RollupManager.parseAndCollectTableNames(soql)
+  }
+
+  // This is a little icky because rollups saved on other tables will
+  // refer to their own table implicity (i.e., without a values
+  // returned from relevantTableNames) so we'll track their dataset
+  // ids directly.
+  def existingRollupsTableNamesAndOrIds(dmr: PGSecondaryDatasetMapReader[SoQLType], dsInfo: TruthDatasetInfo): (Set[String], Set[DatasetId]) = {
+    dmr.allCopies(dsInfo).foldLeft((Set.empty[String], Set(dsInfo.systemId))) { case ((names, ids), copy) =>
+      val newNames =
+        dmr.rollups(copy).foldLeft(names) { (acc, rollup) =>
+          acc ++ relevantTableNames(rollup)
+        }
+      dmr.getRollupsRelatedToCopy(copy).foldLeft((newNames, ids)) { case ((names, ids), rollup) =>
+        (names ++ relevantTableNames(rollup), (ids + rollup.copyInfo.datasetInfo.systemId))
+      }
+    }
+  }
+
+  def newRollupsTableNames(rollups: Seq[RollupInfo]): Set[String] = {
+    rollups.foldLeft(Set.empty[String]) { (acc, rollup) =>
+      acc ++ relevantTableNames(rollup)
+    }
+  }
+
+  def takeRollupLocks(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], dsInfo: TruthDatasetInfo, upcomingRollups: Seq[RollupInfo]): Unit = {
+    val (names, ids) = existingRollupsTableNamesAndOrIds(pgu.datasetMapReader, dsInfo)
+    takeLocks(
+      pgu.datasetMapWriter,
+      tableNamesToDatasetIds(
+        pgu.datasetMapReader,
+        names ++ newRollupsTableNames(upcomingRollups)
+      ) ++ ids
+    )
+  }
 
   // The main method by which data will be sent to this API.
   // workingCopyCreated event is the (first) event by which this method will be called
@@ -263,7 +339,8 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
                         newDataVersion: Long,
                         finalDataVersion: Long,
                         cookie: Secondary.Cookie,
-                        events: Iterator[Event[SoQLType, SoQLValue]]): Secondary.Cookie = {
+                        events: Iterator[Event[SoQLType, SoQLValue]],
+                        upcomingRollups: Seq[RollupInfo]): Secondary.Cookie = {
     // How do we get the copyInfo? dataset_map
     //  - One of the events that comes through here will be working copy created, it must be the first if it does,
     //    separate event for actually copying the data
@@ -303,10 +380,14 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
       e match {
         case WorkingCopyCreated(copyInfo) =>
-          val theCopy = existingDataset.flatMap { dsInfo =>
-            val allCopies = pgu.datasetMapReader.allCopies(dsInfo)
-            // Either this copy or some newer copy
-            allCopies.find(existingCopyInfo => existingCopyInfo.copyNumber >= copyInfo.copyNumber)
+          val theCopy = existingDataset match {
+            case Some(dsInfo) =>
+              takeRollupLocks(pgu, dsInfo, upcomingRollups)
+              val allCopies = pgu.datasetMapReader.allCopies(dsInfo)
+              // Either this copy or some newer copy
+              allCopies.find(existingCopyInfo => existingCopyInfo.copyNumber >= copyInfo.copyNumber)
+            case None =>
+              None
           }
           if (theCopy.isDefined) {
             logger.info("dataset {} working copy {} already existed, resync",
@@ -335,6 +416,11 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
 
     val truthDatasetInfo = pgu.datasetMapReader.datasetInfo(dsId).get
     val initialTruthCopyInfo = pgu.datasetMapReader.latest(truthDatasetInfo)
+
+    // This is redundant (but harmless, because we have all the locks)
+    // if the WorkingCopyCreated-on-an-existing-dataset path was taken
+    // before.
+    takeRollupLocks(pgu, truthDatasetInfo, upcomingRollups)
 
     // If there's more than one version's difference between the last known copy in truth
     // and the last known copy in the secondary, force a resync.
@@ -611,6 +697,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         //    WHERE dataset_internal_name = ? -- 'alpha.20'
         logger.info("re-creating secondary dataset with new id")
         val newDatasetInfo = pgu.datasetMapWriter.unsafeCreateDatasetAllocatingSystemId(secondaryDatasetInfo.localeName, secondaryDatasetInfo.obfuscationKey, secondaryDatasetInfo.resourceName)
+        takeRollupLocks(pgu, newDatasetInfo, rollups)
         val newDatasetId = newDatasetInfo.systemId
         logger.info("new secondary dataset {} {}", secondaryDatasetInfo.internalName, newDatasetId.toString())
         pgu.datasetMapWriter.createInternalNameMapping(secondaryDatasetInfo.internalName, newDatasetId)
@@ -634,6 +721,7 @@ class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] wit
         pgu.datasetMapWriter.disableDataset(dsId)
         pgu.commit()
         pgu.datasetMapReader.datasetInfo(dsId).map { truthDatasetInfo =>
+          takeRollupLocks(pgu, truthDatasetInfo, rollups)
           pgu.datasetMapWriter.copyNumber(truthDatasetInfo, secondaryCopyInfo.copyNumber) match {
             case Some(copyInfo) =>
               logger.info(

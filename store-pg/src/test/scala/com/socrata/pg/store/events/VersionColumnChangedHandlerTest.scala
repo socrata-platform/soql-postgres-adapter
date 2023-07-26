@@ -18,7 +18,7 @@ class VersionColumnChangedHandlerTest extends PGSecondaryTestBase with PGSeconda
         ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":version"), Some(ColumnName(":version")), SoQLID, false, false, false, None)),
         VersionColumnChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":version"), Some(ColumnName(":version")), SoQLID, false, false, false, None))
       )
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, events.iterator, Nil)
 
       val truthCopyInfo = getTruthCopyInfo(pgu, f.datasetInfo)
       val schema = pgu.datasetMapReader.schema(truthCopyInfo)
@@ -36,7 +36,7 @@ class VersionColumnChangedHandlerTest extends PGSecondaryTestBase with PGSeconda
         VersionColumnChanged(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":version")), SoQLID, false, false, false, None))
       )
       intercept[UnsupportedOperationException] {
-        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, events.iterator)
+        f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, events.iterator, Nil)
       }
     }
   }
