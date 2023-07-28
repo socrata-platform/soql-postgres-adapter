@@ -38,7 +38,7 @@ object TestRewriteSearch extends RewriteSearch[SqlizerTest.TestMT] {
       Seq(left, right)
     )(FuncallPositionInfo.None)
 
-  override def toTsQuery: MonomorphicFunction = ???
+  override def plainToTsQuery: MonomorphicFunction = ???
   override def toTsVector: MonomorphicFunction = ???
   override def tsSearch: MonomorphicFunction = ???
 
