@@ -108,8 +108,8 @@ abstract class RewriteSearch[MT <: MetaTypes]
       FunctionCall[MT](
         tsSearch,
         Seq(
-          FunctionCall[MT](toTsVector, Seq(litText("english"), haystack))(FuncallPositionInfo.None),
-          FunctionCall[MT](toTsQuery, Seq(litText("english"), needle))(FuncallPositionInfo.None)
+          FunctionCall[MT](toTsVector, Seq(haystack))(FuncallPositionInfo.None),
+          FunctionCall[MT](plainToTsQuery, Seq(needle))(FuncallPositionInfo.None)
         )
       )(FuncallPositionInfo.None)
     } else {
@@ -130,5 +130,5 @@ abstract class RewriteSearch[MT <: MetaTypes]
   protected def concat: MonomorphicFunction
   protected def tsSearch: MonomorphicFunction
   protected def toTsVector: MonomorphicFunction
-  protected def toTsQuery: MonomorphicFunction
+  protected def plainToTsQuery: MonomorphicFunction
 }

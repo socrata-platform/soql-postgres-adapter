@@ -502,8 +502,8 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; ty
       // magical
       GetContext -> sqlizeGetContext,
 
-      SoQLRewriteSearch.ToTsVector -> sqlizeNormalOrdinaryFuncall("to_tsvector"),
-      SoQLRewriteSearch.ToTsQuery -> sqlizeNormalOrdinaryFuncall("to_tsquery"),
+      SoQLRewriteSearch.ToTsVector -> sqlizeNormalOrdinaryFuncall("to_tsvector", prefixArgs = Seq(d"'english'")),
+      SoQLRewriteSearch.PlainToTsQuery -> sqlizeNormalOrdinaryFuncall("plainto_tsquery", prefixArgs = Seq(d"'english'")),
       SoQLRewriteSearch.TsSearch -> sqlizeBinaryOp("@@"),
 
       // simple casts

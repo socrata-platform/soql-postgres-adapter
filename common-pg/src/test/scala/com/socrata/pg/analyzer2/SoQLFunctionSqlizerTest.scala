@@ -92,20 +92,20 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
   }
 
   test("basic search") {
-    analyzeStatement("SELECT 1 SEARCH 'hello'") must equal("""SELECT 1 :: numeric AS i1 FROM table1 AS x1 WHERE (to_tsvector(text "english", ((((coalesce(x1.text, text "")) || (text " ")) || (coalesce(x1.url_url, text ""))) || (text " ")) || (coalesce(x1.url_description, text "")))) @@ (to_tsquery(text "english", text "hello"))""");
+    analyzeStatement("SELECT 1 SEARCH 'hello'") must equal("""SELECT 1 :: numeric AS i1 FROM table1 AS x1 WHERE (to_tsvector('english', ((((coalesce(x1.text, text "")) || (text " ")) || (coalesce(x1.url_url, text ""))) || (text " ")) || (coalesce(x1.url_description, text "")))) @@ (plainto_tsquery('english', text "hello"))""");
   }
 
   test("search with where") {
-    analyzeStatement("SELECT 1 where num > 5 SEARCH 'hello'") must equal("""SELECT 1 :: numeric AS i1 FROM table1 AS x1 WHERE ((to_tsvector(text "english", ((((coalesce(x1.text, text "")) || (text " ")) || (coalesce(x1.url_url, text ""))) || (text " ")) || (coalesce(x1.url_description, text "")))) @@ (to_tsquery(text "english", text "hello"))) AND ((x1.num) > (5 :: numeric))""");
+    analyzeStatement("SELECT 1 where num > 5 SEARCH 'hello'") must equal("""SELECT 1 :: numeric AS i1 FROM table1 AS x1 WHERE ((to_tsvector('english', ((((coalesce(x1.text, text "")) || (text " ")) || (coalesce(x1.url_url, text ""))) || (text " ")) || (coalesce(x1.url_description, text "")))) @@ (plainto_tsquery('english', text "hello"))) AND ((x1.num) > (5 :: numeric))""");
   }
 
   test("subquery search") {
-    analyzeStatement("SELECT text, url |> select 1 SEARCH 'hello'") must equal("""SELECT 1 :: numeric AS i3 FROM (SELECT x1.text AS i1, x1.url_url AS i2_url, x1.url_description AS i2_description FROM table1 AS x1) AS x2 WHERE (to_tsvector(text "english", ((((coalesce(x2.i1, text "")) || (text " ")) || (coalesce(x2.i2_url, text ""))) || (text " ")) || (coalesce(x2.i2_description, text "")))) @@ (to_tsquery(text "english", text "hello"))""")
+    analyzeStatement("SELECT text, url |> select 1 SEARCH 'hello'") must equal("""SELECT 1 :: numeric AS i3 FROM (SELECT x1.text AS i1, x1.url_url AS i2_url, x1.url_description AS i2_description FROM table1 AS x1) AS x2 WHERE (to_tsvector('english', ((((coalesce(x2.i1, text "")) || (text " ")) || (coalesce(x2.i2_url, text ""))) || (text " ")) || (coalesce(x2.i2_description, text "")))) @@ (plainto_tsquery('english', text "hello"))""")
   }
 
   test("subquery search - compressed") {
     // the "case" here just forces url to be compressed
-    analyzeStatement("SELECT text, case when true then url end |> select 1 SEARCH 'hello'") must equal ("""SELECT 1 :: numeric AS i3 FROM (SELECT x1.text AS i1, soql_compress_compound(x1.url_url, x1.url_description) AS i2 FROM table1 AS x1) AS x2 WHERE (to_tsvector(text "english", ((((coalesce(x2.i1, text "")) || (text " ")) || (coalesce((x2.i2) ->> 0, text ""))) || (text " ")) || (coalesce((x2.i2) ->> 1, text "")))) @@ (to_tsquery(text "english", text "hello"))""")
+    analyzeStatement("SELECT text, case when true then url end |> select 1 SEARCH 'hello'") must equal ("""SELECT 1 :: numeric AS i3 FROM (SELECT x1.text AS i1, soql_compress_compound(x1.url_url, x1.url_description) AS i2 FROM table1 AS x1) AS x2 WHERE (to_tsvector('english', ((((coalesce(x2.i1, text "")) || (text " ")) || (coalesce((x2.i2) ->> 0, text ""))) || (text " ")) || (coalesce((x2.i2) ->> 1, text "")))) @@ (plainto_tsquery('english', text "hello"))""")
   }
 
   test("all window functions are covered") {

@@ -49,7 +49,7 @@ class SoQLRewriteSearch[MT <: MetaTypes with ({type ColumnType = SoQLType; type 
   }
 
   override val toTsVector = SoQLRewriteSearch.ToTsVector.monomorphic.get
-  override val toTsQuery = SoQLRewriteSearch.ToTsQuery.monomorphic.get
+  override val plainToTsQuery = SoQLRewriteSearch.PlainToTsQuery.monomorphic.get
   override val tsSearch = SoQLRewriteSearch.TsSearch.monomorphic.get
   override val concat = MonomorphicFunction(SoQLFunctions.Concat, Map("a" -> SoQLText, "b" -> SoQLText))
 
@@ -73,8 +73,8 @@ object SoQLRewriteSearch {
   // These result types are lies (they should be SoQLTSVector and
   // SoQLTSQuery respectively), but since users can't name these
   // functions it's ok-ish
-  val ToTsVector = mf("to_tsvector", FunctionName("to_tsvector (unnameable)"), Seq(SoQLText, SoQLText), Nil, SoQLText)
-  val ToTsQuery = mf("to_tsquery", FunctionName("to_tsquery (unnameable)"), Seq(SoQLText, SoQLText), Nil, SoQLText)
+  val ToTsVector = mf("to_tsvector", FunctionName("to_tsvector (unnameable)"), Seq(SoQLText), Nil, SoQLText)
+  val PlainToTsQuery = mf("plainto_tsquery", FunctionName("plainto_tsquery (unnameable)"), Seq(SoQLText), Nil, SoQLText)
 
   val TsSearch = mf("tssearch", FunctionName("search (unnameable)"), Seq(SoQLText, SoQLText), Nil, SoQLBoolean)
 }
