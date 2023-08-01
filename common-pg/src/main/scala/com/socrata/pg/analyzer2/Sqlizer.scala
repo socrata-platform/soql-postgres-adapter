@@ -88,22 +88,32 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   val systemContext: Map[String, String]
   val rewriteSearch: RewriteSearch
 
-  def apply(stmt: Statement, availableSchemas: AvailableSchemas)(implicit ct: ClassTag[CV]): Sqlizer.Result[MT] = {
-    val rewritten = rewriteSearch(stmt)
-    val now = DateTime.now(DateTimeZone.UTC).withMillisOfSecond(0)
-    val dynamicContext = FuncallSqlizer.DynamicContext[MT](
-      repFor,
-      systemContext,
-      ProvenanceTracker(rewritten, e => repFor(e.typ).provenanceOf(e)),
-      now
-    )
-    val (sql, augmentedSchema) = sqlizeStatement(rewritten, availableSchemas, dynamicContext, true)
+  def apply(stmt: Statement)(implicit ct: ClassTag[CV]): Sqlizer.Result[MT] = {
+    val (sql, augmentedSchema, dynamicContext) = sqlizeStatement(stmt, true)
     Sqlizer.Result(
       sql,
       new ResultExtractor(augmentedSchema, repFor),
       dynamicContext.nonliteralSystemContextLookupFound,
-      if(dynamicContext.nowUsed) Some(now) else None
+      if(dynamicContext.nowUsed) Some(dynamicContext.now) else None
     )
+  }
+
+  // This produces a SQL statement, but doesn't necessarily apply any
+  // postprocessing transforms to the final output columns (which you
+  // wouldn't want if, for example, you were converting a Statement
+  // into a rollup table).
+  def sqlizeStatement(stmt: Statement, rewriteOutputColumns: Boolean): (Doc, AugmentedSchema, FuncallSqlizer.DynamicContext[MT]) = {
+    val rewritten = rewriteSearch(stmt)
+    val dynamicContext = FuncallSqlizer.DynamicContext[MT](
+      repFor,
+      systemContext,
+      ProvenanceTracker(rewritten, e => repFor(e.typ).provenanceOf(e)),
+      DateTime.now(DateTimeZone.UTC).withMillisOfSecond(0)
+    )
+
+    val (sql, augmentedSchema) = sqlizeStatement(rewritten, Map.empty, dynamicContext, rewriteOutputColumns)
+
+    (sql, augmentedSchema, dynamicContext)
   }
 
   private def sqlizeStatement(
