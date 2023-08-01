@@ -88,7 +88,7 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
 
     if(useSelectListReferences) analysis = analysis.useSelectListReferences
 
-    sqlizer(analysis.statement, Map.empty).sql.layoutSingleLine.toString
+    sqlizer(analysis.statement).sql.layoutSingleLine.toString
   }
 
   test("basic search") {

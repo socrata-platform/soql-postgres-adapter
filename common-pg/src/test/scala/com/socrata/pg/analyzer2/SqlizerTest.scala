@@ -65,7 +65,7 @@ class SqlizerTest extends FunSuite with MustMatchers with SqlizerUniverse[Sqlize
         case Left(err) => fail("Bad query: " + err)
       }
 
-    sqlizer(analysis.statement, Map.empty).sql
+    sqlizer(analysis.statement).sql
   }
 
   test("simple") {
