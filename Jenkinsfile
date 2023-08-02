@@ -148,30 +148,6 @@ pipeline {
             }
           }
         }
-        stage('Deploy PG Control Mirrors') {
-          steps {
-            script {
-              // uses env.DOCKER_TAG and deploys to staging by default
-              marathonDeploy(serviceName: 'soql-server-mirror-control-pg1-staging', tag: env.DOCKER_TAG, waitTime: '60')
-
-              // deploys to staging by default
-              marathonDeploy(serviceName: "secondary-watcher-mirror-control-pg-alpha", tag: env.SECONDARY_DOCKER_TAG)
-              marathonDeploy(serviceName: "secondary-watcher-mirror-control-pg-bravo", tag: env.SECONDARY_DOCKER_TAG)
-            }
-          }
-        }
-        stage('Deploy Citus Mirrors') {
-          steps {
-            script {
-              // uses env.DOCKER_TAG and deploys to staging by default
-              marathonDeploy(serviceName: 'soql-server-mirror-citus1-staging', tag: env.DOCKER_TAG, waitTime: '60')
-
-              // deploys to staging by default
-              marathonDeploy(serviceName: 'secondary-watcher-mirror-citus-alpha', tag: env.SECONDARY_DOCKER_TAG)
-              marathonDeploy(serviceName: 'secondary-watcher-mirror-citus-bravo', tag: env.SECONDARY_DOCKER_TAG)
-            }
-          }
-        }
       }
     }
   }
