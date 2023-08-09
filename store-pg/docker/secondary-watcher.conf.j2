@@ -7,7 +7,6 @@ com.socrata.coordinator.secondary-watcher {
   // use this instead of its own zk configuration
   curator.ensemble = {{ ZOOKEEPER_ENSEMBLE }}
   service-advertisement.address = "{{ ARK_HOST }}"
-  collocation.group = {{ TRUTH_CLUSTER_COLLOCATION_GROUP }}
 
   # So we have good news and bad news.
   # The bad news is in the docker world we don't have the notion of an instance that will come back and 
