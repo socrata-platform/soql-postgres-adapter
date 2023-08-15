@@ -14,7 +14,7 @@ class WorkingCopyPublishedHandlerTest extends PGSecondaryTestBase with PGSeconda
       val events = f.events ++ Seq(
         WorkingCopyPublished
       )
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, events.iterator, Nil)
 
       val truthCopyInfo = getTruthCopyInfo(pgu, f.datasetInfo)
 

@@ -19,7 +19,7 @@ class SchemaTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase 
     ds.map { dsInfo =>
       withPgu() { pgu =>
       val f = columnsCreatedFixture
-      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, f.events.iterator)
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, f.events.iterator, Nil)
       val qs = new QueryServerTest(dsInfo, pgu)
       val schema = qs.getSchema(f.datasetInfo.internalName, None).get
       val schemaj = JsonUtil.renderJson(schema)

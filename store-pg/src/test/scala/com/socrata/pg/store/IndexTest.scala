@@ -221,7 +221,7 @@ class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wit
       copyColumns(pgu, copyInfo, secondUnpublished,  200)
 
       val pgs = new PGSecondary(config)
-      pgs.doVersion(pgu, secDatasetInfo, secondUnpublished.dataVersion + 1, secondUnpublished.dataVersion + 1, None, Iterator(WorkingCopyDropped))
+      pgs.doVersion(pgu, secDatasetInfo, secondUnpublished.dataVersion + 1, secondUnpublished.dataVersion + 1, None, Iterator(WorkingCopyDropped), Nil)
 
       // Check that the index in the previous copy is still good.
       val previousCopy = getTruthCopyInfo(pgu, secDatasetInfo)
