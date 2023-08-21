@@ -75,6 +75,12 @@ pipeline {
         script {
           echo "Building sbt project..."
           sbtbuild.setScalaVersion("2.12")
+          // This build is a little unusual; it actually has _two_ artifacts, this one
+          // and one for store-pg-assembly.  sbtbuild isn't really set up to override names
+          // for two separate artifacts, so here we override the primary, and we'll override
+          // the secondary down below when it's passed to dockerize.
+          sbtbuild.setSrcJar("soql-server-pg/target/soql-server-pg-assembly.jar")
+          env.STORE_PG_ARTIFACT = "store-pg/target/store-pg-assembly.jar"
           sbtbuild.build()
 
           // Set environment variables for dockerize stages
@@ -111,7 +117,10 @@ pipeline {
       }
       steps {
         script {
-          env.SECONDARY_DOCKER_TAG = dockerize_secondary.docker_build(env.SERVICE_VERSION, env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_secondary), sbtbuild.getDockerArtifact(project_wd_secondary), env.REGISTRY_PUSH)
+          // Here's where we're getting the secondary artifact (named
+          // via env.STORE_PG_ARTIFACT) out for dockerizing, per the
+          // comment above.
+          env.SECONDARY_DOCKER_TAG = dockerize_secondary.docker_build(env.SERVICE_VERSION, env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_secondary), env.STORE_PG_ARTIFACT, env.REGISTRY_PUSH)
         }
       }
       post {
