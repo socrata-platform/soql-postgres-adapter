@@ -13,6 +13,7 @@ def isPr = env.CHANGE_ID != null;
 def sbtbuild = new com.socrata.SBTBuild(steps, service_server, '.', [project_wd_server, project_wd_secondary])
 def dockerize_server = new com.socrata.Dockerize(steps, service_server, BUILD_NUMBER)
 def dockerize_secondary = new com.socrata.Dockerize(steps, service_secondary, BUILD_NUMBER)
+def releaseTag = new com.socrata.ReleaseTag(steps, service_server)
 
 pipeline {
   options {
@@ -21,6 +22,7 @@ pipeline {
   parameters {
     booleanParam(name: 'RELEASE_BUILD', defaultValue: false, description: 'Are we building a release candidate?')
     booleanParam(name: 'RELEASE_DRY_RUN', defaultValue: false, description: 'To test out the release build without creating a new tag.')
+    string(name: 'RELEASE_NAME', defaultValue: '', description: 'For release builds, the release name which is used for the git tag and the deploy tag.')
     string(name: 'AGENT', defaultValue: 'build-worker', description: 'Which build agent to use?')
     string(name: 'BRANCH_SPECIFIER', defaultValue: 'origin/main', description: 'Use this branch for building the artifact.')
   }
@@ -43,30 +45,8 @@ pipeline {
             echo 'DRY RUN: Skipping release tag creation'
           }
           else {
-            // get a list of all files changes since the last tag
-            files = sh(returnStdout: true, script: "git diff --name-only HEAD `git describe --match \"v*\" --abbrev=0`").trim()
-            echo "Files changed:\n${files}"
-
-            // the release build process changes the version file, so it will always be changed
-            // if there are other files changed, then increment the version, create a new tag and publish the changes
-            if (files != 'version.sbt') {
-              publishStage = true
-
-              echo 'Running sbt-release'
-              sh(returnStdout: true, script: "git config remote.origin.fetch +refs/heads/*:refs/remotes/origin/*")
-              sh(returnStdout: true, script: "git config branch.main.remote origin")
-              sh(returnStdout: true, script: "git config branch.main.merge refs/heads/main")
-
-              echo sh(returnStdout: true, script: "echo y | sbt \"release with-defaults\"")
-            }
+            releaseTag.create(params.RELEASE_NAME)
           }
-          echo 'Getting release tag'
-          release_tag = sh(returnStdout: true, script: "git describe --abbrev=0 --match \"v*\"").trim()
-          branchSpecifier = "refs/tags/${release_tag}"
-          echo branchSpecifier
-
-          // checkout the tag so we're performing subsequent actions on it
-          sh "git checkout ${branchSpecifier}"
         }
       }
     }
@@ -82,12 +62,6 @@ pipeline {
           sbtbuild.setSrcJar("soql-server-pg/target/soql-server-pg-assembly.jar")
           env.STORE_PG_ARTIFACT = "store-pg/target/store-pg-assembly.jar"
           sbtbuild.build()
-
-          // Set environment variables for dockerize stages
-          env.SERVICE_VERSION = sbtbuild.getServiceVersion()
-          // set the SERVICE_SHA to the current head because it might not be the same as env.GIT_COMMIT
-          env.SERVICE_SHA = sh(returnStdout: true, script: "git rev-parse HEAD").trim()
-          env.REGISTRY_PUSH = (params.RELEASE_BUILD) ? 'all' : 'internal'
         }
       }
     }
@@ -97,14 +71,19 @@ pipeline {
       }
       steps {
         script {
-          env.DOCKER_TAG = dockerize_server.docker_build(env.SERVICE_VERSION, env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server), env.REGISTRY_PUSH)
-          currentBuild.description = env.DOCKER_TAG
+          if (params.RELEASE_BUILD) {
+            env.REGISTRY_PUSH = (params.RELEASE_DRY_RUN) ? 'none' : 'all'
+            env.DOCKER_TAG = dockerize_server.docker_build_specify_tag_and_push(params.RELEASE_NAME, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server), env.REGISTRY_PUSH)
+          } else {
+            env.REGISTRY_PUSH = 'internal'
+            env.DOCKER_TAG = dockerize_server.docker_build('STAGING', env.GIT_COMMIT, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server), env.REGISTRY_PUSH)
+          }
         }
       }
       post {
         success {
           script {
-            if (params.RELEASE_BUILD){
+            if (params.RELEASE_BUILD && !params.RELEASE_DRY_RUN) {
               echo env.DOCKER_TAG // For now, just print the deploy tag in the console output -- later, communicate to release metadata service
             }
           }
@@ -120,13 +99,20 @@ pipeline {
           // Here's where we're getting the secondary artifact (named
           // via env.STORE_PG_ARTIFACT) out for dockerizing, per the
           // comment above.
-          env.SECONDARY_DOCKER_TAG = dockerize_secondary.docker_build(env.SERVICE_VERSION, env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_secondary), env.STORE_PG_ARTIFACT, env.REGISTRY_PUSH)
+          if (params.RELEASE_BUILD) {
+            env.REGISTRY_PUSH = (params.RELEASE_DRY_RUN) ? 'none' : 'all'
+            env.SECONDARY_DOCKER_TAG = dockerize_secondary.docker_build_specify_tag_and_push(params.RELEASE_NAME, sbtbuild.getDockerPath(project_wd_secondary), env.STORE_PG_ARTIFACT, env.REGISTRY_PUSH)
+          } else {
+            env.REGISTRY_PUSH = 'internal'
+            env.SECONDARY_DOCKER_TAG = dockerize_secondary.docker_build('STAGING', env.GIT_COMMIT, sbtbuild.getDockerPath(project_wd_secondary), env.STORE_PG_ARTIFACT, env.REGISTRY_PUSH)
+          }
+          currentBuild.description = "${env.DOCKER_TAG} & ${env.SECONDARY_DOCKER_TAG}"
         }
       }
       post {
         success {
           script {
-            if (params.RELEASE_BUILD){
+            if (params.RELEASE_BUILD && !params.RELEASE_DRY_RUN) {
               echo env.SECONDARY_DOCKER_TAG // For now, just print the deploy tag in the console output -- later, communicate to release metadata service
             }
           }
