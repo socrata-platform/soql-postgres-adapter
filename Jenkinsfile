@@ -104,7 +104,7 @@ pipeline {
             env.SECONDARY_DOCKER_TAG = dockerize_secondary.docker_build_specify_tag_and_push(params.RELEASE_NAME, sbtbuild.getDockerPath(project_wd_secondary), env.STORE_PG_ARTIFACT, env.REGISTRY_PUSH)
           } else {
             env.REGISTRY_PUSH = 'internal'
-            env.SECONDARY_DOCKER_TAG = dockerize_secondary.docker_build('STAGING', env.SERVICE_SHA, sbtbuild.getDockerPath(project_wd_secondary), env.STORE_PG_ARTIFACT, env.REGISTRY_PUSH)
+            env.SECONDARY_DOCKER_TAG = dockerize_secondary.docker_build('STAGING', env.GIT_COMMIT, sbtbuild.getDockerPath(project_wd_secondary), env.STORE_PG_ARTIFACT, env.REGISTRY_PUSH)
           }
           currentBuild.description = "${env.DOCKER_TAG} & ${env.SECONDARY_DOCKER_TAG}"
         }
