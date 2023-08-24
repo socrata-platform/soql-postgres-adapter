@@ -1,17 +1,20 @@
 package com.socrata.pg.server.analyzer2
 
+import com.rojoma.json.v3.util.JsonUtil
+
 import com.socrata.prettyprint.prelude._
 
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo, ColumnInfo}
 import com.socrata.datacoordinator.id.{DatasetInternalName, UserColumnId}
 
 import com.socrata.soql.analyzer2._
+import com.socrata.soql.environment.Provenance
 import com.socrata.soql.serialize._
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.socrata.soql.types.obfuscation.CryptProvider
-import com.socrata.soql.functions.{MonomorphicFunction, SoQLFunctionInfo}
+import com.socrata.soql.functions.{MonomorphicFunction, SoQLFunctionInfo, SoQLTypeInfo}
 
-final abstract class InputMetaTypes extends MetaTypes {
+final class InputMetaTypes extends MetaTypes {
   override type ResourceNameScope = Int
   override type ColumnType = SoQLType
   override type ColumnValue = SoQLValue
@@ -20,6 +23,21 @@ final abstract class InputMetaTypes extends MetaTypes {
 }
 
 object InputMetaTypes {
+  val typeInfo = SoQLTypeInfo.metaProject[InputMetaTypes]
+
+  val provenanceMapper = new types.ProvenanceMapper[InputMetaTypes] {
+    def fromProvenance(prov: Provenance): types.DatabaseTableName[InputMetaTypes] = {
+      JsonUtil.parseJson[types.DatabaseTableName[InputMetaTypes]](prov.value) match {
+        case Right(result) => result
+        case Left(e) => throw new Exception(e.english)
+      }
+    }
+
+    def toProvenance(dtn: types.DatabaseTableName[InputMetaTypes]): Provenance = {
+      Provenance(JsonUtil.renderJson(dtn, pretty=false))
+    }
+  }
+
   object DeserializeImplicits {
     implicit object dinDeserialize extends Readable[DatasetInternalName] {
       def readFrom(buffer: ReadBuffer) =

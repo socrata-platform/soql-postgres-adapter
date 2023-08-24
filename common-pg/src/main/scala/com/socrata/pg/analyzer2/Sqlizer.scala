@@ -8,7 +8,7 @@ import org.joda.time.{DateTime, DateTimeZone}
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.ColumnName
+import com.socrata.soql.environment.{ColumnName, Provenance}
 import com.socrata.pg.analyzer2.iterutil._
 import com.socrata.prettyprint.prelude._
 import com.socrata.prettyprint.{SimpleDocStream, SimpleDocTree, tree}
@@ -87,6 +87,8 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   val namespace: SqlNamespaces
   val systemContext: Map[String, String]
   val rewriteSearch: RewriteSearch
+  val toProvenance: types.ToProvenance[MT]
+  def isRollup(dtn: DatabaseTableName): Boolean
 
   def apply(stmt: Statement)(implicit ct: ClassTag[CV]): Sqlizer.Result[MT] = {
     val (sql, augmentedSchema, dynamicContext) = sqlizeStatement(stmt, true)
@@ -107,7 +109,7 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     val dynamicContext = FuncallSqlizer.DynamicContext[MT](
       repFor,
       systemContext,
-      ProvenanceTracker(rewritten, e => repFor(e.typ).provenanceOf(e)),
+      ProvenanceTracker(rewritten, e => repFor(e.typ).provenanceOf(e), toProvenance, isRollup),
       DateTime.now(DateTimeZone.UTC).withMillisOfSecond(0)
     )
 
@@ -542,7 +544,7 @@ abstract class Sqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   private def sqlizeAtomicFrom(from: AtomicFrom, availableSchemas: AvailableSchemas, dynamicContext: FuncallSqlizer.DynamicContext[MT]): (Doc, AvailableSchemas) = {
     val (sql, schema: AugmentedSchema) =
       from match {
-        case FromTable(name, _cn, _rn, _alias, label, columns, _pks) =>
+        case FromTable(name, _rn, _alias, label, columns, _pks) =>
           (
             namespace.databaseTableName(name),
             OrderedMap() ++ columns.iterator.map { case (dcn, nameEntry) =>

@@ -1,6 +1,7 @@
 package com.socrata.pg.server.analyzer2
 
 import com.socrata.soql.analyzer2._
+import com.socrata.soql.environment.Provenance
 import com.socrata.soql.types.{SoQLValue, SoQLID, SoQLVersion}
 import com.socrata.soql.types.obfuscation.CryptProvider
 
@@ -18,7 +19,7 @@ trait SoQLValueDebugHelper {
           other.doc(CryptProvider.zeros)
       }
 
-    private def cryptProviderFor(provenance: Option[String]): CryptProvider =
-      provenance.map(CanonicalName).flatMap(cryptProviderProvider).getOrElse(CryptProvider.zeros)
+    private def cryptProviderFor(provenance: Option[Provenance]): CryptProvider =
+      provenance.flatMap(cryptProviderProvider.forProvenance).getOrElse(CryptProvider.zeros)
   }
 }
