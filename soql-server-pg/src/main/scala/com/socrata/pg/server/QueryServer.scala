@@ -739,6 +739,14 @@ object QueryServer extends DynamicPortMap {
       val handler = ThreadRenamingHandler(NewLoggingHandler(logOptions)(queryServer.route))
       val server = new SocrataServerJetty(handler,
                      SocrataServerJetty.defaultOptions.
+                       withGzipOptions(
+                         Some(
+                           SocrataServerJetty.Gzip.defaultOptions.
+                             withExcludedMimeTypes(
+                               Set("application/x-socrata-gzipped-cjson")
+                             )
+                         )
+                       ).
                        withPort(config.port).
                        withExtraHandlers(List(SocrataHttpSupport.getHandler(config.metrics))).
                        withPoolOptions(SocrataServerJetty.Pool(config.threadpool)).
