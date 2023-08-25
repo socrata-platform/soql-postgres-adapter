@@ -2,8 +2,11 @@ package com.socrata.pg.server.analyzer2
 
 import scala.collection.{mutable => scm}
 
+import java.io.{BufferedWriter, OutputStreamWriter}
+import java.nio.charset.StandardCharsets
 import java.sql.{Connection, PreparedStatement}
 import java.util.Base64
+import java.util.zip.GZIPOutputStream
 
 import com.rojoma.json.v3.ast.{JArray, JString, JValue, JNull}
 import com.rojoma.json.v3.interpolation._
@@ -252,32 +255,38 @@ object ProcessQuery {
         }
       }
 
-    ETag(etag) ~> LastModified(lastModified) ~> Write("application/json; content-type=utf-8") { writer =>
-      writer.write("[{")
-      for(debugFields <- debugFields) {
-        writer.write("\"debug\":%s\n ,".format(JsonUtil.renderJson(debugFields, pretty = false)))
+    ETag(etag) ~> LastModified(lastModified) ~> ContentType("application/x-socrata-gzipped-cjson") ~> Stream { rawOutputStream =>
+      for {
+        gzos <- managed(new GZIPOutputStream(rawOutputStream))
+        osw <- managed(new OutputStreamWriter(gzos, StandardCharsets.UTF_8))
+        writer <- managed(new BufferedWriter(osw))
+      } {
+        writer.write("[{")
+        for(debugFields <- debugFields) {
+          writer.write("\"debug\":%s\n ,".format(JsonUtil.renderJson(debugFields, pretty = false)))
+        }
+        writer.write("\"fingerprint\":%s\n ,".format(JString(Base64.getUrlEncoder.withoutPadding.encodeToString(etag.asBytes))))
+        writer.write("\"last_modified\":%s\n ,".format(JString(CJSONWriter.dateTimeFormat.print(lastModified))))
+        writer.write("\"locale\":%s\n ,".format(JString(locale)))
+        writer.write("\"schema\":")
+
+        @AutomaticJsonEncode
+        case class Field(c: ColumnName, t: SoQLType)
+
+        val reformattedSchema = nameAnalysis.statement.schema.values.map { case Statement.SchemaEntry(cn, typ, _isSynthetic) =>
+          Field(cn, typ)
+        }.toArray
+
+        JsonUtil.writeJson(writer, reformattedSchema)
+        writer.write("\n }")
+
+        for(row <- rows) {
+          writer.write("\n,")
+          CompactJsonWriter.toWriter(writer, JArray(row))
+        }
+
+        writer.write("\n]\n")
       }
-      writer.write("\"fingerprint\":%s\n ,".format(JString(Base64.getUrlEncoder.withoutPadding.encodeToString(etag.asBytes))))
-      writer.write("\"last_modified\":%s\n ,".format(JString(CJSONWriter.dateTimeFormat.print(lastModified))))
-      writer.write("\"locale\":%s\n ,".format(JString(locale)))
-      writer.write("\"schema\":")
-
-      @AutomaticJsonEncode
-      case class Field(c: ColumnName, t: SoQLType)
-
-      val reformattedSchema = nameAnalysis.statement.schema.values.map { case Statement.SchemaEntry(cn, typ, _isSynthetic) =>
-        Field(cn, typ)
-      }.toArray
-
-      JsonUtil.writeJson(writer, reformattedSchema)
-      writer.write("\n }")
-
-      for(row <- rows) {
-        writer.write("\n,")
-        CompactJsonWriter.toWriter(writer, JArray(row))
-      }
-
-      writer.write("\n]\n")
     }
   }
 
