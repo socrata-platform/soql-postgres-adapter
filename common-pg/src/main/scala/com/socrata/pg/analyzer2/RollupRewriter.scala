@@ -32,6 +32,18 @@ trait RollupRewriter[MT <: MetaTypes] {
 }
 
 object RollupRewriter {
+  // Ick.  Ok, so what we're doing here is this: If a rollup table
+  // contains a provenanced column, then _even though it's a physical
+  // column_ we need to treat it specially in two ways.  First, it's
+  // _actually_ a serialized virtual column (i.e., a prov column and
+  // the actual physical value) so the Rep needs to know to load two
+  // columns.  Second, various things over in ExprSqlizer and
+  // FuncallSqlizer do a special optimized thing if a provenanced
+  // column is known to have a single source-table.  For now, we'll
+  // just not do that optimized thing if it's sourced from a rollup
+  // tables.
+  val MAGIC_ROLLUP_CANONICAL_NAME = CanonicalName("magic rollup canonical name")
+
   class Noop[MT <: MetaTypes] extends RollupRewriter[MT] {
     protected def attemptRollups(analysis: SoQLAnalysis[MT]): Option[SoQLAnalysis[MT]] =
       None
@@ -41,9 +53,12 @@ object RollupRewriter {
     new Noop[MT]
 }
 
-trait RRExperiments[MT <: MetaTypes] extends SqlizerUniverse[MT] {
-  protected implicit def dtnOrdering: Ordering[MT#DatabaseColumnNameImpl]
+trait HasLabelProvider {
   protected val labelProvider: LabelProvider
+}
+
+trait RRExperiments[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelProvider =>
+  protected implicit def dtnOrdering: Ordering[MT#DatabaseColumnNameImpl]
 
   // see if there's a rollup that can be used to answer _this_ select
   // (not any sub-parts of the select!).  This needs to produce a
@@ -392,5 +407,169 @@ trait RRExperiments[MT <: MetaTypes] extends SqlizerUniverse[MT] {
       ne.copy(expr = goExpr(ne.expr))
 
     goStmt(sel)
+  }
+}
+
+trait ExprIsomorphism[MT <: MetaTypes] extends SqlizerUniverse[MT] {
+  def isIsomorphicTo(e1: Expr, e2: Expr): Boolean
+  def isIsomorphicTo(e1: Option[Expr], e2: Option[Expr]): Boolean =
+    (e1, e2) match {
+      case (None, None) => true
+      case (Some(a), Some(b)) => isIsomorphicTo(a, b)
+      case _ => false
+    }
+}
+
+trait IsProjection[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: ExprIsomorphism[MT] =>
+  def isProjection(expr: Expr, candidates: Seq[(Expr, Expr)]): Option[Expr] = {
+    expr match {
+      case lit: LiteralValue =>
+        Some(lit)
+      case nul: NullLiteral =>
+        Some(nul)
+      case other =>
+        for((candidate, columnRef) <- candidates) {
+          if(isIsomorphicTo(expr, candidate)) {
+            return Some(columnRef)
+          } else {
+            expr match {
+              case fc@FunctionCall(func, args) =>
+                val break = new scala.util.control.Breaks
+                break.breakable {
+                  val rewrittenArgs = args.map { arg =>
+                    isProjection(arg, candidates) match {
+                      case Some(columnRef) =>
+                        columnRef
+                      case None =>
+                        break.break()
+                    }
+                  }
+                  return Some(FunctionCall(func, rewrittenArgs)(fc.position))
+                }
+              case _ =>
+                // nope
+            }
+          }
+        }
+        None
+    }
+  }
+}
+
+trait SemigroupRewriter[MT <: MetaTypes] extends SqlizerUniverse[MT] {
+  // This is responsible for doing things that look like
+  //   count(x) => coalesce(sum(count_x), 0)
+  //   max(x) => max(max_x)
+  def mergeSemigroup(f: AggregateFunctionCall): Option[AggregateFunctionCall]
+}
+
+// Cases!
+//    Rollup is a grouped view.  In that case it can be used
+//       * for exact-match rewrites
+//       * for rollup rewrites
+//
+// Rollup-rewrites:
+//   GIVEN
+//     a rollup that looks like SELECT s1 FROM f WHERE w GROUP BY x, y, z...
+//     a query that looks like SELECT s2 FROM f WHERE w GROUP BY a strict subset of x, y, z... HAVING h ORDER BY o OFFSET off LIMIT lim
+//   WHERE
+//     aggregate functions in s2 form a semigroup over their types
+//   THEN
+//     the query can be rewritten into SELECT reagg(s2) FROM rollup GROUP BY (subset) HAVING h ORDER BY o OFFSET off LIMIT lim
+//   NOTE THAT
+//     date_trunc_ymd(x) is a subset of x
+//     date_trunc_ym(x) is a subset of x and date_trunc_ymd(x)
+//     (etc)
+
+trait RollupAggregate[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: SemigroupRewriter[MT] with ExprIsomorphism[MT] with HasLabelProvider =>
+  def rollupAggregate(query: Select, candidate: Select, candidateName: types.ScopedResourceName[MT], candidateTableInfo: TableDescription.Dataset[MT]): Option[Select] = {
+    assert(!query.hint(SelectHint.NoRollup))
+    assert(query.isAggregated)
+    assert(candidate.isAggregated)
+
+    query match {
+      case Select(
+        distinct@Distinctiveness.Indistinct(),
+        selectList,
+        from,
+        where,
+        groupBy,
+        having,
+        orderBy,
+        offset,
+        limit,
+        None, // won't roll up if a SEARCH is involved
+        hint
+      ) if isStrictSubset(groupBy, candidate.groupBy) && isIsomorphic(from, candidate.from) && isIsomorphicTo(where, candidate.where) =>
+        val rewriter = exprRewriter(groupBy, candidate.groupBy, candidateName, candidateTableInfo)
+        Some(
+          Select(
+            distinct,
+            rewriter.rewriteSelectList(selectList),
+            rewriter.newFrom,
+            None,
+            groupBy.map(rewriter.rewriteExpr),
+            having.map(rewriter.rewriteExpr),
+            orderBy.map(rewriter.rewriteOrderBy),
+            offset,
+            limit,
+            None,
+            hint + SelectHint.NoRollup
+          )
+        )
+      case _ =>
+        // Query isn't the right shape, won't rewrite
+        None
+    }
+  }
+
+  private def isIsomorphic(a: From, b: From): Boolean = {
+    val fakeA = Select(Distinctiveness.Indistinct(), OrderedMap(), a, None, Nil, None, Nil, None, None, None, Set.empty)
+    val fakeB = Select(Distinctiveness.Indistinct(), OrderedMap(), b, None, Nil, None, Nil, None, None, None, Set.empty)
+    fakeA.isIsomorphic(fakeB)
+  }
+
+  private def isStrictSubset(queryGroupBy: Seq[Expr], candidateGroupBy: Seq[Expr]): Boolean = {
+    isSubset(queryGroupBy, candidateGroupBy) && !isSubset(candidateGroupBy, queryGroupBy)
+  }
+
+  private def isSubset(queryGroupBy: Seq[Expr], candidateGroupBy: Seq[Expr]): Boolean = {
+    queryGroupBy.forall { qgb =>
+      candidateGroupBy.exists { cgb =>
+        isIsomorphicTo(qgb, cgb) || funcallSubset(qgb, cgb)
+      }
+    }
+  }
+
+  protected def funcallSubset(queryExpr: Expr, candidateExpr: Expr): Boolean
+
+  private def exprRewriter(queryGroupBy: Seq[Expr], candidateGroupBy: Seq[Expr], rollupName: types.ScopedResourceName[MT], candidateTableInfo: TableDescription.Dataset[MT]): ExprRewriter = {
+    new ExprRewriter {
+      val newFrom = FromTable(
+        candidateTableInfo.name,
+        RollupRewriter.MAGIC_ROLLUP_CANONICAL_NAME,
+        rollupName,
+        None,
+        labelProvider.tableLabel(),
+        OrderedMap() ++ candidateTableInfo.columns.iterator.map { case (dtn, dci) =>
+          dtn -> NameEntry(dci.name, dci.typ)
+        },
+        candidateTableInfo.primaryKeys
+      )
+
+      def rewriteExpr(e: Expr): Expr =
+        ???
+    }
+  }
+
+  private trait ExprRewriter {
+    def newFrom: FromTable
+    def rewriteExpr(e: Expr): Expr
+
+    final def rewriteOrderBy(ob: OrderBy) = ob.copy(expr = rewriteExpr(ob.expr))
+    final def rewriteSelectList(sl: OrderedMap[AutoColumnLabel, NamedExpr]): OrderedMap[AutoColumnLabel, NamedExpr] =
+      OrderedMap() ++ sl.iterator.map { case (acl, ne) =>
+        acl -> ne.copy(expr = rewriteExpr(ne.expr))
+      }
   }
 }

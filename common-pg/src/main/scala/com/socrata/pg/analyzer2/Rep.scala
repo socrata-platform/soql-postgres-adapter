@@ -151,11 +151,16 @@ object Rep {
         namespace.columnBase(name)
 
       def physicalColumnRef(col: PhysicalColumn) = {
-        // The "::text" is required so that the provenance is not a
-        // literal by SQL's standards.  Otherwise this will have
-        // trouble if you order or group by :id
         val dsTable = namespace.tableLabel(col.table)
-        ExprSql.Expanded[MT](Seq(mkTextLiteral(col.tableCanonicalName.name), dsTable ++ d"." ++ compressedDatabaseColumn(col.column)), col)
+        if(col.tableCanonicalName != RollupRewriter.MAGIC_ROLLUP_CANONICAL_NAME) {
+          // The "::text" is required so that the provenance is not a
+          // literal by SQL's standards.  Otherwise this will have
+          // trouble if you order or group by :id
+          ExprSql.Expanded[MT](Seq(mkTextLiteral(col.tableCanonicalName.name), dsTable ++ d"." ++ compressedDatabaseColumn(col.column)), col)
+        } else {
+          // This is actually a materialized VirtualColumn
+          ExprSql(expandedDatabaseColumns(col.column).map { cn => dsTable ++ d"." ++ cn }, col)
+        }
       }
 
       def virtualColumnRef(col: VirtualColumn, isExpanded: Boolean) = {

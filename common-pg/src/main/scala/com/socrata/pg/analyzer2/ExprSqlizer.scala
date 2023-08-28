@@ -18,8 +18,7 @@ class ExprSqlizer[MT <: MetaTypes](
       // literal id/version will have a null provenance, but one of
       // those ending up in a set of values being given to an ORDER BY
       // is _such_ an edge condition that I honestly don't care.
-      val possibleProv = dynamicContext.provTracker(e.expr)
-      if(possibleProv.size < 2) {
+      if(dynamicContext.provTracker.isSingleton(e.expr)) {
         // all provenance values in a physical column will be the
         // same; eliminate them from the sqlizer so that the pg
         // optimizer doesn't have to.

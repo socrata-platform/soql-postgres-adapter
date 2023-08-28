@@ -13,9 +13,18 @@ class ProvenanceTracker[MT <: MetaTypes] private (exprs: sc.Map[Expr[MT], Set[Ca
   // getting tracked dynamically.
   def apply(expr: Expr): Set[CanonicalName] =
     exprs(expr)
+
+  def isSingleton(expr: Expr): Boolean = {
+    val set = this(expr)
+    ProvenanceTracker.isSingleton(set)
+  }
 }
 
 object ProvenanceTracker {
+  def isSingleton(set: Set[CanonicalName]): Boolean = {
+    set.size < 2 && !set(RollupRewriter.MAGIC_ROLLUP_CANONICAL_NAME)
+  }
+
   def apply[MT <: MetaTypes](s: Statement[MT], provenanceOf: LiteralValue[MT] => Set[CanonicalName]): ProvenanceTracker[MT] = {
     val builder = new Builder[MT](provenanceOf)
     builder.processStatement(s)

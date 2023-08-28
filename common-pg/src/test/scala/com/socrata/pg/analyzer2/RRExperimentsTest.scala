@@ -25,7 +25,7 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
       case Left(e) => fail(e.toString)
     }
 
-    val expr = new RRExperiments[SqlizerTest.TestMT] {
+    val expr = new RRExperiments[SqlizerTest.TestMT] with HasLabelProvider {
       override val labelProvider = analysis.labelProvider
       implicit val dtnOrdering = Ordering.String
 
