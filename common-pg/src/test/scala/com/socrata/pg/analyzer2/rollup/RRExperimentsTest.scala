@@ -1,10 +1,12 @@
-package com.socrata.pg.analyzer2
+package com.socrata.pg.analyzer2.rollup
 
 import org.scalatest.{FunSuite, MustMatchers}
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.analyzer2.mocktablefinder._
 import com.socrata.soql.environment.ResourceName
+
+import com.socrata.pg.analyzer2._
 
 class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[SqlizerTest.TestMT] {
   def tableFinder(items: ((Int, String), Thing[Int, TestType])*) =
