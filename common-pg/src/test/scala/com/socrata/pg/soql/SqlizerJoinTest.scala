@@ -64,7 +64,7 @@ class SqlizerJoinTest  extends SqlizerTest {
   test("join to single_row in subselect") {
     val soql = "select 'bleh' join (select 1, 2, 3 from @single_row) as vars on true"
     val psql@ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT e'[[bleh]]' FROM t1 JOIN (SELECT 1 as "_1",2 as "_2",3 as "_3") as "_vars" ON ?""")
+    sql should be ("""SELECT e'[[bleh]]' FROM t1 JOIN (SELECT (1::numeric) as "_1",(2::numeric) as "_2",(3::numeric) as "_3") as "_vars" ON ?""")
     psql.paramsAsStrings should be (Seq("true"))
   }
 
@@ -142,11 +142,11 @@ class SqlizerJoinTest  extends SqlizerTest {
 
     val expectedSql = """SELECT "t1".case_number FROM t1
       |     JOIN
-      |  (SELECT (coalesce((max("avg_temperature")),1)) as "coalesce_max_avg_temperature_1","year" as "year"
+      |  (SELECT (coalesce((max("avg_temperature")),(1::numeric))) as "coalesce_max_avg_temperature_1","year" as "year"
       |     FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1"
       |    WHERE ("avg_temperature" < ?) GROUP BY "year") as "_j1" ON ("t1".year = "_j1"."year")
       |     JOIN
-      |  (SELECT (coalesce((sum("avg_temperature")),3)) as "coalesce_sum_avg_temperature_3","year" as "year"
+      |  (SELECT (coalesce((sum("avg_temperature")),(3::numeric))) as "coalesce_sum_avg_temperature_3","year" as "year"
       |     FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1"
       |    WHERE ("avg_temperature" < ?) GROUP BY "year") as "_j2" ON ("t1".year = "_j2"."year")""".stripMargin
 
@@ -167,13 +167,13 @@ class SqlizerJoinTest  extends SqlizerTest {
          """
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
 
-    val expectedSql = """SELECT "case_number",11 FROM (SELECT "t1".case_number as "case_number" FROM t1
+    val expectedSql = """SELECT "case_number",(11::numeric) FROM (SELECT "t1".case_number as "case_number" FROM t1
                                   JOIN
-                                       (SELECT (coalesce((max("avg_temperature")),1)) as "coalesce_max_avg_temperature_1","year" as "year"
+                                       (SELECT (coalesce((max("avg_temperature")),(1::numeric))) as "coalesce_max_avg_temperature_1","year" as "year"
                                           FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1"
                                          WHERE ("avg_temperature" < ?) GROUP BY "year") as "_j1" ON ("t1".year = "_j1"."year")
                                   JOIN
-                                       (SELECT (coalesce((sum("avg_temperature")),3)) as "coalesce_sum_avg_temperature_3","year" as "year"
+                                       (SELECT (coalesce((sum("avg_temperature")),(3::numeric))) as "coalesce_sum_avg_temperature_3","year" as "year"
                                           FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1"
                                          WHERE ("avg_temperature" < ?) GROUP BY "year") as "_j2" ON ("t1".year = "_j2"."year")) AS "x1" WHERE (? = ?)"""
 
