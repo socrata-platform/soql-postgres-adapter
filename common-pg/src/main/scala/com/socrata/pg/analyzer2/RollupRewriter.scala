@@ -613,9 +613,10 @@ trait RollupAggregate[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: Semig
         candidateSelectList.iterator.find { case (_, ne) =>
           isIsomorphicTo(e, ne.expr)
         } match {
-          case Some((selectedColumn, NamedExpr(e@AggregateFunctionCall(func, args, false, None), _name, _isSynthetic))) =>
+          case Some((selectedColumn, NamedExpr(rollup_expr@AggregateFunctionCall(func, args, false, None), _name, _isSynthetic))) =>
+            assert(rollup_expr.typ == e.typ)
             mergeSemigroup(func).map { merger =>
-              merger(PhysicalColumn[MT](newFrom.label, newFrom.canonicalName, columnLabelMap(selectedColumn), e.typ)(e.position.asAtomic))
+              merger(PhysicalColumn[MT](newFrom.label, newFrom.canonicalName, columnLabelMap(selectedColumn), rollup_expr.typ)(e.position.asAtomic))
             }
           case Some((selectedColumn, NamedExpr(_ : AggregateFunctionCall, _name, _isSynthetic))) =>
             // can't rewrite, the aggregate has a "distinct" or "filter"
