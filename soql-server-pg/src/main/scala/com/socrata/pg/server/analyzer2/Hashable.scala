@@ -124,6 +124,7 @@ object Hashable {
           hasher.hashByte(9)
           hasher.hash(lim)
           hasher.hash(off)
+        case rewrite.Pass.RemoveOrderBy => hasher.hashByte(10)
       }
   }
 
