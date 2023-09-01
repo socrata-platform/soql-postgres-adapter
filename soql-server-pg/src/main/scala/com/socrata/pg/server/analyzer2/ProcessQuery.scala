@@ -495,7 +495,7 @@ object ProcessQuery {
                 sb.append(cn.name)
                 sb.append(" */")
               }
-            case SqlizeAnnotation.Expression(PhysicalColumn(tLabel, _, cLabel, _)) =>
+            case SqlizeAnnotation.Expression(PhysicalColumn(tLabel, _, _, cLabel, _)) =>
               walk(doc)
               for((rn, cn) <- map.physicalColumnNames.get((tLabel, cLabel))) {
                 sb.append(" /* ")
