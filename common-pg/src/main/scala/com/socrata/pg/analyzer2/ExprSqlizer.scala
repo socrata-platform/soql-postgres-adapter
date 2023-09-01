@@ -39,7 +39,7 @@ class ExprSqlizer[MT <: MetaTypes](
 
   def sqlize(e: Expr): ExprSql[MT] =
     e match {
-      case pc@PhysicalColumn(tbl, _tableCanonName, col, typ) =>
+      case pc@PhysicalColumn(tbl, _tableName, _tableCanonName, col, typ) =>
         val trueType = availableSchemas(tbl)(col)
         assert(trueType.typ == typ)
         assert(trueType.isExpanded)
