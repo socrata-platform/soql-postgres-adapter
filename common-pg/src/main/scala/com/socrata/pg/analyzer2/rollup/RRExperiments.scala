@@ -129,8 +129,8 @@ trait RRExperiments[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabe
           case (VirtCol(AutoTableLabel(atl1), AutoColumnLabel(acl1)),
                 VirtCol(AutoTableLabel(atl2), AutoColumnLabel(acl2))) =>
             ord1.compare((atl1, acl1), (atl2, acl2)) < 0
-          case (PhysCol(AutoTableLabel(atl1), _, DatabaseColumnName(dtn1)),
-                PhysCol(AutoTableLabel(atl2), _, DatabaseColumnName(dtn2))) =>
+          case (PhysCol(AutoTableLabel(atl1), _, _, DatabaseColumnName(dtn1)),
+                PhysCol(AutoTableLabel(atl2), _, _, DatabaseColumnName(dtn2))) =>
             ord2.compare((atl1, dtn1), (atl2, dtn2)) < 0
           case (_ : VirtCol, _ : PhysCol) => true
           case (_ : PhysCol, _ : VirtCol) => false
@@ -169,8 +169,8 @@ trait RRExperiments[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabe
   private sealed abstract class Col {
     def at(typ: CT, pos: AtomicPositionInfo): Column
   }
-  private case class PhysCol(table: AutoTableLabel, canonicalName: CanonicalName, column: DatabaseColumnName) extends Col {
-    def at(typ: CT, pos: AtomicPositionInfo) = PhysicalColumn(table, canonicalName, column, typ)(pos)
+  private case class PhysCol(table: AutoTableLabel, tableName: DatabaseTableName, canonicalName: CanonicalName, column: DatabaseColumnName) extends Col {
+    def at(typ: CT, pos: AtomicPositionInfo) = PhysicalColumn(table, tableName, canonicalName, column, typ)(pos)
   }
   private case class VirtCol(table: AutoTableLabel, column: AutoColumnLabel) extends Col {
     def at(typ: CT, pos: AtomicPositionInfo) = VirtualColumn(table, column, typ)(pos)
@@ -210,8 +210,8 @@ trait RRExperiments[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabe
         expr match {
           case VirtualColumn(table, col, typ) if from(table) =>
             acc += VirtCol(table, col) -> typ
-          case PhysicalColumn(table, canonName, col, typ) if from(table) =>
-            acc += PhysCol(table, canonName, col) -> typ
+          case PhysicalColumn(table, tableName, canonName, col, typ) if from(table) =>
+            acc += PhysCol(table, tableName, canonName, col) -> typ
           case FunctionCall(_func, args) =>
             for(arg <- args) go(arg)
           case AggregateFunctionCall(_func, args, _distinct, filter) =>
@@ -322,8 +322,8 @@ trait RRExperiments[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabe
             case None =>
               vc
           }
-        case pc@PhysicalColumn(table, canonName, col, typ) =>
-          columnMap.get(PhysCol(table, canonName, col)) match {
+        case pc@PhysicalColumn(table, tableName, canonName, col, typ) =>
+          columnMap.get(PhysCol(table, tableName, canonName, col)) match {
             case Some(VirtCol(newTable, newCol)) =>
               VirtualColumn(newTable, newCol, typ)(pc.position)
             case None =>

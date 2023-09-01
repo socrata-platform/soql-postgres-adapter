@@ -27,6 +27,8 @@ import com.socrata.pg.analyzer2.{SqlizerUniverse, RollupRewriter}
 //     (etc)
 
 trait RollupAggregate[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: SemigroupRewriter[MT] with ExprIsomorphism[MT] with HasLabelProvider =>
+  type IsoState = IsomorphismState.View[MT]
+
   def rollupAggregate(query: Select, candidate: Select, candidateName: types.ScopedResourceName[MT], candidateTableInfo: TableDescription.Dataset[MT]): Option[Select] = {
     assert(!query.hint(SelectHint.NoRollup))
     assert(query.isAggregated)
@@ -45,9 +47,12 @@ trait RollupAggregate[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: Semig
         limit,
         None, // won't roll up if a SEARCH is involved
         hint
-      ) if isStrictSubset(groupBy, candidate.groupBy) && isIsomorphic(from, candidate.from) && isIsomorphicTo(where, candidate.where) =>
-        val rewriter = exprRewriter(candidate.selectList, candidateName, candidateTableInfo)
+      ) =>
         for {
+          isoState <- from.isomorphicTo(candidate.from)
+          if isStrictSubset(groupBy, candidate.groupBy, isoState)
+          if isIsomorphic(where, candidate.where, isoState)
+          rewriter = exprRewriter(candidate.selectList, candidateName, candidateTableInfo)
           newSelectList <- rewriter.rewriteSelectList(selectList)
           newGroupBy <- mapMaybe(groupBy, rewriter.rewriteExpr)
           // "having" is None if there is no having, but we want
@@ -77,6 +82,13 @@ trait RollupAggregate[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: Semig
     }
   }
 
+  private def isIsomorphic(a: Option[Expr], b: Option[Expr], under: IsoState): Boolean =
+    (a, b) match {
+      case (Some(a), Some(b)) => a.isIsomorphic(b, under)
+      case (None, None) => true
+      case _ => false
+    }
+
   private def transposeOption[T](o: Option[Option[T]]): Option[Option[T]] =
     o match {
       case Some(None) => None
@@ -98,19 +110,19 @@ trait RollupAggregate[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: Semig
     fakeA.isIsomorphic(fakeB)
   }
 
-  private def isStrictSubset(queryGroupBy: Seq[Expr], candidateGroupBy: Seq[Expr]): Boolean = {
-    isSubset(queryGroupBy, candidateGroupBy) && !isSubset(candidateGroupBy, queryGroupBy)
+  private def isStrictSubset(queryGroupBy: Seq[Expr], candidateGroupBy: Seq[Expr], under: IsoState): Boolean = {
+    isSubset(queryGroupBy, candidateGroupBy, under) && !isSubset(candidateGroupBy, queryGroupBy, under.reverse)
   }
 
-  private def isSubset(queryGroupBy: Seq[Expr], candidateGroupBy: Seq[Expr]): Boolean = {
+  private def isSubset(queryGroupBy: Seq[Expr], candidateGroupBy: Seq[Expr], under: IsoState): Boolean = {
     queryGroupBy.forall { qgb =>
       candidateGroupBy.exists { cgb =>
-        isIsomorphicTo(qgb, cgb) || funcallSubset(qgb, cgb)
+        qgb.isIsomorphic(cgb, under) || funcallSubset(qgb, cgb, under)
       }
     }
   }
 
-  protected def funcallSubset(queryExpr: Expr, candidateExpr: Expr): Boolean
+  protected def funcallSubset(queryExpr: Expr, candidateExpr: Expr, under: IsoState): Boolean
 
   private def exprRewriter(
     candidateSelectList: OrderedMap[AutoColumnLabel, NamedExpr],
@@ -159,7 +171,7 @@ trait RollupAggregate[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: Semig
           case Some((selectedColumn, NamedExpr(rollup_expr@AggregateFunctionCall(func, args, false, None), _name, _isSynthetic))) =>
             assert(rollup_expr.typ == e.typ)
             mergeSemigroup(func).map { merger =>
-              merger(PhysicalColumn[MT](newFrom.label, newFrom.canonicalName, columnLabelMap(selectedColumn), rollup_expr.typ)(e.position.asAtomic))
+              merger(PhysicalColumn[MT](newFrom.label, newFrom.tableName, newFrom.canonicalName, columnLabelMap(selectedColumn), rollup_expr.typ)(e.position.asAtomic))
             }
           case Some((selectedColumn, NamedExpr(_ : AggregateFunctionCall, _name, _isSynthetic))) =>
             // can't rewrite, the aggregate has a "distinct" or "filter"
@@ -169,7 +181,7 @@ trait RollupAggregate[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: Semig
             None
           case Some((selectedColumn, ne)) =>
             assert(ne.expr.typ == e.typ)
-            Some(PhysicalColumn[MT](newFrom.label, newFrom.canonicalName, columnLabelMap(selectedColumn), e.typ)(e.position.asAtomic))
+            Some(PhysicalColumn[MT](newFrom.label, newFrom.tableName, newFrom.canonicalName, columnLabelMap(selectedColumn), e.typ)(e.position.asAtomic))
           case None =>
             e match {
               case lit: LiteralValue => Some(lit)
