@@ -27,7 +27,7 @@ import com.socrata.pg.analyzer2.{SqlizerUniverse, RollupRewriter}
 //     (etc)
 
 trait RollupAggregate[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: SemigroupRewriter[MT] with ExprIsomorphism[MT] with HasLabelProvider =>
-  type IsoState = IsomorphismState.View[MT]
+  private type IsoState = IsomorphismState.View[MT]
 
   def rollupAggregate(query: Select, candidate: Select, candidateName: types.ScopedResourceName[MT], candidateTableInfo: TableDescription.Dataset[MT]): Option[Select] = {
     assert(!query.hint(SelectHint.NoRollup))
