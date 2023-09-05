@@ -73,7 +73,6 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
 
       protected val labelProvider = analysis.labelProvider
 
-      // Members declared in com.socrata.pg.analyzer2.rollup.SemigroupRewriter
       def mergeSemigroup(f: MonomorphicFunction): Option[Expr => Expr] = None
     }
 
@@ -86,6 +85,58 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
         DatabaseColumnName("c1") -> TableDescription.DatasetColumnInfo(ColumnName("text"), TestText, false),
         DatabaseColumnName("c2") -> TableDescription.DatasetColumnInfo(ColumnName("num_5"), TestNumber, false),
         DatabaseColumnName("c3") -> TableDescription.DatasetColumnInfo(ColumnName("num"), TestNumber, false),
+      ),
+      Nil,
+      Nil
+    ))
+
+    println(result.map(_.debugDoc))
+  }
+
+  test("simple actual rollup") {
+    val tf = tableFinder(
+      (0, "threecol") -> D("text" -> TestText, "num" -> TestNumber, "another_num" -> TestNumber)
+    )
+
+    val Right(foundTables) = tf.findTables(0, "select text, sum(another_num) from @threecol group by text", Map.empty)
+    val analysis = analyzer(foundTables, UserParameters.empty) match {
+      case Right(a) => a
+      case Left(e) => fail(e.toString)
+    }
+    val select = analysis.statement.asInstanceOf[Select]
+
+    val Right(foundRollupTables) = tf.findTables(0, "select text, num, sum(another_num) from @threecol group by text, num", Map.empty)
+    val rollupAnalysis = analyzer(foundRollupTables, UserParameters.empty) match {
+      case Right(a) => a
+      case Left(e) => fail(e.toString)
+    }
+    val rollupSelect = rollupAnalysis.statement.asInstanceOf[Select]
+
+    val re = new RollupExact[MT] with HasLabelProvider with SemigroupRewriter[MT] with FunctionSubset[MT] {
+      def functionSubset(a: MonomorphicFunction,b: MonomorphicFunction): Boolean = false
+
+      protected val labelProvider = analysis.labelProvider
+
+      val Sum = TestFunctions.Sum.monomorphic.get
+      def mergeSemigroup(f: MonomorphicFunction): Option[Expr => Expr] = {
+        f match {
+          case Sum =>
+            Some { sum => AggregateFunctionCall[MT](Sum, Seq(sum), false, None)(FuncallPositionInfo.None) }
+          case _ =>
+            None
+        }
+      }
+    }
+
+    println(select.debugDoc)
+    println(rollupSelect.debugDoc)
+    val result = re.rollupSelectExact(select, rollupSelect, ScopedResourceName(0, ResourceName("rollup")), TableDescription.Dataset[MT](
+      DatabaseTableName("rollup1"),
+      CanonicalName("rollup1"),
+      OrderedMap(
+        DatabaseColumnName("c1") -> TableDescription.DatasetColumnInfo(ColumnName("text"), TestText, false),
+        DatabaseColumnName("c2") -> TableDescription.DatasetColumnInfo(ColumnName("num"), TestNumber, false),
+        DatabaseColumnName("c3") -> TableDescription.DatasetColumnInfo(ColumnName("sum_another_num"), TestNumber, false),
       ),
       Nil,
       Nil
