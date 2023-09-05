@@ -6,22 +6,98 @@ import com.socrata.soql.analyzer2._
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.ColumnName
 
-import com.socrata.pg.analyzer2.SqlizerUniverse
+import com.socrata.pg.analyzer2.{RollupRewriter, SqlizerUniverse}
 
-trait RRExperiments[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelProvider =>
+trait RRExperiments[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelProvider with RollupExact[MT] =>
   protected implicit def dtnOrdering: Ordering[MT#DatabaseColumnNameImpl]
+  val rollups: Seq[RollupInfo]
+  def databaseColumnNameOfIndex(i: Int): DatabaseColumnName
+
+  case class RollupInfo(statement: Statement, name: types.ScopedResourceName[MT], databaseName: DatabaseTableName) {
+    lazy val description =
+      TableDescription.Dataset[MT](
+        databaseName,
+        RollupRewriter.MAGIC_ROLLUP_CANONICAL_NAME,
+        OrderedMap() ++ statement.schema.iterator.zipWithIndex.map { case ((label, schemaEnt), idx) =>
+          databaseColumnNameOfIndex(idx) -> TableDescription.DatasetColumnInfo(
+            schemaEnt.name,
+            schemaEnt.typ,
+            false
+          )
+        },
+        Nil,
+        Nil
+      )
+  }
 
   // see if there's a rollup that can be used to answer _this_ select
   // (not any sub-parts of the select!).  This needs to produce a
   // statement with the same output schema (in terms of column labels
   // and types) as the given select.
-  protected def rollupSelectExact(select: Select): Option[Statement]
+  protected def rollupSelectExact(select: Select): Option[Statement] =
+    rollups.findMap {
+      case ri@RollupInfo(candidate: Select, candidateName, _candidateDatabaseName) =>
+        rollupSelectExact(select, candidate, candidateName, ri.description)
+      case _ =>
+        None
+    }
 
   // See if there's a rollup that can be used to answer _this_
   // combined tables (not any sub-parts of the combined tables!).
   // This needs to produce a statement with the same output schema (in
   // terms of column labels and types) as the given select.
-  protected def rollupCombinedExact(combined: CombinedTables): Option[Statement]
+  private def rollupCombinedExact(combined: CombinedTables): Option[Statement] = {
+    rollups.findMap {
+      // This is stronger than it needs to be.  Ways it can be
+      // weakened:
+      //    the select lists don't need to be so sensitive to ordering
+      //    if the op is UNION ALL we don't need exact match on the select-lists
+      case ri@RollupInfo(cCombined, candidateName, _candidateDatabaseName)
+          if combined.isIsomorphic(cCombined) =>
+
+        val candidateTableInfo = ri.description
+
+        val from =
+          FromTable(
+            candidateTableInfo.name,
+            RollupRewriter.MAGIC_ROLLUP_CANONICAL_NAME,
+            candidateName,
+            None,
+            labelProvider.tableLabel(),
+            OrderedMap() ++ candidateTableInfo.columns.iterator.map { case (dtn, dci) =>
+              dtn -> NameEntry(dci.name, dci.typ)
+            },
+            candidateTableInfo.primaryKeys
+          )
+
+        Some(
+          Select(
+            Distinctiveness.Indistinct(),
+            OrderedMap() ++ (combined.schema.toStream, from.columns.toStream).zipped.map {
+              case ((sourceLabel, sourceEnt), (rollupCol, rollupEnt)) =>
+                assert(sourceEnt.name == rollupEnt.name)
+                assert(sourceEnt.typ == rollupEnt.typ)
+                sourceLabel -> NamedExpr(
+                  PhysicalColumn[MT](from.label, from.tableName, from.canonicalName, rollupCol, sourceEnt.typ)(AtomicPositionInfo.None),
+                  sourceEnt.name,
+                  sourceEnt.isSynthetic
+                )
+            },
+            from,
+            None,
+            Nil,
+            None,
+            Nil,
+            None,
+            None,
+            None,
+            Set.empty
+          )
+        )
+      case _ =>
+        None
+    }
+  }
 
   final def rollup(stmt: Statement): Option[Statement] = {
     rollup(stmt, prefixesAllowed = true)
