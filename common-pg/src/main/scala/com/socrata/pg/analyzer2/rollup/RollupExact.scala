@@ -29,7 +29,7 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
 
     // Cases:
     //   * neither select is aggregated
-    //      * the candidate must be indistinct, or its DISTINCT clause
+    //      * the candidate must be indistinct, or its DISTINCT clause         ✓
     //        must match (requires WHERE and ORDER isomorphism, and
     //        if fully distinct, select list isomorphism)
     //      * all expressions in select list, ORDER BY must be                 ✓
@@ -41,7 +41,6 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
     //        is windowed and the windowed expressions are used in
     //        this select.
     //      * SEARCH must not exist on either select                           ✓
-    //      * DISTINCT or DISTINCT ON: interaction with window functions?      XXX
     //      * If LIMIT and/or OFFSET is specified, either the candidate        ✓
     //        must not specify or ORDER BY must be isomorphic and this
     //        function's LIMIT/OFFSET must specify a window completely
@@ -62,7 +61,7 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
     //      * the expressions in the select's GROUP BY must be a               ✓
     //        subset of the candidate's
     //      * WHERE must be isomorphic                                         ✓
-    //      * all expressions in select list and ORDER BY must be
+    //      * all expressions in select list and ORDER BY must be              ✓
     //        expressible in terms of the output columns of candidate,
     //        under monoidal combination if the grouping is not the
     //        same
@@ -248,8 +247,8 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
   }
 
   private def sameSelectList(s: OrderedMap[AutoColumnLabel, NamedExpr], c: OrderedMap[AutoColumnLabel, NamedExpr], isoState: IsoState): Boolean = {
-    // we don't care about order, but we do care that all exprs in s
-    // are isomorphic to exprs in c, and vice-versa.
+    // we don't care about order or duplicates, but we do care that
+    // all exprs in s are isomorphic to exprs in c, and vice-versa.
     val sExprs = s.values.map(_.expr).toVector
     val cExprs = c.values.map(_.expr).toVector
 
