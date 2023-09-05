@@ -5,6 +5,19 @@ import com.socrata.soql.analyzer2._
 import com.socrata.pg.analyzer2.SqlizerUniverse
 
 trait FunctionSubset[MT <: MetaTypes] extends SqlizerUniverse[MT] {
+  // Given two expressions A and B, if A in some sense "contains" B
+  // then return a function that lets you _replace_ that contained B
+  //
+  // Some examples:
+  //   A is date_trunc_ym(some_floating_timestamp)
+  //   B is date_trunc_ymd(some_floating_timestamp)
+  //   A "contains" B in the sense that B contains all the info A needs to compute its answer
+  //   (by calling date_trunc_ym(floating_timestamp)->floating_timestamp on B's result)
+  //
+  //   A is date_trunc_ym(some_fixed_timestamp, "some_timezone")
+  //   B is date_trunc_ymd(some_fixed_timestamp, "some_timezone")
+  //   A "contains" B: you can convert B to A by calling date_trunc_ym(floating_timestamp)->floating_timestamp
+  //   on it.
   def funcallSubset(a: Expr, b: Expr, under: IsomorphismState.View[MT]): Option[Expr => Expr]
 }
 
@@ -17,6 +30,8 @@ trait SimpleFunctionSubset[MT <: MetaTypes] extends FunctionSubset[MT] {
   // and as a result, count(date_trunc_ym(some_date)) can be rewritten to use
   // count(date_trunc_ymd(some_date)) by (approximately) rewriting it to
   // sum(date_trunc_ymd_some_date)
+  //
+  // More abstractly if c(b(x)) = a(x), then given a and b, this returns c
   protected def funcallSubset(a: MonomorphicFunction, b: MonomorphicFunction): Option[MonomorphicFunction]
 
   // Helper function that does this same comparison but on concrete
