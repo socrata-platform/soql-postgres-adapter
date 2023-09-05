@@ -5,14 +5,14 @@ import com.socrata.soql.collection.OrderedMap
 
 import com.socrata.pg.analyzer2.{SqlizerUniverse, RollupRewriter}
 
-trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelProvider =>
+trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelProvider with SemigroupRewriter[MT] with FunctionSubset[MT] =>
   private type IsoState = IsomorphismState.View[MT]
 
   // see if there's a rollup that can be used to answer _this_ select
   // (not any sub-parts of the select!).  This needs to produce a
   // statement with the same output schema (in terms of column labels
   // and types) as the given select.
-  protected def rollupSelectExact(select: Select, candidate: Select, candidateName: types.ScopedResourceName[MT], candidateTableInfo: TableDescription.Dataset[MT]): Option[Statement] = {
+  def rollupSelectExact(select: Select, candidate: Select, candidateName: types.ScopedResourceName[MT], candidateTableInfo: TableDescription.Dataset[MT]): Option[Statement] = {
     if(select.hint(SelectHint.NoRollup)) {
       return None
     }
@@ -114,10 +114,9 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
             trace("Bailing because WHEREs are not isomorphic")
             return None
           }
-          candidate.where.mapFallibly(rewriteInTerms.rewrite(_)).getOrElse {
-            trace("Bailing because couldn't rewrite WHERE in terms of candidate output columns")
-            return None
-          }
+          // Our where is the same as the candidate's where, so we can
+          // just piggy-back on it.
+          None
         case None =>
           // Candidate has no WHERE but we do
           if(select.isWindowed) {
@@ -448,14 +447,15 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
           trace("Bailing because both have a HAVING but they are not isomorphic")
           return None
         }
+
         if(!sameGroupBy) {
           trace("Bailing because both have a HAVING but the GROUP BY clauses are different")
           return None
         }
-        Some(sHaving).mapFallibly(rewriteInTerms.rewrite(_)).getOrElse {
-          trace("Bailing because unable to rewrite the HAVING in terms of the candidate's output columns")
-          return None
-        }
+
+        // Our GROUP BYs and HAVINGs are the same so since we're just
+        // going to be using the rollup's having.
+        None
       case (None, Some(_)) =>
         trace("Bailing because the candidate has a HAVING clause and the query does not")
         return None
@@ -483,7 +483,16 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
     )
   }
 
-  protected def funcallSubset(queryExpr: Expr, candidateExpr: Expr, under: IsoState): Boolean
+  protected def funcallSubset(queryExpr: Expr, candidateExpr: Expr, under: IsoState): Boolean = {
+    (queryExpr, candidateExpr) match {
+      case (FunctionCall(qFunc, qArgs), FunctionCall(cFunc, cArgs)) =>
+        functionSubset(qFunc, cFunc) &&
+          qArgs.length == cArgs.length &&
+          (qArgs, cArgs).zipped.forall { (q, c) => q.isIsomorphic(c, under) }
+      case _ =>
+        false
+    }
+  }
 
   private class RewriteInTerms(
     val isoState: IsoState,
@@ -491,6 +500,22 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
     candidateName: types.ScopedResourceName[MT],
     candidateTableInfo: TableDescription.Dataset[MT]
   ) {
+    // Check that our candidate select list and table info are in
+    // sync, and build a map from AutoColumnLabel to
+    // DatabaseColumnName so when we're rewriting exprs we can fill in
+    // with references to PhysicalColumns
+    assert(candidateSelectList.size == candidateTableInfo.columns.size)
+    private val columnLabelMap: Map[AutoColumnLabel, DatabaseColumnName] =
+      candidateSelectList.iterator.map { case (label, namedExpr) =>
+        val (databaseColumnName, _) =
+          candidateTableInfo.columns.find { case (dcn, dci) =>
+            dci.name == namedExpr.name
+          }.getOrElse {
+            throw new AssertionError("No corresponding column in rollup table for " + namedExpr.name)
+          }
+        label -> databaseColumnName
+      }.toMap
+
     val newFrom = FromTable(
       candidateTableInfo.name,
       RollupRewriter.MAGIC_ROLLUP_CANONICAL_NAME,
@@ -504,7 +529,53 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
     )
 
     def rewrite(sExpr: Expr, needsMerge: Boolean = false): Option[Expr] =
-      ???
+      candidateSelectList.iterator.find { case (_, ne) =>
+        sExpr.isIsomorphic(ne.expr, isoState) || (needsMerge && funcallSubset(sExpr, ne.expr, isoState))
+      } match {
+        case Some((selectedColumn, NamedExpr(rollupExpr@AggregateFunctionCall(func, args, false, None), _name, _isSynthetic))) if needsMerge =>
+          assert(rollupExpr.typ == sExpr.typ)
+          mergeSemigroup(func).map { merger =>
+            merger(PhysicalColumn[MT](newFrom.label, newFrom.tableName, newFrom.canonicalName, columnLabelMap(selectedColumn), rollupExpr.typ)(sExpr.position.asAtomic))
+          }
+        case Some((selectedColumn, NamedExpr(_ : AggregateFunctionCall, _name, _isSynthetic))) if needsMerge =>
+          trace("can't rewrite, the aggregate has a 'distinct' or 'filter'")
+          None
+        case Some((selectedColumn, NamedExpr(_ : WindowedFunctionCall, _name, _isSynthetic))) if needsMerge =>
+          trace("can't rewrite, windowed function call")
+          None
+        case Some((selectedColumn, ne)) =>
+          assert(ne.expr.typ == sExpr.typ)
+          Some(PhysicalColumn[MT](newFrom.label, newFrom.tableName, newFrom.canonicalName, columnLabelMap(selectedColumn), sExpr.typ)(sExpr.position.asAtomic))
+        case None =>
+          sExpr match {
+            case lit: LiteralValue => Some(lit)
+            case nul: NullLiteral => Some(nul)
+            case slr: SelectListReference => throw new AssertionError("Rollups should never see a SelectListReference")
+            case fc@FunctionCall(func, args) =>
+              args.mapFallibly(rewrite(_, needsMerge)).map { newArgs =>
+                FunctionCall(func, newArgs)(fc.position)
+              }
+            case afc@AggregateFunctionCall(func, args, distinct, filter) if !needsMerge =>
+              for {
+                newArgs <- args.mapFallibly(rewrite(_, needsMerge))
+                newFilter <- filter.mapFallibly(rewrite(_, needsMerge))
+              } yield {
+                AggregateFunctionCall(func, newArgs, distinct, newFilter)(afc.position)
+              }
+            case wfc@WindowedFunctionCall(func, args, filter, partitionBy, orderBy, frame) if !needsMerge =>
+              for {
+                newArgs <- args.mapFallibly(rewrite(_, needsMerge))
+                newFilter <- filter.mapFallibly(rewrite(_, needsMerge))
+                newPartitionBy <- partitionBy.mapFallibly(rewrite(_, needsMerge))
+                newOrderBy <- orderBy.mapFallibly(rewriteOrderBy(_, needsMerge))
+              } yield {
+                WindowedFunctionCall(func, args, newFilter, newPartitionBy, newOrderBy, frame)(wfc.position)
+              }
+            case other =>
+              trace("Can't rewrite, didn't find an appropriate source column")
+              None
+          }
+      }
 
     def rewriteOrderBy(sOrderBy: OrderBy, needsMerge: Boolean = false): Option[OrderBy] =
       rewrite(sOrderBy.expr, needsMerge).map { newExpr => sOrderBy.copy(expr = newExpr) }
