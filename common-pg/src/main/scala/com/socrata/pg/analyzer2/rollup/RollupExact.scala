@@ -21,7 +21,7 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
       return None
     }
 
-    val rewriteInTerms = new RewriteInTerms(candidate.selectList, candidateName, candidateTableInfo)
+    val rewriteInTerms = new RewriteInTerms(isoState, candidate.selectList, candidateName, candidateTableInfo)
 
     // we're both FROM the same thing, so now we can decide if this
     // Select can be expressed in terms of the output of that
@@ -29,6 +29,9 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
 
     // Cases:
     //   * neither select is aggregated
+    //      * the candidate must be indistinct, or its DISTINCT clause
+    //        must match (requires WHERE and ORDER isomorphism, and
+    //        if fully distinct, select list isomorphism)
     //      * all expressions in select list, ORDER BY must be                 ✓
     //        expressible in terms of the output columns of candidate
     //      * WHERE must be isomorphic if the candidate has one,               ✓
@@ -52,6 +55,7 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
     //        columns of candidate
     //      * SEARCH must not exist on either select                           ✓
     //      * Neither LIMIT nor OFFSET may exist on the candidate              ✓
+    //      * candidate must not have a DISTINCT or DISTINCT ON                ✓
     //   * candidate is aggregated but this is not
     //      * reject, candidate cannot be used                                 ✓
     //   * both are aggregated
@@ -62,13 +66,14 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
     //        expressible in terms of the output columns of candidate,
     //        under monoidal combination if the grouping is not the
     //        same
-    //      * HAVING must be isomorphic and the GROUP BYs must be the
+    //      * HAVING must be isomorphic and the GROUP BYs must be the          ✓
     //        same if the candidate has a HAVING, otherwise it must be
     //        expressible in terms of the output columns of candidate,
     //        under monoidal combination if the grouping is not the
     //        same
     //      * SEARCH must not exist on either select                           ✓
     //      * Neither LIMIT nor OFFSET may exist on the candidate              ✓
+    //      * candidate must not have a DISTINCT or DISTINCT ON                ✓
 
     (select.isAggregated, candidate.isAggregated) match {
       case (false, false) =>
@@ -98,19 +103,20 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
       return None
     }
 
+    lazy val whereIsIsomorphic: Boolean =
+      select.where.isDefined == candidate.where.isDefined &&
+        (select.where, candidate.where).zipped.forall { (a, b) => a.isIsomorphic(b, rewriteInTerms.isoState) }
+
     val newWhere: Option[Expr] =
       candidate.where match {
-        case Some(cWhere) =>
-          select.where match {
-            case Some(sWhere) =>
-              if(!sWhere.isIsomorphic(cWhere, rewriteInTerms.isoState)) {
-                trace("Bailing because WHERE is not isomorphic")
-                return None
-              }
-              None // we'll just be using the candidate's WHERE
-            case None =>
-              trace("Bailing because candidate has a WHERE and we don't")
-              return None
+        case Some(_) =>
+          if(!whereIsIsomorphic) {
+            trace("Bailing because WHEREs are not isomorphic")
+            return None
+          }
+          candidate.where.mapFallibly(rewriteInTerms.rewrite(_)).getOrElse {
+            trace("Bailing because couldn't rewrite WHERE in terms of candidate output columns")
+            return None
           }
         case None =>
           // Candidate has no WHERE but we do
@@ -118,15 +124,9 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
             trace("Bailing we have a WHERE and the candidate doesn't but we're windowed")
             return None
           }
-          select.where match {
-            case Some(sWhere) =>
-              Some(
-                rewriteInTerms(sWhere).getOrElse {
-                  trace("Bailing because failed to rewrite WHERE")
-                  return None
-                })
-            case None =>
-              None
+          candidate.where.mapFallibly(rewriteInTerms.rewrite(_)).getOrElse {
+            trace("Bailing because couldn't rewrite WHERE in terms of candidate output columns")
+            return None
           }
       }
 
@@ -142,13 +142,51 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
       return None
     }
 
-    val newOrderBy: Seq[OrderBy] = select.orderBy.mapFallibly(rewriteInTerms(_)).getOrElse {
+    val newOrderBy: Seq[OrderBy] = select.orderBy.mapFallibly(rewriteInTerms.rewriteOrderBy(_)).getOrElse {
       trace("Bailing because couldn't rewrite ORDER BY in terms of candidate output columns")
       return None
     }
 
+    (select.distinctiveness, candidate.distinctiveness) match {
+      case (sDistinct, Distinctiveness.Indistinct()) =>
+        // ok, we can work with this
+      case (Distinctiveness.FullyDistinct(), Distinctiveness.FullyDistinct()) =>
+        // we need to select the exact same columns
+        if(!sameSelectList(select.selectList, candidate.selectList, rewriteInTerms.isoState)) {
+          trace("Bailing because DISTINCT but different select lists")
+        }
+
+        if(!whereIsIsomorphic || !orderByIsIsomorphic) {
+          trace("Bailing because DISTINCT but WHERE or ORDER BY are not isomorphic")
+          return None
+        }
+      case (sDistinct@Distinctiveness.On(sOn), Distinctiveness.On(cOn)) =>
+        if(sOn.length != cOn.length || (sOn, cOn).zipped.exists { (s, c) => !s.isIsomorphic(c, rewriteInTerms.isoState) }) {
+          trace("Bailing because of DISTINCT ON mismtach")
+          return None
+        }
+        if(!whereIsIsomorphic || !orderByIsIsomorphic) {
+          trace("Bailing because DISTINCT ON but WHERE or ORDER BY are not isomorphic")
+          return None
+        }
+        val newOn = sOn.mapFallibly(rewriteInTerms.rewrite(_)).getOrElse {
+          trace("Bailing because failed to rewrite DISTINCT ON")
+          return None
+        }
+      case _ =>
+        trace("Bailing because of a distinctiveness mismatch")
+        return None
+      }
+    val newDistinctiveness = rewriteDistinctiveness(select.distinctiveness, rewriteInTerms).getOrElse {
+      trace("Bailing because failed to rewrite distinctiveness")
+      return None
+    }
+
     val newSelectList: OrderedMap[AutoColumnLabel, NamedExpr] =
-      select.selectList.iterator.mapFallibly(rewriteInTerms(_))
+      OrderedMap() ++ select.selectList.iterator.mapFallibly(rewriteInTerms.rewriteSelectListEntry(_)).getOrElse {
+        trace("Bailing because failed to rewrite the select list")
+        return None
+      }
 
     val (newLimit, newOffset) =
       (candidate.limit, candidate.offset) match {
@@ -195,7 +233,7 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
 
     Some(
       Select(
-        distinctiveness = ???,
+        distinctiveness = newDistinctiveness,
         selectList = newSelectList,
         from = rewriteInTerms.newFrom,
         where = newWhere,
@@ -208,6 +246,34 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
         hint = select.hint
       )
     )
+  }
+
+  private def sameSelectList(s: OrderedMap[AutoColumnLabel, NamedExpr], c: OrderedMap[AutoColumnLabel, NamedExpr], isoState: IsoState): Boolean = {
+    // we don't care about order, but we do care that all exprs in s
+    // are isomorphic to exprs in c, and vice-versa.
+    val sExprs = s.values.map(_.expr).toVector
+    val cExprs = c.values.map(_.expr).toVector
+
+    sameExprsIgnoringOrder(sExprs, cExprs, isoState)
+  }
+
+  private def sameExprsIgnoringOrder(s: Seq[Expr], c: Seq[Expr], isoState: IsoState): Boolean = {
+    def isSubset(as: Seq[Expr], bs: Seq[Expr], isoState: IsoState): Boolean = {
+      as.forall { a =>
+        bs.exists { b => a.isIsomorphic(b, isoState) }
+      }
+    }
+
+    isSubset(s, c, isoState) && isSubset(c, s, isoState.reverse)
+  }
+
+  private def rewriteDistinctiveness(distinct: Distinctiveness, rewriteInTerms: RewriteInTerms, needsMerge: Boolean = false): Option[Distinctiveness] = {
+    distinct match {
+      case Distinctiveness.Indistinct() | Distinctiveness.FullyDistinct() =>
+        Some(distinct)
+      case Distinctiveness.On(exprs) =>
+        exprs.mapFallibly(rewriteInTerms.rewrite(_, needsMerge)).map(Distinctiveness.On(_))
+    }
   }
 
   private def rewriteAggregatedOnUnaggregated(select: Select, candidate: Select, rewriteInTerms: RewriteInTerms): Option[Select] = {
@@ -225,6 +291,18 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
 
     if(candidate.limit.isDefined || candidate.offset.isDefined) {
       trace("Bailing because the candidate has a LIMIT/OFFSET")
+      return None
+    }
+
+    candidate.distinctiveness match {
+      case Distinctiveness.Indistinct() =>
+        // ok
+      case Distinctiveness.FullyDistinct() | Distinctiveness.On(_) =>
+        trace("Bailing because the candidate has a DISTINCT clause")
+        return None
+    }
+    val newDistinctiveness = rewriteDistinctiveness(select.distinctiveness, rewriteInTerms).getOrElse {
+      trace("Bailing because failed to rewrite the query's DISTINCT clause")
       return None
     }
 
@@ -246,39 +324,32 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
               return None
           }
         case None =>
-          select.where match {
-            case Some(sWhere) =>
-              Some(
-                rewriteInTerms(sWhere).getOrElse {
-                  trace("Bailing because unable to rewrite the WHERE in terms of the candidate's output columns")
-                  return None
-                }
-              )
-            case None =>
-              None
+          select.where.mapFallibly(rewriteInTerms.rewrite(_)).getOrElse {
+            trace("Bailing because unable to rewrite the WHERE in terms of the candidate's output columns")
+            return None
           }
       }
 
-    val newGroupBy = select.groupBy.mapFallibly(rewriteInTerms(_)).getOrElse {
+    val newGroupBy = select.groupBy.mapFallibly(rewriteInTerms.rewrite(_)).getOrElse {
       trace("Bailing because unable to rewrite the GROUP BY in terms of the candidate's output columns")
       return None
     }
-    val newHaving = select.having.mapFallibly(rewriteInTerms(_)).getOrElse {
+    val newHaving = select.having.mapFallibly(rewriteInTerms.rewrite(_)).getOrElse {
       trace("Bailing because unable to rewrite the HAVING in terms of the candidate's output columns")
       return None
     }
-    val newOrderBy = select.orderBy.mapFallibly(rewriteInTerms(_)).getOrElse {
+    val newOrderBy = select.orderBy.mapFallibly(rewriteInTerms.rewriteOrderBy(_)).getOrElse {
       trace("Bailing because unable to rewrite the ORDER BY in terms of the candidate's output columns")
       return None
     }
-    val newSelectList = OrderedMap() ++ select.selectList.iterator.mapFallibly(rewriteInTerms(_)).getOrElse {
+    val newSelectList = OrderedMap() ++ select.selectList.iterator.mapFallibly(rewriteInTerms.rewriteSelectListEntry(_)).getOrElse {
       trace("Bailing because unable to rewrite the select list in terms of the candidate's output columns")
       return None
     }
 
     Some(
       Select(
-        distinctiveness = ???,
+        distinctiveness = newDistinctiveness,
         selectList = newSelectList,
         from = rewriteInTerms.newFrom,
         where = newWhere,
@@ -339,41 +410,77 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
         return None
       }.toMap
 
-    val candidateGroupByIsSubsetOfSelect = {
-      val reversedIsoState = rewriteInTerms.isoState.reverse
-      candidate.groupBy.forall { cGroupBy =>
-        select.groupBy.exists { sGroupBy =>
-          cGroupBy.isIsomorphic(sGroupBy, reversedIsoState) || funcallSubset(cGroupBy, sGroupBy, reversedIsoState)
-        }
+    val sameGroupBy = sameExprsIgnoringOrder(select.groupBy, candidate.groupBy, rewriteInTerms.isoState)
+
+    val needsMerge = !sameGroupBy
+
+    candidate.distinctiveness match {
+      case Distinctiveness.Indistinct() =>
+        // ok
+      case Distinctiveness.FullyDistinct() | Distinctiveness.On(_) =>
+        trace("Bailing because the candidate has a DISTINCT clause")
+        return None
+    }
+    val newDistinctiveness = rewriteDistinctiveness(select.distinctiveness, rewriteInTerms, needsMerge).getOrElse {
+      trace("Bailing because failed to rewrite the DISTINCT clause")
+      return None
+    }
+
+    val newSelectList: OrderedMap[AutoColumnLabel, NamedExpr] =
+      OrderedMap() ++ select.selectList.iterator.mapFallibly(rewriteInTerms.rewriteSelectListEntry(_, needsMerge)).getOrElse {
+        trace("Bailing because failed to rewrite the select list")
+        return None
       }
+
+    val newGroupBy = select.groupBy.mapFallibly(rewriteInTerms.rewrite(_, needsMerge)).getOrElse {
+      trace("Bailing because unable to rewrite the GROUP BY in terms of the candidate's output columns")
+      return None
     }
 
-    if(candidateGroupByIsSubsetOfSelect) {
-      // we're actually group by exactly the same set of things as the
-      // candidate, so this is really a lot more like "unaggregated on
-      // unaggregated".  In particular, we _don't_ need to combine
-      // groups at all.
+    val newHaving = (select.having, candidate.having) match {
+      case (sHaving, None) =>
+        sHaving.mapFallibly(rewriteInTerms.rewrite(_)).getOrElse {
+          trace("Bailing because unable to rewrite the HAVING in terms of the candidate's output columns")
+          return None
+        }
+      case (Some(sHaving), Some(cHaving)) =>
+        if(!sHaving.isIsomorphic(cHaving, rewriteInTerms.isoState)) {
+          trace("Bailing because both have a HAVING but they are not isomorphic")
+          return None
+        }
+        if(!sameGroupBy) {
+          trace("Bailing because both have a HAVING but the GROUP BY clauses are different")
+          return None
+        }
+        Some(sHaving).mapFallibly(rewriteInTerms.rewrite(_)).getOrElse {
+          trace("Bailing because unable to rewrite the HAVING in terms of the candidate's output columns")
+          return None
+        }
+      case (None, Some(_)) =>
+        trace("Bailing because the candidate has a HAVING clause and the query does not")
+        return None
+    }
 
-    } else {
-      // Ok, when we do our rewrites we'll need to merge things using
-      // selectGroupAssociations...
+    val newOrderBy = select.orderBy.mapFallibly(rewriteInTerms.rewriteOrderBy(_, needsMerge)).getOrElse {
+      trace("Bailing because unable to rewrite the GROUP BY in terms of the candidate's output columns")
+      return None
+    }
 
-      Some(
-        Select(
-          distinctiveness = ???,
-          selectList = newSelectList,
-          from = rewriteInTerms.newFrom,
-          where = None,
-          groupBy = newGroupBy,
-          having = newHaving,
-          orderBy = newOrderBy,
-          limit = select.limit,
-          offset = select.offset,
-          search = None,
-          hint = select.hint
-        )
+    Some(
+      Select(
+        distinctiveness = newDistinctiveness,
+        selectList = newSelectList,
+        from = rewriteInTerms.newFrom,
+        where = None,
+        groupBy = newGroupBy,
+        having = newHaving,
+        orderBy = newOrderBy,
+        limit = select.limit,
+        offset = select.offset,
+        search = None,
+        hint = select.hint
       )
-    }
+    )
   }
 
   protected def funcallSubset(queryExpr: Expr, candidateExpr: Expr, under: IsoState): Boolean
@@ -396,18 +503,18 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
       candidateTableInfo.primaryKeys
     )
 
-    def apply(sExpr: Expr): Option[Expr] =
+    def rewrite(sExpr: Expr, needsMerge: Boolean = false): Option[Expr] =
       ???
 
-    def apply(sOrderBy: OrderBy): Option[OrderBy] =
-      apply(sOrderBy.expr).map { newExpr => sOrderBy.copy(expr = newExpr) }
+    def rewriteOrderBy(sOrderBy: OrderBy, needsMerge: Boolean = false): Option[OrderBy] =
+      rewrite(sOrderBy.expr, needsMerge).map { newExpr => sOrderBy.copy(expr = newExpr) }
 
-    def apply(sNamedExpr: NamedExpr): Option[NamedExpr] =
-      apply(sNamedExpr.expr).map { newExpr => sNamedExpr.copy(expr = newExpr) }
+    def rewriteNamedExpr(sNamedExpr: NamedExpr, needsMerge: Boolean = false): Option[NamedExpr] =
+      rewrite(sNamedExpr.expr, needsMerge).map { newExpr => sNamedExpr.copy(expr = newExpr) }
 
-    def apply(sSelectListEntry: (AutoColumnLabel, NamedExpr)): Option[(AutoColumnLabel, NamedExpr)] = {
+    def rewriteSelectListEntry(sSelectListEntry: (AutoColumnLabel, NamedExpr), needsMerge: Boolean = false): Option[(AutoColumnLabel, NamedExpr)] = {
       val (sLabel, sNamedExpr) = sSelectListEntry
-      apply(sNamedExpr).map { newExpr => sLabel -> newExpr }
+      rewriteNamedExpr(sNamedExpr, needsMerge).map { newExpr => sLabel -> newExpr }
     }
   }
 
