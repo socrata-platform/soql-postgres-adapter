@@ -394,19 +394,18 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
         return None
     }
 
-    val selectGroupAssociations: Map[Expr, (Expr, Boolean)] =
-      select.groupBy.mapFallibly { sGroupBy =>
-        candidate.groupBy.find { cGroupBy =>
+    val groupBySubset =
+      select.groupBy.forall { sGroupBy =>
+        candidate.groupBy.exists { cGroupBy =>
           sGroupBy.isIsomorphic(cGroupBy, rewriteInTerms.isoState)
-        }.map((_, true)).orElse(
-          candidate.groupBy.find { cGroupBy =>
-            funcallSubset(sGroupBy, cGroupBy, rewriteInTerms.isoState)
-          }.map((_, false))
-        ).map(sGroupBy -> _)
-      }.getOrElse {
-        trace("Bailing because the query's GROUP BY was not a subset of the candidate's")
-        return None
-      }.toMap
+        } || candidate.groupBy.exists { cGroupBy =>
+          funcallSubset(sGroupBy, cGroupBy, rewriteInTerms.isoState).isDefined
+        }
+      }
+    if(!groupBySubset) {
+      trace("Bailing because the query's GROUP BY was not a subset of the candidate's")
+      return None
+    }
 
     val sameGroupBy = sameExprsIgnoringOrder(select.groupBy, candidate.groupBy, rewriteInTerms.isoState)
 
@@ -482,17 +481,6 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
     )
   }
 
-  protected def funcallSubset(queryExpr: Expr, candidateExpr: Expr, under: IsoState): Boolean = {
-    (queryExpr, candidateExpr) match {
-      case (FunctionCall(qFunc, qArgs), FunctionCall(cFunc, cArgs)) =>
-        functionSubset(qFunc, cFunc) &&
-          qArgs.length == cArgs.length &&
-          (qArgs, cArgs).zipped.forall { (q, c) => q.isIsomorphic(c, under) }
-      case _ =>
-        false
-    }
-  }
-
   private class RewriteInTerms(
     val isoState: IsoState,
     candidateSelectList: OrderedMap[AutoColumnLabel, NamedExpr],
@@ -528,23 +516,31 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
     )
 
     def rewrite(sExpr: Expr, needsMerge: Boolean = false): Option[Expr] =
-      candidateSelectList.iterator.find { case (_, ne) =>
-        sExpr.isIsomorphic(ne.expr, isoState) || (needsMerge && funcallSubset(sExpr, ne.expr, isoState))
-      } match {
-        case Some((selectedColumn, NamedExpr(rollupExpr@AggregateFunctionCall(func, args, false, None), _name, _isSynthetic))) if needsMerge =>
+      candidateSelectList.iterator.findMap { case (label, ne) =>
+        if(sExpr.isIsomorphic(ne.expr, isoState)) {
+          Some((label, ne, identity[Expr] _))
+        } else {
+          None
+        }
+      }.orElse(
+        candidateSelectList.iterator.findMap { case (label, ne) =>
+          funcallSubset(sExpr, ne.expr, isoState).map((label, ne, _))
+        }
+      ) match {
+        case Some((selectedColumn, NamedExpr(rollupExpr@AggregateFunctionCall(func, args, false, None), _name, _isSynthetic), functionExtract)) if needsMerge =>
           assert(rollupExpr.typ == sExpr.typ)
           mergeSemigroup(func).map { merger =>
-            merger(PhysicalColumn[MT](newFrom.label, newFrom.tableName, newFrom.canonicalName, columnLabelMap(selectedColumn), rollupExpr.typ)(sExpr.position.asAtomic))
+            functionExtract(merger(PhysicalColumn[MT](newFrom.label, newFrom.tableName, newFrom.canonicalName, columnLabelMap(selectedColumn), rollupExpr.typ)(sExpr.position.asAtomic)))
           }
-        case Some((selectedColumn, NamedExpr(_ : AggregateFunctionCall, _name, _isSynthetic))) if needsMerge =>
+        case Some((selectedColumn, NamedExpr(_ : AggregateFunctionCall, _name, _isSynthetic), _)) if needsMerge =>
           trace("can't rewrite, the aggregate has a 'distinct' or 'filter'")
           None
-        case Some((selectedColumn, NamedExpr(_ : WindowedFunctionCall, _name, _isSynthetic))) if needsMerge =>
+        case Some((selectedColumn, NamedExpr(_ : WindowedFunctionCall, _name, _isSynthetic), _)) if needsMerge =>
           trace("can't rewrite, windowed function call")
           None
-        case Some((selectedColumn, ne)) =>
+        case Some((selectedColumn, ne, functionExtract)) =>
           assert(ne.expr.typ == sExpr.typ)
-          Some(PhysicalColumn[MT](newFrom.label, newFrom.tableName, newFrom.canonicalName, columnLabelMap(selectedColumn), sExpr.typ)(sExpr.position.asAtomic))
+          Some(functionExtract(PhysicalColumn[MT](newFrom.label, newFrom.tableName, newFrom.canonicalName, columnLabelMap(selectedColumn), sExpr.typ)(sExpr.position.asAtomic)))
         case None =>
           sExpr match {
             case lit: LiteralValue => Some(lit)

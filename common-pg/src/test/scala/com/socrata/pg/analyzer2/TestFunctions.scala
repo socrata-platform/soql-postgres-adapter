@@ -30,6 +30,9 @@ object TestFunctions {
 
   val Compress = f("compress", FunctionName("compress"), Map("a" -> AllTypes), Seq(VariableType("a")), Seq.empty, VariableType("a"))
 
+  val BottomDWord = mf("bottom_dword", FunctionName("bottom_dword"), Seq(TestNumber), Seq.empty, TestNumber)
+  val BottomByte = mf("bottom_byte", FunctionName("bottom_byte"), Seq(TestNumber), Seq.empty, TestNumber)
+
   val And = mf("and", SpecialFunctions.Operator("and"), Seq(TestBoolean, TestBoolean), Seq.empty, TestBoolean)
   val Or = mf("or", SpecialFunctions.Operator("or"), Seq(TestBoolean, TestBoolean), Seq.empty, TestBoolean)
 

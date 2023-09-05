@@ -22,5 +22,13 @@ package object rollup {
       }
       Some(result.result())
     }
+
+    def findMap[U](f: T => Option[U]): Option[U] = {
+      for(t <- ts) {
+        val maybeResult = f(t)
+        if(maybeResult.isDefined) return maybeResult
+      }
+      None
+    }
   }
 }
