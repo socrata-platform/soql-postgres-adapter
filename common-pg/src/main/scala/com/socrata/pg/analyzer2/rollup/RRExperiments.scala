@@ -34,7 +34,7 @@ trait RRExperiments[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabe
   // (not any sub-parts of the select!).  This needs to produce a
   // statement with the same output schema (in terms of column labels
   // and types) as the given select.
-  protected def rollupSelectExact(select: Select): Option[Statement] =
+  private def rollupSelectExact(select: Select): Option[Statement] =
     rollups.findMap {
       case ri@RollupInfo(candidate: Select, candidateName, _candidateDatabaseName) =>
         rollupSelectExact(select, candidate, candidateName, ri.description)
