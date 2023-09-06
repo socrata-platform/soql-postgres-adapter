@@ -11,7 +11,6 @@ import com.socrata.pg.analyzer2.{RollupRewriter, SqlizerUniverse}
 trait RRExperiments[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelProvider with RollupExact[MT] =>
   protected implicit def dtnOrdering: Ordering[MT#DatabaseColumnNameImpl]
   val rollups: Seq[RollupInfo[MT]]
-  def databaseColumnNameOfIndex(i: Int): DatabaseColumnName
 
   // see if there's a rollup that can be used to answer _this_ select
   // (not any sub-parts of the select!).  This needs to produce a
