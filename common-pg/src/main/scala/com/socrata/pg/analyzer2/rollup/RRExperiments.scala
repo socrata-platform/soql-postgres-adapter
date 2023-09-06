@@ -12,19 +12,19 @@ trait RRExperiments[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabe
   protected implicit def dtnOrdering: Ordering[MT#DatabaseColumnNameImpl]
   val rollups: Seq[RollupInfo[MT]]
 
-  // see if there's a rollup that can be used to answer _this_ select
-  // (not any sub-parts of the select!).  This needs to produce a
-  // statement with the same output schema (in terms of column labels
+  // see if there are rollups that can be used to answer _this_ select
+  // (not any sub-parts of the select!).  This needs to produce
+  // statements with the same output schema (in terms of column labels
   // and types) as the given select.
-  private def rollupSelectExact(select: Select): Option[Statement] =
-    rollups.findMap(rollupSelectExact(select, _))
+  private def rollupSelectExact(select: Select): Seq[Statement] =
+    rollups.flatMap(rollupSelectExact(select, _))
 
-  // See if there's a rollup that can be used to answer _this_
+  // See if there are rollup that can be used to answer _this_
   // combined tables (not any sub-parts of the combined tables!).
-  // This needs to produce a statement with the same output schema (in
+  // This needs to produce statements with the same output schema (in
   // terms of column labels and types) as the given select.
-  private def rollupCombinedExact(combined: CombinedTables): Option[Statement] = {
-    rollups.findMap {
+  private def rollupCombinedExact(combined: CombinedTables): Seq[Statement] = {
+    rollups.flatMap {
       // This is stronger than it needs to be.  Ways it can be
       // weakened:
       //    the select lists don't need to be so sensitive to ordering
@@ -62,30 +62,40 @@ trait RRExperiments[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabe
     }
   }
 
-  final def rollup(stmt: Statement): Option[Statement] = {
+  // Attempt to roll up this statement; this will produce no results
+  // if no rollups apply.
+  final def rollup(stmt: Statement): Seq[Statement] = {
     rollup(stmt, prefixesAllowed = true)
   }
 
-  private def rollup(stmt: Statement, prefixesAllowed: Boolean): Option[Statement] = {
+  // Attempt to roll up this statement; this will produce no results
+  // if no rollups apply.
+  private def rollup(stmt: Statement, prefixesAllowed: Boolean): Seq[Statement] = {
     stmt match {
       case select: Select =>
-        rollupSelectExact(select).
-          orElse(if(prefixesAllowed) rollupPrefixes(select) else None).
-          orElse(rollupSubqueries(select))
+        rollupSelectExact(select) ++
+          (if(prefixesAllowed) rollupPrefixes(select) else None) ++
+          rollupSubqueries(select)
       case v: Values =>
-        None
+        Nil
       case combined@CombinedTables(op, left, right) =>
-        rollupCombinedExact(combined).orElse {
-          val newLeft = rollup(left)
-          val newRight = rollup(right)
-          if(newLeft.isEmpty && newRight.isEmpty) {
-            None
+        rollupCombinedExact(combined) ++ {
+          val newLefts = rollup(left)
+          val newRights = rollup(right)
+          if(newLefts.isEmpty && newRights.isEmpty) {
+            Nil
           } else {
-            Some(CombinedTables(op, newLeft.getOrElse(left), newRight.getOrElse(right)))
+            for {
+              newLeft <- left +: newLefts
+              newRight <- right +: newRights
+              if (newLeft ne left) || (newRight ne right)
+            } yield {
+              CombinedTables(op, newLeft, newRight)
+            }
           }
         }
       case _ : CTE =>
-        None // don't have these yet, just punting on them...
+        Nil // don't have these yet, just punting on them...
     }
   }
 
@@ -107,59 +117,57 @@ trait RRExperiments[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabe
   //
   // The most annoying part is that I'm not actually sure this is a
   // useful thing to do :)
-  private def rollupPrefixes(select: Select): Option[Statement] =
+  private def rollupPrefixes(select: Select): Seq[Statement] =
     rollupPrefixes(select.from, select).map { case (newFrom, columnMap) =>
       fixupColumnReferences(select.copy(from = newFrom), columnMap)
     }
 
-  private def rollupPrefixes(from: From, container: Select): Option[(From, Map[Col, VirtCol])] =
+  private def rollupPrefixes(from: From, container: Select): Seq[(From, Map[Col, VirtCol])] =
     from match {
       case af: AtomicFrom =>
-        None
+        Nil
       case join: Join =>
-        rollupPrefix(join, demandedColumns(join, container)).orElse {
+        rollupPrefix(join, demandedColumns(join, container)) ++ {
           // One thing I'm unhappy about here is that we're
           // recomputing the demandedColumns for each prefix, which
           // involves a walk over the "container" select.  It'd be
           // nice not to do that.
-          rollupPrefixes(join.left, container).map { case (newLeft, columnMap) =>
-            val newRight = rollupAtomicFrom(join.right).getOrElse(join.right)
-            (join.copy(left = newLeft, right = newRight), columnMap)
+          rollupPrefixes(join.left, container).flatMap { case (newLeft, columnMap) =>
+            rollupAtomicFrom(join.right).map { newRight =>
+              (join.copy(left = newLeft, right = newRight), columnMap)
+            }
           }
         }
     }
 
-  final def rollupSubqueries(select: Select): Option[Select] = {
-    val (rewroteSomething, newFrom) = select.from.reduceMap[Boolean,MT](
-      { leftmost =>
-        rollupAtomicFrom(leftmost) match {
-          case None => (false, leftmost)
-          case Some(rewritten) => (true, rewritten)
-        }
-      },
-      { (rewroteSomething, joinType, lateral, left, right, on) =>
-        rollupAtomicFrom(right) match {
-          case None => (rewroteSomething, Join(joinType, lateral, left, right, on))
-          case Some(rewritten) => (true, Join(joinType, lateral, left, rewritten, on))
+  final def rollupSubqueries(select: Select): Seq[Select] = {
+    val newFroms = select.from.reduce[Seq[From]](
+      { leftmost => leftmost +: rollupAtomicFrom(leftmost) },
+      { (acc, join) =>
+        val Join(joinType, lateral, left, right, on) = join
+        for {
+          newLeft <- acc
+          newRight <- right +: rollupAtomicFrom(right)
+        } yield {
+          Join(joinType, lateral, newLeft, newRight, on)
         }
       }
     )
 
-    if(rewroteSomething) Some(select.copy(from = newFrom))
-    else None
+    newFroms.filterNot(_ == select.from).map { newFrom => select.copy(from = newFrom) }
   }
 
-  private def rollupAtomicFrom(from: AtomicFrom): Option[AtomicFrom] = {
+  private def rollupAtomicFrom(from: AtomicFrom): Seq[AtomicFrom] = {
     from match {
       case FromStatement(stmt, label, resourceName, alias) =>
         rollup(stmt).map(FromStatement(_, label, resourceName, alias))
       case other =>
-        None
+        Nil
     }
   }
 
-  // see if there's a rollup that matches `select ${all the columns} from $from`...
-  private def rollupPrefix(from: Join, demandedColumns: Map[Col, CT]): Option[(FromStatement, Map[Col, VirtCol])] = {
+  // see if there are rollups that match `select ${all the columns} from $from`...
+  private def rollupPrefix(from: Join, demandedColumns: Map[Col, CT]): Seq[(FromStatement, Map[Col, VirtCol])] = {
     val ord1 = Ordering[(Int, Int)]
     val ord2 = Ordering[(Int, MT#DatabaseColumnNameImpl)]
     val orderedDemandedColumns: Seq[(Col, CT)] = demandedColumns.toSeq.

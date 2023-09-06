@@ -97,7 +97,9 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     )
 
     val result = expr.rollup(analysis.statement).map(_.debugStr)
-    println(result)
+    for((possibility, i) <- result.zipWithIndex) {
+      println(s"${i+1} : ${possibility}")
+    }
   }
 
   class TestRollupInfo(
