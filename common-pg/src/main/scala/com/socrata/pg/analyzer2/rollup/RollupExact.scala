@@ -38,7 +38,7 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
       return None
     }
 
-    val rewriteInTerms = new RewriteInTerms(isoState, candidate.selectList, rollupInfo.resourceName, rollupInfo.from(labelProvider))
+    val rewriteInTerms = new RewriteInTerms(isoState, candidate.selectList, rollupInfo.from(labelProvider))
 
     (select.isAggregated, candidate.isAggregated) match {
       case (false, false) =>
@@ -492,7 +492,6 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
   private class RewriteInTerms(
     val isoState: IsoState,
     candidateSelectList: OrderedMap[AutoColumnLabel, NamedExpr],
-    candidateName: types.ScopedResourceName[MT],
     val newFrom: FromTable
   ) {
     // Check that our candidate select list and table info are in
