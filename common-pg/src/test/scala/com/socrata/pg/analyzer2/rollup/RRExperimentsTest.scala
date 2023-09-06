@@ -22,7 +22,7 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
 
   class TestRollupExact(
     override val labelProvider: LabelProvider
-  ) extends RollupExact[MT] with HasLabelProvider with SemigroupRewriter[MT] with SimpleFunctionSubset[MT] {
+  ) extends RollupExact[MT] with HasLabelProvider with SemigroupRewriter[MT] with SimpleFunctionSubset[MT] with SplitAnd[MT] {
     private val Max = TestFunctions.Max.identity
     private val Sum = TestFunctions.Sum.identity
     private val Count = TestFunctions.Count.identity
@@ -50,6 +50,22 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
         case _ =>
           None
       }
+
+    val And = TestFunctions.And.monomorphic.get
+    override def splitAnd(e: Expr) =
+      e match {
+        case FunctionCall(And, args) =>
+          args.flatMap(splitAnd)
+        case other =>
+          Seq(other)
+      }
+    override def mergeAnd(e: Seq[Expr]) = {
+      if(e.isEmpty) {
+        None
+      } else {
+        Some(e.reduceLeft { (acc, expr) => FunctionCall[MT](And, Seq(expr))(FuncallPositionInfo.None) })
+      }
+    }
   }
 
   class TestRRExperiments(
@@ -182,6 +198,28 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     val select = analysis.statement.asInstanceOf[Select]
 
     val rollup = TestRollupInfo("rollup", tf, "select bottom_dword(num1), max(num2) from @twocol group by bottom_dword(num1)")
+    val re = new TestRollupExact(analysis.labelProvider)
+
+    println(select.debugDoc)
+    println(rollup.statement.debugDoc)
+    val result = re.rollupSelectExact(select, rollup)
+
+    println(result.map(_.debugDoc))
+  }
+
+  test("simple rollup with additional AND in where") {
+    val tf = tableFinder(
+      (0, "twocol") -> D("num" -> TestNumber, "num" -> TestNumber)
+    )
+
+    val Right(foundTables) = tf.findTables(0, "select * from @twocol where num > 5 and num < 10", Map.empty)
+    val analysis = analyzer(foundTables, UserParameters.empty) match {
+      case Right(a) => a
+      case Left(e) => fail(e.toString)
+    }
+    val select = analysis.statement.asInstanceOf[Select]
+
+    val rollup = TestRollupInfo("rollup", tf, "select * from @twocol where num > 5")
     val re = new TestRollupExact(analysis.labelProvider)
 
     println(select.debugDoc)

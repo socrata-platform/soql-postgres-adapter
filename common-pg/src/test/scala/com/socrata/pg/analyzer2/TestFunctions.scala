@@ -37,6 +37,8 @@ object TestFunctions {
   val Or = mf("or", SpecialFunctions.Operator("or"), Seq(TestBoolean, TestBoolean), Seq.empty, TestBoolean)
 
   val Eq = f("=", SpecialFunctions.Operator("="), Map("a" -> Equatable), Seq(VariableType("a"), VariableType("a")), Seq.empty, FixedType(TestBoolean))
+  val Gt = f(">", SpecialFunctions.Operator(">"), Map("a" -> Ordered), Seq(VariableType("a"), VariableType("a")), Seq.empty, FixedType(TestBoolean))
+  val Lt = f("<", SpecialFunctions.Operator("<"), Map("a" -> Ordered), Seq(VariableType("a"), VariableType("a")), Seq.empty, FixedType(TestBoolean))
 
   val RowNumber = mf("row_number", FunctionName("row_number"), Nil, Nil, TestNumber, needsWindow = true)
   val WindowFunction = mf("window_function", FunctionName("window_function"), Seq(TestText), Nil, TestNumber, needsWindow = true)

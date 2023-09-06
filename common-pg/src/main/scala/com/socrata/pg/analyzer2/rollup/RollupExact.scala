@@ -11,7 +11,7 @@ object RollupExact {
   private val log = LoggerFactory.getLogger(classOf[RollupExact[_]])
 }
 
-trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelProvider with SemigroupRewriter[MT] with FunctionSubset[MT] =>
+trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelProvider with SemigroupRewriter[MT] with FunctionSubset[MT] with SplitAnd[MT] =>
   import RollupExact.log
 
   private type IsoState = IsomorphismState.View[MT]
@@ -90,14 +90,24 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
 
     val newWhere: Option[Expr] =
       candidate.where match {
-        case Some(_) =>
+        case Some(cWhere) =>
           if(!whereIsIsomorphic) {
-            log.debug("Bailing because WHEREs are not isomorphic")
-            return None
+            // We might still be able to deal with this...
+            select.where match {
+              case Some(sWhere) =>
+                combineAnd(sWhere, cWhere, rewriteInTerms).getOrElse {
+                  log.debug("Bailing because couldn't express the query's WHERE in terms of the candidate's WHERE")
+                  return None
+                }
+              case None =>
+                log.debug("Bailing because the candidate had a WHERE and the query does not")
+                return None
+            }
+          } else {
+            // Our where is the same as the candidate's where, so we can
+            // just piggy-back on it.
+            None
           }
-          // Our where is the same as the candidate's where, so we can
-          // just piggy-back on it.
-          None
         case None =>
           // Candidate has no WHERE but we do
           if(select.isWindowed) {
@@ -296,19 +306,15 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
       return None
     }
 
-    val newWhere =
+    val newWhere: Option[Expr] =
       candidate.where match {
         case Some(cWhere) =>
           select.where match {
             case Some(sWhere) =>
-              if(!sWhere.isIsomorphic(cWhere, rewriteInTerms.isoState)) {
-                log.debug("Bailing because WHERE clauses where not isomorphic")
+              combineAnd(sWhere, cWhere, rewriteInTerms).getOrElse {
+                log.debug("Bailing because couldn't express the query's WHERE in terms of the candidate's WHERE")
                 return None
               }
-
-              // We'll just be using the rollup's WHERE, so no need
-              // for a where in the rewritten query.
-              None
             case None =>
               log.debug("Bailing because candidate had a WHERE and the query does not")
               return None
@@ -449,8 +455,8 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
           return None
         }
       case (Some(sHaving), Some(cHaving)) =>
-        if(!sHaving.isIsomorphic(cHaving, rewriteInTerms.isoState)) {
-          log.debug("Bailing because both have a HAVING but they are not isomorphic")
+        val combined = combineAnd(sHaving, cHaving, rewriteInTerms).getOrElse {
+          log.debug("Bailing because couldn't express the query's HAVING in terms of the candidate's HAVING")
           return None
         }
 
@@ -461,7 +467,7 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
 
         // Our GROUP BYs and HAVINGs are the same so since we're just
         // going to be using the rollup's having.
-        None
+        combined
       case (None, Some(_)) =>
         log.debug("Bailing because the candidate has a HAVING clause and the query does not")
         return None
@@ -487,6 +493,36 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
         hint = select.hint
       )
     )
+  }
+
+  private def combineAnd(sExpr: Expr, cExpr: Expr, rewriteInTerms: RewriteInTerms): Option[Option[Expr]] = {
+    val sSplit = splitAnd(sExpr)
+    val cSplit = splitAnd(cExpr)
+
+    // ok, this is a little subtle.  We have two lists of AND clauses,
+    // and we want to make sure that cSplit is a subseqence of sSplit,
+    // to preserve short-circuiting.
+    var remaining = cSplit.toList
+    val result = Vector.newBuilder[Expr]
+    for(sClause <- sSplit) {
+      remaining match {
+        case cClause :: cRemaining =>
+          if(sClause.isIsomorphic(cClause, rewriteInTerms.isoState)) {
+            remaining = cRemaining
+          } else {
+            result += sClause
+          }
+        case Nil =>
+          result += sClause
+      }
+    }
+
+    if(remaining.nonEmpty) {
+      log.debug("Leftover candidate clauses after scan")
+      return None
+    }
+
+    mergeAnd(result.result()).mapFallibly(rewriteInTerms.rewrite(_))
   }
 
   private class RewriteInTerms(
