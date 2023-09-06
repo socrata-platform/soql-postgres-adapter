@@ -40,57 +40,6 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
 
     val rewriteInTerms = new RewriteInTerms(isoState, candidate.selectList, rollupInfo.resourceName, rollupInfo.from(labelProvider))
 
-    // we're both FROM the same thing, so now we can decide if this
-    // Select can be expressed in terms of the output of that
-    // candidate Select.
-
-    // Cases:
-    //   * neither select is aggregated
-    //      * the candidate must be indistinct, or its DISTINCT clause         ✓
-    //        must match (requires WHERE and ORDER isomorphism, and
-    //        if fully distinct, select list isomorphism)
-    //      * all expressions in select list, ORDER BY must be                 ✓
-    //        expressible in terms of the output columns of candidate
-    //      * WHERE must be isomorphic if the candidate has one,               ✓
-    //        otherwise it must be expressible in terms of the output
-    //        columns of candidate
-    //      * WHERE and ORDER BY must be isomorphic if the candidate           ✓ (kinda)
-    //        is windowed and the windowed expressions are used in
-    //        this select.
-    //      * SEARCH must not exist on either select                           ✓
-    //      * If LIMIT and/or OFFSET is specified, either the candidate        ✓
-    //        must not specify or ORDER BY must be isomorphic and this
-    //        function's LIMIT/OFFSET must specify a window completely
-    //        contained within the candidate's LIMIT/OFFSET
-    //   * this is aggregated but candidate is not
-    //      * all expressions in the select list, GROUP BY, HAVING,            ✓
-    //        and ORDER BY must be expressible in terms of the output
-    //        columns of the candidate
-    //      * WHERE must be isomorphic if the candidate has one,               ✓
-    //        otherwise it must be expressible in terms of the output
-    //        columns of candidate
-    //      * SEARCH must not exist on either select                           ✓
-    //      * Neither LIMIT nor OFFSET may exist on the candidate              ✓
-    //      * candidate must not have a DISTINCT or DISTINCT ON                ✓
-    //   * candidate is aggregated but this is not
-    //      * reject, candidate cannot be used                                 ✓
-    //   * both are aggregated
-    //      * the expressions in the select's GROUP BY must be a               ✓
-    //        subset of the candidate's
-    //      * WHERE must be isomorphic                                         ✓
-    //      * all expressions in select list and ORDER BY must be              ✓
-    //        expressible in terms of the output columns of candidate,
-    //        under monoidal combination if the grouping is not the
-    //        same
-    //      * HAVING must be isomorphic and the GROUP BYs must be the          ✓
-    //        same if the candidate has a HAVING, otherwise it must be
-    //        expressible in terms of the output columns of candidate,
-    //        under monoidal combination if the grouping is not the
-    //        same
-    //      * SEARCH must not exist on either select                           ✓
-    //      * Neither LIMIT nor OFFSET may exist on the candidate              ✓
-    //      * candidate must not have a DISTINCT or DISTINCT ON                ✓
-
     (select.isAggregated, candidate.isAggregated) match {
       case (false, false) =>
         rewriteUnaggregatedOnUnaggregated(select, candidate, rewriteInTerms)
@@ -105,6 +54,22 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
   }
 
   private def rewriteUnaggregatedOnUnaggregated(select: Select, candidate: Select, rewriteInTerms: RewriteInTerms): Option[Select] = {
+    // * the candidate must be indistinct, or its DISTINCT clause         ✓
+    //   must match (requires WHERE and ORDER isomorphism, and
+    //   if fully distinct, select list isomorphism)
+    // * all expressions in select list, ORDER BY must be                 ✓
+    //   expressible in terms of the output columns of candidate
+    // * WHERE must be isomorphic if the candidate has one,               ✓
+    //   otherwise it must be expressible in terms of the output
+    //   columns of candidate
+    // * WHERE and ORDER BY must be isomorphic if the candidate           ✓ (kinda)
+    //   is windowed and the windowed expressions are used in
+    //   this select.
+    // * SEARCH must not exist on either select                           ✓
+    // * If LIMIT and/or OFFSET is specified, either the candidate        ✓
+    //   must not specify or ORDER BY must be isomorphic and this
+    //   function's LIMIT/OFFSET must specify a window completely
+    //   contained within the candidate's LIMIT/OFFSET
     log.debug("attempting to rewrite an unaggregated query in terms of an unaggregated candidate")
 
     assert(!select.isAggregated)
@@ -292,6 +257,16 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
   }
 
   private def rewriteAggregatedOnUnaggregated(select: Select, candidate: Select, rewriteInTerms: RewriteInTerms): Option[Select] = {
+    // * all expressions in the select list, GROUP BY, HAVING,            ✓
+    //   and ORDER BY must be expressible in terms of the output
+    //   columns of the candidate
+    // * WHERE must be isomorphic if the candidate has one,               ✓
+    //   otherwise it must be expressible in terms of the output
+    //   columns of candidate
+    // * SEARCH must not exist on either select                           ✓
+    // * Neither LIMIT nor OFFSET may exist on the candidate              ✓
+    // * candidate must not have a DISTINCT or DISTINCT ON                ✓
+
     log.debug("attempting to rewrite an aggregated query in terms of an unaggregated candidate")
 
     assert(select.isAggregated)
@@ -380,6 +355,22 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
   }
 
   private def rewriteAggregatedOnAggregated(select: Select, candidate: Select, rewriteInTerms: RewriteInTerms): Option[Select] = {
+    // * the expressions in the select's GROUP BY must be a               ✓
+    //   subset of the candidate's
+    // * WHERE must be isomorphic                                         ✓
+    // * all expressions in select list and ORDER BY must be              ✓
+    //   expressible in terms of the output columns of candidate,
+    //   under monoidal combination if the grouping is not the
+    //   same
+    // * HAVING must be isomorphic and the GROUP BYs must be the          ✓
+    //   same if the candidate has a HAVING, otherwise it must be
+    //   expressible in terms of the output columns of candidate,
+    //   under monoidal combination if the grouping is not the
+    //   same
+    // * SEARCH must not exist on either select                           ✓
+    // * Neither LIMIT nor OFFSET may exist on the candidate              ✓
+    // * candidate must not have a DISTINCT or DISTINCT ON                ✓
+
     log.debug("attempting to rewrite an aggregated query in terms of an aggregated candidate")
 
     assert(select.isAggregated)
