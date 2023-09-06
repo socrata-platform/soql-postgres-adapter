@@ -10,37 +10,15 @@ import com.socrata.pg.analyzer2.{RollupRewriter, SqlizerUniverse}
 
 trait RRExperiments[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelProvider with RollupExact[MT] =>
   protected implicit def dtnOrdering: Ordering[MT#DatabaseColumnNameImpl]
-  val rollups: Seq[RollupInfo]
+  val rollups: Seq[RollupInfo[MT]]
   def databaseColumnNameOfIndex(i: Int): DatabaseColumnName
-
-  case class RollupInfo(statement: Statement, name: types.ScopedResourceName[MT], databaseName: DatabaseTableName) {
-    lazy val description =
-      TableDescription.Dataset[MT](
-        databaseName,
-        RollupRewriter.MAGIC_ROLLUP_CANONICAL_NAME,
-        OrderedMap() ++ statement.schema.iterator.zipWithIndex.map { case ((label, schemaEnt), idx) =>
-          databaseColumnNameOfIndex(idx) -> TableDescription.DatasetColumnInfo(
-            schemaEnt.name,
-            schemaEnt.typ,
-            false
-          )
-        },
-        Nil,
-        Nil
-      )
-  }
 
   // see if there's a rollup that can be used to answer _this_ select
   // (not any sub-parts of the select!).  This needs to produce a
   // statement with the same output schema (in terms of column labels
   // and types) as the given select.
   private def rollupSelectExact(select: Select): Option[Statement] =
-    rollups.findMap {
-      case ri@RollupInfo(candidate: Select, candidateName, _candidateDatabaseName) =>
-        rollupSelectExact(select, candidate, candidateName, ri.description)
-      case _ =>
-        None
-    }
+    rollups.findMap(rollupSelectExact(select, _))
 
   // See if there's a rollup that can be used to answer _this_
   // combined tables (not any sub-parts of the combined tables!).
@@ -52,23 +30,9 @@ trait RRExperiments[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabe
       // weakened:
       //    the select lists don't need to be so sensitive to ordering
       //    if the op is UNION ALL we don't need exact match on the select-lists
-      case ri@RollupInfo(cCombined, candidateName, _candidateDatabaseName)
-          if combined.isIsomorphic(cCombined) =>
+      case ri if combined.isIsomorphic(ri.statement) =>
 
-        val candidateTableInfo = ri.description
-
-        val from =
-          FromTable(
-            candidateTableInfo.name,
-            RollupRewriter.MAGIC_ROLLUP_CANONICAL_NAME,
-            candidateName,
-            None,
-            labelProvider.tableLabel(),
-            OrderedMap() ++ candidateTableInfo.columns.iterator.map { case (dtn, dci) =>
-              dtn -> NameEntry(dci.name, dci.typ)
-            },
-            candidateTableInfo.primaryKeys
-          )
+        val from = ri.from(labelProvider)
 
         Some(
           Select(

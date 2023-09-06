@@ -12,16 +12,25 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
   // (not any sub-parts of the select!).  This needs to produce a
   // statement with the same output schema (in terms of column labels
   // and types) as the given select.
-  def rollupSelectExact(select: Select, candidate: Select, candidateName: types.ScopedResourceName[MT], candidateTableInfo: TableDescription.Dataset[MT]): Option[Statement] = {
+  def rollupSelectExact(select: Select, rollupInfo: RollupInfo[MT]): Option[Statement] = {
     if(select.hint(SelectHint.NoRollup)) {
       return None
     }
 
+    val candidate = rollupInfo.statement match {
+      case sel: Select =>
+        sel
+      case _ =>
+        trace("Bailing because rollup is not a Select")
+        return None
+    }
+
     val isoState = select.from.isomorphicTo(candidate.from).getOrElse {
+      trace("Bailing because the rollup's From is not the same as the query's From")
       return None
     }
 
-    val rewriteInTerms = new RewriteInTerms(isoState, candidate.selectList, candidateName, candidateTableInfo)
+    val rewriteInTerms = new RewriteInTerms(isoState, candidate.selectList, rollupInfo.resourceName, rollupInfo.from(labelProvider))
 
     // we're both FROM the same thing, so now we can decide if this
     // Select can be expressed in terms of the output of that
@@ -485,35 +494,19 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
     val isoState: IsoState,
     candidateSelectList: OrderedMap[AutoColumnLabel, NamedExpr],
     candidateName: types.ScopedResourceName[MT],
-    candidateTableInfo: TableDescription.Dataset[MT]
+    val newFrom: FromTable
   ) {
     // Check that our candidate select list and table info are in
     // sync, and build a map from AutoColumnLabel to
     // DatabaseColumnName so when we're rewriting exprs we can fill in
     // with references to PhysicalColumns
-    assert(candidateSelectList.size == candidateTableInfo.columns.size)
+    assert(candidateSelectList.size == newFrom.schema.length)
     private val columnLabelMap: Map[AutoColumnLabel, DatabaseColumnName] =
-      candidateSelectList.iterator.map { case (label, namedExpr) =>
-        val (databaseColumnName, _) =
-          candidateTableInfo.columns.find { case (dcn, dci) =>
-            dci.name == namedExpr.name
-          }.getOrElse {
-            throw new AssertionError("No corresponding column in rollup table for " + namedExpr.name)
-          }
+      (candidateSelectList.toStream, newFrom.columns).zipped.map { case ((label, namedExpr), (databaseColumnName, nameEntry)) =>
+        assert(namedExpr.name == nameEntry.name && namedExpr.expr.typ == nameEntry.typ)
+
         label -> databaseColumnName
       }.toMap
-
-    val newFrom = FromTable(
-      candidateTableInfo.name,
-      RollupRewriter.MAGIC_ROLLUP_CANONICAL_NAME,
-      candidateName,
-      None,
-      labelProvider.tableLabel(),
-      OrderedMap() ++ candidateTableInfo.columns.iterator.map { case (dtn, dci) =>
-        dtn -> NameEntry(dci.name, dci.typ)
-      },
-      candidateTableInfo.primaryKeys
-    )
 
     def rewrite(sExpr: Expr, needsMerge: Boolean = false): Option[Expr] =
       candidateSelectList.iterator.findMap { case (label, ne) =>

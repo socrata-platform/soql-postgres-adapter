@@ -51,6 +51,14 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
   //   val result = expr.rollup(analysis.statement).map(_.debugStr)
   // }
 
+  case class TestRollupInfo(
+    statement: Statement,
+    resourceName: types.ScopedResourceName[MT],
+    databaseName: DatabaseTableName
+  ) extends RollupInfo[MT] {
+    override def databaseColumnNameOfIndex(i: Int) = DatabaseColumnName(s"c$i")
+  }
+
   test("simple exact") {
     val tf = tableFinder(
       (0, "twocol") -> D("text" -> TestText, "num" -> TestNumber)
@@ -80,17 +88,7 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
 
     println(select.debugDoc)
     println(rollupSelect.debugDoc)
-    val result = re.rollupSelectExact(select, rollupSelect, ScopedResourceName(0, ResourceName("rollup")), TableDescription.Dataset[MT](
-      DatabaseTableName("rollup1"),
-      CanonicalName("rollup1"),
-      OrderedMap(
-        DatabaseColumnName("c1") -> TableDescription.DatasetColumnInfo(ColumnName("text"), TestText, false),
-        DatabaseColumnName("c2") -> TableDescription.DatasetColumnInfo(ColumnName("num_5"), TestNumber, false),
-        DatabaseColumnName("c3") -> TableDescription.DatasetColumnInfo(ColumnName("num"), TestNumber, false),
-      ),
-      Nil,
-      Nil
-    ))
+    val result = re.rollupSelectExact(select, TestRollupInfo(rollupSelect, ScopedResourceName(0, ResourceName("rollup")), DatabaseTableName("rollup1")))
 
     println(result.map(_.debugDoc))
   }
@@ -133,17 +131,7 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
 
     println(select.debugDoc)
     println(rollupSelect.debugDoc)
-    val result = re.rollupSelectExact(select, rollupSelect, ScopedResourceName(0, ResourceName("rollup")), TableDescription.Dataset[MT](
-      DatabaseTableName("rollup1"),
-      CanonicalName("rollup1"),
-      OrderedMap(
-        DatabaseColumnName("c1") -> TableDescription.DatasetColumnInfo(ColumnName("text"), TestText, false),
-        DatabaseColumnName("c2") -> TableDescription.DatasetColumnInfo(ColumnName("num_5"), TestNumber, false),
-        DatabaseColumnName("c3") -> TableDescription.DatasetColumnInfo(ColumnName("bottom_dword_num"), TestNumber, false),
-      ),
-      Nil,
-      Nil
-    ))
+    val result = re.rollupSelectExact(select, TestRollupInfo(rollupSelect, ScopedResourceName(0, ResourceName("rollup")), DatabaseTableName("rollup1")))
 
     println(result.map(_.debugDoc))
   }
@@ -185,17 +173,7 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
 
     println(select.debugDoc)
     println(rollupSelect.debugDoc)
-    val result = re.rollupSelectExact(select, rollupSelect, ScopedResourceName(0, ResourceName("rollup")), TableDescription.Dataset[MT](
-      DatabaseTableName("rollup1"),
-      CanonicalName("rollup1"),
-      OrderedMap(
-        DatabaseColumnName("c1") -> TableDescription.DatasetColumnInfo(ColumnName("text"), TestText, false),
-        DatabaseColumnName("c2") -> TableDescription.DatasetColumnInfo(ColumnName("num"), TestNumber, false),
-        DatabaseColumnName("c3") -> TableDescription.DatasetColumnInfo(ColumnName("sum_another_num"), TestNumber, false),
-      ),
-      Nil,
-      Nil
-    ))
+    val result = re.rollupSelectExact(select, TestRollupInfo(rollupSelect, ScopedResourceName(0, ResourceName("rollup")), DatabaseTableName("rollup1")))
 
     println(result.map(_.debugDoc))
   }
@@ -246,16 +224,7 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
 
     println(select.debugDoc)
     println(rollupSelect.debugDoc)
-    val result = re.rollupSelectExact(select, rollupSelect, ScopedResourceName(0, ResourceName("rollup")), TableDescription.Dataset[MT](
-      DatabaseTableName("rollup1"),
-      CanonicalName("rollup1"),
-      OrderedMap(
-        DatabaseColumnName("c1") -> TableDescription.DatasetColumnInfo(ColumnName("bottom_dword_num1"), TestText, false),
-        DatabaseColumnName("c2") -> TableDescription.DatasetColumnInfo(ColumnName("max_num2"), TestNumber, false),
-      ),
-      Nil,
-      Nil
-    ))
+    val result = re.rollupSelectExact(select, TestRollupInfo(rollupSelect, ScopedResourceName(0, ResourceName("rollup")), DatabaseTableName("rollup1")))
 
     println(result.map(_.debugDoc))
   }
