@@ -20,43 +20,53 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
 
   def xtest(s: String)(f: => Any): Unit = {}
 
-  // xtest("huh") {
-  //   val tf = tableFinder(
-  //     (0, "twocol") -> D("text" -> TestText, "num" -> TestNumber),
-  //     (0, "english") -> D("num" -> TestNumber, "name" -> TestText),
-  //     (0, "counts_by_name") -> Q(0, "twocol", "select text, @english.name, count(*) join @english on num = @english.num group by text, @english.name")
-  //   )
+  class TestRRExperiments(
+    override val rollups: Seq[RollupInfo[MT]],
+    override val labelProvider: LabelProvider
+  ) extends RRExperiments[MT] with HasLabelProvider with RollupExact[MT] with SemigroupRewriter[MT] with SimpleFunctionSubset[MT] {
+    override val dtnOrdering = Ordering.String
+    override def mergeSemigroup(f: MonomorphicFunction): Option[Expr => Expr] = None
+    override def funcallSubset(a: MonomorphicFunction,b: MonomorphicFunction): Option[MonomorphicFunction] = None
+  }
 
-  //   val Right(foundTables) = tf.findTables(0, ResourceName("counts_by_name"))
-  //   val analysis = analyzer(foundTables, UserParameters.empty) match {
-  //     case Right(a) => a
-  //     case Left(e) => fail(e.toString)
-  //   }
+  test("huh") {
+    val tf = tableFinder(
+      (0, "twocol") -> D("text" -> TestText, "num" -> TestNumber),
+      (0, "english") -> D("num" -> TestNumber, "name" -> TestText),
+      (0, "counts_by_name") -> Q(0, "twocol", "select text, @english.name, count(*) join @english on num = @english.num group by text, @english.name")
+    )
 
-  //   val expr = new RRExperiments[MT] with HasLabelProvider {
-  //     override val labelProvider = analysis.labelProvider
-  //     implicit val dtnOrdering = Ordering.String
+    val Right(foundTables) = tf.findTables(0, ResourceName("counts_by_name"))
+    val analysis = analyzer(foundTables, UserParameters.empty) match {
+      case Right(a) => a
+      case Left(e) => fail(e.toString)
+    }
 
-  //     override def rollupSelectExact(select: Select): Option[Statement] = {
-  //       println("rollup select exect: " + select.debugDoc)
-  //       None
-  //     }
+    val expr = new TestRRExperiments(
+      Nil,
+      analysis.labelProvider
+    )
 
-  //     override def rollupCombinedExact(combined: CombinedTables): Option[Statement] = {
-  //       println("rollup combined exact: " + combined.debugDoc)
-  //       None
-  //     }
-  //   }
+    val result = expr.rollup(analysis.statement).map(_.debugStr)
+  }
 
-  //   val result = expr.rollup(analysis.statement).map(_.debugStr)
-  // }
-
-  case class TestRollupInfo(
-    statement: Statement,
-    resourceName: types.ScopedResourceName[MT],
-    databaseName: DatabaseTableName
+  class TestRollupInfo(
+    val statement: Statement,
+    val resourceName: types.ScopedResourceName[MT],
+    val databaseName: DatabaseTableName
   ) extends RollupInfo[MT] {
     override def databaseColumnNameOfIndex(i: Int) = DatabaseColumnName(s"c$i")
+  }
+
+  object TestRollupInfo {
+    def apply(name: String, tf: TableFinder[MT], soql: String): TestRollupInfo = {
+      val Right(foundTables) = tf.findTables(0, soql, Map.empty)
+      val analysis = analyzer(foundTables, UserParameters.empty) match {
+        case Right(a) => a
+        case Left(e) => fail(e.toString)
+      }
+      new TestRollupInfo(analysis.statement, ScopedResourceName(0, ResourceName(name)), DatabaseTableName(name))
+    }
   }
 
   test("simple exact") {
@@ -71,13 +81,6 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     }
     val select = analysis.statement.asInstanceOf[Select]
 
-    val Right(foundRollupTables) = tf.findTables(0, "select text, num * 5, num from @twocol where num = 5 order by text", Map.empty)
-    val rollupAnalysis = analyzer(foundRollupTables, UserParameters.empty) match {
-      case Right(a) => a
-      case Left(e) => fail(e.toString)
-    }
-    val rollupSelect = rollupAnalysis.statement.asInstanceOf[Select]
-
     val re = new RollupExact[MT] with HasLabelProvider with SemigroupRewriter[MT] with SimpleFunctionSubset[MT] {
       override def funcallSubset(a: MonomorphicFunction,b: MonomorphicFunction) = None
 
@@ -86,9 +89,11 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
       def mergeSemigroup(f: MonomorphicFunction): Option[Expr => Expr] = None
     }
 
+    val rollup = TestRollupInfo("rollup", tf, "select text, num * 5, num from @twocol where num = 5 order by text")
+
     println(select.debugDoc)
-    println(rollupSelect.debugDoc)
-    val result = re.rollupSelectExact(select, TestRollupInfo(rollupSelect, ScopedResourceName(0, ResourceName("rollup")), DatabaseTableName("rollup1")))
+    println(rollup.statement.debugDoc)
+    val result = re.rollupSelectExact(select, rollup)
 
     println(result.map(_.debugDoc))
   }
@@ -105,12 +110,7 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     }
     val select = analysis.statement.asInstanceOf[Select]
 
-    val Right(foundRollupTables) = tf.findTables(0, "select text, num * 5, bottom_dword(num) from @twocol where num = 5 order by text", Map.empty)
-    val rollupAnalysis = analyzer(foundRollupTables, UserParameters.empty) match {
-      case Right(a) => a
-      case Left(e) => fail(e.toString)
-    }
-    val rollupSelect = rollupAnalysis.statement.asInstanceOf[Select]
+    val rollup = TestRollupInfo("rollup", tf, "select text, num * 5, bottom_dword(num) from @twocol where num = 5 order by text")
 
     val re = new RollupExact[MT] with HasLabelProvider with SemigroupRewriter[MT] with SimpleFunctionSubset[MT] {
       val BottomByte = TestFunctions.BottomByte.monomorphic.get
@@ -130,8 +130,8 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     }
 
     println(select.debugDoc)
-    println(rollupSelect.debugDoc)
-    val result = re.rollupSelectExact(select, TestRollupInfo(rollupSelect, ScopedResourceName(0, ResourceName("rollup")), DatabaseTableName("rollup1")))
+    println(rollup.statement.debugDoc)
+    val result = re.rollupSelectExact(select, rollup)
 
     println(result.map(_.debugDoc))
   }
@@ -148,12 +148,7 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     }
     val select = analysis.statement.asInstanceOf[Select]
 
-    val Right(foundRollupTables) = tf.findTables(0, "select text, num, sum(another_num) from @threecol group by text, num", Map.empty)
-    val rollupAnalysis = analyzer(foundRollupTables, UserParameters.empty) match {
-      case Right(a) => a
-      case Left(e) => fail(e.toString)
-    }
-    val rollupSelect = rollupAnalysis.statement.asInstanceOf[Select]
+    val rollup = TestRollupInfo("rollup", tf, "select text, num, sum(another_num) from @threecol group by text, num")
 
     val re = new RollupExact[MT] with HasLabelProvider with SemigroupRewriter[MT] with SimpleFunctionSubset[MT] {
       override def funcallSubset(a: MonomorphicFunction,b: MonomorphicFunction) = None
@@ -172,8 +167,8 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     }
 
     println(select.debugDoc)
-    println(rollupSelect.debugDoc)
-    val result = re.rollupSelectExact(select, TestRollupInfo(rollupSelect, ScopedResourceName(0, ResourceName("rollup")), DatabaseTableName("rollup1")))
+    println(rollup.statement.debugDoc)
+    val result = re.rollupSelectExact(select, rollup)
 
     println(result.map(_.debugDoc))
   }
@@ -190,12 +185,7 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     }
     val select = analysis.statement.asInstanceOf[Select]
 
-    val Right(foundRollupTables) = tf.findTables(0, "select bottom_dword(num1), max(num2) from @twocol group by bottom_dword(num1)", Map.empty)
-    val rollupAnalysis = analyzer(foundRollupTables, UserParameters.empty) match {
-      case Right(a) => a
-      case Left(e) => fail(e.toString)
-    }
-    val rollupSelect = rollupAnalysis.statement.asInstanceOf[Select]
+    val rollup = TestRollupInfo("rollup", tf, "select bottom_dword(num1), max(num2) from @twocol group by bottom_dword(num1)")
 
     val re = new RollupExact[MT] with HasLabelProvider with SemigroupRewriter[MT] with SimpleFunctionSubset[MT] {
       val BottomByte = TestFunctions.BottomByte.monomorphic.get
@@ -223,8 +213,8 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     }
 
     println(select.debugDoc)
-    println(rollupSelect.debugDoc)
-    val result = re.rollupSelectExact(select, TestRollupInfo(rollupSelect, ScopedResourceName(0, ResourceName("rollup")), DatabaseTableName("rollup1")))
+    println(rollup.statement.debugDoc)
+    val result = re.rollupSelectExact(select, rollup)
 
     println(result.map(_.debugDoc))
   }
