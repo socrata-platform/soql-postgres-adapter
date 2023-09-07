@@ -436,6 +436,10 @@ class RollupExact[MT <: MetaTypes](
 
     val sameGroupBy = sameExprsIgnoringOrder(select.groupBy, candidate.groupBy, rewriteInTerms.isoState)
 
+    // If the GROUP BY clauses are the same, then we can just select
+    // rows out of the rollup and we don't need to merge anything.  In
+    // that case, we'll "promote" the query's HAVING clause into the
+    // WHERE position.
     val needsMerge = !sameGroupBy
 
     candidate.distinctiveness match {
@@ -456,19 +460,24 @@ class RollupExact[MT <: MetaTypes](
         return None
       }
 
-    val newGroupBy = select.groupBy.mapFallibly(rewriteInTerms.rewrite(_, needsMerge)).getOrElse {
-      log.debug("Bailing because unable to rewrite the GROUP BY in terms of the candidate's output columns")
-      return None
-    }
+    val newGroupBy =
+      if(sameGroupBy) {
+        Nil
+      } else {
+        select.groupBy.mapFallibly(rewriteInTerms.rewrite(_, needsMerge)).getOrElse {
+          log.debug("Bailing because unable to rewrite the GROUP BY in terms of the candidate's output columns")
+          return None
+        }
+      }
 
     val newHaving = (select.having, candidate.having) match {
       case (sHaving, None) =>
-        sHaving.mapFallibly(rewriteInTerms.rewrite(_)).getOrElse {
+        sHaving.mapFallibly(rewriteInTerms.rewrite(_, needsMerge)).getOrElse {
           log.debug("Bailing because unable to rewrite the HAVING in terms of the candidate's output columns")
           return None
         }
       case (Some(sHaving), Some(cHaving)) =>
-        val combined = combineAnd(sHaving, cHaving, rewriteInTerms).getOrElse {
+        val combined = combineAnd(sHaving, cHaving, rewriteInTerms, needsMerge).getOrElse {
           log.debug("Bailing because couldn't express the query's HAVING in terms of the candidate's HAVING")
           return None
         }
@@ -496,9 +505,9 @@ class RollupExact[MT <: MetaTypes](
         distinctiveness = newDistinctiveness,
         selectList = newSelectList,
         from = rewriteInTerms.newFrom,
-        where = None,
+        where = if(sameGroupBy) newHaving else None,
         groupBy = newGroupBy,
-        having = newHaving,
+        having = if(sameGroupBy) None else newHaving,
         orderBy = newOrderBy,
         limit = select.limit,
         offset = select.offset,
@@ -508,7 +517,7 @@ class RollupExact[MT <: MetaTypes](
     )
   }
 
-  private def combineAnd(sExpr: Expr, cExpr: Expr, rewriteInTerms: RewriteInTerms): Option[Option[Expr]] = {
+  private def combineAnd(sExpr: Expr, cExpr: Expr, rewriteInTerms: RewriteInTerms, needsMerge: Boolean = false): Option[Option[Expr]] = {
     val sSplit = splitAnd.split(sExpr)
     val cSplit = splitAnd.split(cExpr)
 
@@ -535,7 +544,7 @@ class RollupExact[MT <: MetaTypes](
       return None
     }
 
-    splitAnd.merge(result.result()).mapFallibly(rewriteInTerms.rewrite(_))
+    splitAnd.merge(result.result()).mapFallibly(rewriteInTerms.rewrite(_, needsMerge))
   }
 
   private class RewriteInTerms(

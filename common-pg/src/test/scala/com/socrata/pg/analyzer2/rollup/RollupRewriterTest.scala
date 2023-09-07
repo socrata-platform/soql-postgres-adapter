@@ -252,8 +252,7 @@ class RollupRewriterTest extends FunSuite with MustMatchers with SqlizerUniverse
     println(result.map(_.debugDoc))
   }
 
-
-  test("rollup avg") {
+  test("rollup avg - identical group by") {
     val tf = tableFinder(
       (0, "twocol") -> D("text" -> TestText, "num" -> TestNumber)
     )
@@ -266,6 +265,27 @@ class RollupRewriterTest extends FunSuite with MustMatchers with SqlizerUniverse
     val select = analysis.statement.asInstanceOf[Select]
 
     val rollup = TestRollupInfo("rollup", tf, "select text, sum(num), count(num) from @twocol group by text")
+
+    println(select.debugDoc)
+    println(rollup.statement.debugDoc)
+    val result = TestRollupExact(select, rollup, analysis.labelProvider)
+
+    println(result.map(_.debugDoc))
+  }
+
+  test("rollup avg - coarser group by") {
+    val tf = tableFinder(
+      (0, "twocol") -> D("text1" -> TestText, "text2" -> TestText, "num" -> TestNumber)
+    )
+
+    val Right(foundTables) = tf.findTables(0, "select text1, avg(num) from @twocol group by text1", Map.empty)
+    val analysis = analyzer(foundTables, UserParameters.empty) match {
+      case Right(a) => a
+      case Left(e) => fail(e.toString)
+    }
+    val select = analysis.statement.asInstanceOf[Select]
+
+    val rollup = TestRollupInfo("rollup", tf, "select text1, text2, sum(num), count(num) from @twocol group by text1, text2")
 
     println(select.debugDoc)
     println(rollup.statement.debugDoc)
