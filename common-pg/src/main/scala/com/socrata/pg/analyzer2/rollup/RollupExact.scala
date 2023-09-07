@@ -377,9 +377,12 @@ class RollupExact[MT <: MetaTypes](
       return None
     }
 
-    if(candidate.distinctiveness != Distinctiveness.Indistinct()) {
-      log.debug("Bailing because the candidate has a DISTINCT")
-      return None
+    candidate.distinctiveness match {
+      case Distinctiveness.Indistinct() =>
+        // ok
+      case Distinctiveness.FullyDistinct() | Distinctiveness.On(_) =>
+        log.debug("Bailing because the candidate has a DISTINCT clause")
+        return None
     }
 
     if(candidate.having.isDefined) {
