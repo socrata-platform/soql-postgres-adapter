@@ -14,7 +14,8 @@ object RollupExact {
 class RollupExact[MT <: MetaTypes](
   semigroupRewriter: SemigroupRewriter[MT],
   functionSubset: FunctionSubset[MT],
-  splitAnd: SplitAnd[MT]
+  splitAnd: SplitAnd[MT],
+  stringifier: Stringifier[MT]
 ) extends ((Select[MT], RollupInfo[MT], LabelProvider) => Option[Statement[MT]]) with SqlizerUniverse[MT] {
   import RollupExact.log
 
@@ -26,16 +27,23 @@ class RollupExact[MT <: MetaTypes](
   // and types) as the given select.
   def apply(select: Select, rollupInfo: RollupInfo[MT], labelProvider: LabelProvider): Option[Statement] = {
     if(select.hint(SelectHint.NoRollup)) {
+      log.debug("Bailing because query asked us not to roll it up")
       return None
     }
 
     val candidate = rollupInfo.statement match {
       case sel: Select =>
         sel
-      case _ =>
-        log.debug("Bailing because rollup is not a Select")
+      case stmt =>
+        log.debug("Bailing because rollup is not a Select: {}", stringifier.statement(stmt))
         return None
     }
+
+    log.debug(
+      "Attempting to rewrite:\n  QUERY: {}\n  ROLLUP: {}",
+      stringifier.statement(select).indent(4): Any,
+      stringifier.statement(rollupInfo.statement).indent(4)
+    )
 
     val isoState = select.from.isomorphicTo(candidate.from).getOrElse {
       log.debug("Bailing because the rollup's From is not the same as the query's From")

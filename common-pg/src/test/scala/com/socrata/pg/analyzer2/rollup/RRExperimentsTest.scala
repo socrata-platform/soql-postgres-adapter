@@ -74,7 +74,8 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
   object TestRollupExact extends RollupExact[MT](
     TestSemigroupRewriter,
     TestFunctionSubset,
-    TestSplitAnd
+    TestSplitAnd,
+    Stringifier.pretty
   )
 
   class TestRRExperiments(
