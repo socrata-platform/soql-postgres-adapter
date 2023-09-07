@@ -32,7 +32,7 @@ import com.socrata.soql.sql.Debug
 import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
 import com.socrata.datacoordinator.common.soql.SoQLRep
 
-import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse}
+import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, SoQLRewritePasses}
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils}
 import com.socrata.pg.server.CJSONWriter
 
@@ -78,6 +78,7 @@ object ProcessQuery {
     // each group of rewrite passes and after all rewrite passes have
     // happened.
     val nameAnalysis = locally {
+      val rewritePasses = new SoQLRewritePasses[DatabaseNamesMetaTypes]
       val postRewrites =
         passes.foldLeft(DatabaseNamesMetaTypes.rewriteFrom(metadataAnalysis)) { (nameAnalysis, batch) =>
           locally {
@@ -91,9 +92,9 @@ object ProcessQuery {
           }
           effectiveAnalysis.applyPasses(
             batch,
-            RewritePasses.isLiteralTrue,
-            RewritePasses.isOrderable,
-            RewritePasses.and
+            rewritePasses.isLiteralTrue,
+            rewritePasses.isOrderable,
+            rewritePasses.and
           )
         }
 
