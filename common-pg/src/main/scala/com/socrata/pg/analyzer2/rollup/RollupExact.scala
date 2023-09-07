@@ -5,7 +5,7 @@ import org.slf4j.LoggerFactory
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.collection.OrderedMap
 
-import com.socrata.pg.analyzer2.{SqlizerUniverse, RollupRewriter}
+import com.socrata.pg.analyzer2.SqlizerUniverse
 
 object RollupExact {
   private val log = LoggerFactory.getLogger(classOf[RollupExact[_]])

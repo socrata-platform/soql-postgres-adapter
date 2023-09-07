@@ -6,7 +6,7 @@ import com.socrata.soql.analyzer2._
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.ColumnName
 
-import com.socrata.pg.analyzer2.{RollupRewriter, SqlizerUniverse}
+import com.socrata.pg.analyzer2.SqlizerUniverse
 
 trait RollupInfo[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   val statement: Statement

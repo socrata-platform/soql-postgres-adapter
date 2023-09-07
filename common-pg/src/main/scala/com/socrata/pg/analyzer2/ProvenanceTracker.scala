@@ -22,7 +22,7 @@ class ProvenanceTracker[MT <: MetaTypes] private (exprs: sc.Map[Expr[MT], Set[Ca
 
 object ProvenanceTracker {
   def isSingleton(set: Set[CanonicalName]): Boolean = {
-    set.size < 2 && !set(RollupRewriter.MAGIC_ROLLUP_CANONICAL_NAME)
+    set.size < 2 && !set(rollup.RollupRewriter.MAGIC_ROLLUP_CANONICAL_NAME)
   }
 
   def apply[MT <: MetaTypes](s: Statement[MT], provenanceOf: LiteralValue[MT] => Set[CanonicalName]): ProvenanceTracker[MT] = {

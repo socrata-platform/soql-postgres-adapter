@@ -152,7 +152,7 @@ object Rep {
 
       def physicalColumnRef(col: PhysicalColumn) = {
         val dsTable = namespace.tableLabel(col.table)
-        if(col.tableCanonicalName != RollupRewriter.MAGIC_ROLLUP_CANONICAL_NAME) {
+        if(col.tableCanonicalName != rollup.RollupRewriter.MAGIC_ROLLUP_CANONICAL_NAME) {
           // The "::text" is required so that the provenance is not a
           // literal by SQL's standards.  Otherwise this will have
           // trouble if you order or group by :id

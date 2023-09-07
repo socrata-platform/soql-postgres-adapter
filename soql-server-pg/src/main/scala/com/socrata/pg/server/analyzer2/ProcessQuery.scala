@@ -32,7 +32,7 @@ import com.socrata.soql.sql.Debug
 import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
 import com.socrata.datacoordinator.common.soql.SoQLRep
 
-import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, RollupRewriter}
+import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse}
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils}
 import com.socrata.pg.server.CJSONWriter
 
@@ -72,7 +72,7 @@ object ProcessQuery {
       analysis.statement.debugDoc.layoutPretty(LayoutOptions(PageWidth.Unbounded)).toString
     }
 
-    def rollupRewriter = RollupRewriter.fromPostgres[DatabaseNamesMetaTypes](pgu)
+    // def rollupRewriter = RollupRewriter.fromPostgres[DatabaseNamesMetaTypes](pgu)
 
     // Intermixed rewrites and rollups: rollups are attemted before
     // each group of rewrite passes and after all rewrite passes have
@@ -84,7 +84,7 @@ object ProcessQuery {
             import DatabaseNamesMetaTypes.DebugHelper._
             log.debug("Statement before applying rollups:\n{}", Lazy(nameAnalysis.statement.debugStr))
           }
-          val effectiveAnalysis = rollupRewriter.applyRollups(nameAnalysis)
+          val effectiveAnalysis = nameAnalysis // rollupRewriter.applyRollups(nameAnalysis)
           locally {
             import DatabaseNamesMetaTypes.DebugHelper._
             log.debug("Statement before applying rewrites {}:\n{}", batch:Any, Lazy(nameAnalysis.statement.debugStr))
@@ -101,7 +101,7 @@ object ProcessQuery {
         import DatabaseNamesMetaTypes.DebugHelper._
         log.debug("Statement before applying rollups:\n{}", Lazy(postRewrites.statement.debugStr))
       }
-      rollupRewriter.applyRollups(postRewrites)
+      postRewrites // rollupRewriter.applyRollups(postRewrites)
     }
 
     locally {

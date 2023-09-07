@@ -10,7 +10,7 @@ import com.socrata.soql.functions.MonomorphicFunction
 
 import com.socrata.pg.analyzer2._
 
-class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[SqlizerTest.TestMT] {
+class RollupRewriterTest extends FunSuite with MustMatchers with SqlizerUniverse[SqlizerTest.TestMT] {
   type MT = SqlizerTest.TestMT
 
   def tableFinder(items: ((Int, String), Thing[Int, TestType])*) =
@@ -78,10 +78,10 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     Stringifier.pretty
   )
 
-  class TestRRExperiments(
+  class TestRollupRewriter(
     labelProvider: LabelProvider,
     rollups: Seq[RollupInfo[MT]]
-  ) extends RRExperiments(labelProvider, TestRollupExact, rollups)
+  ) extends RollupRewriter(labelProvider, TestRollupExact, rollups)
 
   test("huh") {
     val tf = tableFinder(
@@ -96,7 +96,7 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
       case Left(e) => fail(e.toString)
     }
 
-    val expr = new TestRRExperiments(
+    val expr = new TestRollupRewriter(
       analysis.labelProvider,
       Seq(
         TestRollupInfo("rollup1", tf, "select @twocol.text as twocol_text, @twocol.num as twocol_num, @english.num as english_num, @english.name as english_name from @twocol join @english on @twocol.num = @english.num"),
