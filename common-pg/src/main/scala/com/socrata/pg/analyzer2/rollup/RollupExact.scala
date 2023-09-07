@@ -603,46 +603,46 @@ class RollupExact[MT <: MetaTypes](
     orderByIsIsomorphic: =>Boolean
   ): Option[(Option[BigInt], Option[BigInt])] = {
     (cLimit, cOffset) match {
-        case (None, None) =>
-          Some((sLimit, sOffset))
+      case (None, None) =>
+        Some((sLimit, sOffset))
 
-        case (maybeLim, maybeOff) =>
-          if(!orderByIsIsomorphic) {
-            log.debug("Bailing because candidate has limit/offset but ORDER BYs are not isomorphic")
+      case (maybeLim, maybeOff) =>
+        if(!orderByIsIsomorphic) {
+          log.debug("Bailing because candidate has limit/offset but ORDER BYs are not isomorphic")
+          return None
+        }
+
+        val requestedOffset = sOffset.getOrElse(BigInt(0))
+        val existingOffset = maybeOff.getOrElse(BigInt(0))
+
+        if(requestedOffset < existingOffset) {
+          log.debug("Bailing because candidate has limit/offset but the query's window precedes it")
+          return None
+        }
+
+        val newOffset = requestedOffset + existingOffset
+
+        (sLimit, maybeLim) match {
+          case (None, None) =>
+            if(newOffset == 0) {
+              Some((None, None))
+            } else {
+              Some((None, Some(newOffset)))
+            }
+          case (None, Some(_)) =>
+            log.debug("Bailing because candidate has a limit but the query does not")
             return None
-          }
-
-          val requestedOffset = sOffset.getOrElse(BigInt(0))
-          val existingOffset = maybeOff.getOrElse(BigInt(0))
-
-          if(requestedOffset < existingOffset) {
-            log.debug("Bailing because candidate has limit/offset but the query's window precedes it")
-            return None
-          }
-
-          val newOffset = requestedOffset + existingOffset
-
-          (sLimit, maybeLim) match {
-            case (None, None) =>
-              if(newOffset == 0) {
-                Some((None, None))
-              } else {
-                Some((None, Some(newOffset)))
-              }
-            case (None, Some(_)) =>
-              log.debug("Bailing because candidate has a limit but the query does not")
+          case (sLimit@Some(_), None) =>
+            Some((sLimit, Some(newOffset)))
+          case (Some(sLimit), Some(cLimit)) =>
+            if(newOffset + sLimit > cLimit) {
+              log.debug("Bailing because candiate has a limit and the query's extends beyond its end")
               return None
-            case (sLimit@Some(_), None) =>
-              Some((sLimit, Some(newOffset)))
-            case (Some(sLimit), Some(cLimit)) =>
-              if(newOffset + sLimit > cLimit) {
-                log.debug("Bailing because candiate has a limit and the query's extends beyond its end")
-                return None
-              }
+            }
 
-              Some((Some(sLimit), Some(newOffset)))
-          }
-      }
+            Some((Some(sLimit), Some(newOffset)))
+        }
+    }
   }
 
   private def combineAnd(sExpr: Expr, cExpr: Expr, rewriteInTerms: RewriteInTerms, needsMerge: Boolean = false): Option[Option[Expr]] = {
