@@ -151,29 +151,29 @@ class RollupExact[MT <: MetaTypes](
     }
 
     (select.distinctiveness, candidate.distinctiveness) match {
-      case (sDistinct, Distinctiveness.Indistinct()) =>
+      case (_, Distinctiveness.Indistinct()) =>
         // ok, we can work with this
       case (Distinctiveness.FullyDistinct(), Distinctiveness.FullyDistinct()) =>
         // we need to select the exact same columns
         if(!sameSelectList(select.selectList, candidate.selectList, rewriteInTerms.isoState)) {
           log.debug("Bailing because DISTINCT but different select lists")
+          return None
         }
 
-        if(!whereIsIsomorphic || !orderByIsIsomorphic) {
-          log.debug("Bailing because DISTINCT but WHERE or ORDER BY are not isomorphic")
+        if(!whereIsIsomorphic) {
+          log.debug("Bailing because DISTINCT but WHERE is not isomorphic")
           return None
         }
-      case (sDistinct@Distinctiveness.On(sOn), Distinctiveness.On(cOn)) =>
+      case (Distinctiveness.On(sOn), Distinctiveness.On(cOn)) =>
         if(sOn.length != cOn.length || (sOn, cOn).zipped.exists { (s, c) => !s.isIsomorphic(c, rewriteInTerms.isoState) }) {
-          log.debug("Bailing because of DISTINCT ON mismtach")
+          log.debug("Bailing because of DISTINCT ON mismatch")
           return None
         }
+
+        // ORDER BY needs to be isomorphic because DISTINCT ON picks
+        // the first row
         if(!whereIsIsomorphic || !orderByIsIsomorphic) {
           log.debug("Bailing because DISTINCT ON but WHERE or ORDER BY are not isomorphic")
-          return None
-        }
-        val newOn = sOn.mapFallibly(rewriteInTerms.rewrite(_)).getOrElse {
-          log.debug("Bailing because failed to rewrite DISTINCT ON")
           return None
         }
       case _ =>
@@ -442,11 +442,46 @@ class RollupExact[MT <: MetaTypes](
     // WHERE position.
     val needsMerge = !sameGroupBy
 
-    candidate.distinctiveness match {
-      case Distinctiveness.Indistinct() =>
+    lazy val havingIsIsomorphic: Boolean =
+      select.having.isDefined == candidate.having.isDefined &&
+        (select.having, candidate.having).zipped.forall { (a, b) => a.isIsomorphic(b, rewriteInTerms.isoState) }
+    lazy val orderByIsIsomorphic: Boolean =
+      select.orderBy.length == candidate.orderBy.length &&
+        (select.orderBy, candidate.orderBy).zipped.forall { (a, b) => a.isIsomorphic(b, rewriteInTerms.isoState) }
+
+    (select.distinctiveness, candidate.distinctiveness) match {
+      case (_, Distinctiveness.Indistinct()) =>
         // ok
-      case Distinctiveness.FullyDistinct() | Distinctiveness.On(_) =>
-        log.debug("Bailing because the candidate has a DISTINCT clause")
+      case (Distinctiveness.FullyDistinct(), Distinctiveness.FullyDistinct()) =>
+        if(!sameGroupBy) {
+          log.debug("Bailing because the candidate has a DISTINCT clause and GROUP BY is different")
+          return None
+        }
+        if(!sameSelectList(select.selectList, candidate.selectList, rewriteInTerms.isoState)) {
+          log.debug("Bailing because DISTINCT but different select lists")
+          return None
+        }
+        if(!havingIsIsomorphic) {
+          log.debug("Bailing because DISTINCT but HAVING is not isomorphic")
+          return None
+        }
+      case (Distinctiveness.On(sOn), Distinctiveness.On(cOn)) =>
+        if(!sameGroupBy) {
+          log.debug("Bailing because the candidate has a DISTINCT clause and GROUP BY is different")
+          return None
+        }
+        if(sOn.length != cOn.length || (sOn, cOn).zipped.exists { (s, c) => !s.isIsomorphic(c, rewriteInTerms.isoState) }) {
+          log.debug("Bailing because of DISTINCT ON mismatch")
+          return None
+        }
+
+        if(!havingIsIsomorphic || !orderByIsIsomorphic) {
+          log.debug("Bailing because DISTINCT ON but HAVING or ORDER BY are not isomorphic")
+          return None
+        }
+
+      case _ =>
+        log.debug("Bailing because of a distinctiveness mismatch")
         return None
     }
     val newDistinctiveness = rewriteDistinctiveness(select.distinctiveness, rewriteInTerms, needsMerge).getOrElse {
