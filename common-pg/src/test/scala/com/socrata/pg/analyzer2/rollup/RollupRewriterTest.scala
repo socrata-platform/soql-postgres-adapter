@@ -53,6 +53,23 @@ class RollupRewriterTest extends FunSuite with MustMatchers with SqlizerUniverse
       }
   }
 
+  object TestFunctionSplitter extends FunctionSplitter[MT] {
+    private val avg = (
+      TestFunctions.Div.monomorphic.get,
+      Seq(
+        TestFunctions.Sum.monomorphic.get,
+        MonomorphicFunction(TestFunctions.Count, Map("a" -> TestNumber))
+      )
+    )
+
+    override def apply(f: MonomorphicFunction): Option[(MonomorphicFunction, Seq[MonomorphicFunction])] =
+      if(f.function.identity == TestFunctions.Avg.identity) {
+        Some(avg)
+      } else {
+        None
+      }
+  }
+
   object TestSplitAnd extends SplitAnd[MT] {
     val And = TestFunctions.And.monomorphic.get
     override def split(e: Expr) =
@@ -74,6 +91,7 @@ class RollupRewriterTest extends FunSuite with MustMatchers with SqlizerUniverse
   object TestRollupExact extends RollupExact[MT](
     TestSemigroupRewriter,
     TestFunctionSubset,
+    TestFunctionSplitter,
     TestSplitAnd,
     Stringifier.pretty
   )
@@ -215,7 +233,7 @@ class RollupRewriterTest extends FunSuite with MustMatchers with SqlizerUniverse
 
   test("simple rollup with additional AND in where") {
     val tf = tableFinder(
-      (0, "twocol") -> D("num" -> TestNumber, "num" -> TestNumber)
+      (0, "twocol") -> D("text" -> TestText, "num" -> TestNumber)
     )
 
     val Right(foundTables) = tf.findTables(0, "select * from @twocol where num > 5 and num < 10", Map.empty)
@@ -226,6 +244,28 @@ class RollupRewriterTest extends FunSuite with MustMatchers with SqlizerUniverse
     val select = analysis.statement.asInstanceOf[Select]
 
     val rollup = TestRollupInfo("rollup", tf, "select * from @twocol where num > 5")
+
+    println(select.debugDoc)
+    println(rollup.statement.debugDoc)
+    val result = TestRollupExact(select, rollup, analysis.labelProvider)
+
+    println(result.map(_.debugDoc))
+  }
+
+
+  test("rollup avg") {
+    val tf = tableFinder(
+      (0, "twocol") -> D("text" -> TestText, "num" -> TestNumber)
+    )
+
+    val Right(foundTables) = tf.findTables(0, "select text, avg(num) from @twocol group by text", Map.empty)
+    val analysis = analyzer(foundTables, UserParameters.empty) match {
+      case Right(a) => a
+      case Left(e) => fail(e.toString)
+    }
+    val select = analysis.statement.asInstanceOf[Select]
+
+    val rollup = TestRollupInfo("rollup", tf, "select text, sum(num), count(num) from @twocol group by text")
 
     println(select.debugDoc)
     println(rollup.statement.debugDoc)

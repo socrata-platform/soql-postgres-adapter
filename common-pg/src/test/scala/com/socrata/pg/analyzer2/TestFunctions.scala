@@ -27,6 +27,7 @@ object TestFunctions {
 
   val Plus = mf("+", SpecialFunctions.Operator("+"), Seq(TestNumber, TestNumber), Seq.empty, TestNumber)
   val Times = mf("*", SpecialFunctions.Operator("*"), Seq(TestNumber, TestNumber), Seq.empty, TestNumber)
+  val Div = mf("/", SpecialFunctions.Operator("/"), Seq(TestNumber, TestNumber), Seq.empty, TestNumber)
 
   val Compress = f("compress", FunctionName("compress"), Map("a" -> AllTypes), Seq(VariableType("a")), Seq.empty, VariableType("a"))
 
@@ -48,6 +49,8 @@ object TestFunctions {
 
   val Count = f("count", FunctionName("count"), Map.empty, Seq(VariableType("a")), Nil, FixedType(TestNumber), isAggregate = true)
   val CountStar = f("count(*)", SpecialFunctions.StarFunc("count"), Map.empty, Nil, Nil, FixedType(TestNumber), isAggregate = true)
+
+  val Avg = mf("avg", FunctionName("avg"), Seq(TestNumber), Nil, TestNumber, isAggregate = true)
 
   val castIdentitiesByType = OrderedMap() ++ TestType.typesByName.iterator.map { case (n, t) =>
     t -> mf(n.caseFolded + "::" + n.caseFolded, SpecialFunctions.Cast(n), Seq(t), Seq.empty, t)

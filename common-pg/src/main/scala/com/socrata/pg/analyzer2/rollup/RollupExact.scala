@@ -14,6 +14,7 @@ object RollupExact {
 class RollupExact[MT <: MetaTypes](
   semigroupRewriter: SemigroupRewriter[MT],
   functionSubset: FunctionSubset[MT],
+  functionSplitter: FunctionSplitter[MT],
   splitAnd: SplitAnd[MT],
   stringifier: Stringifier[MT]
 ) extends ((Select[MT], RollupInfo[MT], LabelProvider) => Option[Statement[MT]]) with SqlizerUniverse[MT] {
@@ -555,6 +556,58 @@ class RollupExact[MT <: MetaTypes](
       }.toMap
 
     def rewrite(sExpr: Expr, needsMerge: Boolean = false): Option[Expr] =
+      rewriteSimple(sExpr, needsMerge).orElse { rewriteCompound(sExpr, needsMerge) }
+
+    // This exists specifically to handle the case of "avg" but in
+    // principle could also be used for other things?  Anyway,
+    // this rewrites a(x, y, z) into combiner(b(x, y, z), c(x, y, z), ...)
+    // and then tries to rewrite that form.
+    private def rewriteCompound(sExpr: Expr, needsMerge: Boolean): Option[Expr] =
+      sExpr match {
+        case fc@FunctionCall(func, args) =>
+          functionSplitter(func).flatMap { case (combiner, inputFuncs) =>
+            rewrite(
+              FunctionCall(
+                combiner,
+                inputFuncs.map { inputFunc =>
+                  FunctionCall(inputFunc, args)(fc.position)
+                }
+              )(fc.position),
+              needsMerge
+            )
+          }
+
+        case afc@AggregateFunctionCall(func, args, distinct, filter) =>
+          functionSplitter(func).flatMap { case (combiner, inputFuncs) =>
+            rewrite(
+              FunctionCall(
+                combiner,
+                inputFuncs.map { inputFunc =>
+                  AggregateFunctionCall(inputFunc, args, distinct, filter)(afc.position)
+                }
+              )(afc.position),
+              needsMerge
+            )
+          }
+
+        case wfc@WindowedFunctionCall(func, args, filter, partitionBy, orderBy, frame) =>
+          functionSplitter(func).flatMap { case (combiner, inputFuncs) =>
+            rewrite(
+              FunctionCall(
+                combiner,
+                inputFuncs.map { inputFunc =>
+                  WindowedFunctionCall(inputFunc, args, filter, partitionBy, orderBy, frame)(wfc.position)
+                }
+              )(wfc.position),
+              needsMerge
+            )
+          }
+
+        case _ =>
+          None
+      }
+
+    private def rewriteSimple(sExpr: Expr, needsMerge: Boolean): Option[Expr] =
       candidateSelectList.iterator.findMap { case (label, ne) =>
         if(sExpr.isIsomorphic(ne.expr, isoState)) {
           Some((label, ne, identity[Expr] _))
@@ -606,7 +659,6 @@ class RollupExact[MT <: MetaTypes](
                 WindowedFunctionCall(func, args, newFilter, newPartitionBy, newOrderBy, frame)(wfc.position)
               }
             case other =>
-              log.debug("Can't rewrite, didn't find an appropriate source column")
               None
           }
       }
