@@ -74,9 +74,13 @@ class RRExperiments[MT <: MetaTypes](
   private def rollup(stmt: Statement, prefixesAllowed: Boolean): Seq[Statement] = {
     stmt match {
       case select: Select =>
-        rollupSelectExact(select) ++
-          (if(prefixesAllowed) rollupPrefixes(select) else None) ++
-          rollupSubqueries(select)
+        if(select.hint(SelectHint.NoRollup)) {
+          Nil
+        } else {
+          rollupSelectExact(select) ++
+            (if(prefixesAllowed) rollupPrefixes(select) else None) ++
+            rollupSubqueries(select)
+        }
       case v: Values =>
         Nil
       case combined@CombinedTables(op, left, right) =>
