@@ -25,7 +25,8 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     private val Sum = TestFunctions.Sum.identity
     private val Count = TestFunctions.Count.identity
     private val CountStar = TestFunctions.CountStar.identity
-    override def mergeSemigroup(f: MonomorphicFunction): Option[Expr => Expr] = {
+
+    override def apply(f: MonomorphicFunction): Option[Expr => Expr] = {
       f.function.identity match {
         case Max =>
           Some { max => AggregateFunctionCall[MT](TestFunctions.Max.monomorphic.get, Seq(max), false, None)(FuncallPositionInfo.None) }
@@ -54,14 +55,14 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
 
   object TestSplitAnd extends SplitAnd[MT] {
     val And = TestFunctions.And.monomorphic.get
-    override def splitAnd(e: Expr) =
+    override def split(e: Expr) =
       e match {
         case FunctionCall(And, args) =>
-          args.flatMap(splitAnd)
+          args.flatMap(split)
         case other =>
           Seq(other)
       }
-    override def mergeAnd(e: Seq[Expr]) = {
+    override def merge(e: Seq[Expr]) = {
       if(e.isEmpty) {
         None
       } else {
@@ -143,7 +144,7 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
 
     println(select.debugDoc)
     println(rollup.statement.debugDoc)
-    val result = TestRollupExact.rollupSelectExact(select, rollup, analysis.labelProvider)
+    val result = TestRollupExact(select, rollup, analysis.labelProvider)
 
     println(result.map(_.debugDoc))
   }
@@ -164,7 +165,7 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
 
     println(select.debugDoc)
     println(rollup.statement.debugDoc)
-    val result = TestRollupExact.rollupSelectExact(select, rollup, analysis.labelProvider)
+    val result = TestRollupExact(select, rollup, analysis.labelProvider)
 
     println(result.map(_.debugDoc))
   }
@@ -185,7 +186,7 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
 
     println(select.debugDoc)
     println(rollup.statement.debugDoc)
-    val result = TestRollupExact.rollupSelectExact(select, rollup, analysis.labelProvider)
+    val result = TestRollupExact(select, rollup, analysis.labelProvider)
 
     println(result.map(_.debugDoc))
   }
@@ -206,7 +207,7 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
 
     println(select.debugDoc)
     println(rollup.statement.debugDoc)
-    val result = TestRollupExact.rollupSelectExact(select, rollup, analysis.labelProvider)
+    val result = TestRollupExact(select, rollup, analysis.labelProvider)
 
     println(result.map(_.debugDoc))
   }
@@ -227,7 +228,7 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
 
     println(select.debugDoc)
     println(rollup.statement.debugDoc)
-    val result = TestRollupExact.rollupSelectExact(select, rollup, analysis.labelProvider)
+    val result = TestRollupExact(select, rollup, analysis.labelProvider)
 
     println(result.map(_.debugDoc))
   }

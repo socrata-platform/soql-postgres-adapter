@@ -18,7 +18,7 @@ class RRExperiments[MT <: MetaTypes](
   // statements with the same output schema (in terms of column labels
   // and types) as the given select.
   private def rollupSelectExact(select: Select): Seq[Statement] =
-    rollups.flatMap(rollupExact.rollupSelectExact(select, _, labelProvider))
+    rollups.flatMap(rollupExact(select, _, labelProvider))
 
   // See if there are rollup that can be used to answer _this_
   // combined tables (not any sub-parts of the combined tables!).

@@ -15,7 +15,7 @@ class RollupExact[MT <: MetaTypes](
   semigroupRewriter: SemigroupRewriter[MT],
   functionSubset: FunctionSubset[MT],
   splitAnd: SplitAnd[MT]
-) extends SqlizerUniverse[MT] {
+) extends ((Select[MT], RollupInfo[MT], LabelProvider) => Option[Statement[MT]]) with SqlizerUniverse[MT] {
   import RollupExact.log
 
   private type IsoState = IsomorphismState.View[MT]
@@ -24,7 +24,7 @@ class RollupExact[MT <: MetaTypes](
   // (not any sub-parts of the select!).  This needs to produce a
   // statement with the same output schema (in terms of column labels
   // and types) as the given select.
-  def rollupSelectExact(select: Select, rollupInfo: RollupInfo[MT], labelProvider: LabelProvider): Option[Statement] = {
+  def apply(select: Select, rollupInfo: RollupInfo[MT], labelProvider: LabelProvider): Option[Statement] = {
     if(select.hint(SelectHint.NoRollup)) {
       return None
     }
@@ -417,7 +417,7 @@ class RollupExact[MT <: MetaTypes](
         candidate.groupBy.exists { cGroupBy =>
           sGroupBy.isIsomorphic(cGroupBy, rewriteInTerms.isoState)
         } || candidate.groupBy.exists { cGroupBy =>
-          functionSubset.funcallSubset(sGroupBy, cGroupBy, rewriteInTerms.isoState).isDefined
+          functionSubset(sGroupBy, cGroupBy, rewriteInTerms.isoState).isDefined
         }
       }
     if(!groupBySubset) {
@@ -500,8 +500,8 @@ class RollupExact[MT <: MetaTypes](
   }
 
   private def combineAnd(sExpr: Expr, cExpr: Expr, rewriteInTerms: RewriteInTerms): Option[Option[Expr]] = {
-    val sSplit = splitAnd.splitAnd(sExpr)
-    val cSplit = splitAnd.splitAnd(cExpr)
+    val sSplit = splitAnd.split(sExpr)
+    val cSplit = splitAnd.split(cExpr)
 
     // ok, this is a little subtle.  We have two lists of AND clauses,
     // and we want to make sure that cSplit is a subseqence of sSplit,
@@ -526,7 +526,7 @@ class RollupExact[MT <: MetaTypes](
       return None
     }
 
-    splitAnd.mergeAnd(result.result()).mapFallibly(rewriteInTerms.rewrite(_))
+    splitAnd.merge(result.result()).mapFallibly(rewriteInTerms.rewrite(_))
   }
 
   private class RewriteInTerms(
@@ -555,12 +555,12 @@ class RollupExact[MT <: MetaTypes](
         }
       }.orElse(
         candidateSelectList.iterator.findMap { case (label, ne) =>
-          functionSubset.funcallSubset(sExpr, ne.expr, isoState).map((label, ne, _))
+          functionSubset(sExpr, ne.expr, isoState).map((label, ne, _))
         }
       ) match {
         case Some((selectedColumn, NamedExpr(rollupExpr@AggregateFunctionCall(func, args, false, None), _name, _isSynthetic), functionExtract)) if needsMerge =>
           assert(rollupExpr.typ == sExpr.typ)
-          semigroupRewriter.mergeSemigroup(func).map { merger =>
+          semigroupRewriter(func).map { merger =>
             functionExtract(merger(PhysicalColumn[MT](newFrom.label, newFrom.tableName, newFrom.canonicalName, columnLabelMap(selectedColumn), rollupExpr.typ)(sExpr.position.asAtomic)))
           }
         case Some((selectedColumn, NamedExpr(_ : AggregateFunctionCall, _name, _isSynthetic), _)) if needsMerge =>

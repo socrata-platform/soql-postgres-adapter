@@ -4,7 +4,10 @@ import com.socrata.soql.analyzer2._
 
 import com.socrata.pg.analyzer2.SqlizerUniverse
 
-trait FunctionSubset[MT <: MetaTypes] extends SqlizerUniverse[MT] {
+trait FunctionSubset[MT <: MetaTypes]
+    extends ((Expr[MT], Expr[MT], IsomorphismState.View[MT]) => Option[Expr[MT] => Expr[MT]])
+    with SqlizerUniverse[MT]
+{
   // Given two expressions A and B, if A in some sense "contains" B
   // then return a function that lets you _replace_ that contained B
   //
@@ -18,7 +21,7 @@ trait FunctionSubset[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   //   B is date_trunc_ymd(some_fixed_timestamp, "some_timezone")
   //   A "contains" B: you can convert B to A by calling date_trunc_ym(floating_timestamp)->floating_timestamp
   //   on it.
-  def funcallSubset(a: Expr, b: Expr, under: IsomorphismState.View[MT]): Option[Expr => Expr]
+  def apply(a: Expr, b: Expr, under: IsomorphismState.View[MT]): Option[Expr => Expr]
 }
 
 trait SimpleFunctionSubset[MT <: MetaTypes] extends FunctionSubset[MT] {
@@ -46,7 +49,7 @@ trait SimpleFunctionSubset[MT <: MetaTypes] extends FunctionSubset[MT] {
   //    date_trunc_ym(the_rollup.x)
   // but this implementation will not do that.  You'll need to
   // override it if it's wanted.
-  override def funcallSubset(a: Expr, b: Expr, under: IsomorphismState.View[MT]): Option[Expr => Expr] =
+  override def apply(a: Expr, b: Expr, under: IsomorphismState.View[MT]): Option[Expr => Expr] =
     (a, b) match {
       case (aFC@FunctionCall(aFunc, Seq(aArg)), FunctionCall(bFunc, Seq(bArg))) =>
         funcallSubset(aFunc, bFunc) match {
