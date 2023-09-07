@@ -133,7 +133,7 @@ class RollupRewriterTest extends FunSuite with MustMatchers with SqlizerUniverse
     val resourceName: types.ScopedResourceName[MT],
     val databaseName: DatabaseTableName
   ) extends RollupInfo[MT] {
-    override def databaseColumnNameOfIndex(i: Int) = DatabaseColumnName(s"c$i")
+    override def databaseColumnNameOfIndex(i: Int) = DatabaseColumnName(s"c${i+1}")
   }
 
   object TestRollupInfo {
