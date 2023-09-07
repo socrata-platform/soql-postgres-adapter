@@ -35,12 +35,12 @@ class RollupExact[MT <: MetaTypes](
       case sel: Select =>
         sel
       case stmt =>
-        log.debug("Bailing because rollup is not a Select: {}", stringifier.statement(stmt))
+        log.debug("Bailing because rollup is not a Select:\n  {}", stringifier.statement(stmt).indent(2))
         return None
     }
 
     log.debug(
-      "Attempting to rewrite:\n  QUERY: {}\n  ROLLUP: {}",
+      "Attempting to rewrite:\n  QUERY:\n    {}\n  ROLLUP:\n    {}",
       stringifier.statement(select).indent(4): Any,
       stringifier.statement(rollupInfo.statement).indent(4)
     )
