@@ -67,6 +67,98 @@ class RollupExact[MT <: MetaTypes](
   }
 
   private def rewriteUnaggregatedOnUnaggregated(select: Select, candidate: Select, rewriteInTerms: RewriteInTerms): Option[Select] = {
+    log.debug("attempting to rewrite an unaggregated query in terms of an unaggregated candidate")
+
+    assert(!select.isAggregated)
+    assert(!candidate.isAggregated)
+    assert(select.groupBy.isEmpty)
+    assert(select.having.isEmpty)
+    assert(candidate.groupBy.isEmpty)
+    assert(candidate.having.isEmpty)
+
+    val Select(
+      sDistinctiveness,
+      sSelectList,
+      sFrom,
+      sWhere,
+      _sGroupBy,
+      _sHaving,
+      sOrderBy,
+      sLimit,
+      sOffset,
+      sSearch,
+      sHint
+    ) = select
+
+    val Select(
+      cDistinctiveness,
+      cSelectList,
+      cFrom,
+      cWhere,
+      _cGroupBy,
+      _cHaving,
+      cOrderBy,
+      cLimit,
+      cOffset,
+      cSearch,
+      _cHint
+    ) = candidate
+
+    rewriteOneToOne(
+      select.isWindowed,
+      sDistinctiveness,
+      sSelectList,
+      sFrom,
+      sWhere,
+      sOrderBy,
+      sLimit,
+      sOffset,
+      sSearch,
+      sHint,
+
+      candidate.isWindowed,
+      cDistinctiveness,
+      cSelectList,
+      cFrom,
+      cWhere,
+      cOrderBy,
+      cLimit,
+      cOffset,
+      cSearch,
+
+      rewriteInTerms,
+      "WHERE"
+    )
+  }
+
+  // This is used for places where we're not grouping the rollup
+  // (i.e., the queries are not grouped or both are grouped the same
+  // way).
+  private def rewriteOneToOne(
+    sIsWindowed: Boolean,
+    sDistinctiveness: Distinctiveness,
+    sSelectList: OrderedMap[AutoColumnLabel, NamedExpr],
+    sFrom: From,
+    sWhereish: Option[Expr],
+    sOrderBy: Seq[OrderBy],
+    sLimit: Option[BigInt],
+    sOffset: Option[BigInt],
+    sSearch: Option[String],
+    sHint: Set[SelectHint],
+
+    cIsWindowed: Boolean,
+    cDistinctiveness: Distinctiveness,
+    cSelectList: OrderedMap[AutoColumnLabel, NamedExpr],
+    cFrom: From,
+    cWhereish: Option[Expr],
+    cOrderBy: Seq[OrderBy],
+    cLimit: Option[BigInt],
+    cOffset: Option[BigInt],
+    cSearch: Option[String],
+
+    rewriteInTerms: RewriteInTerms,
+    whereName: String
+  ): Option[Select] = {
     // * the candidate must be indistinct, or its DISTINCT clause         ✓
     //   must match (requires WHERE and ORDER isomorphism, and
     //   if fully distinct, select list isomorphism)
@@ -83,76 +175,69 @@ class RollupExact[MT <: MetaTypes](
     //   must not specify or ORDER BY must be isomorphic and this
     //   function's LIMIT/OFFSET must specify a window completely
     //   contained within the candidate's LIMIT/OFFSET
-    log.debug("attempting to rewrite an unaggregated query in terms of an unaggregated candidate")
 
-    assert(!select.isAggregated)
-    assert(!candidate.isAggregated)
-    assert(select.groupBy.isEmpty)
-    assert(select.having.isEmpty)
-    assert(candidate.groupBy.isEmpty)
-    assert(candidate.having.isEmpty)
-
-    if(select.search.isDefined || candidate.search.isDefined) {
+    if(sSearch.isDefined || cSearch.isDefined) {
       log.debug("Bailing because SEARCH makes rollups bad")
       return None
     }
 
-    lazy val whereIsIsomorphic: Boolean =
-      select.where.isDefined == candidate.where.isDefined &&
-        (select.where, candidate.where).zipped.forall { (a, b) => a.isIsomorphic(b, rewriteInTerms.isoState) }
+
+    lazy val whereishIsIsomorphic: Boolean =
+      sWhereish.isDefined == cWhereish.isDefined &&
+        (sWhereish, cWhereish).zipped.forall { (a, b) => a.isIsomorphic(b, rewriteInTerms.isoState) }
 
     val newWhere: Option[Expr] =
-      (select.where, candidate.where) match {
+      (sWhereish, cWhereish) match {
         case (sWhere, None) =>
           sWhere.mapFallibly(rewriteInTerms.rewrite(_)).getOrElse {
-            log.debug("Bailing because couldn't rewrite WHERE in terms of candidate output columns")
+            log.debug(s"Bailing because couldn't rewrite $whereName in terms of candidate output columns")
             return None
           }
 
         case (Some(sWhere), Some(cWhere)) =>
-          if(whereIsIsomorphic) {
+          if(whereishIsIsomorphic) {
             None
           } else {
             combineAnd(sWhere, cWhere, rewriteInTerms).getOrElse {
-              log.debug("Bailing because couldn't express the query's WHERE in terms of the candidate's WHERE")
+              log.debug(s"Bailing because couldn't express the query's $whereName in terms of the candidate's $whereName")
               return None
             }
           }
 
         case (None, Some(_)) =>
-          log.debug("Bailing because the candidate has a WHERE clause and the query does not")
+          log.debug(s"Bailing because the candidate has a $whereName clause and the query does not")
           return None
       }
 
     lazy val orderByIsIsomorphic: Boolean =
-      select.orderBy.length == candidate.orderBy.length &&
-        (select.orderBy, candidate.orderBy).zipped.forall { (a, b) => a.isIsomorphic(b, rewriteInTerms.isoState) }
+      sOrderBy.length == cOrderBy.length &&
+        (sOrderBy, cOrderBy).zipped.forall { (a, b) => a.isIsomorphic(b, rewriteInTerms.isoState) }
 
-    if(candidate.isWindowed && (!orderByIsIsomorphic || !whereIsIsomorphic)) {
+    if(sIsWindowed && cIsWindowed && (!orderByIsIsomorphic || !whereishIsIsomorphic)) {
       // This isn't quite right!  We only need to bail here if one of
       // the candidate's windowed expressions is actually used in the
       // query.
-      log.debug("Bailing because the candidate windowed but ORDER BYs and WHEREs are not isomorphic")
+      log.debug(s"Bailing because the candidate windowed but ORDER BYs and ${whereName}s are not isomorphic")
       return None
     }
 
-    val newOrderBy: Seq[OrderBy] = select.orderBy.mapFallibly(rewriteInTerms.rewriteOrderBy(_)).getOrElse {
+    val newOrderBy: Seq[OrderBy] = sOrderBy.mapFallibly(rewriteInTerms.rewriteOrderBy(_)).getOrElse {
       log.debug("Bailing because couldn't rewrite ORDER BY in terms of candidate output columns")
       return None
     }
 
-    (select.distinctiveness, candidate.distinctiveness) match {
+    (sDistinctiveness, cDistinctiveness) match {
       case (_, Distinctiveness.Indistinct()) =>
         // ok, we can work with this
       case (Distinctiveness.FullyDistinct(), Distinctiveness.FullyDistinct()) =>
         // we need to select the exact same columns
-        if(!sameSelectList(select.selectList, candidate.selectList, rewriteInTerms.isoState)) {
+        if(!sameSelectList(sSelectList, cSelectList, rewriteInTerms.isoState)) {
           log.debug("Bailing because DISTINCT but different select lists")
           return None
         }
 
-        if(!whereIsIsomorphic) {
-          log.debug("Bailing because DISTINCT but WHERE is not isomorphic")
+        if(!whereishIsIsomorphic) {
+          log.debug(s"Bailing because DISTINCT but $whereName is not isomorphic")
           return None
         }
       case (Distinctiveness.On(sOn), Distinctiveness.On(cOn)) =>
@@ -163,27 +248,27 @@ class RollupExact[MT <: MetaTypes](
 
         // ORDER BY needs to be isomorphic because DISTINCT ON picks
         // the first row
-        if(!whereIsIsomorphic || !orderByIsIsomorphic) {
-          log.debug("Bailing because DISTINCT ON but WHERE or ORDER BY are not isomorphic")
+        if(!whereishIsIsomorphic || !orderByIsIsomorphic) {
+          log.debug(s"Bailing because DISTINCT ON but $whereName or ORDER BY are not isomorphic")
           return None
         }
       case _ =>
         log.debug("Bailing because of a distinctiveness mismatch")
         return None
       }
-    val newDistinctiveness = rewriteDistinctiveness(select.distinctiveness, rewriteInTerms).getOrElse {
+    val newDistinctiveness = rewriteDistinctiveness(sDistinctiveness, rewriteInTerms).getOrElse {
       log.debug("Bailing because failed to rewrite distinctiveness")
       return None
     }
 
     val newSelectList: OrderedMap[AutoColumnLabel, NamedExpr] =
-      OrderedMap() ++ select.selectList.iterator.mapFallibly(rewriteInTerms.rewriteSelectListEntry(_)).getOrElse {
+      OrderedMap() ++ sSelectList.iterator.mapFallibly(rewriteInTerms.rewriteSelectListEntry(_)).getOrElse {
         log.debug("Bailing because failed to rewrite the select list")
         return None
       }
 
     val (newLimit, newOffset) =
-      combineLimitOffset(select.limit, select.offset, candidate.limit, candidate.offset, orderByIsIsomorphic).getOrElse {
+      combineLimitOffset(sLimit, sOffset, cLimit, cOffset, orderByIsIsomorphic).getOrElse {
         return None
       }
 
@@ -199,7 +284,7 @@ class RollupExact[MT <: MetaTypes](
         limit = newLimit,
         offset = newOffset,
         search = None,
-        hint = select.hint
+        hint = sHint
       )
     )
   }
@@ -453,129 +538,60 @@ class RollupExact[MT <: MetaTypes](
     // we'll be promoting the select's HAVING clause into the new
     // query's WHERE.
 
-    // * the candidate must be indistinct, or its DISTINCT clause         ✓
-    //   must match (requires HAVING and ORDER isomorphism, and
-    //   if fully distinct, select list isomorphism)
-    // * all expressions in select list, ORDER BY must be                 ✓
-    //   expressible in terms of the output columns of candidate
-    // * HAVING must be a supersequence of the candidate's and the        ✓
-    //   parts that aren't must be expressible in terms of the ouput
-    //   column of the candidate.
-    // * HAVING and ORDER BY must be isomorphic if the candidate          ✓ (kinda)
-    //   is windowed and the windowed expressions are used in
-    //   this select.
-    // * SEARCH must not exist on either select                           ✓
-    // * If LIMIT and/or OFFSET is specified, either the candidate        ✓
-    //   must not specify or ORDER BY must be isomorphic and this
-    //   function's LIMIT/OFFSET must specify a window completely
-    //   contained within the candidate's LIMIT/OFFSET
+    // In fact, we can actually do this in terms of the other!
 
-    if(select.search.isDefined || candidate.search.isDefined) {
-      log.debug("Bailing because SEARCH makes rollups bad")
-      return None
-    }
+    val Select(
+      sDistinctiveness,
+      sSelectList,
+      sFrom,
+      _sWhere,
+      _sGroupBy,
+      sHaving,
+      sOrderBy,
+      sLimit,
+      sOffset,
+      sSearch,
+      sHint
+    ) = select
 
-    lazy val havingIsIsomorphic: Boolean =
-      select.having.isDefined == candidate.having.isDefined &&
-        (select.having, candidate.having).zipped.forall { (a, b) => a.isIsomorphic(b, rewriteInTerms.isoState) }
+    val Select(
+      cDistinctiveness,
+      cSelectList,
+      cFrom,
+      _cWhere,
+      _cGroupBy,
+      cHaving,
+      cOrderBy,
+      cLimit,
+      cOffset,
+      cSearch,
+      _cHint
+    ) = candidate
 
-    val newWhere = (select.having, candidate.having) match {
-      case (sHaving, None) =>
-        sHaving.mapFallibly(rewriteInTerms.rewrite(_)).getOrElse {
-          log.debug("Bailing because unable to rewrite the HAVING in terms of the candidate's output columns")
-          return None
-        }
+    rewriteOneToOne(
+      select.isWindowed,
+      sDistinctiveness,
+      sSelectList,
+      sFrom,
+      sHaving,
+      sOrderBy,
+      sLimit,
+      sOffset,
+      sSearch,
+      sHint,
 
-      case (Some(sHaving), Some(cHaving)) =>
-        if(havingIsIsomorphic) {
-          None
-        } else {
-          combineAnd(sHaving, cHaving, rewriteInTerms).getOrElse {
-            log.debug("Bailing because couldn't express the query's HAVING in terms of the candidate's HAVING")
-            return None
-          }
-        }
+      candidate.isWindowed,
+      cDistinctiveness,
+      cSelectList,
+      cFrom,
+      cHaving,
+      cOrderBy,
+      cLimit,
+      cOffset,
+      cSearch,
 
-      case (None, Some(_)) =>
-        log.debug("Bailing because the candidate has a HAVING clause and the query does not")
-        return None
-    }
-
-    lazy val orderByIsIsomorphic: Boolean =
-      select.orderBy.length == candidate.orderBy.length &&
-        (select.orderBy, candidate.orderBy).zipped.forall { (a, b) => a.isIsomorphic(b, rewriteInTerms.isoState) }
-
-    if(candidate.isWindowed && (!orderByIsIsomorphic || !havingIsIsomorphic)) {
-      // This isn't quite right!  We only need to bail here if one of
-      // the candidate's windowed expressions is actually used in the
-      // query.
-      log.debug("Bailing because the candidate is windowed but ORDER BYs and HAVINGs are not isomorphic")
-      return None
-    }
-
-    val newOrderBy: Seq[OrderBy] = select.orderBy.mapFallibly(rewriteInTerms.rewriteOrderBy(_)).getOrElse {
-      log.debug("Bailing because couldn't rewrite ORDER BY in terms of candidate output columns")
-      return None
-    }
-
-    (select.distinctiveness, candidate.distinctiveness) match {
-      case (_, Distinctiveness.Indistinct()) =>
-        // ok
-      case (Distinctiveness.FullyDistinct(), Distinctiveness.FullyDistinct()) =>
-        if(!sameSelectList(select.selectList, candidate.selectList, rewriteInTerms.isoState)) {
-          log.debug("Bailing because DISTINCT but different select lists")
-          return None
-        }
-
-        if(!havingIsIsomorphic) {
-          log.debug("Bailing because DISTINCT but HAVING is not isomorphic")
-          return None
-        }
-      case (Distinctiveness.On(sOn), Distinctiveness.On(cOn)) =>
-        if(sOn.length != cOn.length || (sOn, cOn).zipped.exists { (s, c) => !s.isIsomorphic(c, rewriteInTerms.isoState) }) {
-          log.debug("Bailing because of DISTINCT ON mismatch")
-          return None
-        }
-
-        if(!havingIsIsomorphic || !orderByIsIsomorphic) {
-          log.debug("Bailing because DISTINCT ON but HAVING or ORDER BY are not isomorphic")
-          return None
-        }
-
-      case _ =>
-        log.debug("Bailing because of a distinctiveness mismatch")
-        return None
-    }
-    val newDistinctiveness = rewriteDistinctiveness(select.distinctiveness, rewriteInTerms).getOrElse {
-      log.debug("Bailing because failed to rewrite the DISTINCT clause")
-      return None
-    }
-
-    val newSelectList: OrderedMap[AutoColumnLabel, NamedExpr] =
-      OrderedMap() ++ select.selectList.iterator.mapFallibly(rewriteInTerms.rewriteSelectListEntry(_)).getOrElse {
-        log.debug("Bailing because failed to rewrite the select list")
-        return None
-      }
-
-    val (newLimit, newOffset) =
-      combineLimitOffset(select.limit, select.offset, candidate.limit, candidate.offset, orderByIsIsomorphic).getOrElse {
-        return None
-      }
-
-    Some(
-      Select(
-        distinctiveness = newDistinctiveness,
-        selectList = newSelectList,
-        from = rewriteInTerms.newFrom,
-        where = newWhere,
-        groupBy = Nil,
-        having = None,
-        orderBy = newOrderBy,
-        limit = select.limit,
-        offset = select.offset,
-        search = None,
-        hint = select.hint
-      )
+      rewriteInTerms,
+      "HAVING"
     )
   }
 
