@@ -8,16 +8,17 @@ import com.socrata.soql.environment.ColumnName
 
 import com.socrata.pg.analyzer2.{RollupRewriter, SqlizerUniverse}
 
-trait RRExperiments[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelProvider with RollupExact[MT] =>
-  protected implicit def dtnOrdering: Ordering[MT#DatabaseColumnNameImpl]
-  val rollups: Seq[RollupInfo[MT]]
-
+class RRExperiments[MT <: MetaTypes](
+  labelProvider: LabelProvider,
+  rollupExact: RollupExact[MT],
+  rollups: Seq[RollupInfo[MT]]
+)(implicit dtnOrdering: Ordering[MT#DatabaseColumnNameImpl]) extends SqlizerUniverse[MT] {
   // see if there are rollups that can be used to answer _this_ select
   // (not any sub-parts of the select!).  This needs to produce
   // statements with the same output schema (in terms of column labels
   // and types) as the given select.
   private def rollupSelectExact(select: Select): Seq[Statement] =
-    rollups.flatMap(rollupSelectExact(select, _))
+    rollups.flatMap(rollupExact.rollupSelectExact(select, _, labelProvider))
 
   // See if there are rollup that can be used to answer _this_
   // combined tables (not any sub-parts of the combined tables!).

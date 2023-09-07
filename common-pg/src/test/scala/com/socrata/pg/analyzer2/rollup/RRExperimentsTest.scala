@@ -20,9 +20,7 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
 
   def xtest(s: String)(f: => Any): Unit = {}
 
-  class TestRollupExact(
-    override val labelProvider: LabelProvider
-  ) extends RollupExact[MT] with HasLabelProvider with SemigroupRewriter[MT] with SimpleFunctionSubset[MT] with SplitAnd[MT] {
+  object TestSemigroupRewriter extends SemigroupRewriter[MT] {
     private val Max = TestFunctions.Max.identity
     private val Sum = TestFunctions.Sum.identity
     private val Count = TestFunctions.Count.identity
@@ -39,7 +37,9 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
           None
       }
     }
+  }
 
+  object TestFunctionSubset extends SimpleFunctionSubset[MT] {
     val BottomByte = TestFunctions.BottomByte.monomorphic.get
     val BottomDWord = TestFunctions.BottomDWord.monomorphic.get
 
@@ -50,7 +50,9 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
         case _ =>
           None
       }
+  }
 
+  object TestSplitAnd extends SplitAnd[MT] {
     val And = TestFunctions.And.monomorphic.get
     override def splitAnd(e: Expr) =
       e match {
@@ -68,12 +70,16 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     }
   }
 
+  object TestRollupExact extends RollupExact[MT](
+    TestSemigroupRewriter,
+    TestFunctionSubset,
+    TestSplitAnd
+  )
+
   class TestRRExperiments(
-    override val rollups: Seq[RollupInfo[MT]],
-    labelProvider: LabelProvider
-  ) extends TestRollupExact(labelProvider) with RRExperiments[MT] {
-    override val dtnOrdering = Ordering.String
-  }
+    labelProvider: LabelProvider,
+    rollups: Seq[RollupInfo[MT]]
+  ) extends RRExperiments(labelProvider, TestRollupExact, rollups)
 
   test("huh") {
     val tf = tableFinder(
@@ -89,11 +95,11 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     }
 
     val expr = new TestRRExperiments(
+      analysis.labelProvider,
       Seq(
         TestRollupInfo("rollup1", tf, "select @twocol.text as twocol_text, @twocol.num as twocol_num, @english.num as english_num, @english.name as english_name from @twocol join @english on @twocol.num = @english.num"),
         TestRollupInfo("rollup2", tf, "select text, num, @english.name, count(*) from @twocol join @english on num = @english.num group by text, num, @english.name")
-      ),
-      analysis.labelProvider
+      )
     )
 
     val result = expr.rollup(analysis.statement).map(_.debugStr)
@@ -134,11 +140,10 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     val select = analysis.statement.asInstanceOf[Select]
 
     val rollup = TestRollupInfo("rollup", tf, "select text, num * 5, num from @twocol where num = 5 order by text")
-    val re = new TestRollupExact(analysis.labelProvider)
 
     println(select.debugDoc)
     println(rollup.statement.debugDoc)
-    val result = re.rollupSelectExact(select, rollup)
+    val result = TestRollupExact.rollupSelectExact(select, rollup, analysis.labelProvider)
 
     println(result.map(_.debugDoc))
   }
@@ -156,11 +161,10 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     val select = analysis.statement.asInstanceOf[Select]
 
     val rollup = TestRollupInfo("rollup", tf, "select text, num * 5, bottom_dword(num) from @twocol where num = 5 order by text")
-    val re = new TestRollupExact(analysis.labelProvider)
 
     println(select.debugDoc)
     println(rollup.statement.debugDoc)
-    val result = re.rollupSelectExact(select, rollup)
+    val result = TestRollupExact.rollupSelectExact(select, rollup, analysis.labelProvider)
 
     println(result.map(_.debugDoc))
   }
@@ -178,11 +182,10 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     val select = analysis.statement.asInstanceOf[Select]
 
     val rollup = TestRollupInfo("rollup", tf, "select text, num, sum(another_num) from @threecol group by text, num")
-    val re = new TestRollupExact(analysis.labelProvider)
 
     println(select.debugDoc)
     println(rollup.statement.debugDoc)
-    val result = re.rollupSelectExact(select, rollup)
+    val result = TestRollupExact.rollupSelectExact(select, rollup, analysis.labelProvider)
 
     println(result.map(_.debugDoc))
   }
@@ -200,11 +203,10 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     val select = analysis.statement.asInstanceOf[Select]
 
     val rollup = TestRollupInfo("rollup", tf, "select bottom_dword(num1), max(num2) from @twocol group by bottom_dword(num1)")
-    val re = new TestRollupExact(analysis.labelProvider)
 
     println(select.debugDoc)
     println(rollup.statement.debugDoc)
-    val result = re.rollupSelectExact(select, rollup)
+    val result = TestRollupExact.rollupSelectExact(select, rollup, analysis.labelProvider)
 
     println(result.map(_.debugDoc))
   }
@@ -222,11 +224,10 @@ class RRExperimentsTest extends FunSuite with MustMatchers with SqlizerUniverse[
     val select = analysis.statement.asInstanceOf[Select]
 
     val rollup = TestRollupInfo("rollup", tf, "select * from @twocol where num > 5")
-    val re = new TestRollupExact(analysis.labelProvider)
 
     println(select.debugDoc)
     println(rollup.statement.debugDoc)
-    val result = re.rollupSelectExact(select, rollup)
+    val result = TestRollupExact.rollupSelectExact(select, rollup, analysis.labelProvider)
 
     println(result.map(_.debugDoc))
   }

@@ -11,7 +11,11 @@ object RollupExact {
   private val log = LoggerFactory.getLogger(classOf[RollupExact[_]])
 }
 
-trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelProvider with SemigroupRewriter[MT] with FunctionSubset[MT] with SplitAnd[MT] =>
+class RollupExact[MT <: MetaTypes](
+  semigroupRewriter: SemigroupRewriter[MT],
+  functionSubset: FunctionSubset[MT],
+  splitAnd: SplitAnd[MT]
+) extends SqlizerUniverse[MT] {
   import RollupExact.log
 
   private type IsoState = IsomorphismState.View[MT]
@@ -20,7 +24,7 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
   // (not any sub-parts of the select!).  This needs to produce a
   // statement with the same output schema (in terms of column labels
   // and types) as the given select.
-  def rollupSelectExact(select: Select, rollupInfo: RollupInfo[MT]): Option[Statement] = {
+  def rollupSelectExact(select: Select, rollupInfo: RollupInfo[MT], labelProvider: LabelProvider): Option[Statement] = {
     if(select.hint(SelectHint.NoRollup)) {
       return None
     }
@@ -413,7 +417,7 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
         candidate.groupBy.exists { cGroupBy =>
           sGroupBy.isIsomorphic(cGroupBy, rewriteInTerms.isoState)
         } || candidate.groupBy.exists { cGroupBy =>
-          funcallSubset(sGroupBy, cGroupBy, rewriteInTerms.isoState).isDefined
+          functionSubset.funcallSubset(sGroupBy, cGroupBy, rewriteInTerms.isoState).isDefined
         }
       }
     if(!groupBySubset) {
@@ -496,8 +500,8 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
   }
 
   private def combineAnd(sExpr: Expr, cExpr: Expr, rewriteInTerms: RewriteInTerms): Option[Option[Expr]] = {
-    val sSplit = splitAnd(sExpr)
-    val cSplit = splitAnd(cExpr)
+    val sSplit = splitAnd.splitAnd(sExpr)
+    val cSplit = splitAnd.splitAnd(cExpr)
 
     // ok, this is a little subtle.  We have two lists of AND clauses,
     // and we want to make sure that cSplit is a subseqence of sSplit,
@@ -522,7 +526,7 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
       return None
     }
 
-    mergeAnd(result.result()).mapFallibly(rewriteInTerms.rewrite(_))
+    splitAnd.mergeAnd(result.result()).mapFallibly(rewriteInTerms.rewrite(_))
   }
 
   private class RewriteInTerms(
@@ -551,12 +555,12 @@ trait RollupExact[MT <: MetaTypes] extends SqlizerUniverse[MT] { this: HasLabelP
         }
       }.orElse(
         candidateSelectList.iterator.findMap { case (label, ne) =>
-          funcallSubset(sExpr, ne.expr, isoState).map((label, ne, _))
+          functionSubset.funcallSubset(sExpr, ne.expr, isoState).map((label, ne, _))
         }
       ) match {
         case Some((selectedColumn, NamedExpr(rollupExpr@AggregateFunctionCall(func, args, false, None), _name, _isSynthetic), functionExtract)) if needsMerge =>
           assert(rollupExpr.typ == sExpr.typ)
-          mergeSemigroup(func).map { merger =>
+          semigroupRewriter.mergeSemigroup(func).map { merger =>
             functionExtract(merger(PhysicalColumn[MT](newFrom.label, newFrom.tableName, newFrom.canonicalName, columnLabelMap(selectedColumn), rollupExpr.typ)(sExpr.position.asAtomic)))
           }
         case Some((selectedColumn, NamedExpr(_ : AggregateFunctionCall, _name, _isSynthetic), _)) if needsMerge =>
