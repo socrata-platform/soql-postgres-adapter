@@ -32,7 +32,7 @@ import com.socrata.soql.sql.Debug
 import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
 import com.socrata.datacoordinator.common.soql.SoQLRep
 
-import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, SoQLRewritePasses, TransformManager, Stringifier}
+import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, SoQLRewritePasses, TransformManager, Stringifier, CostEstimator}
 import com.socrata.pg.analyzer2.rollup.SoQLRollupExact
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils}
 import com.socrata.pg.server.CJSONWriter
@@ -78,7 +78,7 @@ object ProcessQuery {
     // Intermixed rewrites and rollups: rollups are attemted before
     // each group of rewrite passes and after all rewrite passes have
     // happened.
-    val nameAnalysis = locally {
+    val nameAnalyses = locally {
       import DatabaseNamesMetaTypes.DebugHelper._
 
       TransformManager[DatabaseNamesMetaTypes](
@@ -88,16 +88,37 @@ object ProcessQuery {
         new SoQLRewritePasses,
         new SoQLRollupExact(Stringifier.pretty),
         Stringifier.pretty
-      ).head
+      )
     }
 
-    val physicalTableFor: Map[AutoTableLabel, types.DatabaseTableName[DatabaseNamesMetaTypes]] =
-      if(request.locationSubcolumns.isEmpty) Map.empty
-      else physicalTableMap(nameAnalysis)
+    case class Sqlized(
+      analysis: SoQLAnalysis[DatabaseNamesMetaTypes],
+      sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]],
+      extractor: ResultExtractor[DatabaseNamesMetaTypes],
+      nonliteralSystemContextLookupFound: Boolean,
+      now: Option[DateTime],
+      estimatedCost: Double
+    )
 
-    val sqlizer = new ActualSqlizer(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, rewriteSubcolumns(request.locationSubcolumns, copyCache), physicalTableFor)
-    val Sqlizer.Result(sql, extractor, nonliteralSystemContextLookupFound, now) = sqlizer(nameAnalysis.statement)
-    log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
+    val onlyOne = nameAnalyses.lengthCompare(1) == 0
+    val sqlized = nameAnalyses.map { nameAnalysis =>
+      val physicalTableFor: Map[AutoTableLabel, types.DatabaseTableName[DatabaseNamesMetaTypes]] =
+        if(request.locationSubcolumns.isEmpty) Map.empty
+        else physicalTableMap(nameAnalysis)
+
+      val sqlizer = new ActualSqlizer(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, rewriteSubcolumns(request.locationSubcolumns, copyCache), physicalTableFor)
+      val Sqlizer.Result(sql, extractor, nonliteralSystemContextLookupFound, now) = sqlizer(nameAnalysis.statement)
+      log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
+
+      Sqlized(
+        nameAnalysis,
+        sql,
+        extractor,
+        nonliteralSystemContextLookupFound,
+        now,
+        if(onlyOne) 0.0 else CostEstimator(pgu.conn, sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded)).toString)
+      )
+    }.minBy(_.estimatedCost)
 
     // Our etag will be the hash of the inputs that affect the result of the query
     val etag = ETagify(
@@ -108,7 +129,7 @@ object ProcessQuery {
       request.locationSubcolumns,
       passes,
       request.debug,
-      now
+      sqlized.now
     )
 
     // "last modified" is problematic because it doesn't include
@@ -120,14 +141,14 @@ object ProcessQuery {
     precondition.check(Some(etag), sideEffectFree = true) match {
       case Precondition.Passed =>
         fulfillRequest(
-          if(nonliteralSystemContextLookupFound) Some(systemContext) else None,
+          if(sqlized.nonliteralSystemContextLookupFound) Some(systemContext) else None,
           copyCache,
           etag,
           pgu,
-          sql,
-          nameAnalysis,
+          sqlized.sql,
+          sqlized.analysis,
           cryptProviders,
-          extractor,
+          sqlized.extractor,
           lastModified,
           request.debug,
           rs
