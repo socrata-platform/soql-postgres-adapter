@@ -1,8 +1,6 @@
-package com.socrata.pg.analyzer2.rollup
+package com.socrata.pg.analyzer2
 
 import com.socrata.soql.analyzer2._
-
-import com.socrata.pg.analyzer2.SqlizerUniverse
 
 trait Stringifier[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   def statement(stmt: Statement): LazyToString
@@ -13,9 +11,9 @@ trait Stringifier[MT <: MetaTypes] extends SqlizerUniverse[MT] {
 object Stringifier {
   def simple[MT <: MetaTypes]: Stringifier[MT] =
     new Stringifier[MT] {
-      override def statement(stmt: Statement) = LazyToString(stmt)(_.toString)
-      override def from(from: From) = LazyToString(from)(_.toString)
-      override def expr(expr: Expr) = LazyToString(expr)(_.toString)
+      override def statement(stmt: Statement) = LazyToString(stmt)
+      override def from(from: From) = LazyToString(from)
+      override def expr(expr: Expr) = LazyToString(expr)
     }
 
   def pretty[MT <: MetaTypes](
@@ -24,8 +22,8 @@ object Stringifier {
     dcnDoc: HasDoc[MT#DatabaseColumnNameImpl]
   ): Stringifier[MT] =
     new Stringifier[MT] {
-      override def statement(stmt: Statement) = LazyToString(stmt)(_.debugStr)
-      override def from(from: From) = LazyToString(from)(_.debugStr)
-      override def expr(expr: Expr) = LazyToString(expr)(_.debugStr)
+      override def statement(stmt: Statement) = LazyToString(stmt.debugStr)
+      override def from(from: From) = LazyToString(from.debugStr)
+      override def expr(expr: Expr) = LazyToString(expr.debugStr)
     }
 }

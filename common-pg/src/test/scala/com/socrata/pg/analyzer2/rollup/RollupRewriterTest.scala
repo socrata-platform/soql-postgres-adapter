@@ -83,7 +83,7 @@ class RollupRewriterTest extends FunSuite with MustMatchers with SqlizerUniverse
       if(e.isEmpty) {
         None
       } else {
-        Some(e.reduceLeft { (acc, expr) => FunctionCall[MT](And, Seq(expr))(FuncallPositionInfo.None) })
+        Some(e.reduceLeft { (acc, expr) => FunctionCall[MT](And, Seq(acc, expr))(FuncallPositionInfo.None) })
       }
     }
   }

@@ -19,5 +19,4 @@ trait SqlizerUniverse[MT <: MetaTypes] extends StatementUniverse[MT] {
   type ResultExtractor = analyzer2.ResultExtractor[MT]
   type RewriteSearch = analyzer2.RewriteSearch[MT]
   type ProvenanceTracker = analyzer2.ProvenanceTracker[MT]
-  type TransformManager = analyzer2.TransformManager[MT]
 }

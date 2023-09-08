@@ -3,52 +3,57 @@ package com.socrata.pg.analyzer2
 import scala.collection.immutable.ListSet
 import scala.collection.compat._
 
+import org.slf4j.LoggerFactory
+
 import com.socrata.soql.analyzer2._
 
-class TransformManager[MT <: MetaTypes] private (
-  analysis: SoQLAnalysis[MT],
-  rollups: Seq[rollup.RollupInfo[MT]],
-  rewritePasses: RewritePasses[MT],
-  rollupExact: rollup.RollupExact[MT],
-  rolledUp: ListSet[TransformManager.WrappedSoQLAnalysis[MT]]
-)(implicit ordering: Ordering[MT#DatabaseColumnNameImpl]) extends SqlizerUniverse[MT] {
-  def allAnalyses = Vector(analysis) ++ rolledUp
-
-  def applyPasses(passes: Seq[rewrite.Pass]): TransformManager = {
-    val newAnalysis =
-      analysis.applyPasses(
-        passes,
-        rewritePasses.isLiteralTrue,
-        rewritePasses.isOrderable,
-        rewritePasses.and
-      )
-    val newRollups = rolledUp ++ TransformManager.doRollup(newAnalysis, rollupExact, rollups)
-
-    new TransformManager(
-      newAnalysis,
-      rollups,
-      rewritePasses,
-      rollupExact,
-      newRollups
-    )
-  }
-}
+final abstract class TransformManager
 
 object TransformManager {
+  private val log = LoggerFactory.getLogger(classOf[TransformManager])
+
   def apply[MT <: MetaTypes](
     analysis: SoQLAnalysis[MT],
     rollups: Seq[rollup.RollupInfo[MT]],
+    passes: Seq[Seq[rewrite.Pass]],
     rewritePasses: RewritePasses[MT],
-    rollupExact: rollup.RollupExact[MT]
-  )(implicit ordering: Ordering[MT#DatabaseColumnNameImpl]): TransformManager[MT] = {
-    new TransformManager(
-      analysis,
-      rollups,
-      rewritePasses,
-      rollupExact,
-      TransformManager.doRollup(analysis, rollupExact, rollups).to(ListSet)
-    )
+    rollupExact: rollup.RollupExact[MT],
+    stringifier: Stringifier[MT]
+  )(implicit ordering: Ordering[MT#DatabaseColumnNameImpl]): Vector[SoQLAnalysis[MT]] = {
+    log.debug("Rewriting query:\n  {}", stringifier.statement(analysis.statement).indent(2))
+
+    val initialRollups = doRollup(analysis, rollupExact, rollups)
+    log.debug("Candidate rollups:\n  {}", LazyToString(printRollups(initialRollups, stringifier)).indent(2))
+
+    val (resultAnalysis, rolledUp) =
+      passes.foldLeft(
+        (analysis, initialRollups)
+      ) { case ((analysis, rolledUp), passes) =>
+          val newAnalysis =
+            analysis.applyPasses(
+              passes,
+              rewritePasses.isLiteralTrue,
+              rewritePasses.isOrderable,
+              rewritePasses.and
+            )
+
+          val rewrittenRollups = rolledUp.map { wsa =>
+            new WrappedSoQLAnalysis(wsa.analysis)
+          }
+
+          val newRollups = rewrittenRollups ++ doRollup(newAnalysis, rollupExact, rollups)
+
+          log.debug("After {}:\n  {}", passes: Any, stringifier.statement(newAnalysis.statement).indent(2))
+          log.debug("Candidate rollups:\n  {}", LazyToString(printRollups(newRollups, stringifier)).indent(2))
+
+          (newAnalysis, newRollups)
+      }
+
+    Vector(resultAnalysis) ++ rolledUp.map(_.analysis)
   }
+
+  private def printRollups[MT <: MetaTypes](rollups: Iterable[WrappedSoQLAnalysis[MT]], stringifier: Stringifier[MT]): String =
+    rollups.iterator.map { wsa => stringifier.statement(wsa.analysis.statement) }.mkString(";\n")
 
   private class WrappedSoQLAnalysis[MT <: MetaTypes](val analysis: SoQLAnalysis[MT]) {
     override def hashCode = analysis.statement.hashCode

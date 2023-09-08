@@ -32,7 +32,8 @@ import com.socrata.soql.sql.Debug
 import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
 import com.socrata.datacoordinator.common.soql.SoQLRep
 
-import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, SoQLRewritePasses}
+import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, SoQLRewritePasses, TransformManager, Stringifier}
+import com.socrata.pg.analyzer2.rollup.SoQLRollupExact
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils}
 import com.socrata.pg.server.CJSONWriter
 
@@ -78,36 +79,16 @@ object ProcessQuery {
     // each group of rewrite passes and after all rewrite passes have
     // happened.
     val nameAnalysis = locally {
-      val rewritePasses = new SoQLRewritePasses[DatabaseNamesMetaTypes]
-      val postRewrites =
-        passes.foldLeft(DatabaseNamesMetaTypes.rewriteFrom(metadataAnalysis)) { (nameAnalysis, batch) =>
-          locally {
-            import DatabaseNamesMetaTypes.DebugHelper._
-            log.debug("Statement before applying rollups:\n{}", Lazy(nameAnalysis.statement.debugStr))
-          }
-          val effectiveAnalysis = nameAnalysis // rollupRewriter.applyRollups(nameAnalysis)
-          locally {
-            import DatabaseNamesMetaTypes.DebugHelper._
-            log.debug("Statement before applying rewrites {}:\n{}", batch:Any, Lazy(nameAnalysis.statement.debugStr))
-          }
-          effectiveAnalysis.applyPasses(
-            batch,
-            rewritePasses.isLiteralTrue,
-            rewritePasses.isOrderable,
-            rewritePasses.and
-          )
-        }
-
-      locally {
-        import DatabaseNamesMetaTypes.DebugHelper._
-        log.debug("Statement before applying rollups:\n{}", Lazy(postRewrites.statement.debugStr))
-      }
-      postRewrites // rollupRewriter.applyRollups(postRewrites)
-    }
-
-    locally {
       import DatabaseNamesMetaTypes.DebugHelper._
-      log.debug("Statement after applying all rewrites and rollups:\n{}", Lazy(nameAnalysis.statement.debugStr))
+
+      TransformManager[DatabaseNamesMetaTypes](
+        DatabaseNamesMetaTypes.rewriteFrom(metadataAnalysis),
+        Nil,
+        passes,
+        new SoQLRewritePasses,
+        new SoQLRollupExact(Stringifier.pretty),
+        Stringifier.pretty
+      ).head
     }
 
     val physicalTableFor: Map[AutoTableLabel, types.DatabaseTableName[DatabaseNamesMetaTypes]] =
