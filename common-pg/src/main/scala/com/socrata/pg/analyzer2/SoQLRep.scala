@@ -50,7 +50,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
     SoQLID -> new ProvenancedRep(SoQLID, d"bigint") {
       def provenanceOf(e: LiteralValue) = {
         val rawId = e.value.asInstanceOf[SoQLID]
-        rawId.provenance.map(CanonicalName(_)).toSet
+        Set(rawId.provenance.map(CanonicalName(_)))
       }
 
       def literal(e: LiteralValue) = {
@@ -112,7 +112,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
     SoQLVersion -> new ProvenancedRep(SoQLVersion, d"bigint") {
       def provenanceOf(e: LiteralValue) = {
         val rawId = e.value.asInstanceOf[SoQLVersion]
-        rawId.provenance.map(CanonicalName(_)).toSet
+        Set(rawId.provenance.map(CanonicalName(_)))
       }
 
       def literal(e: LiteralValue) = {

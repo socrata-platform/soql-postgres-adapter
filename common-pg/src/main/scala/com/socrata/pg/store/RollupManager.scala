@@ -338,6 +338,10 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
     SoQLAnalyzerHelper.serialize(baos, analysesColumnId)
     SoQLAnalyzerHelper.deserialize(new ByteArrayInputStream(baos.toByteArray))
   }
+
+  def updateAnalyzer2Rollup(table: String, soql: String): Unit = {
+    
+  }
 }
 
 object RollupManager {

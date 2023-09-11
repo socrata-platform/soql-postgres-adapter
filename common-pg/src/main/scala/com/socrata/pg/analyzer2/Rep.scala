@@ -24,7 +24,7 @@ trait Rep[MT <: MetaTypes] extends ExpressionUniverse[MT] {
   def expandedDatabaseColumns(name: ColumnLabel): Seq[Doc[Nothing]]
   def compressedDatabaseColumn(name: ColumnLabel): Doc[Nothing]
   def isProvenanced: Boolean = false
-  def provenanceOf(value: LiteralValue): Set[CanonicalName]
+  def provenanceOf(value: LiteralValue): Set[Option[CanonicalName]]
 
   // Postgresql's JDBC driver will read rows in fixed-size blocks; by
   // default, it reads all the results into memory before returning
