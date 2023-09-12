@@ -2,6 +2,7 @@ package com.socrata.pg.analyzer2
 
 import java.sql.ResultSet
 import com.socrata.soql.analyzer2._
+import com.socrata.soql.environment.Provenance
 import com.socrata.prettyprint.prelude._
 
 case class SubcolInfo[MT <: MetaTypes](compoundType: types.ColumnType[MT], index: Int, sqlType: String, soqlType: types.ColumnType[MT], compressedExtractor: Doc[SqlizeAnnotation[MT]] => Doc[SqlizeAnnotation[MT]]) {
@@ -24,7 +25,7 @@ trait Rep[MT <: MetaTypes] extends ExpressionUniverse[MT] {
   def expandedDatabaseColumns(name: ColumnLabel): Seq[Doc[Nothing]]
   def compressedDatabaseColumn(name: ColumnLabel): Doc[Nothing]
   def isProvenanced: Boolean = false
-  def provenanceOf(value: LiteralValue): Set[Option[CanonicalName]]
+  def provenanceOf(value: LiteralValue): Set[Option[Provenance]]
 
   // Postgresql's JDBC driver will read rows in fixed-size blocks; by
   // default, it reads all the results into memory before returning
@@ -57,6 +58,9 @@ object Rep {
     def apply(typ: CT): Rep
 
     val namespace: SqlNamespaces
+
+    val toProvenance: types.ToProvenance[MT]
+    val isRollup: DatabaseTableName => Boolean
 
     def mkStringLiteral(name: String): Doc
 
@@ -152,14 +156,14 @@ object Rep {
 
       def physicalColumnRef(col: PhysicalColumn) = {
         val dsTable = namespace.tableLabel(col.table)
-        if(col.tableCanonicalName != rollup.RollupRewriter.MAGIC_ROLLUP_CANONICAL_NAME) {
+        if(isRollup(col.tableName)) {
+          // This is actually a materialized VirtualColumn
+          ExprSql(expandedDatabaseColumns(col.column).map { cn => dsTable ++ d"." ++ cn }, col)
+        } else {
           // The "::text" is required so that the provenance is not a
           // literal by SQL's standards.  Otherwise this will have
           // trouble if you order or group by :id
-          ExprSql.Expanded[MT](Seq(mkTextLiteral(col.tableCanonicalName.name), dsTable ++ d"." ++ compressedDatabaseColumn(col.column)), col)
-        } else {
-          // This is actually a materialized VirtualColumn
-          ExprSql(expandedDatabaseColumns(col.column).map { cn => dsTable ++ d"." ++ cn }, col)
+          ExprSql.Expanded[MT](Seq(mkTextLiteral(toProvenance.toProvenance(col.tableName).value), dsTable ++ d"." ++ compressedDatabaseColumn(col.column)), col)
         }
       }
 

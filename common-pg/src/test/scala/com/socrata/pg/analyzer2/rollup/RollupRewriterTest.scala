@@ -16,7 +16,7 @@ class RollupRewriterTest extends FunSuite with MustMatchers with SqlizerUniverse
   def tableFinder(items: ((Int, String), Thing[Int, TestType])*) =
     new MockTableFinder[MT](items.toMap)
 
-  val analyzer = new SoQLAnalyzer[MT](TestTypeInfo, TestFunctionInfo)
+  val analyzer = new SoQLAnalyzer[MT](TestTypeInfo, TestFunctionInfo, TestProvenanceMapper)
 
   def xtest(s: String)(f: => Any): Unit = {}
 

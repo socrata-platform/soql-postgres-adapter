@@ -7,7 +7,7 @@ import com.socrata.prettyprint.prelude._
 import com.socrata.soql.types._
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.analyzer2.mocktablefinder._
-import com.socrata.soql.environment.ResourceName
+import com.socrata.soql.environment.{ResourceName, Provenance}
 import com.socrata.soql.functions._
 
 object SoQLFunctionSqlizerTest {
@@ -17,6 +17,18 @@ object SoQLFunctionSqlizerTest {
     type ResourceNameScope = Int
     type DatabaseTableNameImpl = String
     type DatabaseColumnNameImpl = String
+  }
+
+  object ProvenanceMapper extends types.ProvenanceMapper[TestMT] {
+    def toProvenance(dtn: types.DatabaseTableName[TestMT]): Provenance = {
+      val DatabaseTableName(name) = dtn
+      Provenance(name)
+    }
+
+    def fromProvenance(prov: Provenance): types.DatabaseTableName[TestMT] = {
+      val Provenance(name) = prov
+      DatabaseTableName(name)
+    }
   }
 }
 
@@ -35,10 +47,13 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
       }
     }
 
+    override val toProvenance = SoQLFunctionSqlizerTest.ProvenanceMapper
+    def isRollup(dtn: DatabaseTableName) = false
+
     val cryptProvider = obfuscation.CryptProvider.zeros
 
-    override val repFor = new SoQLRepProvider[TestMT](_ => Some(cryptProvider), namespace, Map.empty, Map.empty) {
-      def mkStringLiteral(s: String) = Doc(JString(s).toString)
+    override val repFor = new SoQLRepProvider[TestMT](_ => Some(cryptProvider), namespace, toProvenance, isRollup, Map.empty, Map.empty) {
+      override def mkStringLiteral(s: String) = Doc(JString(s).toString)
     }
 
     override val funcallSqlizer = new SoQLFunctionSqlizer
@@ -53,7 +68,7 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
 
   def tableFinder(items: ((Int, String), Thing[Int, SoQLType])*) =
     new MockTableFinder[TestMT](items.toMap)
-  val analyzer = new SoQLAnalyzer[TestMT](SoQLTypeInfo, SoQLFunctionInfo)
+  val analyzer = new SoQLAnalyzer[TestMT](SoQLTypeInfo, SoQLFunctionInfo, SoQLFunctionSqlizerTest.ProvenanceMapper)
   def analyze(soqlexpr: String): String = {
     val s = analyzeStatement(s"SELECT ($soqlexpr)")
     val prefix = "SELECT "

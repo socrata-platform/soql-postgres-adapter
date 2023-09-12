@@ -13,11 +13,14 @@ import org.postgresql.util.PGInterval
 
 import com.socrata.prettyprint.prelude._
 import com.socrata.soql.analyzer2._
+import com.socrata.soql.environment.Provenance
 import com.socrata.soql.types._
 
 abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType; type ColumnValue = SoQLValue; type DatabaseColumnNameImpl = String})](
   cryptProviders: CryptProviderProvider,
   override val namespace: SqlNamespaces[MT],
+  override val toProvenance: types.ToProvenance[MT],
+  override val isRollup: types.DatabaseTableName[MT] => Boolean,
   locationSubcolumns: Map[types.DatabaseTableName[MT], Map[types.DatabaseColumnName[MT], Seq[Option[types.DatabaseColumnName[MT]]]]],
   physicalTableFor: Map[AutoTableLabel, types.DatabaseTableName[MT]]
 ) extends Rep.Provider[MT] {
@@ -50,7 +53,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
     SoQLID -> new ProvenancedRep(SoQLID, d"bigint") {
       def provenanceOf(e: LiteralValue) = {
         val rawId = e.value.asInstanceOf[SoQLID]
-        Set(rawId.provenance.map(CanonicalName(_)))
+        Set(rawId.provenance)
       }
 
       def literal(e: LiteralValue) = {
@@ -63,10 +66,10 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
         val provenanceLit =
           rawId.provenance match {
             case None => d"null :: text"
-            case Some(s) => mkTextLiteral(s)
+            case Some(Provenance(s)) => mkTextLiteral(s)
           }
         val numLit =
-          rawId.provenance.map(CanonicalName(_)).flatMap(cryptProviders) match {
+          rawId.provenance.flatMap(cryptProviders.forProvenance) match {
             case None =>
               Doc(rawId.value.toString) +#+ d":: bigint"
             case Some(cryptProvider) =>
@@ -79,7 +82,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
       }
 
       protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {
-        val provenance = Option(rs.getString(dbCol))
+        val provenance = Option(rs.getString(dbCol)).map(Provenance(_))
         val valueRaw = rs.getLong(dbCol + 1)
 
         if(rs.wasNull) {
@@ -99,7 +102,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
             JsonUtil.parseJson[(Either[JNull, String], Long)](v) match {
               case Right((Right(prov), v)) =>
                 val result = SoQLID(v)
-                result.provenance = Some(prov)
+                result.provenance = Some(Provenance(prov))
                 result
               case Right((Left(JNull), v)) =>
                 SoQLID(v)
@@ -112,7 +115,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
     SoQLVersion -> new ProvenancedRep(SoQLVersion, d"bigint") {
       def provenanceOf(e: LiteralValue) = {
         val rawId = e.value.asInstanceOf[SoQLVersion]
-        Set(rawId.provenance.map(CanonicalName(_)))
+        Set(rawId.provenance)
       }
 
       def literal(e: LiteralValue) = {
@@ -125,10 +128,10 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
         val provenanceLit =
           rawId.provenance match {
             case None => d"null :: text"
-            case Some(s) => mkTextLiteral(s)
+            case Some(Provenance(s)) => mkTextLiteral(s)
           }
         val numLit =
-          rawId.provenance.map(CanonicalName(_)).flatMap(cryptProviders) match {
+          rawId.provenance.flatMap(cryptProviders.forProvenance) match {
             case None =>
               Doc(rawId.value.toString) +#+ d":: bigint"
             case Some(cryptProvider) =>
@@ -141,7 +144,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
       }
 
       protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {
-        val provenance = Option(rs.getString(dbCol))
+        val provenance = Option(rs.getString(dbCol)).map(Provenance(_))
         val valueRaw = rs.getLong(dbCol + 1)
 
         if(rs.wasNull) {
@@ -161,7 +164,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType
             JsonUtil.parseJson[(Either[JNull, String], Long)](v) match {
               case Right((Right(prov), v)) =>
                 val result = SoQLVersion(v)
-                result.provenance = Some(prov)
+                result.provenance = Some(Provenance(prov))
                 result
               case Right((Left(JNull), v)) =>
                 SoQLVersion(v)

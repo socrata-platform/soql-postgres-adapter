@@ -25,7 +25,7 @@ import com.socrata.prettyprint.{SimpleDocStream, SimpleDocTree, tree => doctree}
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName, ResourceName}
+import com.socrata.soql.environment.{ColumnName, ResourceName, Provenance}
 import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLID, SoQLVersion, SoQLNull}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.sql.Debug
@@ -61,11 +61,13 @@ object ProcessQuery {
     // and column ids, and we want to turn that into having them in
     // terms of copies and columns
     val copyCache = new CopyCache(pgu)
-    val metadataAnalysis = DatabaseMetaTypes.rewriteFrom(analysis, copyCache)
+
+    val dmtState = new DatabaseMetaTypes
+    val metadataAnalysis = dmtState.rewriteFrom(analysis, copyCache)
 
     // Then we'll rewrite that analysis in terms of actual physical
     // database names, after building our crypt providers.
-    implicit val cryptProviders = CryptProvidersByCanonicalName(metadataAnalysis.statement)
+    implicit val cryptProviders: CryptProviderProvider = CryptProvidersByDatabaseNamesProvenance(metadataAnalysis.statement)
 
     // but first. produce a string of the analysis for etagging purposes
     val stringifiedAnalysis = locally {
@@ -82,7 +84,7 @@ object ProcessQuery {
       import DatabaseNamesMetaTypes.DebugHelper._
 
       TransformManager[DatabaseNamesMetaTypes](
-        DatabaseNamesMetaTypes.rewriteFrom(metadataAnalysis),
+        DatabaseNamesMetaTypes.rewriteFrom(dmtState, metadataAnalysis),
         Nil,
         passes,
         new SoQLRewritePasses,
@@ -310,8 +312,8 @@ object ProcessQuery {
       private var done = false
       private var ready = false
 
-      private var idReps = new scm.HashMap[Option[String], JsonColumnWriteRep[SoQLType, SoQLValue]]
-      private var versionReps = new scm.HashMap[Option[String], JsonColumnWriteRep[SoQLType, SoQLValue]]
+      private var idReps = new scm.HashMap[Option[Provenance], JsonColumnWriteRep[SoQLType, SoQLValue]]
+      private var versionReps = new scm.HashMap[Option[Provenance], JsonColumnWriteRep[SoQLType, SoQLValue]]
 
       private val types = extractor.schema.values.toArray
       private val width = types.length
@@ -416,7 +418,7 @@ object ProcessQuery {
   ): Map[types.DatabaseTableName[DatabaseNamesMetaTypes], Map[types.DatabaseColumnName[DatabaseNamesMetaTypes], Seq[Option[types.DatabaseColumnName[DatabaseNamesMetaTypes]]]]] = {
     colMap.map { case (dtn, cols) =>
       val (copyInfo, newColMap) = copyCache(dtn).get // TODO proper error
-      DatabaseTableName(copyInfo.dataTableName) -> cols.map { case (DatabaseColumnName(mainCol), auxCols) =>
+      DatabaseNamesMetaTypes.rewriteDTN(DatabaseTableName(copyInfo)) -> cols.map { case (DatabaseColumnName(mainCol), auxCols) =>
         val rewrittenMainCol = DatabaseColumnName(newColMap.get(mainCol).get.physicalColumnBase) // TODO proper error
         val rewrittenAuxCols = auxCols.map {
           case Some(DatabaseColumnName(auxCol)) =>
@@ -498,7 +500,7 @@ object ProcessQuery {
                 sb.append(cn.name)
                 sb.append(" */")
               }
-            case SqlizeAnnotation.Expression(PhysicalColumn(tLabel, _, _, cLabel, _)) =>
+            case SqlizeAnnotation.Expression(PhysicalColumn(tLabel, _, cLabel, _)) =>
               walk(doc)
               for((rn, cn) <- map.physicalColumnNames.get((tLabel, cLabel))) {
                 sb.append(" /* ")

@@ -154,7 +154,7 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
         val possibleAProv = ctx.provTracker(a.expr)
         val possibleBProv = ctx.provTracker(b.expr)
 
-        if(ProvenanceTracker.isSingleton(possibleAProv) && ProvenanceTracker.isSingleton(possibleBProv) && possibleAProv == possibleBProv) {
+        if(!possibleAProv.isPlural && !possibleBProv.isPlural && possibleAProv == possibleBProv) {
           ExprSql((aValueSql.parenthesized +#+ Doc(operator) +#+ bValueSql.parenthesized).group, e)
         } else {
           sqlizeBinaryOp(operator)(e, args, ctx)
@@ -284,7 +284,7 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
         val possibleAProv = ctx.provTracker(a.expr)
         val possibleBProv = ctx.provTracker(b.expr)
 
-        if(ProvenanceTracker.isSingleton(possibleAProv) && ProvenanceTracker.isSingleton(possibleBProv) && possibleAProv == possibleBProv) {
+        if(!possibleAProv.isPlural && !possibleBProv.isPlural && possibleAProv == possibleBProv) {
           ExprSql((aValueSql.parenthesized +#+ d"=" +#+ bValueSql.parenthesized).group, e)
         } else {
           ExprSql(
@@ -314,7 +314,7 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
         val possibleAProv = ctx.provTracker(a.expr)
         val possibleBProv = ctx.provTracker(b.expr)
 
-        if(ProvenanceTracker.isSingleton(possibleAProv) && ProvenanceTracker.isSingleton(possibleBProv) && possibleAProv == possibleBProv) {
+        if(!possibleAProv.isPlural && !possibleBProv.isPlural && possibleAProv == possibleBProv) {
           ExprSql((aValueSql.parenthesized +#+ d"<>" +#+ bValueSql.parenthesized).group, e)
         } else {
           ExprSql(

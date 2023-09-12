@@ -4,7 +4,7 @@ import scala.collection.{mutable => scm}
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.ColumnName
+import com.socrata.soql.environment.{ColumnName, Provenance}
 
 import com.socrata.pg.analyzer2.SqlizerUniverse
 
@@ -19,7 +19,7 @@ object RollupRewriter {
   // column is known to have a single source-table.  For now, we'll
   // just not do that optimized thing if it's sourced from a rollup
   // tables.
-  val MAGIC_ROLLUP_CANONICAL_NAME = CanonicalName("magic rollup canonical name")
+  val MAGIC_ROLLUP_PROVENANCE = Provenance("magic rollup provenance")
 }
 
 class RollupRewriter[MT <: MetaTypes](
@@ -56,7 +56,7 @@ class RollupRewriter[MT <: MetaTypes](
                 assert(sourceEnt.name == rollupEnt.name)
                 assert(sourceEnt.typ == rollupEnt.typ)
                 sourceLabel -> NamedExpr(
-                  PhysicalColumn[MT](from.label, from.tableName, from.canonicalName, rollupCol, sourceEnt.typ)(AtomicPositionInfo.None),
+                  PhysicalColumn[MT](from.label, from.tableName, rollupCol, sourceEnt.typ)(AtomicPositionInfo.None),
                   sourceEnt.name,
                   sourceEnt.isSynthetic
                 )
@@ -195,8 +195,8 @@ class RollupRewriter[MT <: MetaTypes](
           case (VirtCol(AutoTableLabel(atl1), AutoColumnLabel(acl1)),
                 VirtCol(AutoTableLabel(atl2), AutoColumnLabel(acl2))) =>
             ord1.compare((atl1, acl1), (atl2, acl2)) < 0
-          case (PhysCol(AutoTableLabel(atl1), _, _, DatabaseColumnName(dtn1)),
-                PhysCol(AutoTableLabel(atl2), _, _, DatabaseColumnName(dtn2))) =>
+          case (PhysCol(AutoTableLabel(atl1), _, DatabaseColumnName(dtn1)),
+                PhysCol(AutoTableLabel(atl2), _, DatabaseColumnName(dtn2))) =>
             ord2.compare((atl1, dtn1), (atl2, dtn2)) < 0
           case (_ : VirtCol, _ : PhysCol) => true
           case (_ : PhysCol, _ : VirtCol) => false
@@ -235,8 +235,8 @@ class RollupRewriter[MT <: MetaTypes](
   private sealed abstract class Col {
     def at(typ: CT, pos: AtomicPositionInfo): Column
   }
-  private case class PhysCol(table: AutoTableLabel, tableName: DatabaseTableName, canonicalName: CanonicalName, column: DatabaseColumnName) extends Col {
-    def at(typ: CT, pos: AtomicPositionInfo) = PhysicalColumn(table, tableName, canonicalName, column, typ)(pos)
+  private case class PhysCol(table: AutoTableLabel, tableName: DatabaseTableName, column: DatabaseColumnName) extends Col {
+    def at(typ: CT, pos: AtomicPositionInfo) = PhysicalColumn(table, tableName, column, typ)(pos)
   }
   private case class VirtCol(table: AutoTableLabel, column: AutoColumnLabel) extends Col {
     def at(typ: CT, pos: AtomicPositionInfo) = VirtualColumn(table, column, typ)(pos)
@@ -276,8 +276,8 @@ class RollupRewriter[MT <: MetaTypes](
         expr match {
           case VirtualColumn(table, col, typ) if from(table) =>
             acc += VirtCol(table, col) -> typ
-          case PhysicalColumn(table, tableName, canonName, col, typ) if from(table) =>
-            acc += PhysCol(table, tableName, canonName, col) -> typ
+          case PhysicalColumn(table, tableName, col, typ) if from(table) =>
+            acc += PhysCol(table, tableName, col) -> typ
           case FunctionCall(_func, args) =>
             for(arg <- args) go(arg)
           case AggregateFunctionCall(_func, args, _distinct, filter) =>
@@ -388,8 +388,8 @@ class RollupRewriter[MT <: MetaTypes](
             case None =>
               vc
           }
-        case pc@PhysicalColumn(table, tableName, canonName, col, typ) =>
-          columnMap.get(PhysCol(table, tableName, canonName, col)) match {
+        case pc@PhysicalColumn(table, tableName, col, typ) =>
+          columnMap.get(PhysCol(table, tableName, col)) match {
             case Some(VirtCol(newTable, newCol)) =>
               VirtualColumn(newTable, newCol, typ)(pc.position)
             case None =>

@@ -6,8 +6,13 @@ import com.rojoma.json.v3.ast.JString
 
 import com.socrata.prettyprint.prelude._
 import com.socrata.soql.analyzer2._
+import com.socrata.soql.environment.Provenance
 
-class TestRepProvider(override val namespace: SqlNamespaces[SqlizerTest.TestMT]) extends Rep.Provider[SqlizerTest.TestMT] {
+class TestRepProvider(
+  override val namespace: SqlNamespaces[SqlizerTest.TestMT],
+  override val toProvenance: types.ToProvenance[SqlizerTest.TestMT],
+  override val isRollup: types.DatabaseTableName[SqlizerTest.TestMT] => Boolean
+) extends Rep.Provider[SqlizerTest.TestMT] {
   type TestMT = SqlizerTest.TestMT
 
   override def mkStringLiteral(s: String) =
@@ -19,7 +24,7 @@ class TestRepProvider(override val namespace: SqlNamespaces[SqlizerTest.TestMT])
     TestID -> new ProvenancedRep(TestID, d"bigint") {
       def provenanceOf(e: LiteralValue) = {
         val rawId = e.value.asInstanceOf[TestID]
-        Set(rawId.provenance.map(CanonicalName(_)))
+        Set(rawId.provenance)
       }
 
       def literal(e: LiteralValue) = {
@@ -27,7 +32,7 @@ class TestRepProvider(override val namespace: SqlNamespaces[SqlizerTest.TestMT])
 
         val provLit = rawId.provenance match {
           case None => d"null :: text"
-          case Some(s) => mkTextLiteral(s)
+          case Some(Provenance(s)) => mkTextLiteral(s)
         }
         val numLit = Doc(rawId.value) +#+ d":: bigint"
 

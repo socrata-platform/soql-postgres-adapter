@@ -759,7 +759,7 @@ class RollupExact[MT <: MetaTypes](
         case Some((selectedColumn, NamedExpr(rollupExpr@AggregateFunctionCall(func, args, false, None), _name, _isSynthetic), functionExtract)) if needsMerge =>
           assert(rollupExpr.typ == sExpr.typ)
           semigroupRewriter(func).map { merger =>
-            functionExtract(merger(PhysicalColumn[MT](newFrom.label, newFrom.tableName, newFrom.canonicalName, columnLabelMap(selectedColumn), rollupExpr.typ)(sExpr.position.asAtomic)))
+            functionExtract(merger(PhysicalColumn[MT](newFrom.label, newFrom.tableName, columnLabelMap(selectedColumn), rollupExpr.typ)(sExpr.position.asAtomic)))
           }
         case Some((selectedColumn, NamedExpr(_ : AggregateFunctionCall, _name, _isSynthetic), _)) if needsMerge =>
           log.debug("can't rewrite, the aggregate has a 'distinct' or 'filter'")
@@ -769,7 +769,7 @@ class RollupExact[MT <: MetaTypes](
           None
         case Some((selectedColumn, ne, functionExtract)) =>
           assert(ne.expr.typ == sExpr.typ)
-          Some(functionExtract(PhysicalColumn[MT](newFrom.label, newFrom.tableName, newFrom.canonicalName, columnLabelMap(selectedColumn), sExpr.typ)(sExpr.position.asAtomic)))
+          Some(functionExtract(PhysicalColumn[MT](newFrom.label, newFrom.tableName, columnLabelMap(selectedColumn), sExpr.typ)(sExpr.position.asAtomic)))
         case None =>
           sExpr match {
             case lit: LiteralValue => Some(lit)

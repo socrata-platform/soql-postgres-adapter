@@ -15,38 +15,23 @@ trait RollupInfo[MT <: MetaTypes] extends SqlizerUniverse[MT] {
 
   def databaseColumnNameOfIndex(idx: Int): DatabaseColumnName
 
-  lazy val description = locally {
-    val columnMap = statement.schema.iterator.zipWithIndex.map { case ((label, _), idx) =>
+  private lazy val columnMap =
+    statement.schema.iterator.zipWithIndex.map { case ((label, _), idx) =>
       label -> databaseColumnNameOfIndex(idx)
     }.toMap
 
-    TableDescription.Dataset[MT](
+  def from(labelProvider: LabelProvider) = locally {
+    new FromTable(
       databaseName,
-      RollupRewriter.MAGIC_ROLLUP_CANONICAL_NAME,
+      resourceName,
+      None,
+      labelProvider.tableLabel(),
       OrderedMap() ++ statement.schema.iterator.map { case (label, schemaEnt) =>
-        columnMap(label) -> TableDescription.DatasetColumnInfo(
-          schemaEnt.name,
-          schemaEnt.typ,
-          false
-        )
+        columnMap(label) -> NameEntry(schemaEnt.name, schemaEnt.typ)
       },
-      Nil,
       statement.unique.map { columnLabels =>
         columnLabels.map(columnMap)
       }.toVector
     )
   }
-
-  def from(labelProvider: LabelProvider) =
-    FromTable(
-      description.name,
-      description.canonicalName,
-      resourceName,
-      None,
-      labelProvider.tableLabel(),
-      OrderedMap() ++ description.columns.iterator.map { case (dtn, dci) =>
-        dtn -> NameEntry(dci.name, dci.typ)
-      },
-      description.primaryKeys
-    )
 }

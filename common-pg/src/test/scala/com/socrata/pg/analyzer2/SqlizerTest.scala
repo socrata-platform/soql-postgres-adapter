@@ -28,7 +28,7 @@ class SqlizerTest extends FunSuite with MustMatchers with SqlizerUniverse[Sqlize
   def tableFinder(items: ((Int, String), Thing[Int, TestType])*) =
     new MockTableFinder[TestMT](items.toMap)
 
-  val analyzer = new SoQLAnalyzer[TestMT](TestTypeInfo, TestFunctionInfo)
+  val analyzer = new SoQLAnalyzer[TestMT](TestTypeInfo, TestFunctionInfo, TestProvenanceMapper)
 
   def sqlizer = new Sqlizer {
     override val namespace = new SqlNamespaces {
@@ -43,7 +43,10 @@ class SqlizerTest extends FunSuite with MustMatchers with SqlizerUniverse[Sqlize
       }
     }
 
-    override val repFor: Rep.Provider[TestMT] = new TestRepProvider(namespace)
+    override val toProvenance = TestProvenanceMapper
+    override def isRollup(dtn: DatabaseTableName) = false
+
+    override val repFor: Rep.Provider[TestMT] = new TestRepProvider(namespace, toProvenance, isRollup)
 
     override val funcallSqlizer: FuncallSqlizer = TestFunctionSqlizer
 
