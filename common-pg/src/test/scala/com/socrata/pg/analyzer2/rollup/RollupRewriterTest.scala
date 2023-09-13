@@ -5,7 +5,7 @@ import org.scalatest.matchers.{BeMatcher, MatchResult}
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.analyzer2.mocktablefinder._
-import com.socrata.soql.collection.OrderedMap
+import com.socrata.soql.collection.{OrderedMap, NonEmptySeq}
 import com.socrata.soql.environment.{ResourceName, ColumnName}
 import com.socrata.soql.functions.MonomorphicFunction
 
@@ -74,16 +74,15 @@ class RollupRewriterTest extends FunSuite with MustMatchers with SqlizerUniverse
     override def split(e: Expr) =
       e match {
         case FunctionCall(And, args) =>
-          args.flatMap(split)
+          val nonEmptyArgs = NonEmptySeq.fromSeq(args).getOrElse {
+            throw new Exception("AND with no arguments??")
+          }
+          nonEmptyArgs.flatMap(split)
         case other =>
-          Seq(other)
+          NonEmptySeq(other)
       }
-    override def merge(e: Seq[Expr]) = {
-      if(e.isEmpty) {
-        None
-      } else {
-        Some(e.reduceLeft { (acc, expr) => FunctionCall[MT](And, Seq(acc, expr))(FuncallPositionInfo.None) })
-      }
+    override def merge(e: NonEmptySeq[Expr]) = {
+      e.foldLeft1(identity) { (acc, expr) => FunctionCall[MT](And, Seq(acc, expr))(FuncallPositionInfo.None) }
     }
   }
 

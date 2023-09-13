@@ -3,7 +3,7 @@ package com.socrata.pg.analyzer2.rollup
 import org.slf4j.LoggerFactory
 
 import com.socrata.soql.analyzer2._
-import com.socrata.soql.collection.OrderedMap
+import com.socrata.soql.collection.{OrderedMap, NonEmptySeq}
 
 import com.socrata.pg.analyzer2.{SqlizerUniverse, Stringifier}
 
@@ -652,7 +652,7 @@ class RollupExact[MT <: MetaTypes](
     // ok, this is a little subtle.  We have two lists of AND clauses,
     // and we want to make sure that cSplit is a subseqence of sSplit,
     // to preserve short-circuiting.
-    var remaining = cSplit.toList
+    var remaining = cSplit.iterator.toList
     val result = Vector.newBuilder[Expr]
     for(sClause <- sSplit) {
       remaining match {
@@ -672,7 +672,7 @@ class RollupExact[MT <: MetaTypes](
       return None
     }
 
-    splitAnd.merge(result.result()).mapFallibly(rewriteInTerms.rewrite(_, needsMerge))
+    NonEmptySeq.fromSeq(result.result()).map(splitAnd.merge).mapFallibly(rewriteInTerms.rewrite(_, needsMerge))
   }
 
   private class RewriteInTerms(
