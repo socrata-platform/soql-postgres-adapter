@@ -4,13 +4,13 @@ import com.socrata.soql.analyzer2._
 import com.socrata.soql.types.{SoQLValue, SoQLBoolean, SoQLType}
 import com.socrata.soql.functions.{SoQLTypeInfo, SoQLFunctions, MonomorphicFunction}
 
-trait RewritePasses[MT <: MetaTypes] extends SqlizerUniverse[MT] {
+trait RewritePassHelpers[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   def isLiteralTrue(e: Expr): Boolean
   def isOrderable(e: CT): Boolean
   def and: MonomorphicFunction
 }
 
-class SoQLRewritePasses[MT <: MetaTypes with ({ type ColumnType = SoQLType; type ColumnValue = SoQLValue })] extends RewritePasses[MT] {
+class SoQLRewritePassHelpers[MT <: MetaTypes with ({ type ColumnType = SoQLType; type ColumnValue = SoQLValue })] extends RewritePassHelpers[MT] {
   def isLiteralTrue(e: Expr): Boolean = {
     e match {
       case LiteralValue(SoQLBoolean(true)) => true

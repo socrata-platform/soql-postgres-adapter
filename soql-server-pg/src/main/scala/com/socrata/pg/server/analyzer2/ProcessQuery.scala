@@ -32,7 +32,7 @@ import com.socrata.soql.sql.Debug
 import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
 import com.socrata.datacoordinator.common.soql.SoQLRep
 
-import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, SoQLRewritePasses, TransformManager, Stringifier, CostEstimator}
+import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, SoQLRewritePassHelpers, TransformManager, Stringifier, CostEstimator}
 import com.socrata.pg.analyzer2.rollup.SoQLRollupExact
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils}
 import com.socrata.pg.server.CJSONWriter
@@ -87,7 +87,7 @@ object ProcessQuery {
         DatabaseNamesMetaTypes.rewriteFrom(dmtState, metadataAnalysis),
         Nil,
         passes,
-        new SoQLRewritePasses,
+        new SoQLRewritePassHelpers,
         new SoQLRollupExact(Stringifier.pretty),
         Stringifier.pretty
       )
