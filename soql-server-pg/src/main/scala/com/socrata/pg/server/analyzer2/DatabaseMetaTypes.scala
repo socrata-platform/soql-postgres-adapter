@@ -5,7 +5,7 @@ import scala.collection.{mutable => scm}
 import com.socrata.prettyprint.prelude._
 
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo, ColumnInfo}
-import com.socrata.datacoordinator.id.UserColumnId
+import com.socrata.datacoordinator.id.{DatasetId, CopyId, UserColumnId}
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.Provenance
@@ -25,18 +25,24 @@ final class DatabaseMetaTypes extends MetaTypes {
   // ugh.. but making this stateful was the only way I could find to
   // do this.
   val provenanceMapper = new types.ProvenanceMapper[DatabaseMetaTypes] {
-    private var counter = 0L;
     private val dtnMap = new scm.HashMap[Provenance, DatabaseTableName[DatabaseTableNameImpl]]
+    private val provMap = new scm.HashMap[(DatasetId, CopyId), Provenance]
 
     def fromProvenance(prov: Provenance): types.DatabaseTableName[DatabaseMetaTypes] = {
       dtnMap(prov)
     }
 
     def toProvenance(dtn: types.DatabaseTableName[DatabaseMetaTypes]): Provenance = {
-      val prov = Provenance(counter.toString)
-      counter += 1
-      dtnMap += prov -> dtn
-      prov
+      val provKey = (dtn.name.datasetInfo.systemId, dtn.name.systemId)
+      provMap.get(provKey) match {
+        case Some(existing) =>
+          existing
+        case None =>
+          val prov = Provenance(dtnMap.size.toString)
+          provMap += provKey -> prov
+          dtnMap += prov -> dtn
+          prov
+      }
     }
   }
 
