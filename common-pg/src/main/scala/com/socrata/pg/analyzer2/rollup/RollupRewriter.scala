@@ -91,14 +91,21 @@ class RollupRewriter[MT <: MetaTypes](
         if(select.hint(SelectHint.NoRollup)) {
           Nil
         } else {
-          rollupSelectExact(select) ++
-            (if(prefixesAllowed) rollupPrefixes(select) else None) ++
+          val exact = rollupSelectExact(select)
+          if(exact.nonEmpty) {
+            exact
+          } else {
+            (if(prefixesAllowed) rollupPrefixes(select) else Nil) ++
             rollupSubqueries(select)
+          }
         }
       case v: Values =>
         Nil
       case combined@CombinedTables(op, left, right) =>
-        rollupCombinedExact(combined) ++ {
+        val exact = rollupCombinedExact(combined)
+        if(exact.nonEmpty) {
+          exact
+        } else {
           val newLefts = rollup(left)
           val newRights = rollup(right)
           if(newLefts.isEmpty && newRights.isEmpty) {
