@@ -9,11 +9,11 @@ import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.Provenance
 
 class TestRepProvider(
-  override val namespace: SqlNamespaces[SqlizerTest.TestMT],
-  override val toProvenance: types.ToProvenance[SqlizerTest.TestMT],
-  override val isRollup: types.DatabaseTableName[SqlizerTest.TestMT] => Boolean
-) extends Rep.Provider[SqlizerTest.TestMT] {
-  type TestMT = SqlizerTest.TestMT
+  override val namespace: SqlNamespaces[TestHelper.TestMT],
+  override val toProvenance: types.ToProvenance[TestHelper.TestMT],
+  override val isRollup: types.DatabaseTableName[TestHelper.TestMT] => Boolean
+) extends Rep.Provider[TestHelper.TestMT] {
+  type TestMT = TestHelper.TestMT
 
   override def mkStringLiteral(s: String) =
     Doc(JString(s).toString)

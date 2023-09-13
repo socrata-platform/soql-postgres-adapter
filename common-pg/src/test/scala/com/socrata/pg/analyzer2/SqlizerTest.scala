@@ -12,24 +12,7 @@ import com.socrata.soql.analyzer2.mocktablefinder._
 import com.socrata.soql.types._
 import com.socrata.soql.functions.{SoQLTypeInfo, SoQLFunctionInfo}
 
-object SqlizerTest {
-  final abstract class TestMT extends MetaTypes {
-    type ColumnType = TestType
-    type ColumnValue = TestValue
-    type ResourceNameScope = Int
-    type DatabaseTableNameImpl = String
-    type DatabaseColumnNameImpl = String
-  }
-}
-
-class SqlizerTest extends FunSuite with MustMatchers with SqlizerUniverse[SqlizerTest.TestMT] {
-  import SqlizerTest._
-
-  def tableFinder(items: ((Int, String), Thing[Int, TestType])*) =
-    new MockTableFinder[TestMT](items.toMap)
-
-  val analyzer = new SoQLAnalyzer[TestMT](TestTypeInfo, TestFunctionInfo, TestProvenanceMapper)
-
+class SqlizerTest extends FunSuite with MustMatchers with TestHelper with SqlizerUniverse[TestHelper.TestMT] {
   def sqlizer = new Sqlizer {
     override val namespace = new SqlNamespaces {
       def databaseTableName(dtn: DatabaseTableName) = {

@@ -3,8 +3,8 @@ package com.socrata.pg.analyzer2
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.functions.MonomorphicFunction
 
-object TestRewriteSearch extends RewriteSearch[SqlizerTest.TestMT] {
-  type TestMT = SqlizerTest.TestMT
+object TestRewriteSearch extends RewriteSearch[TestHelper.TestMT] {
+  type TestMT = TestHelper.TestMT
   import TestTypeInfo.hasType
 
   override val searchBeforeQuery = true
