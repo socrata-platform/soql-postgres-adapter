@@ -31,6 +31,10 @@ object TestFunctions {
 
   val Compress = f("compress", FunctionName("compress"), Map("a" -> AllTypes), Seq(VariableType("a")), Seq.empty, VariableType("a"))
 
+  // "extract the least signficant 32 bits" and "extract the least
+  // significant 8 bits"; these are used for testing the "function
+  // subsetting" feature of rollups (in that the latter is a subset of
+  // the former)
   val BottomDWord = mf("bottom_dword", FunctionName("bottom_dword"), Seq(TestNumber), Seq.empty, TestNumber)
   val BottomByte = mf("bottom_byte", FunctionName("bottom_byte"), Seq(TestNumber), Seq.empty, TestNumber)
 
