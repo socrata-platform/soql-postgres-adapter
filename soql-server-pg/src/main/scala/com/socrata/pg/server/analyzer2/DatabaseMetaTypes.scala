@@ -1,32 +1,65 @@
 package com.socrata.pg.server.analyzer2
 
+import scala.collection.{mutable => scm}
+
 import com.socrata.prettyprint.prelude._
 
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo, ColumnInfo}
-import com.socrata.datacoordinator.id.UserColumnId
+import com.socrata.datacoordinator.id.{DatasetId, CopyId, UserColumnId}
 
 import com.socrata.soql.analyzer2._
+import com.socrata.soql.environment.Provenance
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.socrata.soql.types.obfuscation.CryptProvider
+import com.socrata.soql.functions.SoQLTypeInfo
 
-final abstract class DatabaseMetaTypes extends MetaTypes {
+final class DatabaseMetaTypes extends MetaTypes {
   override type ResourceNameScope = InputMetaTypes#ResourceNameScope
   override type ColumnType = InputMetaTypes#ColumnType
   override type ColumnValue = InputMetaTypes#ColumnValue
   override type DatabaseTableNameImpl = CopyInfo
   override type DatabaseColumnNameImpl = ColumnInfo[ColumnType]
-}
 
-object DatabaseMetaTypes extends MetaTypeHelper[DatabaseMetaTypes] {
+  val typeInfo = SoQLTypeInfo.metaProject[DatabaseMetaTypes]
+
+  // ugh.. but making this stateful was the only way I could find to
+  // do this.
+  val provenanceMapper = new types.ProvenanceMapper[DatabaseMetaTypes] {
+    private val dtnMap = new scm.HashMap[Provenance, DatabaseTableName[DatabaseTableNameImpl]]
+    private val provMap = new scm.HashMap[(DatasetId, CopyId), Provenance]
+
+    def fromProvenance(prov: Provenance): types.DatabaseTableName[DatabaseMetaTypes] = {
+      dtnMap(prov)
+    }
+
+    def toProvenance(dtn: types.DatabaseTableName[DatabaseMetaTypes]): Provenance = {
+      val provKey = (dtn.name.datasetInfo.systemId, dtn.name.systemId)
+      provMap.get(provKey) match {
+        case Some(existing) =>
+          existing
+        case None =>
+          val prov = Provenance(dtnMap.size.toString)
+          provMap += provKey -> prov
+          dtnMap += prov -> dtn
+          prov
+      }
+    }
+  }
+
   def rewriteFrom(analysis: SoQLAnalysis[InputMetaTypes], copyCache: CopyCache): SoQLAnalysis[DatabaseMetaTypes] = {
     analysis.rewriteDatabaseNames[DatabaseMetaTypes](
       { dtn => DatabaseTableName(copyCache(dtn).get._1) }, // TODO proper error
       { case (dtn, DatabaseColumnName(userColumnId)) =>
         DatabaseColumnName(copyCache(dtn).get._2.get(userColumnId).get) // TODO proper errors
-      }
+      },
+      InputMetaTypes.provenanceMapper,
+      provenanceMapper,
+      typeInfo.updateProvenance
     )
   }
+}
 
+object DatabaseMetaTypes extends MetaTypeHelper[DatabaseMetaTypes] {
   object DebugHelper extends SoQLValueDebugHelper { // Various implicits to make things printable
     implicit object hasDocDBTN extends HasDoc[CopyInfo] {
       def docOf(cv: CopyInfo) = Doc(cv.datasetInfo.systemId.toString) ++ d"/" ++ Doc(cv.lifecycleStage.toString)

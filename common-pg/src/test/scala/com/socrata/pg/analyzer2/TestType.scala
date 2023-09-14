@@ -4,7 +4,7 @@ import com.rojoma.json.v3.ast.JString
 import com.rojoma.json.v3.util.AutomaticJsonEncodeBuilder
 
 import com.socrata.prettyprint.prelude._
-import com.socrata.soql.environment.TypeName
+import com.socrata.soql.environment.{TypeName, Provenance}
 import com.socrata.soql.analyzer2.HasDoc
 import com.socrata.soql.types.SoQLID
 
@@ -35,7 +35,7 @@ object TestValue {
 }
 
 case class TestID(value: Long) extends TestValue {
-  var provenance: Option[String] = None
+  var provenance: Option[Provenance] = None
 
   def typ = TestID
   def doc = Doc(SoQLID.FormattedButUnobfuscatedStringRep(SoQLID(value)))

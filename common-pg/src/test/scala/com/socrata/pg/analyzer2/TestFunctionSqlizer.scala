@@ -2,7 +2,7 @@ package com.socrata.pg.analyzer2
 
 import com.socrata.soql.functions.Function
 
-object TestFunctionSqlizer extends FuncallSqlizer[SqlizerTest.TestMT] {
+object TestFunctionSqlizer extends FuncallSqlizer[TestHelper.TestMT] {
   def compress(f: FunctionCall, args: Seq[ExprSql], ctx: DynamicContext) = {
     assert(f.function.minArity == 1 && !f.function.isVariadic)
     assert(args.lengthCompare(1) == 0)

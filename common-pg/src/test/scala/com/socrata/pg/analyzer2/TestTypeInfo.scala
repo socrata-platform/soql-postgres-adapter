@@ -4,7 +4,7 @@ import scala.util.parsing.input.Position
 
 import com.socrata.soql.ast
 import com.socrata.soql.collection.OrderedSet
-import com.socrata.soql.environment.TypeName
+import com.socrata.soql.environment.{TypeName, Provenance}
 import com.socrata.soql.typechecker.{TypeInfo2, TypeInfoMetaProjection}
 import com.socrata.soql.types.SoQLID
 import com.socrata.soql.analyzer2._
@@ -28,7 +28,7 @@ object TestTypeInfo extends TypeInfo2[TestType, TestValue] {
       def literalBoolean(b: Boolean, position: Position): Expr[MT] =
         LiteralValue[MT](TestBoolean(b))(new AtomicPositionInfo(position))
 
-      def potentialExprs(l: ast.Literal, currentPrimaryTable: Option[CanonicalName]): Seq[Expr[MT]] =
+      def potentialExprs(l: ast.Literal, currentPrimaryTable: Option[Provenance]): Seq[Expr[MT]] =
         l match {
           case ast.StringLiteral(s) =>
             val asInt: Option[CV] =
@@ -45,10 +45,10 @@ object TestTypeInfo extends TypeInfo2[TestType, TestValue] {
           case ast.NullLiteral() => typeParameterUniverse.iterator.map(NullLiteral[MT](_)(new AtomicPositionInfo(l.position))).toVector
         }
 
-      private def tryAsID(s: String, currentPrimaryTable: Option[CanonicalName]): Option[CV] = {
+      private def tryAsID(s: String, currentPrimaryTable: Option[Provenance]): Option[CV] = {
         SoQLID.FormattedButUnobfuscatedStringRep.unapply(s).map { case SoQLID(n) =>
           val result = TestID(n)
-          result.provenance = currentPrimaryTable.map(_.name)
+          result.provenance = currentPrimaryTable
           result
         }
       }
@@ -73,6 +73,17 @@ object TestTypeInfo extends TypeInfo2[TestType, TestValue] {
         result match {
           case Some(TestCompound(None, None)) => None
           case other => other
+        }
+      }
+
+      def updateProvenance(v: CV)(f: Provenance => Provenance): CV = {
+        valueEvRev(v) match {
+          case id: TestID =>
+            val newId = id.copy()
+            newId.provenance = id.provenance.map(f)
+            newId
+          case _ =>
+            v
         }
       }
     }

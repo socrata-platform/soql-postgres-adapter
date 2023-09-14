@@ -6,7 +6,7 @@ import com.socrata.prettyprint.prelude._
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.types.obfuscation.CryptProvider
 
-import com.socrata.pg.analyzer2.{Sqlizer, SqlNamespaces, SoQLRepProvider, SoQLFunctionSqlizer, Rep, CryptProviderProvider, ResultExtractor, SoQLRewriteSearch, SqlizerUniverse}
+import com.socrata.pg.analyzer2.{Sqlizer, SqlNamespaces, SoQLRepProvider, SoQLFunctionSqlizer, Rep, CryptProviderProvider, ResultExtractor, SoQLRewriteSearch, SqlizerUniverse, ProvenanceTracker}
 
 class ActualSqlizer(
   escapeString: String => String,
@@ -18,7 +18,7 @@ class ActualSqlizer(
   override val namespace = new SqlNamespaces {
     def databaseTableName(dtn: DatabaseTableName) = {
       val DatabaseTableName(dataTableName) = dtn
-      Doc(dataTableName)
+      Doc(dataTableName.name)
     }
     def databaseColumnBase(dcn: DatabaseColumnName) = {
       val DatabaseColumnName(physicalColumnBase) = dcn
@@ -26,8 +26,12 @@ class ActualSqlizer(
     }
   }
 
-  override val repFor: Rep.Provider[DatabaseNamesMetaTypes] = new SoQLRepProvider[DatabaseNamesMetaTypes](cryptProviderProvider, namespace, locationSubcolumns, physicalTableFor) {
-    def mkStringLiteral(text: String): Doc = {
+  override val toProvenance = DatabaseNamesMetaTypes.provenanceMapper
+  override def isRollup(dtn: DatabaseTableName) = dtn.name.isRollup
+
+  override val repFor: Rep.Provider[DatabaseNamesMetaTypes] = new SoQLRepProvider[DatabaseNamesMetaTypes](cryptProviderProvider, namespace, toProvenance, isRollup, locationSubcolumns, physicalTableFor) {
+
+    override def mkStringLiteral(text: String): Doc = {
       // By default, converting a String to Doc replaces the newlines
       // with soft newlines which can be converted into spaces by
       // `group`.  This is a thing we _definitely_ don't want, so
