@@ -75,8 +75,6 @@ object ProcessQuery {
       analysis.statement.debugDoc.layoutPretty(LayoutOptions(PageWidth.Unbounded)).toString
     }
 
-    // def rollupRewriter = RollupRewriter.fromPostgres[DatabaseNamesMetaTypes](pgu)
-
     // Intermixed rewrites and rollups: rollups are attemted before
     // each group of rewrite passes and after all rewrite passes have
     // happened.

@@ -2,6 +2,8 @@ package com.socrata.pg.analyzer2.rollup
 
 import scala.collection.{mutable => scm}
 
+import org.slf4j.LoggerFactory
+
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, Provenance}
@@ -9,17 +11,7 @@ import com.socrata.soql.environment.{ColumnName, Provenance}
 import com.socrata.pg.analyzer2.SqlizerUniverse
 
 object RollupRewriter {
-  // Ick.  Ok, so what we're doing here is this: If a rollup table
-  // contains a provenanced column, then _even though it's a physical
-  // column_ we need to treat it specially in two ways.  First, it's
-  // _actually_ a serialized virtual column (i.e., a prov column and
-  // the actual physical value) so the Rep needs to know to load two
-  // columns.  Second, various things over in ExprSqlizer and
-  // FuncallSqlizer do a special optimized thing if a provenanced
-  // column is known to have a single source-table.  For now, we'll
-  // just not do that optimized thing if it's sourced from a rollup
-  // tables.
-  val MAGIC_ROLLUP_PROVENANCE = Provenance("magic rollup provenance")
+  private val log = LoggerFactory.getLogger(classOf[RollupRewriter[_]])
 }
 
 class RollupRewriter[MT <: MetaTypes](
@@ -27,6 +19,8 @@ class RollupRewriter[MT <: MetaTypes](
   rollupExact: RollupExact[MT],
   rollups: Seq[RollupInfo[MT]]
 )(implicit dtnOrdering: Ordering[MT#DatabaseColumnNameImpl]) extends SqlizerUniverse[MT] {
+  import RollupRewriter.log
+
   // see if there are rollups that can be used to answer _this_ select
   // (not any sub-parts of the select!).  This needs to produce
   // statements with the same output schema (in terms of column labels
@@ -334,7 +328,7 @@ class RollupRewriter[MT <: MetaTypes](
     val walk = new ColumnsFromFrom(fromTables(prefix))
     walk.go(sel)
     val r = walk.acc.toMap
-    println("demanded cols: " + r)
+    log.debug("demanded cols: {}", r)
     r
   }
 
