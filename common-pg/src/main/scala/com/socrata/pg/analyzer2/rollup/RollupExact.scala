@@ -668,7 +668,7 @@ class RollupExact[MT <: MetaTypes](
     // ok, this is a little subtle.  We have two lists of AND clauses,
     // and we want to make sure that cSplit is a subseqence of sSplit,
     // to preserve short-circuiting.
-    var remaining = cSplit.iterator.toList
+    var remaining = cSplit.toList
     val result = Vector.newBuilder[Expr]
     for(sClause <- sSplit) {
       remaining match {

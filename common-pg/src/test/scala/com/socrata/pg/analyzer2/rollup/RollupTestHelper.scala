@@ -73,7 +73,7 @@ trait RollupTestHelper extends TestHelper { this: Assertions =>
           NonEmptySeq(other)
       }
     override def merge(e: NonEmptySeq[Expr]) = {
-      e.foldLeft1(identity) { (acc, expr) =>
+      e.reduceLeft { (acc, expr) =>
         FunctionCall[TestMT](And, Seq(acc, expr))(FuncallPositionInfo.None)
       }
     }

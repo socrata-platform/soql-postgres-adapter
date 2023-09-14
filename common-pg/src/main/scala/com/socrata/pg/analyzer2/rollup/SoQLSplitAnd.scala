@@ -24,5 +24,5 @@ class SoQLSplitAnd[MT <: MetaTypes with ({type ColumnType = SoQLType; type Colum
     }
 
   override def merge(es: NonEmptySeq[Expr]): Expr =
-    es.foldLeft1(identity) { (acc, expr) => FunctionCall[MT](And, Seq(acc, expr))(FuncallPositionInfo.None) }
+    es.reduceLeft { (acc, expr) => FunctionCall[MT](And, Seq(acc, expr))(FuncallPositionInfo.None) }
 }
