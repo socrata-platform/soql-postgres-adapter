@@ -112,7 +112,7 @@ object ProcessQuery {
 
     val sqlizer = new ActualSqlizer(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, rewriteSubcolumns(request.locationSubcolumns, copyCache), physicalTableFor)
     val Sqlizer.Result(sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]], extractor, nonliteralSystemContextLookupFound, now) = sqlizer(nameAnalysis.statement)
-    log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
+    log.info("================================================================Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
 
     // Our etag will be the hash of the inputs that affect the result of the query
     val etag = ETagify(
