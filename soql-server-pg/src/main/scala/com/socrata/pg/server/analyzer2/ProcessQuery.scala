@@ -111,7 +111,7 @@ object ProcessQuery {
       else physicalTableMap(nameAnalysis)
 
     val sqlizer = new ActualSqlizer(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, rewriteSubcolumns(request.locationSubcolumns, copyCache), physicalTableFor)
-    val Sqlizer.Result(sql, extractor, nonliteralSystemContextLookupFound, now) = sqlizer(nameAnalysis.statement)
+    val Sqlizer.Result(sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]], extractor, nonliteralSystemContextLookupFound, now) = sqlizer(nameAnalysis.statement)
     log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
 
     // Our etag will be the hash of the inputs that affect the result of the query
@@ -209,8 +209,13 @@ object ProcessQuery {
   ): HttpResponse = {
     val locale = "en_US"
 
-    val laidOutSql = sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded))
+    val laidOutSql: SimpleDocStream[SqlizeAnnotation[DatabaseNamesMetaTypes]] = sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded))
+    println("================", "laidOutSql")
+    println(laidOutSql)
     val renderedSql = laidOutSql.toString
+
+    println("================", "renderedSql")
+    println(renderedSql)
 
     val debugFields =
       debug.map { debug =>
