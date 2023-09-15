@@ -6,6 +6,7 @@ import com.socrata.pg.config.{StoreConfig}
 import com.socrata.curator.{CuratorConfig, DiscoveryConfig}
 import com.socrata.thirdparty.metrics.MetricsOptions
 import com.socrata.thirdparty.typesafeconfig.ConfigClass
+import com.socrata.pg.server.analyzer2.SqlizerType
 
 class QueryServerConfig(val config: Config, val root: String) extends ConfigClass(config, root) {
   val log4j = getRawConfig("log4j")
@@ -20,4 +21,12 @@ class QueryServerConfig(val config: Config, val root: String) extends ConfigClas
   val maxConcurrentRequestsPerDataset = getInt("max-concurrent-requests-per-dataset")
   val leadingSearch = getBoolean("leading-search")
   val httpQueryTimeoutDelta = getDuration("http-query-timeout-delta")
+  val dbType  = optionally(getString("db-type"))
+    .map(choice =>
+      SqlizerType.parse(choice)
+        .getOrElse(throw new IllegalArgumentException(s"Illegal choice for db-type: $choice"))
+    ).getOrElse(SqlizerType.Postgres)
+
+
+
 }

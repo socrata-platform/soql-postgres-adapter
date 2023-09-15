@@ -14,6 +14,12 @@ object SqlizerType {
   sealed trait SqlizerType
   case object Redshift extends SqlizerType
   case object Postgres extends SqlizerType
+
+  def parse: String => Option[SqlizerType.SqlizerType] = {
+    case "redshift" => Some(SqlizerType.Redshift)
+    case "postgres" => Some(SqlizerType.Postgres)
+    case _ => None
+  }
 }
 
 object ActualSqlizer {
