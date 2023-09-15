@@ -37,7 +37,7 @@ final abstract class ProcessQuery
 object ProcessQuery {
   val log = LoggerFactory.getLogger(classOf[ProcessQuery])
 
-  def apply(
+  def apply(sqlizerType: SqlizerType.SqlizerType)(
     request: Deserializer.Request,
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     precondition: Precondition,
@@ -110,7 +110,7 @@ object ProcessQuery {
       if(request.locationSubcolumns.isEmpty) Map.empty
       else physicalTableMap(nameAnalysis)
 
-    val sqlizer = new ActualSqlizer(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, rewriteSubcolumns(request.locationSubcolumns, copyCache), physicalTableFor)
+    val sqlizer = ActualSqlizer.choose(sqlizerType)(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, rewriteSubcolumns(request.locationSubcolumns, copyCache), physicalTableFor)
     val Sqlizer.Result(sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]], extractor, nonliteralSystemContextLookupFound, now) = sqlizer(nameAnalysis.statement)
     log.info("================================================================Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
 
