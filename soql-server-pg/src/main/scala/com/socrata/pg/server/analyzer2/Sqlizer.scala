@@ -31,11 +31,29 @@ object ActualSqlizer {
     escapeString: String => String,
     cryptProviderProvider: CryptProviderProvider,
     override val systemContext: Map[String, String],
-    locationSubcolumns: Postgres.LocationSubcolumns, // todo: this'll need to change
+    locationSubcolumns: Redshift.LocationSubcolumns,
     physicalTableFor: Map[AutoTableLabel, types.DatabaseTableName[DatabaseNamesMetaTypes]]
   ) extends Sqlizer[DatabaseNamesMetaTypes] {
 
-    override val repFor: Rep.Provider[DatabaseNamesMetaTypes] = ???
+    override val repFor: Rep.Provider[DatabaseNamesMetaTypes] = new SoQLRepProvider[DatabaseNamesMetaTypes](cryptProviderProvider, namespace, locationSubcolumns, physicalTableFor) {
+      def mkStringLiteral(text: String): Doc = {
+        // By default, converting a String to Doc replaces the newlines
+        // with soft newlines which can be converted into spaces by
+        // `group`.  This is a thing we _definitely_ don't want, so
+        // instead replace those newlines with hard line breaks, and
+        // un-nest lines by the current nesting level so the linebreak
+        // doesn't introduce any indentation.
+        val escapedText = escapeString(text)
+          .split("\n", -1)
+          .toSeq
+          .map(Doc(_))
+          .concatWith { (a: Doc, b: Doc) =>
+            a ++ Doc.hardline ++ b
+          }
+        val unindented = Doc.nesting { depth => escapedText.nest(-depth) }
+        d"'" ++ unindented ++ d"'"
+      }
+    }
 
     override val namespace  = new SqlNamespaces {
       def databaseTableName(dtn: DatabaseTableName) = {
@@ -105,7 +123,7 @@ object ActualSqlizer {
 
   object Redshift extends SqlizerUniverse[DatabaseNamesMetaTypes] {
     type LocationSubcolumns = Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]]
-    private val funcallSqlizer = new SoQLFunctionSqlizer[DatabaseNamesMetaTypes]
+    private val funcallSqlizer = new SoQLFunctionSqlizer[DatabaseNamesMetaTypes] // these'll be my own custom things
     private val rewriteSearch = new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true)
   }
 }
