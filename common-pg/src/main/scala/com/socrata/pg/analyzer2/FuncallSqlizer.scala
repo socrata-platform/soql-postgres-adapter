@@ -6,23 +6,6 @@ import com.socrata.soql.collection.NonEmptySeq
 import com.socrata.soql.analyzer2._
 import com.socrata.prettyprint.prelude._
 
-object FuncallSqlizer {
-  case class DynamicContext[MT <: MetaTypes](
-    repFor: Rep.Provider[MT],
-    systemContext: Map[String, String],
-    provTracker: ProvenanceTracker[MT],
-    now: DateTime
-  ) {
-    // This is kinda icky, but it lets us only set system context
-    // settings if absolutely necessary, which in practice it should
-    // never be.
-    var nonliteralSystemContextLookupFound = false
-    // This is also kinda icky, but it lets us only mix the current
-    // timestamp into etag-generation when necessary.
-    var nowUsed = false
-  }
-}
-
 abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   // Convention: if an expr might need parentheses for precedence
   // reason, it's the _caller's_ responsibility to add those
@@ -35,7 +18,7 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   // dynamic context is that part of funcall-sqlization that
   // potentially varies from call to call (e.g., building Reps
   // [because context providers] or the system context variables)
-  type DynamicContext = FuncallSqlizer.DynamicContext[MT]
+  type DynamicContext = Sqlizer.DynamicContext[MT]
 
   type OrdinaryFunctionSqlizer = (FunctionCall, Seq[ExprSql], DynamicContext) => ExprSql
   protected def ofs(f: OrdinaryFunctionSqlizer) = f

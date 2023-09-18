@@ -1,4 +1,4 @@
-package com.socrata.pg.server.analyzer2
+package com.socrata.pg.analyzer2.metatypes
 
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo, ColumnInfo}
 import com.socrata.datacoordinator.id.UserColumnId
@@ -9,6 +9,8 @@ import com.socrata.soql.environment.Provenance
 import com.socrata.soql.types.SoQLValue
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.functions.SoQLTypeInfo
+
+import com.socrata.pg.analyzer2.SoQLValueDebugHelper
 
 case class AugmentedTableName(name: String, isRollup: Boolean)
 

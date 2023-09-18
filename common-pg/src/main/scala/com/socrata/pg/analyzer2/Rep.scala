@@ -40,6 +40,8 @@ trait Rep[MT <: MetaTypes] extends ExpressionUniverse[MT] {
   // throws an exception if "field" is not a subcolumn of this type
   def subcolInfo(field: String): SubcolInfo[MT]
 
+  def compressedSubColumns(table: String, column: ColumnLabel): Seq[Doc[Nothing]]
+
   // This lets us produce a different representation in the top-level
   // selection if desired (e.g., for geometries we want to convert
   // them to WKB).  For most things this is false and wrapTopLevel is
@@ -51,6 +53,10 @@ trait Rep[MT <: MetaTypes] extends ExpressionUniverse[MT] {
   }
 
   def extractFrom(isExpanded: Boolean): (ResultSet, Int) => (Int, CV)
+
+  def expandedDatabaseTypes: Seq[Doc[SqlizeAnnotation[MT]]]
+
+  def indices(tableName: DatabaseTableName, label: ColumnLabel): Seq[Doc[Nothing]]
 }
 object Rep {
   trait Provider[MT <: MetaTypes] extends SqlizerUniverse[MT] {
@@ -70,41 +76,46 @@ object Rep {
       d"bytea" +#+ mkStringLiteral(bytes.iterator.map { b => "%02x".format(b & 0xff) }.mkString("\\x", "", ""))
 
     protected abstract class SingleColumnRep(val typ: CT, val sqlType: Doc) extends Rep {
-      def physicalColumnRef(col: PhysicalColumn) =
+      override def physicalColumnRef(col: PhysicalColumn) =
         ExprSql(Seq(namespace.tableLabel(col.table) ++ d"." ++ compressedDatabaseColumn(col.column)), col)
 
-      def virtualColumnRef(col: VirtualColumn, isExpanded: Boolean) =
+      override def virtualColumnRef(col: VirtualColumn, isExpanded: Boolean) =
         if(isExpanded) {
           ExprSql(Seq(namespace.tableLabel(col.table) ++ d"." ++ compressedDatabaseColumn(col.column)), col)
         } else {
           ExprSql(namespace.tableLabel(col.table) ++ d"." ++ compressedDatabaseColumn(col.column), col)
         }
 
-      def expandedColumnCount = 1
+      override def expandedColumnCount = 1
 
-      def expandedDatabaseColumns(name: ColumnLabel) = Seq(compressedDatabaseColumn(name))
+      override def expandedDatabaseColumns(name: ColumnLabel) = Seq(compressedDatabaseColumn(name))
 
-      def compressedDatabaseColumn(name: ColumnLabel) = namespace.columnBase(name)
+      override def compressedDatabaseColumn(name: ColumnLabel) = namespace.columnBase(name)
 
-      def nullLiteral(e: NullLiteral) =
+      override def compressedSubColumns(table: String, column: ColumnLabel) =
+        Seq(Doc(table) ++ d"." ++ compressedDatabaseColumn(column))
+
+      override def nullLiteral(e: NullLiteral) =
         ExprSql(d"null ::" +#+ sqlType, e)
 
-      def subcolInfo(field: String) = throw new Exception(s"$typ has no sub-columns")
+      override def subcolInfo(field: String) = throw new Exception(s"$typ has no sub-columns")
 
-      def extractFrom(isExpanded: Boolean): (ResultSet, Int) => (Int, CV) = { (rs, dbCol) =>
+      override def extractFrom(isExpanded: Boolean): (ResultSet, Int) => (Int, CV) = { (rs, dbCol) =>
         (1, doExtractFrom(rs, dbCol))
       }
 
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV
 
-      def provenanceOf(e: LiteralValue) = Set.empty
+      override def provenanceOf(e: LiteralValue) = Set.empty
+
+      override def expandedDatabaseTypes = Seq(sqlType)
     }
 
     protected abstract class CompoundColumnRep(val typ: CT) extends Rep {
-      def physicalColumnRef(col: PhysicalColumn) =
+      override def physicalColumnRef(col: PhysicalColumn) =
         genericColumnRef(col, true)
 
-      def virtualColumnRef(col: VirtualColumn, isExpanded: Boolean) =
+      override def virtualColumnRef(col: VirtualColumn, isExpanded: Boolean) =
         genericColumnRef(col, isExpanded)
 
       private def genericColumnRef(col: Column, isExpanded: Boolean): ExprSql = {
@@ -116,7 +127,7 @@ object Rep {
         }
       }
 
-      def extractFrom(isExpanded: Boolean): (ResultSet, Int) => (Int, CV) = {
+      override def extractFrom(isExpanded: Boolean): (ResultSet, Int) => (Int, CV) = {
         if(isExpanded) { (rs, dbCol) =>
           (expandedColumnCount, doExtractExpanded(rs, dbCol))
         } else { (rs, dbCol) =>
@@ -127,7 +138,7 @@ object Rep {
       protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV
       protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV
 
-      def provenanceOf(e: LiteralValue) = Set.empty
+      override def provenanceOf(e: LiteralValue) = Set.empty
     }
 
     protected abstract class ProvenancedRep(val typ: CT, primarySqlTyp: Doc) extends Rep {
@@ -141,20 +152,22 @@ object Rep {
       // with a table under your control to find out information about
       // intervals between IDs in tables you don't control.
 
-      def nullLiteral(e: NullLiteral) =
+      override def nullLiteral(e: NullLiteral) =
         ExprSql.Expanded[MT](Seq(d"null :: text", d"null ::" +#+ primarySqlTyp), e)
 
-      def expandedColumnCount = 2
+      override def expandedColumnCount = 2
 
-      def expandedDatabaseColumns(name: ColumnLabel) = {
+      override def expandedDatabaseTypes = Seq(d"text", primarySqlTyp)
+
+      override def expandedDatabaseColumns(name: ColumnLabel) = {
         val base = namespace.columnBase(name)
         Seq(base ++ d"_provenance", base)
       }
 
-      def compressedDatabaseColumn(name: ColumnLabel) =
+      override def compressedDatabaseColumn(name: ColumnLabel) =
         namespace.columnBase(name)
 
-      def physicalColumnRef(col: PhysicalColumn) = {
+      override def physicalColumnRef(col: PhysicalColumn) = {
         val dsTable = namespace.tableLabel(col.table)
         if(isRollup(col.tableName)) {
           // This is actually a materialized VirtualColumn
@@ -167,7 +180,7 @@ object Rep {
         }
       }
 
-      def virtualColumnRef(col: VirtualColumn, isExpanded: Boolean) = {
+      override def virtualColumnRef(col: VirtualColumn, isExpanded: Boolean) = {
         val dsTable = namespace.tableLabel(col.table)
         if(isExpanded) {
           ExprSql(expandedDatabaseColumns(col.column).map { cn => dsTable ++ d"." ++ cn }, col)
@@ -178,9 +191,9 @@ object Rep {
 
       override def isProvenanced = true
 
-      def subcolInfo(field: String) = throw new Exception(s"$typ has no sub-columns")
+      override def subcolInfo(field: String) = throw new Exception(s"$typ has no sub-columns")
 
-      def extractFrom(isExpanded: Boolean): (ResultSet, Int) => (Int, CV) = {
+      override def extractFrom(isExpanded: Boolean): (ResultSet, Int) => (Int, CV) = {
         if(isExpanded) { (rs, dbCol) =>
           (expandedColumnCount, doExtractExpanded(rs, dbCol))
         } else { (rs, dbCol) =>

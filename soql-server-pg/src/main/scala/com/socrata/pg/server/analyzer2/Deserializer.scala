@@ -9,6 +9,8 @@ import com.socrata.soql.analyzer2.rewrite.Pass
 import com.socrata.soql.serialize.{ReadBuffer, Readable}
 import com.socrata.soql.sql.Debug
 
+import com.socrata.pg.analyzer2.metatypes.{InputMetaTypes, Stage}
+
 object Deserializer extends LabelUniverse[InputMetaTypes] {
   case class Request(
     analysis: SoQLAnalysis[InputMetaTypes],

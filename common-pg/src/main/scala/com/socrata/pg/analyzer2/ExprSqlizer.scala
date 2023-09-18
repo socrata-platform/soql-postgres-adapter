@@ -7,9 +7,11 @@ class ExprSqlizer[MT <: MetaTypes](
   sqlizer: Sqlizer[MT],
   availableSchemas: Map[AutoTableLabel, Map[types.ColumnLabel[MT], AugmentedType[MT]]],
   selectListIndices: IndexedSeq[SelectListIndex],
-  dynamicContext: FuncallSqlizer.DynamicContext[MT]
+  dynamicContext: Sqlizer.DynamicContext[MT]
 ) extends StatementUniverse[MT] {
-  import sqlizer.{funcallSqlizer, repFor}
+  import sqlizer.funcallSqlizer
+
+  private val repFor = dynamicContext.repFor
 
   def sqlizeOrderBy(e: OrderBy): OrderBySql[MT] = {
     if(repFor(e.expr.typ).isProvenanced) {
