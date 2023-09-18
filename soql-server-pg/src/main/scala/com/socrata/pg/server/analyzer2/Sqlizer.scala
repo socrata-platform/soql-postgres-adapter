@@ -44,7 +44,7 @@ object ActualSqlizer {
       }
     }
 
-    override val namespace  = new SqlNamespaces {
+    override val namespace  = new SqlNamespaces { // maybe this'll be different if our DB table reprs are different
       def databaseTableName(dtn: DatabaseTableName) = {
         val DatabaseTableName(dataTableName) = dtn
         Doc(dataTableName)
@@ -113,6 +113,6 @@ object ActualSqlizer {
   object Redshift extends SqlizerUniverse[DatabaseNamesMetaTypes] {
     type LocationSubcolumns = Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]]
     private val funcallSqlizer = new SoQLFunctionSqlizerRedshift[DatabaseNamesMetaTypes] // these'll be my own custom things
-    private val rewriteSearch = new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true)
+    private val rewriteSearch = new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true) // these'll be my own custom things
   }
 }
