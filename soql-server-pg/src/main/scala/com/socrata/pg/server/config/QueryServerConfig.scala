@@ -6,7 +6,7 @@ import com.socrata.pg.config.{StoreConfig}
 import com.socrata.curator.{CuratorConfig, DiscoveryConfig}
 import com.socrata.thirdparty.metrics.MetricsOptions
 import com.socrata.thirdparty.typesafeconfig.ConfigClass
-import com.socrata.pg.server.analyzer2.SqlizerType
+import com.socrata.db
 
 class QueryServerConfig(val config: Config, val root: String) extends ConfigClass(config, root) {
   val log4j = getRawConfig("log4j")
@@ -23,9 +23,9 @@ class QueryServerConfig(val config: Config, val root: String) extends ConfigClas
   val httpQueryTimeoutDelta = getDuration("http-query-timeout-delta")
   val dbType  = optionally(getString("db-type"))
     .map(choice =>
-      SqlizerType.parse(choice)
+      db.SqlizerType.parse(choice)
         .getOrElse(throw new IllegalArgumentException(s"Illegal choice for db-type: $choice"))
-    ).getOrElse(SqlizerType.Postgres)
+    ).getOrElse(db.Postgres)
 
 
 

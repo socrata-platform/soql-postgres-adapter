@@ -36,6 +36,7 @@ import com.socrata.http.server.routing.SimpleResource
 import com.socrata.http.server.routing.SimpleRouteContext._
 import com.socrata.http.server.util.Precondition._
 import com.socrata.http.server.util.RequestId.ReqIdHeader
+import com.socrata.db
 import com.socrata.http.server.util.handlers.{LoggingOptions, NewLoggingHandler, ThreadRenamingHandler}
 import com.socrata.http.server.util.{EntityTag, NoPrecondition, Precondition, StrongEntityTag}
 import com.socrata.pg.analyzer2.CryptProviderProvider
@@ -76,7 +77,6 @@ import java.time.{Clock, LocalDateTime}
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.collection.immutable.SortedMap
 import scala.language.existentials
-import com.socrata.pg.server.analyzer2.SqlizerType
 
 class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val leadingSearch: Boolean = true,
                   val httpQueryTimeoutDelta: FiniteDuration = Duration.Zero) extends SecondaryBase {
@@ -193,7 +193,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
 
     val parsed = analyzer2.Deserializer(req.inputStream)
 
-    analyzer2.ProcessQuery(SqlizerType.Postgres)(parsed, openPgu(dsInfo, None, rs), req.precondition, rs)
+    analyzer2.ProcessQuery(db.Postgres)(parsed, openPgu(dsInfo, None, rs), req.precondition, rs)
   }
 
   def etagFromCopy(datasetInternalName: String, copy: CopyInfo, etagInfo: Option[String], debug: Boolean = false): EntityTag = {

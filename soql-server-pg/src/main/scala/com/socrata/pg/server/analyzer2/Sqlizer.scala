@@ -6,26 +6,15 @@ import com.socrata.prettyprint.prelude._
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.types.obfuscation.CryptProvider
 
-import com.socrata.pg.analyzer2.{Sqlizer, SqlNamespaces, SoQLRepProvider, SoQLFunctionSqlizer, Rep, CryptProviderProvider, ResultExtractor, SoQLRewriteSearch, SqlizerUniverse}
+import com.socrata.pg.analyzer2._
+import com.socrata.db
 
 // factor out shared code
 
-object SqlizerType {
-  sealed trait SqlizerType
-  case object Redshift extends SqlizerType
-  case object Postgres extends SqlizerType
-
-  def parse: String => Option[SqlizerType.SqlizerType] = {
-    case "redshift" => Some(SqlizerType.Redshift)
-    case "postgres" => Some(SqlizerType.Postgres)
-    case _ => None
-  }
-}
-
 object ActualSqlizer {
-  def choose(sqlizer: SqlizerType.SqlizerType) = sqlizer match {
-    case SqlizerType.Redshift => (Redshift.apply _)
-    case SqlizerType.Postgres => (Postgres.apply _)
+  def choose(sqlizer: db.SqlizerType) = sqlizer match {
+    case db.Redshift => (Redshift.apply _)
+    case db.Postgres => (Postgres.apply _)
   }
   case class Redshift(
     escapeString: String => String,
@@ -123,7 +112,7 @@ object ActualSqlizer {
 
   object Redshift extends SqlizerUniverse[DatabaseNamesMetaTypes] {
     type LocationSubcolumns = Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]]
-    private val funcallSqlizer = new SoQLFunctionSqlizer[DatabaseNamesMetaTypes] // these'll be my own custom things
+    private val funcallSqlizer = new SoQLFunctionSqlizerRedshift[DatabaseNamesMetaTypes] // these'll be my own custom things
     private val rewriteSearch = new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true)
   }
 }
