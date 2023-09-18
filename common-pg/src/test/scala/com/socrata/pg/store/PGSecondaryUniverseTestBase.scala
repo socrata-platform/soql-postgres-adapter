@@ -19,6 +19,7 @@ import org.joda.time.{DateTime, LocalDate, LocalDateTime, LocalTime, Period}
 import org.scalatest.{BeforeAndAfterAll, FunSuiteLike, Matchers}
 
 import scala.annotation.tailrec
+import com.socrata.pg.config.StoreConfig
 
 // scalastyle:off null cyclomatic.complexity
 trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with BeforeAndAfterAll {
@@ -26,34 +27,39 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
 
   val config: Config
 
-  def withDb[T](dbType: DbType = Postgres)(f: (Connection) => T): T = dbType match {
-    case Postgres =>
-      val loglevel = 0; // 2 = debug, 0 = default
+  // do not default to PG
+  def withDb[T](dbType: DbType = Postgres)(f: (Connection) => T): T = {
+    val database = config.getString("database.database")
+    val user = config.getString("database.username")
+    val pass = config.getString("database.password")
 
-      val database = config.getString("database.database")
-      val user = config.getString("database.username")
-      val pass = config.getString("database.password")
-      using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/$database?loglevel=$loglevel", user, pass)) { conn =>
-        conn.setAutoCommit(false)
-        f(conn)
-      }
-    case Redshift =>
-      val database = config.getString("database.database")
-      val host = config.getString("database.host")
-      val user = config.getString("database.username")
-      val pass = config.getString("database.password")
-      using(DriverManager.getConnection(s"jdbc:redshift://$host:5432/$database", user, pass)) { conn =>
-        conn.setAutoCommit(false)
-        f(conn)
-      }
+    dbType match {
+      case Postgres =>
+        val loglevel = 0; // 2 = debug, 0 = default
+
+        using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/$database?loglevel=$loglevel", user, pass)) { conn =>
+          conn.setAutoCommit(false)
+          f(conn)
+        }
+      case Redshift =>
+        val host = config.getString("database.host")
+        using(DriverManager.getConnection(s"jdbc:redshift://$host:5432/$database", user, pass)) { conn =>
+          conn.setAutoCommit(false)
+          f(conn)
+        }
+    }
   }
 
-  def withPgu[T]()(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
-    withDb() { conn =>
+  def withPgu[T](dbType: DbType = Postgres)(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T =
+    withDb(dbType) { conn =>
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
       f(pgu)
     }
+
+  def constrainToDb[T](dbType: Option[DbType])(t: => T) = {
+
   }
+
 
   def createTable(conn:Connection, datasetInfo:Option[DatasetInfo] = None): (PGSecondaryUniverse[SoQLType, SoQLValue], CopyInfo, SchemaLoader[SoQLType]) = {
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon, datasetInfo)

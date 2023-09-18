@@ -3,6 +3,7 @@ package com.socrata.pg.store
 import scala.language.reflectiveCalls
 
 import PGSecondaryUtil._
+import com.socrata.db.Postgres
 
 class CurrentCopyNumberTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
   test("handle CurrentCopyNumber") {

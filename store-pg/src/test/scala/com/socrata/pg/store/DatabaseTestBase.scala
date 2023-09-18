@@ -26,6 +26,7 @@ import com.socrata.db._
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.Logger
 import org.scalatest.Matchers.fail
+import com.socrata.pg.config.StoreConfig
 
 /**
  * Recreate test databases of truth and secondary.

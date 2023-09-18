@@ -21,12 +21,4 @@ class QueryServerConfig(val config: Config, val root: String) extends ConfigClas
   val maxConcurrentRequestsPerDataset = getInt("max-concurrent-requests-per-dataset")
   val leadingSearch = getBoolean("leading-search")
   val httpQueryTimeoutDelta = getDuration("http-query-timeout-delta")
-  val dbType  = optionally(getString("db-type"))
-    .map(choice =>
-      db.DbType.parse(choice)
-        .getOrElse(throw new IllegalArgumentException(s"Illegal choice for db-type: $choice"))
-    ).getOrElse(db.Postgres)
-
-
-
 }

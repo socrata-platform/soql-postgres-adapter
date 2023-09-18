@@ -193,7 +193,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
 
     val parsed = analyzer2.Deserializer(req.inputStream)
 
-    analyzer2.ProcessQuery(config.dbType)(parsed, openPgu(dsInfo, None, rs), req.precondition, rs)
+    analyzer2.ProcessQuery(config.store.dbType)(parsed, openPgu(dsInfo, None, rs), req.precondition, rs)
   }
 
   def etagFromCopy(datasetInternalName: String, copy: CopyInfo, etagInfo: Option[String], debug: Boolean = false): EntityTag = {
