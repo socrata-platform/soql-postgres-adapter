@@ -22,8 +22,6 @@ import scala.annotation.tailrec
 
 // scalastyle:off null cyclomatic.complexity
 trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with BeforeAndAfterAll {
-  type CT = SoQLType
-  type CV = SoQLValue
   val common = PostgresUniverseCommon
 
   val config: Config
