@@ -39,9 +39,13 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
       }
     case Redshift =>
       val database = config.getString("database.database")
+      val host = config.getString("database.host")
       val user = config.getString("database.username")
       val pass = config.getString("database.password")
-      ???
+      using(DriverManager.getConnection(s"jdbc:redshift://$host:5432/$database", user, pass)) { conn =>
+        conn.setAutoCommit(false)
+        f(conn)
+      }
   }
 
   def withPgu[T]()(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
