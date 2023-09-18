@@ -43,13 +43,13 @@ trait DatabaseTestBase {
 
   private lazy val projectConfig: Config = ConfigFactory.load().getConfig(s"com.socrata.pg.${projectDb}")
 
-  lazy val config: Config = projectConfig.getConfig("secondary")
+  lazy val config: StoreConfig  = ???
 
   lazy val truthDataSourceConfig: DataSourceConfig = new DataSourceConfig(projectConfig, "truth.database" )
 
   lazy val truthDb: String = truthDataSourceConfig.database
 
-  lazy val secondaryDb: String = config.getString("database.database")
+  lazy val secondaryDb: String = config.database.database
 
   var truthDatasetId: DatasetId = _
 
@@ -64,7 +64,7 @@ trait DatabaseTestBase {
    * To be called during beforeAll
    */
   def createDatabases(): Unit = {
-    DatabaseTestBase.createDatabases(truthDb, secondaryDb, config)
+    DatabaseTestBase.createDatabases(truthDb, secondaryDb, config.database)
   }
 
   def withSoQLCommon[T](datasourceConfig: DataSourceConfig)(f: (SoQLCommon) => T): T = {
@@ -206,7 +206,7 @@ object DatabaseTestBase {
 
   private var dbInitialized = false
 
-  def createDatabases(truthDb: String, secondaryDb: String, secondaryConfig: Config): Unit = { // change this
+  def createDatabases(truthDb: String, secondaryDb: String, secondaryConfig: DataSourceConfig): Unit = { // change this
     synchronized {
       if (!DatabaseTestBase.dbInitialized) {
         logger.info("*** Creating test databases *** ")
@@ -215,7 +215,7 @@ object DatabaseTestBase {
         // migrate truth db
         populateTruth(truthDb)
         // migrate secondary db
-        SchemaMigrator("database", MigrationOperation.Migrate, secondaryConfig, false)
+        SchemaMigrator(MigrationOperation.Migrate, secondaryConfig, false)
         DatabaseTestBase.dbInitialized = true
       }
     }

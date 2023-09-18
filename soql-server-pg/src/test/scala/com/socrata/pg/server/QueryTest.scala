@@ -24,7 +24,6 @@ import scala.concurrent.duration.Duration
 class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase with PGQueryTestBase {
 
   override def beforeAll: Unit = {
-    PropertyConfigurator.configure(Propertizer("log4j", config.getConfig("log4j")))
     createDatabases()
   }
 

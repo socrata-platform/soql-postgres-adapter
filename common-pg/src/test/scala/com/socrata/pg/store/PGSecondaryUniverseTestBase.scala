@@ -21,18 +21,19 @@ import org.scalatest.{BeforeAndAfterAll, FunSuiteLike, Matchers}
 import scala.annotation.tailrec
 import com.socrata.pg.config.StoreConfig
 import com.socrata.datacoordinator.common.DbType
+import com.socrata.datacoordinator.common.DataSourceConfig
 
 // scalastyle:off null cyclomatic.complexity
 trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with BeforeAndAfterAll {
   val common = PostgresUniverseCommon
 
-  val config: Config
+  val config: StoreConfig
 
   // do not default to PG
-  def withDb[T](dbType: DbType = Postgres)(f: (Connection) => T): T = {
-    val database = config.getString("database.database")
-    val user = config.getString("database.username")
-    val pass = config.getString("database.password")
+  def withDb[T]()(f: (Connection) => T)(dbType: DbType = Postgres): T = {
+    val database = config.database
+    val user = config.database.username
+    val pass = config.database.password
 
     dbType match {
       case Postgres =>
@@ -43,7 +44,7 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
           f(conn)
         }
       case Redshift =>
-        val host = config.getString("database.host")
+        val host = config.database.host
         using(DriverManager.getConnection(s"jdbc:redshift://$host:5432/$database", user, pass)) { conn =>
           conn.setAutoCommit(false)
           f(conn)
@@ -51,14 +52,18 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
     }
   }
 
-  def withPgu[T](dbType: DbType = Postgres)(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T =
-    withDb(dbType) { conn =>
+  def withPgu[T]()(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T)(dbType: DbType): T =
+    withDb() { conn =>
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
       f(pgu)
-    }
+    }(dbType)
 
-  def constrainToDb[T](dbType: Option[DbType])(t: => T) = {
-    println(config);
+
+
+  def constrainToDb[T](constraint: Option[DbType] = None)(t: DbType => T) = constraint match {
+    case Some(n) if n == config.database.dbType => Some(t(n))
+    case Some(n) => None
+    case None => Some(t(config.database.dbType))
   }
 
 

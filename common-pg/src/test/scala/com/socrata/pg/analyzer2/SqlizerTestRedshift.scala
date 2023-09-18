@@ -15,6 +15,7 @@ import com.socrata.pg.store.PGSecondaryUniverseTestBase
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import com.socrata.datacoordinator.common._
+import com.socrata.pg.config.StoreConfig
 
 object SqlizerTestRedshift {
   final abstract class TestMT extends MetaTypes {
@@ -28,9 +29,8 @@ object SqlizerTestRedshift {
 
 class SqlizerTestRedshift extends FunSuite with Matchers with SqlizerUniverse[SqlizerTest.TestMT] with PGSecondaryUniverseTestBase{
 
-  override val config: Config = {
-    val projectConfig: Config = ConfigFactory.load().getConfig(s"com.socrata.pg.store")
-    projectConfig
+  override val config = {
+    new StoreConfig(ConfigFactory.load(), "com.socrata.pg.store")
   }
 
   import SqlizerTest._
@@ -79,9 +79,10 @@ class SqlizerTestRedshift extends FunSuite with Matchers with SqlizerUniverse[Sq
   }
 
   test("tst") {
-    constrainToDb(Some(Redshift))(???)
-    withDb(Redshift) { conn =>
+    constrainToDb(Some(Redshift)){
+    withDb() { conn =>
       println("conn")
+    }
     }
   }
 

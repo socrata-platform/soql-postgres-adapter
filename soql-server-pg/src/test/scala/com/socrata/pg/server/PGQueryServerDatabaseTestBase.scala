@@ -24,7 +24,7 @@ import scala.language.existentials
 
 // scalastyle:off method.length
 trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUniverseTestBase {
-  private lazy val datasourceConfig = new DataSourceConfig(config, "database")
+  private lazy val datasourceConfig = config.database
 
   protected lazy val ds = DataSourceFromConfig(datasourceConfig)
 

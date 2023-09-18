@@ -39,12 +39,11 @@ object PGSecondary {
 /**
  * Postgres Secondary Store Implementation
  */
-class PGSecondary(val config: Config) extends Secondary[SoQLType, SoQLValue] with SecondaryBase {
+class PGSecondary(val storeConfig: StoreConfig) extends Secondary[SoQLType, SoQLValue] with SecondaryBase {
   import PGSecondary.logger
 
   logger.info(BuildInfo.toJson)
 
-  val storeConfig = new StoreConfig(config, "")
   override val dsConfig =  storeConfig.database
 
   private val dsInfo = DataSourceFromConfig.unmanaged(dsConfig)
