@@ -13,6 +13,7 @@ import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, Dataset
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.soql.environment.{ColumnName, TypeName}
 import com.socrata.soql.types._
+import com.socrata.db._
 import com.typesafe.config.Config
 import org.joda.time.{DateTime, LocalDate, LocalDateTime, LocalTime, Period}
 import org.scalatest.{BeforeAndAfterAll, FunSuiteLike, Matchers}
@@ -27,16 +28,22 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
 
   val config: Config
 
-  def withDb[T]()(f: (Connection) => T): T = {
-    def loglevel = 0; // 2 = debug, 0 = default
+  def withDb[T](dbType: DbType = Postgres)(f: (Connection) => T): T = dbType match {
+    case Postgres =>
+      val loglevel = 0; // 2 = debug, 0 = default
 
-    val database = config.getString("database.database")
-    val user = config.getString("database.username")
-    val pass = config.getString("database.password")
-    using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/$database?loglevel=$loglevel", user, pass)) { conn =>
-      conn.setAutoCommit(false)
-      f(conn)
-    }
+      val database = config.getString("database.database")
+      val user = config.getString("database.username")
+      val pass = config.getString("database.password")
+      using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/$database?loglevel=$loglevel", user, pass)) { conn =>
+        conn.setAutoCommit(false)
+        f(conn)
+      }
+    case Redshift =>
+      val database = config.getString("database.database")
+      val user = config.getString("database.username")
+      val pass = config.getString("database.password")
+      ???
   }
 
   def withPgu[T]()(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
