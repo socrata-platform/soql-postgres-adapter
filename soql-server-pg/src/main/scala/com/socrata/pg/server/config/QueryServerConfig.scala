@@ -6,7 +6,6 @@ import com.socrata.pg.config.{StoreConfig}
 import com.socrata.curator.{CuratorConfig, DiscoveryConfig}
 import com.socrata.thirdparty.metrics.MetricsOptions
 import com.socrata.thirdparty.typesafeconfig.ConfigClass
-import com.socrata.db
 
 class QueryServerConfig(val config: Config, val root: String) extends ConfigClass(config, root) {
   val log4j = getRawConfig("log4j")

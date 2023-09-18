@@ -13,13 +13,14 @@ import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, Dataset
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.soql.environment.{ColumnName, TypeName}
 import com.socrata.soql.types._
-import com.socrata.db._
+import com.socrata.datacoordinator.common.{Redshift, Postgres}
 import com.typesafe.config.Config
 import org.joda.time.{DateTime, LocalDate, LocalDateTime, LocalTime, Period}
 import org.scalatest.{BeforeAndAfterAll, FunSuiteLike, Matchers}
 
 import scala.annotation.tailrec
 import com.socrata.pg.config.StoreConfig
+import com.socrata.datacoordinator.common.DbType
 
 // scalastyle:off null cyclomatic.complexity
 trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with BeforeAndAfterAll {
@@ -57,7 +58,7 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
     }
 
   def constrainToDb[T](dbType: Option[DbType])(t: => T) = {
-
+    println(config);
   }
 
 

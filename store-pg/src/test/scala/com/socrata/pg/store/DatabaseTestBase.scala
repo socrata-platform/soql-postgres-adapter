@@ -22,7 +22,6 @@ import com.socrata.datacoordinator.truth.universe.sql.PostgresCopyIn
 import com.socrata.datacoordinator.util.{IndexedTempFile, NoopTimingReport, NullCache}
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.types.{SoQLType, SoQLValue}
-import com.socrata.db._
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.Logger
 import org.scalatest.Matchers.fail

@@ -4,18 +4,9 @@ import com.socrata.curator.CuratorConfig
 import com.typesafe.config.{ConfigUtil, Config}
 import com.socrata.thirdparty.typesafeconfig.ConfigClass
 import com.socrata.datacoordinator.common.DataSourceConfig
-import com.socrata.db
 import scala.collection.JavaConverters._
 
 class StoreConfig(config: Config, root: String) extends ConfigClass(config, root) {
-  val dbType  = optionally(getString("db-type"))
-    .map(choice =>
-      db.DbType.parse(choice)
-        .getOrElse(throw new IllegalArgumentException(s"Illegal choice for db-type: $choice"))
-    ).getOrElse(db.Postgres)
-
-
-
   private val defaultResyncBatchSize = 1000
 
   // handle blank root

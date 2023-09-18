@@ -7,14 +7,14 @@ import com.socrata.soql.analyzer2._
 import com.socrata.soql.types.obfuscation.CryptProvider
 
 import com.socrata.pg.analyzer2._
-import com.socrata.db
+import com.socrata.datacoordinator.common
 
 // factor out shared code
 
 object ActualSqlizer {
-  def choose(sqlizer: db.DbType) = sqlizer match {
-    case db.Redshift => (Redshift.apply _)
-    case db.Postgres => (Postgres.apply _)
+  def choose(sqlizer: common.DbType) = sqlizer match {
+    case common.Redshift => (Redshift.apply _)
+    case common.Postgres => (Postgres.apply _)
   }
   case class Redshift(
     escapeString: String => String,

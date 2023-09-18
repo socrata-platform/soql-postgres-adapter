@@ -32,13 +32,13 @@ import com.socrata.datacoordinator.common.soql.SoQLRep
 import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, RollupRewriter}
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils}
 import com.socrata.pg.server.CJSONWriter
-import com.socrata.db
+import com.socrata.datacoordinator.common.DbType
 
 final abstract class ProcessQuery
 object ProcessQuery {
   val log = LoggerFactory.getLogger(classOf[ProcessQuery])
 
-  def apply(sqlizerType: db.DbType)(
+  def apply(sqlizerType: DbType)(
     request: Deserializer.Request,
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     precondition: Precondition,
