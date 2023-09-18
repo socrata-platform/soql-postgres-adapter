@@ -12,7 +12,7 @@ import com.socrata.db
 // factor out shared code
 
 object ActualSqlizer {
-  def choose(sqlizer: db.SqlizerType) = sqlizer match {
+  def choose(sqlizer: db.DbType) = sqlizer match {
     case db.Redshift => (Redshift.apply _)
     case db.Postgres => (Postgres.apply _)
   }

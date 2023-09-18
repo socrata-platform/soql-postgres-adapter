@@ -1,12 +1,12 @@
 package com.socrata.db
 
-  sealed trait SqlizerType
-  case object Redshift extends SqlizerType
-  case object Postgres extends SqlizerType
+ sealed trait DbType
+ case object Redshift extends DbType
+ case object Postgres extends DbType
 
 
-object SqlizerType {
-  def parse: String => Option[SqlizerType] = {
+object DbType {
+  def parse: String => Option[DbType] = {
     case "redshift" => Some(Redshift)
     case "postgres" => Some(Postgres)
     case _ => None

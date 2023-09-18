@@ -38,7 +38,7 @@ final abstract class ProcessQuery
 object ProcessQuery {
   val log = LoggerFactory.getLogger(classOf[ProcessQuery])
 
-  def apply(sqlizerType: db.SqlizerType)(
+  def apply(sqlizerType: db.DbType)(
     request: Deserializer.Request,
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     precondition: Precondition,
