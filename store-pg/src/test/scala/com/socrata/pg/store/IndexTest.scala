@@ -23,7 +23,7 @@ class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wit
   }
 
   test("create index") {
-    withPguUnconstrained { pgu =>
+    withPgu { pgu =>
       val secondary = new PGSecondary(config)
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
@@ -41,7 +41,7 @@ class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wit
   }
 
   test("create advanced index") {
-    withPguUnconstrained { pgu =>
+    withPgu { pgu =>
       val secondary = new PGSecondary(config)
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
@@ -59,7 +59,7 @@ class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wit
   }
 
   test("invalid expression shouldn't throw exception") {
-    withPguUnconstrained { pgu =>
+    withPgu { pgu =>
       val secondary = new PGSecondary(config)
       secondary.shutdown()
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
@@ -75,7 +75,7 @@ class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wit
   }
 
   test("index is copied from first to second copy") {
-    withPguUnconstrained { pgu =>
+    withPgu { pgu =>
       val secondary = new PGSecondary(config)
       secondary.shutdown()
 
@@ -124,7 +124,7 @@ class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wit
   }
 
   test("index survives resync") {
-    withPguUnconstrained { pgu =>
+    withPgu { pgu =>
       val pgs = new PGSecondary(config)
       val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, None)
       val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55, 55, new DateTime())
@@ -194,7 +194,7 @@ class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wit
   }
 
   test("index of previous published copy is still good after a working copy is dropped") {
-    withPguUnconstrained { pgu =>
+    withPgu { pgu =>
       val secondary = new PGSecondary(config)
       secondary.shutdown()
 

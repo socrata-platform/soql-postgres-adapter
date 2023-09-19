@@ -41,7 +41,7 @@ class PGSecondaryDatasetMapWriterTest extends PGSecondaryTestBase with PGSeconda
   }
 
   test("Can create internal name mapping") {
-    withPguUnconstrained { pgu =>
+    withPgu { pgu =>
       createSchema(pgu.conn)
       pgu.datasetMapWriter.createInternalNameMapping("Dataset Name", new DatasetId(123))
       val datasetId: DatasetId = pgu.datasetMapReader.datasetIdForInternalName("Dataset Name").get
@@ -50,7 +50,7 @@ class PGSecondaryDatasetMapWriterTest extends PGSecondaryTestBase with PGSeconda
   }
 
   test("Can create dataset only") {
-    withPguUnconstrained { pgu =>
+    withPgu { pgu =>
       createSchema(pgu.conn)
       val datasetId = pgu.datasetMapWriter.createDatasetOnly("locale")
 
@@ -60,7 +60,7 @@ class PGSecondaryDatasetMapWriterTest extends PGSecondaryTestBase with PGSeconda
   }
 
   test("Can delete a copy") {
-    withPguUnconstrained { pgu =>
+    withPgu { pgu =>
       val f = columnsCreatedFixture
 
       f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, f.events.iterator, Nil)

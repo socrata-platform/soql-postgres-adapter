@@ -7,7 +7,7 @@ class CurrentVersionTest extends PGSecondaryTestBase with PGSecondaryUniverseTes
   import PGSecondaryUtil._
 
   test("handle CurrentVersion") {
-    withPguUnconstrained { pgu =>
+    withPgu { pgu =>
       val f = columnsCreatedFixture
 
       var version = f.dataVersion
@@ -21,7 +21,7 @@ class CurrentVersionTest extends PGSecondaryTestBase with PGSecondaryUniverseTes
   }
 
   test("handle CurrentVersion over a range") {
-    withPguUnconstrained { pgu =>
+    withPgu { pgu =>
       val f = columnsCreatedFixture
 
       var version = f.dataVersion

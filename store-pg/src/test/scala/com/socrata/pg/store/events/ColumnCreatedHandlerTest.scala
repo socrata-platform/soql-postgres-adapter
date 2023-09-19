@@ -8,7 +8,7 @@ import scala.language.reflectiveCalls
 class ColumnCreatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
   test("handle ColumnCreated") {
-    withPguUnconstrained { pgu =>
+    withPgu { pgu =>
       val f = columnsCreatedFixture
 
       f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, f.events.iterator, Nil)

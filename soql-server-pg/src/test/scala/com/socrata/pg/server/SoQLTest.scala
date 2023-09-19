@@ -25,7 +25,7 @@ abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTe
   private lazy val joinCtx3 = getContext(secDatasetIdJoin3)
   private lazy val joinCtx4 = getContext(secDatasetIdJoin4)
 
-  private def getContext(secondaryDatasetId: DatasetId): DatasetContext[SoQLType] = withDbUnconstrained { conn =>
+  private def getContext(secondaryDatasetId: DatasetId): DatasetContext[SoQLType] = withDb { conn =>
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
     val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secondaryDatasetId).get)
 
@@ -53,7 +53,7 @@ abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTe
 
   override def beforeAll: Unit = {
     createDatabases()
-    withDbUnconstrained { conn =>
+    withDb { conn =>
       val (truthDsId2, secDsId2) = importDataset(conn, "mutate-create-2nd-dataset.json")
       val (truthDsId3, secDsId3) = importDataset(conn, "mutate-create-3rd-dataset.json")
       val (truthDsId4, secDsId4) = importDataset(conn, "mutate-create-4th-dataset.json")
@@ -72,7 +72,7 @@ abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTe
   }
 
   override def afterAll: Unit = {
-    withPguUnconstrained { pgu =>
+    withPgu { pgu =>
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val tableName = pgu.datasetMapReader.latest(datasetInfo).dataTableName
       dropDataset(pgu, truthDatasetId)
