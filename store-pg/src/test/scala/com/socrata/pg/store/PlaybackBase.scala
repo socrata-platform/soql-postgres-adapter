@@ -56,7 +56,7 @@ class PlaybackBase extends PGSecondaryTestBase with PGSecondaryUniverseTestBase 
     }
   }
 
-  def getSingleNumericValueFromStatement(statement: String): Option[java.math.BigDecimal] = {
+  def getSingleNumericValueFromStatement(statement: String): Option[BigDecimal] = {
     withPguUnconstrained { pgu =>
       using(pgu.conn.prepareStatement(statement)) { stmt =>
         using(stmt.executeQuery()) { rs =>

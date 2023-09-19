@@ -80,8 +80,8 @@ class SqlizerTestRedshift extends FunSuite with Matchers with SqlizerUniverse[Sq
   }
 
   test("tst") {
-    withDbUnconstrained { conn =>
-      println("conn")
+    constrainToDb(Some(Redshift)) {
+      withPgu { n => ???} _
     }
   }
 
