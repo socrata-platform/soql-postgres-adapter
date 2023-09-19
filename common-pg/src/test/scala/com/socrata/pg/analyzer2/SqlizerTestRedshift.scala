@@ -30,7 +30,8 @@ object SqlizerTestRedshift {
 class SqlizerTestRedshift extends FunSuite with Matchers with SqlizerUniverse[SqlizerTest.TestMT] with PGSecondaryUniverseTestBase{
 
   override val config = {
-    new StoreConfig(ConfigFactory.load(), "com.socrata.pg.store")
+    val config = ConfigFactory.load()
+    new StoreConfig(config.getConfig("com.socrata.pg.store.secondary"), "")
   }
 
   import SqlizerTest._
