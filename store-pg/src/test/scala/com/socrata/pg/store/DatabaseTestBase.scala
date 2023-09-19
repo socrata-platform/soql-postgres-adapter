@@ -25,7 +25,6 @@ import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.Logger
 import org.scalatest.Matchers.fail
-import com.socrata.pg.config.StoreConfig
 
 /**
  * Recreate test databases of truth and secondary.
@@ -43,13 +42,13 @@ trait DatabaseTestBase {
 
   private lazy val projectConfig: Config = ConfigFactory.load().getConfig(s"com.socrata.pg.${projectDb}")
 
-  lazy val config: StoreConfig  = ???
+  lazy val config: Config = projectConfig.getConfig("secondary")
 
   lazy val truthDataSourceConfig: DataSourceConfig = new DataSourceConfig(projectConfig, "truth.database" )
 
   lazy val truthDb: String = truthDataSourceConfig.database
 
-  lazy val secondaryDb: String = config.database.database
+  lazy val secondaryDb: String = config.getString("database.database")
 
   var truthDatasetId: DatasetId = _
 
@@ -64,7 +63,7 @@ trait DatabaseTestBase {
    * To be called during beforeAll
    */
   def createDatabases(): Unit = {
-    DatabaseTestBase.createDatabases(truthDb, secondaryDb, config.database)
+    DatabaseTestBase.createDatabases(truthDb, secondaryDb, config)
   }
 
   def withSoQLCommon[T](datasourceConfig: DataSourceConfig)(f: (SoQLCommon) => T): T = {
@@ -206,7 +205,7 @@ object DatabaseTestBase {
 
   private var dbInitialized = false
 
-  def createDatabases(truthDb: String, secondaryDb: String, secondaryConfig: DataSourceConfig): Unit = { // change this
+  def createDatabases(truthDb: String, secondaryDb: String, secondaryConfig: Config): Unit = {
     synchronized {
       if (!DatabaseTestBase.dbInitialized) {
         logger.info("*** Creating test databases *** ")
@@ -215,7 +214,7 @@ object DatabaseTestBase {
         // migrate truth db
         populateTruth(truthDb)
         // migrate secondary db
-        SchemaMigrator(MigrationOperation.Migrate, secondaryConfig, false)
+        SchemaMigrator("database", MigrationOperation.Migrate, secondaryConfig, false)
         DatabaseTestBase.dbInitialized = true
       }
     }
