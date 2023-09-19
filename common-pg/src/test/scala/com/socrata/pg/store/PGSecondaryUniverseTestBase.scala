@@ -30,11 +30,11 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
   val config: StoreConfig
 
 
-  def withDbUnconstrained[T]()(f: (Connection) => T): T = {
-    unconstrained(withDb()(f) _)
+  def withDbUnconstrained[T](f: (Connection) => T): T = {
+    unconstrained(withDb(f) _)
   }
 
-  def withDb[T]()(f: (Connection) => T)(dbType: DbType = Postgres): T = {
+  def withDb[T](f: (Connection) => T)(dbType: DbType = Postgres): T = {
     val database = config.database
     val user = config.database.username
     val pass = config.database.password
@@ -56,15 +56,15 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
     }
   }
 
-  def withPguUnconstrained[T]()(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
+  def withPguUnconstrained[T](f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
     unconstrained {
-      withPgu()(f) _
+      withPgu(f) _
     }
   }
 
 
-  def withPgu[T]()(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T)(dbType: DbType): T =
-    withDb() { conn =>
+  def withPgu[T](f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T)(dbType: DbType): T =
+    withDb { conn =>
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
       f(pgu)
     }(dbType)

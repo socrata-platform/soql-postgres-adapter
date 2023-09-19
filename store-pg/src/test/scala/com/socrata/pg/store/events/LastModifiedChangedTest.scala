@@ -10,7 +10,7 @@ import org.joda.time.DateTime
 class LastModifiedChangedTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
   test("handle LastModifiedChanged") {
-    withPguUnconstrained() { pgu =>
+    withPguUnconstrained { pgu =>
       val f = workingCopyCreatedFixture
 
       // Any random time within the last year

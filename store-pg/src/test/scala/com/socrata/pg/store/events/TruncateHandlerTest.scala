@@ -25,7 +25,7 @@ class TruncateHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTe
   }
 
   test("truncate") {
-    withPguUnconstrained() { pgu =>
+    withPguUnconstrained { pgu =>
       val f = columnsCreatedFixture
       val events = f.events ++ Seq(RowDataUpdated(insertOps), Truncated)
 

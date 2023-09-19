@@ -8,7 +8,7 @@ import com.socrata.datacoordinator.id.{UserColumnId, ColumnId}
 class ColumnRemovedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
   test("Handle ColumnRemoved") {
-    withPguUnconstrained() { pgu =>
+    withPguUnconstrained { pgu =>
       val f = columnsRemovedFixture
 
       f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, f.events.iterator, Nil)

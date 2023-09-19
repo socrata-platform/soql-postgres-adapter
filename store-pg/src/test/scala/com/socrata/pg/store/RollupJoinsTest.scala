@@ -129,7 +129,7 @@ class RollupJoinsTest extends PlaybackBase {
       (peopleDatasetInfo, 2, Seq(
         RollupCreatedOrUpdated(peopleLikeCountRollup)),
         () => {
-          withPguUnconstrained() { pgu =>
+          withPguUnconstrained { pgu =>
             //We should have a single record in both these tables now
             val peopleCopy = getCopyInfoByInternalDatasetName(peopleDatasetInfo.internalName).getOrElse(fail(s"Could not find ${peopleDatasetInfo.internalName}"))
             val peopleRollup = pgu.datasetMapReader.rollup(peopleCopy, new RollupName(peopleLikeCountRollup.name))
@@ -141,7 +141,7 @@ class RollupJoinsTest extends PlaybackBase {
       (peopleDatasetInfo, 3, Seq(
         RollupDropped(peopleLikeCountRollup)),
         () => {
-          withPguUnconstrained() { pgu =>
+          withPguUnconstrained { pgu =>
             //We should have no records in both these tables now
             val peopleCopy = getCopyInfoByInternalDatasetName(peopleDatasetInfo.internalName).getOrElse(fail(s"Could not find ${peopleDatasetInfo.internalName}"))
             val peopleRollup = pgu.datasetMapReader.rollup(peopleCopy, new RollupName(peopleLikeCountRollup.name))
@@ -200,7 +200,7 @@ class RollupJoinsTest extends PlaybackBase {
       (peopleDatasetInfo, 2, Seq(
         RollupCreatedOrUpdated(peopleLikeCountRollup)),
         () => {
-          withPguUnconstrained() { pgu =>
+          withPguUnconstrained { pgu =>
             //We should have a single record in both these tables now
             val peopleCopy = getCopyInfoByInternalDatasetName(peopleDatasetInfo.internalName).getOrElse(fail(s"Could not find ${peopleDatasetInfo.internalName}"))
             val peopleRollup = pgu.datasetMapReader.rollup(peopleCopy, new RollupName(peopleLikeCountRollup.name))
@@ -217,7 +217,7 @@ class RollupJoinsTest extends PlaybackBase {
     val actionCopy = getCopyInfoByInternalDatasetName(actionDatasetInfo.internalName).getOrElse(fail(s"Could not find ${actionDatasetInfo.internalName}"))
 
     secondary.dropDataset(actionDatasetInfo.internalName, None)
-    withPguUnconstrained() { pgu =>
+    withPguUnconstrained { pgu =>
       val peopleCopy = getCopyInfoByInternalDatasetName(peopleDatasetInfo.internalName).getOrElse(fail(s"Could not find ${peopleDatasetInfo.internalName}"))
       val peopleRollup = pgu.datasetMapReader.rollup(peopleCopy, new RollupName(peopleLikeCountRollup.name))
       //The rollup which references the dropped dataset should itself be deleted
@@ -288,7 +288,7 @@ class RollupJoinsTest extends PlaybackBase {
           )
         })),
         () => {
-          withPguUnconstrained() { pgu =>
+          withPguUnconstrained { pgu =>
             val actionCopy = getCopyInfoByInternalDatasetName(actionDatasetInfo.internalName).getOrElse(fail(s"Could not find ${actionDatasetInfo.internalName}"))
             pgu.datasetMapReader.getRollupCopiesRelatedToCopy(actionCopy) should have size (1)
           }

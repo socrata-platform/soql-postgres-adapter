@@ -41,7 +41,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
   }
 
   test("handle row insert") {
-    withPguUnconstrained() {
+    withPguUnconstrained {
       pgu =>
         val f = publishedDatasetFixture
         val events = f.events ++ Seq(
@@ -59,7 +59,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
   }
 
   test("handle row insert with long string") {
-    withPguUnconstrained() {
+    withPguUnconstrained {
       pgu =>
         val f = publishedDatasetFixture
         val events = Seq(
@@ -74,7 +74,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
   }
 
   test("handle row update") {
-    withDbUnconstrained() {
+    withDbUnconstrained {
       conn =>
 
         val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
@@ -106,7 +106,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
   }
 
   test("handle row update with long string") {
-    withDbUnconstrained() {
+    withDbUnconstrained {
       conn =>
 
         val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
@@ -134,7 +134,7 @@ class RowDataUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniv
   }
 
   test("handle row delete") {
-    withDbUnconstrained() { conn =>
+    withDbUnconstrained { conn =>
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
       val f = publishedDatasetFixture
       val events = f.events :+ RowDataUpdated(insertOps)
