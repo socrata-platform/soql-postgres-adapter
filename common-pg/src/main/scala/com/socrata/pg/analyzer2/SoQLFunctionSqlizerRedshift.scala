@@ -16,9 +16,10 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
   def numericize(sqlizer: OrdinaryFunctionSqlizer) = ofs { (f, args, ctx) =>
     val e = sqlizer(f, args, ctx)
     assert(e.typ == SoQLNumber)
-    ExprSql(e.compressed.sql.parenthesized +#+ d":: numeric", f)
+    ExprSql(e.compressed.sql.parenthesized +#+ d":: FLOAT8", f)
   }
 
+  // need to change this
   def numericize(sqlizer: AggregateFunctionSqlizer) = afs { (f, args, filter, ctx) =>
     val e = sqlizer(f, args, filter, ctx)
     assert(e.typ == SoQLNumber)
