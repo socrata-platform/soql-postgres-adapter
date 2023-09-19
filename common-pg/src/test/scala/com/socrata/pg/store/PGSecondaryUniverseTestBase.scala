@@ -30,9 +30,8 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
   val config: StoreConfig
 
 
-  def withDbUnconstrained[T](f: (Connection) => T): T = {
+  def withDbUnconstrained[T](f: (Connection) => T): T =
     unconstrained(withDb(f) _)
-  }
 
   def withDb[T](f: (Connection) => T)(dbType: DbType = Postgres): T = {
     val database = config.database.database
@@ -56,12 +55,10 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
     }
   }
 
-  def withPguUnconstrained[T](f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
+  def withPguUnconstrained[T](f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T =
     unconstrained {
       withPgu(f) _
     }
-  }
-
 
   def withPgu[T](f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T)(dbType: DbType): T =
     withDb { conn =>
