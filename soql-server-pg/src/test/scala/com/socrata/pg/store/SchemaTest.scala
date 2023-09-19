@@ -17,21 +17,19 @@ class SchemaTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase 
     val dsConfig = config.database
     val ds = DataSourceFromConfig(dsConfig)
     ds.map { dsInfo =>
-      constrainToDb() {
-        withPgu() { pgu =>
-          val f = columnsCreatedFixture
-          f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, f.events.iterator, Nil)
-          val qs = new QueryServerTest(dsInfo, pgu)
-          val schema = qs.getSchema(f.datasetInfo.internalName, None).get
-          val schemaj = JsonUtil.renderJson(schema)
-          val schemaRoundTrip = JsonUtil.parseJson[com.socrata.datacoordinator.truth.metadata.Schema](schemaj)
-            .right.toOption.get
-          schema should be (schemaRoundTrip)
-          val expected = Source.fromURL(getClass.getResource("/fixtures/schema.json"))
-          val expectedSchema = JsonUtil.readJson[com.socrata.datacoordinator.truth.metadata.Schema](expected.reader())
-            .right.toOption.get
-          schema should be (expectedSchema)
-        } _
+      withPguUnconstrained() { pgu =>
+      val f = columnsCreatedFixture
+      f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, f.events.iterator, Nil)
+      val qs = new QueryServerTest(dsInfo, pgu)
+      val schema = qs.getSchema(f.datasetInfo.internalName, None).get
+      val schemaj = JsonUtil.renderJson(schema)
+      val schemaRoundTrip = JsonUtil.parseJson[com.socrata.datacoordinator.truth.metadata.Schema](schemaj)
+        .right.toOption.get
+      schema should be (schemaRoundTrip)
+      val expected = Source.fromURL(getClass.getResource("/fixtures/schema.json"))
+      val expectedSchema = JsonUtil.readJson[com.socrata.datacoordinator.truth.metadata.Schema](expected.reader())
+        .right.toOption.get
+      schema should be (expectedSchema)
       }
     }
   }

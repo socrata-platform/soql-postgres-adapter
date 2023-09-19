@@ -33,7 +33,7 @@ class PlaybackBase extends PGSecondaryTestBase with PGSecondaryUniverseTestBase 
   }
 
   def getCopyInfoByInternalDatasetName(internalDatasetName: String): Option[TruthCopyInfo] = {
-    withPgu() { pgu =>
+    withPguUnconstrained() { pgu =>
       pgu.datasetMapReader.datasetIdForInternalName(internalDatasetName) match {
         case Some(id) =>
           pgu.datasetMapReader.datasetInfo(id) match {
@@ -47,7 +47,7 @@ class PlaybackBase extends PGSecondaryTestBase with PGSecondaryUniverseTestBase 
   }
 
   def getRollupByInternalDatasetNameAndName(internalDatasetName: String, rollupName: String): Option[LocalRollupInfo] = {
-    withPgu() { pgu =>
+    withPguUnconstrained() { pgu =>
       getCopyInfoByInternalDatasetName(internalDatasetName) match {
         case Some(copy) =>
           pgu.datasetMapReader.rollup(copy, new RollupName(rollupName))
@@ -56,8 +56,8 @@ class PlaybackBase extends PGSecondaryTestBase with PGSecondaryUniverseTestBase 
     }
   }
 
-  def getSingleNumericValueFromStatement(statement: String): Option[BigDecimal] = {
-    withPgu() { pgu =>
+  def getSingleNumericValueFromStatement(statement: String): Option[java.math.BigDecimal] = {
+    withPguUnconstrained() { pgu =>
       using(pgu.conn.prepareStatement(statement)) { stmt =>
         using(stmt.executeQuery()) { rs =>
           if (rs.next()) {

@@ -14,7 +14,7 @@ class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBas
   }
 
   test("delete dataset should delete all rollups in all copies") {
-    withPgu() { pgu =>
+    withPguUnconstrained() { pgu =>
       val (truthDatasetId, secDatasetId) = importDataset(pgu.conn)
       pgu.commit()
       val allCopies = createTwoCopiesAndRollup(pgu, truthDatasetId, secDatasetId, publishSecondCopy = true)
@@ -29,7 +29,7 @@ class RollupDropTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBas
   }
 
   test("delete one copy should delete rollups for that copy") {
-    withPgu() { pgu =>
+    withPguUnconstrained() { pgu =>
       val (truthDatasetId, secDatasetId) = importDataset(pgu.conn)
       pgu.commit()
       val allCopies = createTwoCopiesAndRollup(pgu, truthDatasetId, secDatasetId, publishSecondCopy = false)

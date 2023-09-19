@@ -6,8 +6,7 @@ import PGSecondaryUtil._
 
 class CurrentCopyNumberTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
   test("handle CurrentCopyNumber") {
-    constrainToDb(None) { implicit dbType =>
-      withPgu() { pgu =>
+      withPguUnconstrained() { pgu =>
         val f = workingCopyCreatedFixture
 
         f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, f.events.iterator, Nil)
@@ -16,7 +15,6 @@ class CurrentCopyNumberTest extends PGSecondaryTestBase with PGSecondaryUniverse
 
         // right now we only support a single copy of the dataset ... so this is a silly test!
         actualCopyNum shouldEqual 1
-
-      } _}
+      }
   }
 }

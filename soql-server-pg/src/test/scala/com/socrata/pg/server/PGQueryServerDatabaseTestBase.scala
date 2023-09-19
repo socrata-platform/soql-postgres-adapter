@@ -40,7 +40,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
                         secDatasetId: DatasetId = secDatasetId)
                        (implicit materialized: Boolean): Unit = {
     val soqlh = if (materialized) soql.replace("/*hint*/", "HINT(materialized)") else soql
-    withDb() { conn =>
+    withDbUnconstrained() { conn =>
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon)
       val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secDatasetId).get)
 

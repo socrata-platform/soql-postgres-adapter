@@ -47,7 +47,7 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
 
   private lazy val typeReps = getTypeReps(secDatasetIdCat)
 
-  private def getContext(secondaryDatasetId: DatasetId): DatasetContext[SoQLType] = withDb() { conn =>
+  private def getContext(secondaryDatasetId: DatasetId): DatasetContext[SoQLType] = withDbUnconstrained() { conn =>
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
     val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secondaryDatasetId).get)
 
@@ -63,7 +63,7 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
     }
   }
 
-  private def getColumnMap(secondaryDatasetId: DatasetId): Map[QualifiedColumnName, UserColumnId] = withDb() { conn =>
+  private def getColumnMap(secondaryDatasetId: DatasetId): Map[QualifiedColumnName, UserColumnId] = withDbUnconstrained() { conn =>
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
     val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secondaryDatasetId).get)
 
@@ -77,7 +77,7 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
     }.toMap
   }
 
-  private def getColumnReps(secondaryDatasetId: DatasetId): Map[UserColumnId, SqlColIdx] = withDb() { conn =>
+  private def getColumnReps(secondaryDatasetId: DatasetId): Map[UserColumnId, SqlColIdx] = withDbUnconstrained() { conn =>
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
     val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secondaryDatasetId).get)
 
@@ -90,7 +90,7 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
     }
   }
 
-  private def getTypeReps(secondaryDatasetId: DatasetId): Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]] = withDb() { conn =>
+  private def getTypeReps(secondaryDatasetId: DatasetId): Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]] = withDbUnconstrained() { conn =>
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
     val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secondaryDatasetId).get)
 
@@ -128,7 +128,7 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
 
   override def beforeAll: Unit = {
     createDatabases()
-    withDb() { conn =>
+    withDbUnconstrained() { conn =>
       val (truthCatId1, secCatId1) = importDataset(conn, "mutate-create-cat-dataset.json")
       val (truthDogId2, secDogId2) = importDataset(conn, "mutate-create-dog-dataset.json")
       val (truthBirdId3, secBirdId3) = importDataset(conn, "mutate-create-bird-dataset.json")
@@ -149,7 +149,7 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
   }
 
   override def afterAll: Unit = {
-    withPgu() { pgu =>
+    withPguUnconstrained() { pgu =>
 
       Seq(truthDatasetIdCat, truthDatasetIdDog, truthDatasetIdBird, truthDatasetIdFish).foreach { dsId =>
         if (dsId != DatasetId.Invalid) {

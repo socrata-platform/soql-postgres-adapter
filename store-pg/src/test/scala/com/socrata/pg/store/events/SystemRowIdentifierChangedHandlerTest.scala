@@ -12,7 +12,7 @@ import com.socrata.soql.types.SoQLID
 class SystemRowIdentifierChangedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
   test("handle SystemRowIdentifierChanged") {
-    withPgu() { pgu =>
+    withPguUnconstrained() { pgu =>
       val f = workingCopyCreatedFixture
       val events = f.events ++ Seq(
         ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, false, false, false, None)),
@@ -28,7 +28,7 @@ class SystemRowIdentifierChangedHandlerTest extends PGSecondaryTestBase with PGS
   }
 
   test("SystemRowIdentifierChanged should refuse to run a second time") {
-    withPgu() { pgu =>
+    withPguUnconstrained() { pgu =>
       val f = workingCopyCreatedFixture
       val events = f.events ++ Seq(
         ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, false, false, false, None)),

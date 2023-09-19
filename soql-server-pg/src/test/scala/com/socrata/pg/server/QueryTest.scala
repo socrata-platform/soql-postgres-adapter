@@ -28,7 +28,7 @@ class QueryTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase w
   }
 
   test("select text, number") {
-    withDb() { conn =>
+    withDbUnconstrained() { conn =>
       val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
       val schema = createTableWithSchema(pgu, copyInfo, sLoader)
 

@@ -9,7 +9,7 @@ import com.socrata.pg.store.{PGSecondaryUniverseTestBase, PGSecondaryTestBase, P
 class WorkingCopyPublishedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
   test("handle WorkingCopyPublished") {
-    withPgu() { pgu =>
+    withPguUnconstrained() { pgu =>
       val f = workingCopyCreatedFixture
       val events = f.events ++ Seq(
         WorkingCopyPublished
