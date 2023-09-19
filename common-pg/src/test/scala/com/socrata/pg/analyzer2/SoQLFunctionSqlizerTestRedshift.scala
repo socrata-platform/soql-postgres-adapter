@@ -103,9 +103,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   }
 
   test("tst") {
-    constrainToDb(Some(Redshift)) {
-      withPgu { n => ???}
-    }
+    withPgu { n => ???}
   }
 
   test("basic search") {

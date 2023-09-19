@@ -30,10 +30,9 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
   val config: StoreConfig
 
 
-  def withDbUnconstrained[T](f: (Connection) => T): T =
-    unconstrained(withDb(f))
+  def withDbUnconstrained[T](f: (Connection) => T): T = withDb(f)
 
-  def withDb[T](f: (Connection) => T)(dbType: DbType = Postgres): T = {
+  def withDb[T](f: (Connection) => T): T = {
     val database = config.database.database
     val user = config.database.username
     val pass = config.database.password
@@ -41,7 +40,7 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
     val host = config.database.host
 
 
-    dbType match {
+    config.database.dbType match {
       case Postgres =>
         val loglevel = 0; // 2 = debug, 0 = default
 
@@ -58,24 +57,13 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
   }
 
   def withPguUnconstrained[T](f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T =
-    unconstrained(withPgu(f))
+    withPgu(f)
 
-  def withPgu[T](f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T)(dbType: DbType): T =
+  def withPgu[T](f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T =
     withDb { conn =>
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
       f(pgu)
-    }(dbType)
-
-
-
-  def unconstrained[T](t: DbType => T) = constrainToDb(None)(t).get
-
-  def constrainToDb[T](constraint: Option[DbType] = None)(t: DbType => T) = constraint match {
-    case Some(n) if n == config.database.dbType => Some(t(n))
-    case Some(n) => None
-    case None => Some(t(config.database.dbType))
-  }
-
+    }
 
   def createTable(conn:Connection, datasetInfo:Option[DatasetInfo] = None): (PGSecondaryUniverse[SoQLType, SoQLValue], CopyInfo, SchemaLoader[SoQLType]) = {
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon, datasetInfo)

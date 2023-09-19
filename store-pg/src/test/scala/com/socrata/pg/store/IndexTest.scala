@@ -11,12 +11,13 @@ import com.socrata.pg.store.events.{ColumnCreatedHandler, IndexCreatedOrUpdatedH
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.types._
 import org.joda.time.DateTime
+import com.socrata.datacoordinator.common.Postgres
 
 class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
   override def beforeAll: Unit = {
-    createDatabases()
-    withDbUnconstrained { conn =>
+    withDb { conn =>
+      createDatabases()
       importDataset(conn)
     }
   }
