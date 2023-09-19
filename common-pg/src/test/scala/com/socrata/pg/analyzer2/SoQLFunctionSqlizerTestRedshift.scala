@@ -110,6 +110,10 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     analyzeStatement("SELECT text, num WHERE text is not null") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (x1.text) IS NOT NULL""")
   }
 
+  test("between x and y works") {
+    analyzeStatement("SELECT text, num WHERE num between 0 and 3") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (x1.num) between (0 :: numeric) and (3 :: numeric)""")
+  }
+
 //  test("less than works") {
 //    println(analyzeStatement("Select num WHERE num < 3"))
 //  }
