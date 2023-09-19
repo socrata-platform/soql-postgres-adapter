@@ -35,7 +35,7 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
   }
 
   def withDb[T](f: (Connection) => T)(dbType: DbType = Postgres): T = {
-    val database = config.database
+    val database = config.database.database
     val user = config.database.username
     val pass = config.database.password
 
