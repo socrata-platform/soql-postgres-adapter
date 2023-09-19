@@ -37,18 +37,20 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
     val database = config.database.database
     val user = config.database.username
     val pass = config.database.password
+    val port = config.database.port
+    val host = config.database.host
+
 
     dbType match {
       case Postgres =>
         val loglevel = 0; // 2 = debug, 0 = default
 
-        using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/$database?loglevel=$loglevel", user, pass)) { conn =>
+        using(DriverManager.getConnection(s"jdbc:postgresql://$host:$port/$database?loglevel=$loglevel", user, pass)) { conn =>
           conn.setAutoCommit(false)
           f(conn)
         }
       case Redshift =>
-        val host = config.database.host
-        using(DriverManager.getConnection(s"jdbc:redshift://$host:5432/$database", user, pass)) { conn =>
+        using(DriverManager.getConnection(s"jdbc:redshift://$host:$port/$database", user, pass)) { conn =>
           conn.setAutoCommit(false)
           f(conn)
         }

@@ -3,6 +3,7 @@ import Dependencies._
 name := "common-pg"
 
 libraryDependencies ++= Seq(
+  awsRedshift,
   c3p0,
   clojure,
   commonsCodec,
