@@ -306,7 +306,9 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
 
   val ordinaryFunctionMap = (
     Seq[(Function[CT], OrdinaryFunctionSqlizer)](
+//      is tested
       IsNull -> sqlizeIsNull,
+//      not tested yet
       IsNotNull -> sqlizeIsNotNull,
       Not -> sqlizeUnaryOp("NOT"),
 

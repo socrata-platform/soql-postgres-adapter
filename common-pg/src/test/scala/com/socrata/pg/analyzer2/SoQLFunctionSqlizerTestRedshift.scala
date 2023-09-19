@@ -102,6 +102,14 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     sqlizer(analysis.statement).sql.layoutSingleLine.toString
   }
 
+  test("is null works") {
+    analyzeStatement("SELECT text, num WHERE text is null") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (x1.text) IS NULL""")
+  }
+
+//  test("less than works") {
+//    println(analyzeStatement("Select num WHERE num < 3"))
+//  }
+
   test("tst") {
     withPgu { n => ???}
   }
