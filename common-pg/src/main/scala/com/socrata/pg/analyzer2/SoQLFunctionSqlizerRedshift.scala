@@ -306,19 +306,18 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
 
   val ordinaryFunctionMap = (
     Seq[(Function[CT], OrdinaryFunctionSqlizer)](
-      //      is tested
+//    is tested
       IsNull -> sqlizeIsNull,
       IsNotNull -> sqlizeIsNotNull,
 
-      //      not tested yet
+//    not tested yet
       Not -> sqlizeUnaryOp("NOT"),
 
 //      is tested
       Between -> sqlizeTrinaryOp("between", "and"),
-//      not tested yet
       NotBetween -> sqlizeTrinaryOp("not between", "and"),
-
       In -> sqlizeInlike("IN"),
+      //      not tested yet
       CaselessOneOf -> uncased(sqlizeInlike("IN")),
       NotIn -> sqlizeInlike("NOT IN"),
       CaselessNotOneOf -> uncased(sqlizeInlike("NOT IN")),
