@@ -283,7 +283,7 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
     ofs { (f, args, ctx) =>
       sqlizer(f, args.map(uncased), ctx)
     }
-  def uncased(expr: ExprSql): ExprSql =
+  def  uncased(expr: ExprSql): ExprSql =
     expr.typ match {
       case SoQLText =>
         ExprSql(Seq(expr.compressed.sql).funcall(Doc("upper")).group, expr.expr)
@@ -310,14 +310,11 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       IsNull -> sqlizeIsNull,
       IsNotNull -> sqlizeIsNotNull,
 
-//    not tested yet
       Not -> sqlizeUnaryOp("NOT"),
 
-//      is tested
       Between -> sqlizeTrinaryOp("between", "and"),
       NotBetween -> sqlizeTrinaryOp("not between", "and"),
       In -> sqlizeInlike("IN"),
-      //      not tested yet
       CaselessOneOf -> uncased(sqlizeInlike("IN")),
       NotIn -> sqlizeInlike("NOT IN"),
       CaselessNotOneOf -> uncased(sqlizeInlike("NOT IN")),
@@ -326,6 +323,7 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       CaselessEq -> uncased(sqlizeEq),
       Neq -> sqlizeNeq,
       BangEq -> sqlizeNeq,
+      //      not tested yet
       CaselessNe -> uncased(sqlizeNeq),
       And -> sqlizeBinaryOp("AND"),
       Or -> sqlizeBinaryOp("OR"),
