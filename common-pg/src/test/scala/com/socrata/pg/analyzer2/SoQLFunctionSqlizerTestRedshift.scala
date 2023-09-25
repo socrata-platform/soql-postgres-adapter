@@ -167,9 +167,23 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     analyzeStatement("SELECT text, num WHERE num != 2") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (x1.num) <> (2 :: numeric)""")
   }
 
-  //  test("less than works") {
-//    println(analyzeStatement("Select num WHERE num < 3"))
-//  }
+  test("caseless not equal works") {
+    analyzeStatement("SELECT text, num WHERE caseless_ne(text, 'TWO')") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (upper(x1.text)) <> (upper(text 'TWO'))""")
+  }
+
+  test("and works") {
+    analyzeStatement("SELECT text, num WHERE num == 1 and text == 'one'") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE ((x1.num) = (1 :: numeric)) AND ((x1.text) = (text 'one'))""")
+  }
+
+  test("or works") {
+    analyzeStatement("SELECT text, num WHERE num < 5 or text == 'two'") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE ((x1.num) < (5 :: numeric)) OR ((x1.text) = (text 'two'))""")
+  }
+
+//  TODO cast numeric data type as float8
+    test("less than works") {
+      val analyzedStatement = analyzeStatement("SELECT text, num WHERE num < 2.0001")
+      println(analyzedStatement)
+  }
 
   test("tst") {
     withPgu { n => ???}

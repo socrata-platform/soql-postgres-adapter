@@ -323,10 +323,10 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       CaselessEq -> uncased(sqlizeEq),
       Neq -> sqlizeNeq,
       BangEq -> sqlizeNeq,
-      //      not tested yet
       CaselessNe -> uncased(sqlizeNeq),
       And -> sqlizeBinaryOp("AND"),
       Or -> sqlizeBinaryOp("OR"),
+//    not tested yet
       Lt -> sqlizeProvenancedBinaryOp("<"),
       Lte -> sqlizeProvenancedBinaryOp("<="),
       Gt -> sqlizeProvenancedBinaryOp(">"),
