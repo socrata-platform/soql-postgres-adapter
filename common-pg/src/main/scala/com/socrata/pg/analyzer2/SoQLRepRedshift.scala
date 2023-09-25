@@ -186,7 +186,8 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
         }
       }
     },
-    SoQLNumber -> new SingleColumnRep(SoQLNumber, d"float8") {
+//TODO make sure the scale and precision are right
+    SoQLNumber -> new SingleColumnRep(SoQLNumber, d"decimal(30, 7)") {
       def literal(e: LiteralValue) = {
         val SoQLNumber(n) = e.value
         ExprSql(Doc(n.toString) +#+ d"::" +#+ sqlType, e)
