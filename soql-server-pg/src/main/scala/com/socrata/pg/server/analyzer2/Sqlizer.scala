@@ -24,7 +24,7 @@ object ActualSqlizer {
     physicalTableFor: Map[AutoTableLabel, types.DatabaseTableName[DatabaseNamesMetaTypes]]
   ) extends Sqlizer[DatabaseNamesMetaTypes] {
 
-    override val repFor: Rep.Provider[DatabaseNamesMetaTypes] = new SoQLRepProvider[DatabaseNamesMetaTypes](cryptProviderProvider, namespace, locationSubcolumns, physicalTableFor) {
+    override val repFor: Rep.Provider[DatabaseNamesMetaTypes] = new SoQLRepProviderRedshift[DatabaseNamesMetaTypes](cryptProviderProvider, namespace, locationSubcolumns, physicalTableFor) {
       def mkStringLiteral(text: String): Doc = {
         // By default, converting a String to Doc replaces the newlines
         // with soft newlines which can be converted into spaces by

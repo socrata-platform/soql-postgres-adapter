@@ -48,7 +48,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
     val cryptProvider = obfuscation.CryptProvider.zeros
 
-    override val repFor = new SoQLRepProvider[TestMT](_ => Some(cryptProvider), namespace, Map.empty, Map.empty) {
+    override val repFor = new SoQLRepProviderRedshift[TestMT](_ => Some(cryptProvider), namespace, Map.empty, Map.empty) {
       def mkStringLiteral(s: String) = Doc(JString(s).toString)
     }
 
