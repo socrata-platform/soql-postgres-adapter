@@ -335,12 +335,12 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
 
       Like -> sqlizeBinaryOp("LIKE"),
       NotLike -> sqlizeBinaryOp("NOT LIKE"),
-      //    not tested yet
       Concat -> sqlizeBinaryOp("||"),
       Lower -> sqlizeNormalOrdinaryFuncall("lower"),
       Upper -> sqlizeNormalOrdinaryFuncall("upper"),
       Length -> sqlizeNormalOrdinaryFuncall("length"),
       Replace -> sqlizeNormalOrdinaryFuncall("replace"),
+      //    not tested yet
       Trim -> sqlizeNormalOrdinaryFuncall("trim"),
       TrimLeading -> sqlizeNormalOrdinaryFuncall("ltrim"),
       TrimTrailing -> sqlizeNormalOrdinaryFuncall("rtrim"),

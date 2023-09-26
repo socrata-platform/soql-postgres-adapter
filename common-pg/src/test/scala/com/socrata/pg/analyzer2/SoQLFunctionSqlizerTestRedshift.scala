@@ -195,7 +195,6 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     analyzeStatement("SELECT text, num WHERE num >= 2") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (x1.num) >= (2 :: decimal(30, 7))""")
   }
 
-//  TODO verify if it is okay to have as many rows as a result of the following query as we have rows in the table we're referencing
   test("least works") {
     analyzeStatement("SELECT LEAST(1, 1.1, 0.9)") should equal("""SELECT least(1 :: decimal(30, 7), 1.1 :: decimal(30, 7), 0.9 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
   }
@@ -219,6 +218,32 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   test("not like works with underscore") {
     analyzeStatement("SELECT text, num WHERE text NOT LIKE 't__'") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (x1.text) NOT LIKE (text 't__')""")
   }
+
+  test("concat || works"){
+    analyzeStatement("SELECT text || num") should equal("""SELECT (x1.text) || (x1.num) AS i1 FROM table1 AS x1""")
+  }
+
+  test("lower() works") {
+    println(analyzeStatement("SELECT lower(text), num where lower(text) == 'two'"))
+    analyzeStatement("SELECT lower(text), num where lower(text) == 'two'") should equal("""SELECT lower(x1.text) AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (lower(x1.text)) = (text 'two')""")
+  }
+
+  test("upper() works") {
+    analyzeStatement("SELECT upper(text), num where upper(text) == 'TWO'") should equal("""SELECT upper(x1.text) AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (upper(x1.text)) = (text 'TWO')""")
+  }
+
+  test("length() works") {
+    analyzeStatement("SELECT length(text), num") should equal("""SELECT length(x1.text) AS i1, x1.num AS i2 FROM table1 AS x1""")
+  }
+
+  test("replace() works") {
+    analyzeStatement("SELECT num ,replace(text, 'o', 'z')") should equal("""SELECT x1.num AS i1, replace(x1.text, text 'o', text 'z') AS i2 FROM table1 AS x1""")
+  }
+
+  test("trimming on both ends works") {
+    println(analyzeStatement("SELECT trim('a' from 'abc')"))
+  }
+
 
   test("tst") {
     withPgu { n => ???}
