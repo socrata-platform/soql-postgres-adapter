@@ -187,6 +187,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
       }
     },
 //TODO make sure the scale and precision are right
+//TODO make sure money is correct $$$$
     SoQLNumber -> new SingleColumnRep(SoQLNumber, d"decimal(30, 7)") {
       def literal(e: LiteralValue) = {
         val SoQLNumber(n) = e.value
@@ -495,6 +496,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
       }
     },
 
+    // make sure compound data uses SUPER instead of jsonb
     SoQLUrl -> new CompoundColumnRep(SoQLUrl) {
       def nullLiteral(e: NullLiteral) =
         ExprSql.Expanded[MT](Seq(d"null :: text", d"null :: text"), e)

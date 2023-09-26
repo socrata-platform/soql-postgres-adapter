@@ -29,7 +29,7 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
 
   val config: StoreConfig
 
-  def withDb[T](f: (Connection) => T): T = {
+  def withDb[T](f: (Connection) => T, dbType: Option[DbType] = None): T = {
     val database = config.database.database
     val user = config.database.username
     val pass = config.database.password
@@ -37,7 +37,7 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
     val host = config.database.host
 
 
-    config.database.dbType match {
+    dbType.getOrElse(config.database.dbType) match {
       case Postgres =>
         val loglevel = 0; // 2 = debug, 0 = default
 
@@ -53,11 +53,16 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
     }
   }
 
-  def withPgu[T](f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T =
-    withDb { conn =>
-      val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
-      f(pgu)
-    }
+  def withPgu[T](f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T, dbType: Option[DbType] = None): T =
+    withDb(
+      { conn =>
+        val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
+        f(pgu)
+      }, dbType
+    )
+
+  def onlyRunIf[T](dbType: DbType)(fn: => T): Option[T] =
+    if(config.database.dbType == dbType) Some(fn) else None
 
   def createTable(conn:Connection, datasetInfo:Option[DatasetInfo] = None): (PGSecondaryUniverse[SoQLType, SoQLValue], CopyInfo, SchemaLoader[SoQLType]) = {
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon, datasetInfo)

@@ -99,7 +99,9 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
     if(useSelectListReferences) analysis = analysis.useSelectListReferences
 
-    sqlizer(analysis.statement).sql.layoutSingleLine.toString
+    val sql = sqlizer(analysis.statement).sql.layoutSingleLine.toString
+
+    sql
   }
 
   test("is null works") {
@@ -246,7 +248,9 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
 
   test("tst") {
-    withPgu { n => ???}
+    onlyRunIf(Redshift) {
+      withPgu { n => ???}
+    }
   }
 
   test("basic search") {
