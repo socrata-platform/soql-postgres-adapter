@@ -183,6 +183,43 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
       analyzeStatement("SELECT text, num WHERE num < 2.0001") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (x1.num) < (2.0001 :: decimal(30, 7))""")
   }
 
+  test("les than or equals works") {
+    analyzeStatement("SELECT text, num WHERE num <= 2.1") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (x1.num) <= (2.1 :: decimal(30, 7))""")
+  }
+
+  test("greater than works") {
+    analyzeStatement("SELECT text, num WHERE num > 0.9") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (x1.num) > (0.9 :: decimal(30, 7))""")
+  }
+
+  test("greater than or equals works") {
+    analyzeStatement("SELECT text, num WHERE num >= 2") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (x1.num) >= (2 :: decimal(30, 7))""")
+  }
+
+//  TODO verify if it is okay to have as many rows as a result of the following query as we have rows in the table we're referencing
+  test("least works") {
+    analyzeStatement("SELECT LEAST(1, 1.1, 0.9)") should equal("""SELECT least(1 :: decimal(30, 7), 1.1 :: decimal(30, 7), 0.9 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
+  }
+
+  test("greatest works") {
+    analyzeStatement("SELECT GREATEST(0.9, 1, 1.1)") should equal("""SELECT greatest(0.9 :: decimal(30, 7), 1 :: decimal(30, 7), 1.1 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
+  }
+
+  test("like works with percent") {
+    analyzeStatement("SELECT text, num WHERE text LIKE 't%'") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (x1.text) LIKE (text 't%')""")
+  }
+
+  test("like works with underscore") {
+    analyzeStatement("SELECT text, num WHERE text LIKE 't__'") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (x1.text) LIKE (text 't__')""")
+  }
+
+  test("not like works with percent") {
+    analyzeStatement("SELECT text, num WHERE text NOT LIKE 't%'") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (x1.text) NOT LIKE (text 't%')""")
+  }
+
+  test("not like works with underscore") {
+    analyzeStatement("SELECT text, num WHERE text NOT LIKE 't__'") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (x1.text) NOT LIKE (text 't__')""")
+  }
+
   test("tst") {
     withPgu { n => ???}
   }

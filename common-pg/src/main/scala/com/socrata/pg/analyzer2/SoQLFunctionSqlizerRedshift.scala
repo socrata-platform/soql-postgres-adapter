@@ -326,7 +326,6 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       CaselessNe -> uncased(sqlizeNeq),
       And -> sqlizeBinaryOp("AND"),
       Or -> sqlizeBinaryOp("OR"),
-//    not tested yet
       Lt -> sqlizeProvenancedBinaryOp("<"),
       Lte -> sqlizeProvenancedBinaryOp("<="),
       Gt -> sqlizeProvenancedBinaryOp(">"),
@@ -336,6 +335,7 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
 
       Like -> sqlizeBinaryOp("LIKE"),
       NotLike -> sqlizeBinaryOp("NOT LIKE"),
+      //    not tested yet
       Concat -> sqlizeBinaryOp("||"),
       Lower -> sqlizeNormalOrdinaryFuncall("lower"),
       Upper -> sqlizeNormalOrdinaryFuncall("upper"),
