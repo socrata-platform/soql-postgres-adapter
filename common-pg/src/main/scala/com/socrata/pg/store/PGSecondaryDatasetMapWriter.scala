@@ -170,7 +170,7 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
         }
       case None =>
 
-        val tableName = LocalRollupInfo.tableName(copyInfo, name,getNextRollupTableNameSequence.toString)
+        val tableName = LocalRollupInfo.tableName(copyInfo, getNextRollupTableNameSequence.toString)
         using(conn.prepareStatement(insertLocalRollupQuery)) { stmt =>
           stmt.setString(1, name.underlying)
           stmt.setLong(2, copyInfo.systemId.underlying)

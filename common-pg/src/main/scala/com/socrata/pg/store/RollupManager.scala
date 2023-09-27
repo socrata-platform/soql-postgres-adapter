@@ -178,7 +178,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
       case _ =>
         if(oldRollupExists) {
-          rollupInfo = pgu.datasetMapWriter.changeRollupTableName(rollupInfo, LocalRollupInfo.tableName(rollupInfo.copyInfo, rollupInfo.name,pgu.datasetMapReader.getNextRollupTableNameSequence.toString))
+          rollupInfo = pgu.datasetMapWriter.changeRollupTableName(rollupInfo, LocalRollupInfo.tableName(rollupInfo.copyInfo, pgu.datasetMapReader.getNextRollupTableNameSequence.toString))
         }
 
         RollupAnalyzer(pgu, copyInfo, rollupInfo) match {
@@ -295,7 +295,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
             // At this point we are either creating the rollup table for the first time,
             // or we need to rename the existing one and create a new one
             if(oldRollupExists){
-              rollupInfo = pgu.datasetMapWriter.changeRollupTableName(rollupInfo, LocalRollupInfo.tableName(rollupInfo.copyInfo, rollupInfo.name,pgu.datasetMapReader.getNextRollupTableNameSequence.toString))
+              rollupInfo = pgu.datasetMapWriter.changeRollupTableName(rollupInfo, LocalRollupInfo.tableName(rollupInfo.copyInfo, pgu.datasetMapReader.getNextRollupTableNameSequence.toString))
             }
 
             for(or <- oldRollup) {

@@ -13,11 +13,12 @@ object LocalRollupInfo {
   // Generate the name for the actual rollup table
   // It is important that this is somewhat random so that we can drop/recreate a rollup table and not have names conflict
   // Note that table name should be lowercase, as this is an assumption throughout the stack
-  def tableName(copyInfo: CopyInfo, name: RollupName, uniqueSequence: String): String = {
-    List(copyInfo.dataTableName,
+  def tableName(copyInfo: CopyInfo, uniqueSequence: String): String = {
+    List(
+      copyInfo.dataTableName,
       copyInfo.dataVersion,
-      uniqueSequence,
-      name.underlying.filter(Predicates.isAlphaNumericUnderscore).toLowerCase)
-      .mkString("_").take(63)
+      "r",
+      uniqueSequence
+    ).mkString("_").take(63)
   }
 }
