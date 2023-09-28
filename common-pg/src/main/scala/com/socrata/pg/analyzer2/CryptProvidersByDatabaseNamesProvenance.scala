@@ -1,4 +1,4 @@
-package com.socrata.pg.server.analyzer2
+package com.socrata.pg.analyzer2
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.Provenance
@@ -6,7 +6,7 @@ import com.socrata.soql.types.obfuscation.CryptProvider
 
 import com.socrata.datacoordinator.truth.metadata.DatasetInfo
 
-import com.socrata.pg.analyzer2.CryptProviderProvider
+import com.socrata.pg.analyzer2.metatypes.{DatabaseMetaTypes, DatabaseNamesMetaTypes}
 
 object CryptProvidersByDatabaseNamesProvenance extends StatementUniverse[DatabaseMetaTypes] {
   def apply(stmt: Statement): CryptProviderProvider = {

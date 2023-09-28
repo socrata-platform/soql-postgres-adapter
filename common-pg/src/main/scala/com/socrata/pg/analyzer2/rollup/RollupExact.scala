@@ -46,24 +46,8 @@ class RollupExact[MT <: MetaTypes](
       stringifier.statement(rollupInfo.statement).indent(4)
     )
 
-    // This is stronger than it needs to be - it requires that this
-    // SELECT's FROM clause and the candidate's FROM clause be exactly
-    // the same up to labels, but that's more than we need.  What we
-    // _actually_ need is for the candidate's FROM to supply the same
-    // values that we're interested in (that is, we don't want an
-    // isomorphism we want some kind of superset comparison).
-    //
-    // For example, given the query and the rollup
-    //  Q: select x, count(*) from (select x, y, z where x > 7)
-    //  R: select x, count(*) from (select x where x > 7)
-    //
-    // that rollup can in principle be used to answer this query directly,
-    // but since the FROMs are different it'll be rejected here.
-    //
-    // Defining this subsetting is tricky (especially in the face of
-    // DISTINCT and DISTINCT ON) so for now, we don't.
-    val isoState = select.from.isomorphicTo(candidate.from).getOrElse {
-      log.debug("Bailing because the rollup's From is not the same as the query's From")
+    val isoState = select.from.verticalSliceOf(candidate.from).getOrElse {
+      log.debug("Bailing because the rollup's From is not a vertical slice of the query's From")
       return None
     }
 
@@ -668,7 +652,7 @@ class RollupExact[MT <: MetaTypes](
     // ok, this is a little subtle.  We have two lists of AND clauses,
     // and we want to make sure that cSplit is a subseqence of sSplit,
     // to preserve short-circuiting.
-    var remaining = cSplit.iterator.toList
+    var remaining = cSplit.toList
     val result = Vector.newBuilder[Expr]
     for(sClause <- sSplit) {
       remaining match {

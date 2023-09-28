@@ -16,7 +16,7 @@ trait SqlNamespaces[MT <: MetaTypes] extends LabelUniverse[MT] {
   // Turns an AutoTableLabel into a table name that is guaranteed to
   // not conflict with any real table.
   def tableLabel(table: AutoTableLabel): Doc[Nothing] =
-    d"x${table.name}" // "x" because "t" is taken by the physical tables
+    Doc(SqlNamespaces.tableLabel(table))
 
   // If the label is an AutoColumnLabel, turns it into a column name
   // that is guaranteed to not conflict with any real column.
@@ -25,10 +25,25 @@ trait SqlNamespaces[MT <: MetaTypes] extends LabelUniverse[MT] {
   def columnBase(label: ColumnLabel): Doc[Nothing] =
     label match {
       case dcn: DatabaseColumnName => databaseColumnBase(dcn)
-      case AutoColumnLabel(n) => d"i$n" // "i" for "intermediate"
+      case acl: AutoColumnLabel => Doc(SqlNamespaces.columnBase(acl))
     }
 
   def databaseTableName(dtn: DatabaseTableName): Doc[Nothing]
   def databaseColumnBase(dcn: DatabaseColumnName): Doc[Nothing]
 
+  def indexName(dtn: DatabaseTableName, col: ColumnLabel): Doc[Nothing] =
+    d"idx_" ++ databaseTableName(dtn) ++ d"_" ++ columnBase(col)
+
+  def indexName(dtn: DatabaseTableName, col: ColumnLabel, subcol: String): Doc[Nothing] =
+    indexName(dtn, col) ++ d"_" ++ Doc(subcol)
+}
+
+object SqlNamespaces {
+  def tableLabel(table: AutoTableLabel): String =
+    s"x${table.name}" // "x" because "t" is taken by the physical tables
+
+  def columnBase(label: AutoColumnLabel): String = {
+    val AutoColumnLabel(n: Int) = label
+    s"i$n" // "i" for "intermediate"
+  }
 }

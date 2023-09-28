@@ -29,12 +29,14 @@ import com.socrata.soql.environment.{ColumnName, ResourceName, Provenance}
 import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLID, SoQLVersion, SoQLNull}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.sql.Debug
+import com.socrata.soql.stdlib.analyzer2.SoQLRewritePassHelpers
 import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
 import com.socrata.datacoordinator.common.soql.SoQLRep
 
-import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, SoQLRewritePassHelpers, TransformManager, Stringifier, CostEstimator}
-import com.socrata.pg.analyzer2.rollup.SoQLRollupExact
-import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils}
+import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, TransformManager, Stringifier, CostEstimator, SoQLSqlizer, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, SqlNamespaces}
+import com.socrata.pg.analyzer2.metatypes.{CopyCache, InputMetaTypes, DatabaseMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName}
+import com.socrata.pg.analyzer2.rollup.{SoQLRollupExact, RollupInfo}
+import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils, RollupAnalyzer}
 import com.socrata.pg.server.CJSONWriter
 
 final abstract class ProcessQuery
@@ -60,10 +62,10 @@ object ProcessQuery {
     // ok, we have our analysis which is in terms of internal names
     // and column ids, and we want to turn that into having them in
     // terms of copies and columns
-    val copyCache = new CopyCache(pgu)
+    val copyCache = new InputMetaTypes.CopyCache(pgu)
 
     val dmtState = new DatabaseMetaTypes
-    val metadataAnalysis = dmtState.rewriteFrom(analysis, copyCache)
+    val metadataAnalysis = dmtState.rewriteFrom(analysis, copyCache, InputMetaTypes.provenanceMapper)
 
     // Then we'll rewrite that analysis in terms of actual physical
     // database names, after building our crypt providers.
@@ -75,6 +77,29 @@ object ProcessQuery {
       analysis.statement.debugDoc.layoutPretty(LayoutOptions(PageWidth.Unbounded)).toString
     }
 
+    val relevantRollups = copyCache.allCopies.
+      flatMap { copy =>
+        pgu.datasetMapReader.rollups(copy).
+          iterator.
+          filter(_.soql.startsWith("{")).
+          filter { rollup => tableExists(pgu, rollup.tableName) }.
+          flatMap { rollup => RollupAnalyzer(pgu, copy, rollup).map((rollup, _)) }.
+          map { case (rollup, (analysis, _locationSubcolumnsMap, _cryptProvider)) =>
+            // don't care about the other two things because:
+            //   * we're not going to be sqlizing this rollup
+            //   * any referenced datasets we already know about
+            new RollupInfo[DatabaseNamesMetaTypes] {
+              override val statement = analysis.statement
+              override val resourceName = ScopedResourceName(-1, ResourceName(s"rollup:${rollup.copyInfo.datasetInfo.systemId}/${rollup.copyInfo.systemId}/${rollup.name.underlying}"))
+              override val databaseName = DatabaseTableName(AugmentedTableName(rollup.tableName, isRollup = true))
+
+              private val columns = statement.schema.keysIterator.toArray
+              override def databaseColumnNameOfIndex(idx: Int) =
+                DatabaseColumnName(SqlNamespaces.columnBase(columns(idx)))
+            }
+          }
+      }
+
     // Intermixed rewrites and rollups: rollups are attemted before
     // each group of rewrite passes and after all rewrite passes have
     // happened.
@@ -83,7 +108,7 @@ object ProcessQuery {
 
       TransformManager[DatabaseNamesMetaTypes](
         DatabaseNamesMetaTypes.rewriteFrom(dmtState, metadataAnalysis),
-        Nil,
+        relevantRollups,
         passes,
         new SoQLRewritePassHelpers,
         new SoQLRollupExact(Stringifier.pretty),
@@ -102,12 +127,8 @@ object ProcessQuery {
 
     val onlyOne = nameAnalyses.lengthCompare(1) == 0
     val sqlized = nameAnalyses.map { nameAnalysis =>
-      val physicalTableFor: Map[AutoTableLabel, types.DatabaseTableName[DatabaseNamesMetaTypes]] =
-        if(request.locationSubcolumns.isEmpty) Map.empty
-        else physicalTableMap(nameAnalysis)
-
-      val sqlizer = new ActualSqlizer(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, rewriteSubcolumns(request.locationSubcolumns, copyCache), physicalTableFor)
-      val Sqlizer.Result(sql, extractor, nonliteralSystemContextLookupFound, now) = sqlizer(nameAnalysis.statement)
+      val sqlizer = new SoQLSqlizer(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, RewriteSubcolumns[InputMetaTypes](request.locationSubcolumns, copyCache))
+      val Sqlizer.Result(sql, extractor, nonliteralSystemContextLookupFound, now) = sqlizer(nameAnalysis)
       log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
 
       Sqlized(
@@ -162,6 +183,8 @@ object ProcessQuery {
     }
   }
 
+  def tableExists(pgu: Any, table: String): Boolean = true
+
   def explainText(
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     query: String,
@@ -202,7 +225,7 @@ object ProcessQuery {
 
   def fulfillRequest(
     systemContext: Option[Map[String, String]],
-    copyCache: CopyCache,
+    copyCache: CopyCache[InputMetaTypes],
     etag: EntityTag,
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]],
@@ -408,59 +431,6 @@ object ProcessQuery {
         stmt.executeQuery().close()
       }
     }
-  }
-
-  def rewriteSubcolumns(
-    colMap: Map[types.DatabaseTableName[InputMetaTypes], Map[types.DatabaseColumnName[InputMetaTypes], Seq[Option[types.DatabaseColumnName[InputMetaTypes]]]]],
-    copyCache: CopyCache
-  ): Map[types.DatabaseTableName[DatabaseNamesMetaTypes], Map[types.DatabaseColumnName[DatabaseNamesMetaTypes], Seq[Option[types.DatabaseColumnName[DatabaseNamesMetaTypes]]]]] = {
-    colMap.map { case (dtn, cols) =>
-      val (copyInfo, newColMap) = copyCache(dtn).get // TODO proper error
-      DatabaseNamesMetaTypes.rewriteDTN(DatabaseTableName(copyInfo)) -> cols.map { case (DatabaseColumnName(mainCol), auxCols) =>
-        val rewrittenMainCol = DatabaseColumnName(newColMap.get(mainCol).get.physicalColumnBase) // TODO proper error
-        val rewrittenAuxCols = auxCols.map {
-          case Some(DatabaseColumnName(auxCol)) =>
-            Some(DatabaseColumnName(newColMap.get(auxCol).get.physicalColumnBase)) // TODO proper error
-          case None =>
-            None
-        }
-        rewrittenMainCol -> rewrittenAuxCols
-      }
-    }
-  }
-
-  def physicalTableMap[MT <: MetaTypes](analysis: SoQLAnalysis[MT]): Map[AutoTableLabel, types.DatabaseTableName[MT]] = {
-    object Go extends SqlizerUniverse[MT] {
-      type Acc = Map[AutoTableLabel, DatabaseTableName]
-      def walkStatement(stmt: Statement, acc: Acc): Acc =
-        stmt match {
-          case CombinedTables(_, left, right) =>
-            walkStatement(left, walkStatement(right, acc))
-          case CTE(_defLbl, _defAlias, defQ, _matHint, useQ) =>
-            walkStatement(defQ, walkStatement(useQ, acc))
-          case Values(_, _) =>
-            acc
-          case s: Select =>
-            walkFrom(s.from, acc)
-        }
-
-      def walkFrom(from: From, acc: Acc): Acc =
-        from.reduce[Acc](
-          walkAtomicFrom(_, acc),
-          { (acc, join) => walkAtomicFrom(join.right, acc) }
-        )
-
-      def walkAtomicFrom(from: AtomicFrom, acc: Acc): Acc =
-        from match {
-          case fs: FromStatement =>
-            walkStatement(fs.statement, acc)
-          case fsr: FromSingleRow =>
-            acc
-          case ft: FromTable =>
-            acc + (ft.label -> ft.tableName)
-        }
-    }
-    Go.walkStatement(analysis.statement, Map.empty)
   }
 
   def prettierSql[MT <: MetaTypes](analysis: SoQLAnalysis[MT], doc: Doc[SqlizeAnnotation[MT]]): String = {

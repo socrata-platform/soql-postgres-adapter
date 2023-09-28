@@ -16,7 +16,7 @@ object TransformManager {
     analysis: SoQLAnalysis[MT],
     rollups: Seq[rollup.RollupInfo[MT]],
     passes: Seq[Seq[rewrite.Pass]],
-    rewritePassHelpers: RewritePassHelpers[MT],
+    rewritePassHelpers: rewrite.RewritePassHelpers[MT],
     rollupExact: rollup.RollupExact[MT],
     stringifier: Stringifier[MT]
   )(implicit ordering: Ordering[MT#DatabaseColumnNameImpl]): Vector[SoQLAnalysis[MT]] = {
@@ -30,12 +30,7 @@ object TransformManager {
         (analysis, initialRollups)
       ) { case ((analysis, rolledUp), passes) =>
           val newAnalysis =
-            analysis.applyPasses(
-              passes,
-              rewritePassHelpers.isLiteralTrue,
-              rewritePassHelpers.isOrderable,
-              rewritePassHelpers.and
-            )
+            analysis.applyPasses(passes, rewritePassHelpers)
 
           val rewrittenRollups = rolledUp.map { wsa =>
             new WrappedSoQLAnalysis(wsa.analysis)

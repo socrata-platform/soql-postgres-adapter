@@ -13,6 +13,7 @@ object CostEstimator {
   private val log = LoggerFactory.getLogger(classOf[CostEstimator])
 
   def apply(conn: Connection, sql: String): Double = {
+    log.debug("Considering {}", sql)
     for {
       stmt <- managed(conn.createStatement())
       rs <- managed(stmt.executeQuery("EXPLAIN (FORMAT JSON) " + sql))
@@ -21,7 +22,7 @@ object CostEstimator {
         throw new Exception("EXPLAIN should have returned a single result?");
       }
 
-      val result = JsonReader.fromString(rs.getString(0)).dyn(0).Plan("Total Cost").! match {
+      val result = JsonReader.fromString(rs.getString(1)).dyn(0).Plan("Total Cost").! match {
         case n: JNumber => n.toDouble
         case _ => throw new Exception("Total Cost should have been a number")
       }

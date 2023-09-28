@@ -52,9 +52,10 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
 
     val cryptProvider = obfuscation.CryptProvider.zeros
 
-    override val repFor = new SoQLRepProvider[TestMT](_ => Some(cryptProvider), namespace, toProvenance, isRollup, Map.empty, Map.empty) {
-      override def mkStringLiteral(s: String) = Doc(JString(s).toString)
-    }
+    override def mkRepProvider(physicalTableFor: Map[AutoTableLabel, DatabaseTableName]) =
+      new SoQLRepProvider[TestMT](_ => Some(cryptProvider), namespace, toProvenance, isRollup, Map.empty, physicalTableFor) {
+        override def mkStringLiteral(s: String) = Doc(JString(s).toString)
+      }
 
     override val funcallSqlizer = new SoQLFunctionSqlizer
 
@@ -103,7 +104,7 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
 
     if(useSelectListReferences) analysis = analysis.useSelectListReferences
 
-    sqlizer(analysis.statement).sql.layoutSingleLine.toString
+    sqlizer(analysis).sql.layoutSingleLine.toString
   }
 
   test("basic search") {

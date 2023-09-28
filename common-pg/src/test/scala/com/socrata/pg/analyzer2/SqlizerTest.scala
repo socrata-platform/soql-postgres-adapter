@@ -29,7 +29,8 @@ class SqlizerTest extends FunSuite with MustMatchers with TestHelper with Sqlize
     override val toProvenance = TestProvenanceMapper
     override def isRollup(dtn: DatabaseTableName) = false
 
-    override val repFor: Rep.Provider[TestMT] = new TestRepProvider(namespace, toProvenance, isRollup)
+    override def mkRepProvider(physicalTableFor: Map[AutoTableLabel, DatabaseTableName]) =
+      new TestRepProvider(namespace, toProvenance, isRollup)
 
     override val funcallSqlizer: FuncallSqlizer = TestFunctionSqlizer
 
@@ -51,7 +52,7 @@ class SqlizerTest extends FunSuite with MustMatchers with TestHelper with Sqlize
         case Left(err) => fail("Bad query: " + err)
       }
 
-    sqlizer(analysis.statement).sql
+    sqlizer(analysis).sql
   }
 
   test("simple") {

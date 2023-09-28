@@ -1,5 +1,7 @@
 package com.socrata.pg.analyzer2
 
+import com.socrata.prettyprint.prelude._
+
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.FunctionName
 import com.socrata.soql.functions.{Function, MonomorphicFunction, SoQLFunctions, SoQLTypeInfo}
@@ -46,6 +48,26 @@ class SoQLRewriteSearch[MT <: MetaTypes with ({type ColumnType = SoQLType; type 
       coalesce,
       Seq(string, litText(""))
     )(FuncallPositionInfo.None)
+  }
+
+  override def searchTerm(schema: Iterable[(ColumnLabel, Rep[MT])]): Option[Doc[Nothing]] = {
+    val term =
+      schema.toSeq.flatMap { case (label, rep) =>
+        rep.typ match {
+          case SoQLText | SoQLUrl =>
+            rep.expandedDatabaseColumns(label)
+          case _ =>
+            Nil
+        }
+      }.map { col =>
+        Seq(col, d"''").funcall(d"coalesce")
+      }
+
+    if(term.nonEmpty) {
+      Some(term.concatWith { (a: Doc[Nothing], b: Doc[Nothing]) => a +#+ d"|| ' ' ||" +#+ b })
+    } else {
+      None
+    }
   }
 
   override val toTsVector = SoQLRewriteSearch.ToTsVector.monomorphic.get

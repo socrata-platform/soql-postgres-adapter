@@ -2,6 +2,8 @@ package com.socrata.pg.analyzer2
 
 import scala.collection.compat.immutable.LazyList
 
+import com.socrata.prettyprint.prelude._
+
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.functions.{MonomorphicFunction, SoQLFunctions, SoQLTypeInfo}
 
@@ -11,6 +13,9 @@ abstract class RewriteSearch[MT <: MetaTypes]
   val searchBeforeQuery: Boolean
 
   def apply(stmt: Statement): Statement = rewriteStatement(stmt)
+
+  // Produce a term that can be used to create an index on a table with the given schema
+  def searchTerm(schema: Iterable[(ColumnLabel, Rep[MT])]): Option[Doc[Nothing]]
 
   private def rewriteStatement(stmt: Statement): Statement =
     stmt match {
