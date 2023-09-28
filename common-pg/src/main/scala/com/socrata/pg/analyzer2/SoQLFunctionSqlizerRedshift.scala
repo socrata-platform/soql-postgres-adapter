@@ -350,7 +350,12 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       CaselessContains -> uncased(sqlizeNormalOrdinaryFuncall("soql_contains")),
       LeftPad -> sqlizeNormalOrdinaryFuncall("soql_left_pad"),
       RightPad -> sqlizeNormalOrdinaryFuncall("soql_right_pad"),
-      Chr -> sqlizeNormalOrdinaryFuncall("soql_chr"),
+      Chr -> sqlizeNormalOrdinaryFuncall("chr",
+        castType = (_, idx) => idx match {
+          case 0 => Some(Doc("int"))
+          case _ => None
+        }
+      ),
       Substr2 -> sqlizeNormalOrdinaryFuncall("soql_substring"),
       Substr3 -> sqlizeNormalOrdinaryFuncall("soql_substring"),
       SplitPart -> sqlizeNormalOrdinaryFuncall("soql_split_part"),

@@ -5,6 +5,7 @@ import org.joda.time.DateTime
 import com.socrata.soql.collection.NonEmptySeq
 import com.socrata.soql.analyzer2._
 import com.socrata.prettyprint.prelude._
+import com.socrata.prettyprint
 
 object FuncallSqlizer {
   case class DynamicContext[MT <: MetaTypes](
@@ -164,13 +165,26 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     }
   }
 
-   def sqlizeNormalOrdinaryFuncall(sqlFunctionName: String, prefixArgs: Seq[Doc] = Nil, suffixArgs: Seq[Doc] = Nil) = {
+  def sqlizeNormalOrdinaryFuncall(
+    sqlFunctionName: String,
+    prefixArgs: Seq[Doc] = Nil,
+    suffixArgs: Seq[Doc] = Nil,
+    castType: (Doc, Int) => Option[Doc] = (_, _) => None
+  ) = {
     val funcName = Doc(sqlFunctionName)
     ofs { (e, args, ctx) =>
       assert(args.length >= e.function.minArity)
       assert(e.function.allParameters.startsWith(args.map(_.typ)))
 
-      val sql = (prefixArgs ++ args.map(_.compressed.sql) ++ suffixArgs).funcall(funcName)
+      val castArgs = args.map(_.compressed.sql).zipWithIndex.map { case (arg, idx) =>
+        castType(arg, idx).map { cast =>
+          arg +#+ Doc("::") +#+ cast
+        }.getOrElse(arg)
+      }
+
+      val argsSql = (prefixArgs ++ castArgs ++ suffixArgs)
+
+      val sql = argsSql.funcall(funcName)
 
       ExprSql(sql.group, e)
     }
