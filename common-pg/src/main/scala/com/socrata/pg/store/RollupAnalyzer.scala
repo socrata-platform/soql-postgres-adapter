@@ -191,7 +191,7 @@ object RollupAnalyzer {
       case Right(analysis) =>
         analysis
       case Left(err) => {
-        logger.info("Failed to analyzie?  Skipping rebuild: " + err)
+        logger.info("Failed to analyze rollup? {}", err)
         return None
       }
     }
