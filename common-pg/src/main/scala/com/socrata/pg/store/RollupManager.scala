@@ -210,7 +210,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
             val searchIdxSql = new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true).
               searchTerm(schema).
               map { searchTerm =>
-                d"CREATE INDEX IF NOT EXISTS idx_" ++ Doc(rollupInfo.tableName) ++ d"_fts ON " ++ Doc(rollupInfo.tableName) ++ d" (to_tsvector('english'," ++ searchTerm ++ d"))" ++ Doc(tablespaceSql)
+                d"CREATE INDEX IF NOT EXISTS idx_" ++ Doc(rollupInfo.tableName) ++ d"_fts ON" +#+ Doc(rollupInfo.tableName) +#+ d"USING GIN (to_tsvector('english'," ++ searchTerm ++ d"))" ++ Doc(tablespaceSql)
               }
 
             logger.info("Actually building new rollup!")
