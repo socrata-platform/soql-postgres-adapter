@@ -21,6 +21,8 @@ object TestHelper {
 trait TestHelper { this: Assertions =>
   type TestMT = TestHelper.TestMT
 
+  def xtest(name: String)(test: => Any): Unit = {}
+
   def tableFinder(items: ((Int, String), Thing[Int, TestType])*) =
     new MockTableFinder[TestMT](items.toMap)
 
