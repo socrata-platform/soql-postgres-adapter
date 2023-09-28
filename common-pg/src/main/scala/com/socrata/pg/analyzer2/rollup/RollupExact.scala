@@ -417,33 +417,50 @@ class RollupExact[MT <: MetaTypes](
     assert(select.isAggregated)
     assert(candidate.isAggregated)
 
-    (select.where, candidate.where) match {
-      case (None, None) =>
-        // ok
-      case (Some(sWhere), Some(cWhere)) =>
-        if(!sWhere.isIsomorphic(cWhere, rewriteInTerms.isoState)) {
-          log.debug("Bailing because WHERE was not isomorphic")
+    val extractedWhere: Option[Expr] =
+      (select.where, candidate.where) match {
+        case (None, None) =>
+          None
+        case (Some(sWhere), Some(cWhere)) =>
+          // this is a little stricter than it could be, but making it
+          // less strict would entail knowing more about functions
+          // mean.  For example, if the candidate has `where x > 5`
+          // and the query has `where x = 10` then these where clauses
+          // are in fact actually compatible, but knowing that depends
+          // on knowing the exact meaning of the op$> and op$=
+          // functions and being able to tell when one boolean
+          // expression is true for a superset of where another
+          // boolean expression is.
+          val sWhereSplit = splitAnd.split(sWhere)
+          val cWhereSplit = splitAnd.split(cWhere)
+          val sLeftover = exprSubsequence(sWhereSplit, cWhereSplit, rewriteInTerms).getOrElse {
+            log.debug("Bailing because WHERE was not a supersequence")
+            return None
+          }
+          NonEmptySeq.fromSeq(sLeftover).
+            map(splitAnd.merge)
+        case (Some(sWhere), None) =>
+          Some(sWhere)
+        case (None, Some(_)) =>
+          log.debug("Bailing because the candidate had a WHERE and the query didn't")
           return None
-        }
-      case (Some(_), None) =>
-        log.debug("Bailing because the query had a WHERE and the candidate didn't")
-        return None
-      case (None, Some(_)) =>
-        log.debug("Bailing because the candidate had a WHERE and the query didn't")
-        return None
-    }
+      }
+
+    val updatedSelect = select.copy(where = extractedWhere)
 
     if(sameExprsIgnoringOrder(select.groupBy, candidate.groupBy, rewriteInTerms.isoState)) {
-      rewriteAggregatedOnAggregatedSameGroupBy(select, candidate, rewriteInTerms)
+      rewriteAggregatedOnAggregatedSameGroupBy(updatedSelect, candidate, rewriteInTerms)
     } else {
-      rewriteAggregatedOnAggregatedDifferentGroupBy(select, candidate, rewriteInTerms)
+      rewriteAggregatedOnAggregatedDifferentGroupBy(updatedSelect, candidate, rewriteInTerms)
     }
   }
 
   private def rewriteAggregatedOnAggregatedDifferentGroupBy(select: Select, candidate: Select, rewriteInTerms: RewriteInTerms): Option[Select] = {
     // * the expressions in the select's GROUP BY must be a               ✓
     //   subset of the candidate's
-    // * WHERE must be isomorphic                                         ✓
+    // * WHERE must be more restrictive than the candidate's WHERE        ✓
+    //   and it must be expressible in terms of the output columns
+    //   of candidate
     // * all expressions in select list and ORDER BY must be              ✓
     //   expressible in terms of the output columns of candidate
     //   under monoidal combination
@@ -499,6 +516,12 @@ class RollupExact[MT <: MetaTypes](
         return None
       }
 
+    val newWhere =
+      select.where.mapFallibly(rewriteInTerms.rewrite(_, needsMerge = true)).getOrElse {
+        log.debug("Bailing because unable to rewrite the WHERE in terms of the candidate's output columns")
+        return None
+      }
+
     val newGroupBy =
       select.groupBy.mapFallibly(rewriteInTerms.rewrite(_, needsMerge = true)).getOrElse {
         log.debug("Bailing because unable to rewrite the GROUP BY in terms of the candidate's output columns")
@@ -521,7 +544,7 @@ class RollupExact[MT <: MetaTypes](
         distinctiveness = newDistinctiveness,
         selectList = newSelectList,
         from = rewriteInTerms.newFrom,
-        where = None,
+        where = newWhere,
         groupBy = newGroupBy,
         having = newHaving,
         orderBy = newOrderBy,
@@ -544,7 +567,7 @@ class RollupExact[MT <: MetaTypes](
       sDistinctiveness,
       sSelectList,
       sFrom,
-      _sWhere,
+      sWhere,
       _sGroupBy,
       sHaving,
       sOrderBy,
@@ -568,12 +591,19 @@ class RollupExact[MT <: MetaTypes](
       _cHint
     ) = candidate
 
+    val newSHaving =
+      (sWhere, sHaving) match {
+        case (w, None) => w
+        case (None, h) => h
+        case (Some(w), Some(h)) => Some(splitAnd.merge(NonEmptySeq(w, List(h))))
+      }
+
     rewriteOneToOne(
       select.isWindowed,
       sDistinctiveness,
       sSelectList,
       sFrom,
-      sHaving,
+      newSHaving,
       sOrderBy,
       sLimit,
       sOffset,
@@ -645,6 +675,30 @@ class RollupExact[MT <: MetaTypes](
     }
   }
 
+  // if "b" is a subsequence of "a", returns the elements of "a" not in "b"
+  private def exprSubsequence(as: NonEmptySeq[Expr], bs: NonEmptySeq[Expr], rewriteInTerms: RewriteInTerms): Option[Seq[Expr]] = {
+    var remainingBs = bs.toList
+    val result = Vector.newBuilder[Expr]
+    for(a <- as) {
+      remainingBs match {
+        case b :: bRemaining =>
+          if(a.isIsomorphic(b, rewriteInTerms.isoState)) {
+            remainingBs = bRemaining
+          } else {
+            result += a
+          }
+        case Nil =>
+          result += a
+      }
+    }
+
+    if(remainingBs.nonEmpty) {
+      None
+    } else {
+      Some(result.result())
+    }
+  }
+
   private def combineAnd(sExpr: Expr, cExpr: Expr, rewriteInTerms: RewriteInTerms, needsMerge: Boolean = false): Option[Option[Expr]] = {
     val sSplit = splitAnd.split(sExpr)
     val cSplit = splitAnd.split(cExpr)
@@ -652,27 +706,12 @@ class RollupExact[MT <: MetaTypes](
     // ok, this is a little subtle.  We have two lists of AND clauses,
     // and we want to make sure that cSplit is a subseqence of sSplit,
     // to preserve short-circuiting.
-    var remaining = cSplit.toList
-    val result = Vector.newBuilder[Expr]
-    for(sClause <- sSplit) {
-      remaining match {
-        case cClause :: cRemaining =>
-          if(sClause.isIsomorphic(cClause, rewriteInTerms.isoState)) {
-            remaining = cRemaining
-          } else {
-            result += sClause
-          }
-        case Nil =>
-          result += sClause
-      }
-    }
-
-    if(remaining.nonEmpty) {
+    val newTerms = exprSubsequence(sSplit, cSplit, rewriteInTerms).getOrElse {
       log.debug("Leftover candidate clauses after scan")
       return None
     }
 
-    NonEmptySeq.fromSeq(result.result()).map(splitAnd.merge).mapFallibly(rewriteInTerms.rewrite(_, needsMerge))
+    NonEmptySeq.fromSeq(newTerms).map(splitAnd.merge).mapFallibly(rewriteInTerms.rewrite(_, needsMerge))
   }
 
   private class RewriteInTerms(
