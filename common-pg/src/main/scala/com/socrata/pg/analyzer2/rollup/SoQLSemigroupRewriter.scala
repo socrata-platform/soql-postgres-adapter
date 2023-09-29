@@ -20,12 +20,14 @@ class SoQLSemigroupRewriter[MT <: MetaTypes with ({type ColumnType = SoQLType; t
         Map("a" -> SoQLNumber)
       ),
       Seq(
-        FunctionCall[MT](
+        AggregateFunctionCall[MT](
           MonomorphicFunction(
             SoQLFunctions.Sum,
             Map("a" -> SoQLNumber)
           ),
-          Seq(expr)
+          Seq(expr),
+          false,
+          None
         )(FuncallPositionInfo.None),
         LiteralValue[MT](SoQLNumber(JBigDecimal.ZERO))(AtomicPositionInfo.None)
       )
@@ -33,12 +35,14 @@ class SoQLSemigroupRewriter[MT <: MetaTypes with ({type ColumnType = SoQLType; t
 
   private def simple(f: Function[CT], binding: String): (Function[CT], Expr => Expr) =
     f -> { expr =>
-      FunctionCall[MT](
+      AggregateFunctionCall[MT](
         MonomorphicFunction(
           f,
           Map(binding -> expr.typ)
         ),
-        Seq(expr)
+        Seq(expr),
+        false,
+        None
       )(FuncallPositionInfo.None)
     }
 
