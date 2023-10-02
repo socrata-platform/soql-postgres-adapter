@@ -5,6 +5,7 @@ import scala.collection.{mutable => scm}
 import java.io.{BufferedWriter, OutputStreamWriter}
 import java.nio.charset.StandardCharsets
 import java.sql.{Connection, PreparedStatement}
+import java.time.{Clock, LocalDateTime}
 import java.util.Base64
 import java.util.zip.GZIPOutputStream
 
@@ -30,13 +31,16 @@ import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLID, SoQLVersion, SoQLNul
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.sql.Debug
 import com.socrata.soql.stdlib.analyzer2.SoQLRewritePassHelpers
+import com.socrata.datacoordinator.id.RollupName
 import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
 import com.socrata.datacoordinator.common.soql.SoQLRep
+import com.socrata.metrics.rollup.RollupMetrics
+import com.socrata.metrics.rollup.events.RollupHit
 
 import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, TransformManager, Stringifier, CostEstimator, SoQLSqlizer, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, SqlNamespaces}
 import com.socrata.pg.analyzer2.metatypes.{CopyCache, InputMetaTypes, DatabaseMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName}
 import com.socrata.pg.analyzer2.rollup.{SoQLRollupExact, RollupInfo}
-import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils, RollupAnalyzer}
+import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils, RollupAnalyzer, RollupId}
 import com.socrata.pg.server.CJSONWriter
 
 final abstract class ProcessQuery
@@ -81,17 +85,21 @@ object ProcessQuery {
       flatMap { copy =>
         pgu.datasetMapReader.rollups(copy).
           iterator.
-          filter(_.soql.startsWith("{")).
-          filter { rollup => tableExists(pgu, rollup.tableName) }.
+          filter { rollup => rollup.isNewAnalyzer && tableExists(pgu, rollup.tableName) }.
           flatMap { rollup => RollupAnalyzer(pgu, copy, rollup).map((rollup, _)) }.
           map { case (rollup, (_foundTables, analysis, _locationSubcolumnsMap, _cryptProvider)) =>
             // don't care about the other two things because:
             //   * we're not going to be sqlizing this rollup
             //   * any referenced datasets we already know about
-            new RollupInfo[DatabaseNamesMetaTypes] {
+            new RollupInfo[DatabaseNamesMetaTypes] with QueryServerRollupInfo {
+              override val id = rollup.systemId
               override val statement = analysis.statement
               override val resourceName = ScopedResourceName(-1, ResourceName(s"rollup:${rollup.copyInfo.datasetInfo.systemId}/${rollup.copyInfo.systemId}/${rollup.name.underlying}"))
               override val databaseName = DatabaseTableName(AugmentedTableName(rollup.tableName, isRollup = true))
+
+              // Needed for metrics
+              override val rollupDatasetName = rollup.copyInfo.datasetInfo.resourceName
+              override val rollupName = rollup.name
 
               private val columns = statement.schema.keysIterator.toArray
               override def databaseColumnNameOfIndex(idx: Int) =
@@ -118,6 +126,7 @@ object ProcessQuery {
 
     case class Sqlized(
       analysis: SoQLAnalysis[DatabaseNamesMetaTypes],
+      rollups: Seq[QueryServerRollupInfo],
       sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]],
       extractor: ResultExtractor[DatabaseNamesMetaTypes],
       nonliteralSystemContextLookupFound: Boolean,
@@ -128,11 +137,12 @@ object ProcessQuery {
     val onlyOne = nameAnalyses.lengthCompare(1) == 0
     val sqlized = nameAnalyses.map { nameAnalysis =>
       val sqlizer = new SoQLSqlizer(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, RewriteSubcolumns[InputMetaTypes](request.locationSubcolumns, copyCache))
-      val Sqlizer.Result(sql, extractor, nonliteralSystemContextLookupFound, now) = sqlizer(nameAnalysis)
+      val Sqlizer.Result(sql, extractor, nonliteralSystemContextLookupFound, now) = sqlizer(nameAnalysis._1)
       log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
 
       Sqlized(
-        nameAnalysis,
+        nameAnalysis._1,
+        relevantRollups.filter { rr => nameAnalysis._2.contains(rr.id) },
         sql,
         extractor,
         nonliteralSystemContextLookupFound,
@@ -168,6 +178,7 @@ object ProcessQuery {
           pgu,
           sqlized.sql,
           sqlized.analysis,
+          sqlized.rollups,
           cryptProviders,
           sqlized.extractor,
           lastModified,
@@ -183,7 +194,23 @@ object ProcessQuery {
     }
   }
 
-  def tableExists(pgu: Any, table: String): Boolean = true
+  trait QueryServerRollupInfo {
+    val rollupDatasetName: Option[String]
+    val rollupName: RollupName
+  }
+
+  def tableExists(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], table: String): Boolean = {
+    for {
+      stmt <- managed(pgu.conn.prepareStatement("SELECT exists(select 1 from pg_tables where schemaname = 'public' and tablename = ?)")).
+        and(_.setString(1, table))
+      rs <- managed(stmt.executeQuery())
+    } {
+      if(!rs.next()) {
+        throw new Exception("`SELECT exists(..)` returned nothing??")
+      }
+      rs.getBoolean(1)
+    }
+  }
 
   def explainText(
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
@@ -230,6 +257,7 @@ object ProcessQuery {
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]],
     nameAnalysis: com.socrata.soql.analyzer2.SoQLAnalysis[DatabaseNamesMetaTypes],
+    rollups: Seq[QueryServerRollupInfo],
     cryptProviders: CryptProviderProvider,
     extractor: ResultExtractor[DatabaseNamesMetaTypes],
     lastModified: DateTime,
@@ -265,8 +293,10 @@ object ProcessQuery {
         ).flatten.toMap
       }
 
+    val preventRun = debug.fold(false)(_.inhibitRun)
+
     val rows =
-      if(debug.fold(false)(_.inhibitRun)) {
+      if(preventRun) {
         Iterator.empty
       } else {
         try {
@@ -280,6 +310,18 @@ object ProcessQuery {
             return InternalServerError
         }
       }
+
+    if(!preventRun) {
+      for(ri <- rollups) {
+        RollupMetrics.digest(
+          RollupHit(
+            ri.rollupDatasetName.getOrElse("unknown"),
+            ri.rollupName.underlying,
+            LocalDateTime.now(Clock.systemUTC())
+          )
+        )
+      }
+    }
 
     ETag(etag) ~> LastModified(lastModified) ~> ContentType("application/x-socrata-gzipped-cjson") ~> Stream { rawOutputStream =>
       for {

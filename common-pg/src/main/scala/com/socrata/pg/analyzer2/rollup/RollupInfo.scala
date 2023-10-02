@@ -7,8 +7,10 @@ import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.ColumnName
 
 import com.socrata.pg.analyzer2.SqlizerUniverse
+import com.socrata.pg.store.RollupId
 
 trait RollupInfo[MT <: MetaTypes] extends SqlizerUniverse[MT] {
+  val id: RollupId
   val statement: Statement
   val resourceName: types.ScopedResourceName[MT]
   val databaseName: DatabaseTableName

@@ -8,6 +8,7 @@ import com.socrata.soql.environment.ResourceName
 import com.socrata.soql.functions.MonomorphicFunction
 
 import com.socrata.pg.analyzer2._
+import com.socrata.pg.store.RollupId
 
 trait RollupTestHelper extends TestHelper { this: Assertions =>
   object TestSemigroupRewriter extends SemigroupRewriter[TestMT] {
@@ -88,6 +89,7 @@ trait RollupTestHelper extends TestHelper { this: Assertions =>
   )
 
   class TestRollupInfo(
+    val id: RollupId,
     val statement: Statement[TestMT],
     val resourceName: types.ScopedResourceName[TestMT],
     val databaseName: types.DatabaseTableName[TestMT]
@@ -96,13 +98,13 @@ trait RollupTestHelper extends TestHelper { this: Assertions =>
   }
 
   object TestRollupInfo {
-    def apply(name: String, tf: TableFinder[TestMT], soql: String): TestRollupInfo = {
+    def apply(id: Int, name: String, tf: TableFinder[TestMT], soql: String): TestRollupInfo = {
       val Right(foundTables) = tf.findTables(0, soql, Map.empty)
       val analysis = analyzer(foundTables, UserParameters.empty) match {
         case Right(a) => a
         case Left(e) => fail(e.toString)
       }
-      new TestRollupInfo(analysis.statement, ScopedResourceName(0, ResourceName(name)), DatabaseTableName(name))
+      new TestRollupInfo(RollupId(id), analysis.statement, ScopedResourceName(0, ResourceName(name)), DatabaseTableName(name))
     }
   }
 
