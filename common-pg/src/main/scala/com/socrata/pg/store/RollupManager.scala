@@ -225,26 +225,30 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
               }
 
             logger.info("Actually building new rollup!")
-            using(pgu.conn.createStatement()) { stmt =>
-              def execute(sql: Doc[Any]): Unit = {
-                logger.debug("Running {}", sql)
-                RowSizeBufferSqlErrorContinue.guard(pgu.conn) {
-                  stmt.execute(sql.toString)
+            Timing.wrap {
+              using(pgu.conn.createStatement()) { stmt =>
+                def execute(sql: Doc[Any]): Unit = {
+                  logger.debug("Running {}", sql)
+                  RowSizeBufferSqlErrorContinue.guard(pgu.conn) {
+                    stmt.execute(sql.toString)
+                  }
                 }
-              }
-              execute(create)
-              execute(populate)
+                execute(create)
+                execute(populate)
 
-              for {
-                (colLabel, rep) <- schema
-                indexSql <- rep.indices(DatabaseTableName(AugmentedTableName(rollupInfo.tableName, isRollup = true)), colLabel)
-              } {
-                execute(indexSql ++ Doc(tablespaceSql))
-              }
-              searchIdxSql.foreach(execute)
+                for {
+                  (colLabel, rep) <- schema
+                  indexSql <- rep.indices(DatabaseTableName(AugmentedTableName(rollupInfo.tableName, isRollup = true)), colLabel)
+                } {
+                  execute(indexSql ++ Doc(tablespaceSql))
+                }
+                searchIdxSql.foreach(execute)
 
-              execute(d"ANALYZE" +#+ Doc(rollupInfo.tableName))
-            }
+                execute(d"ANALYZE" +#+ Doc(rollupInfo.tableName))
+              }
+            }((_,dur)=>{
+                RollupMetrics.digest(RollupBuilt(rollupInfo.copyInfo.datasetInfo.resourceName.getOrElse("unknown"),rollupInfo.name.underlying,LocalDateTime.now(Clock.systemUTC()),dur,pgu.datasetMapReader.getTotalRelationSize(rollupInfo.tableName).getOrElse(-1L)))
+              })
 
           case None =>
             logger.info("skipping rebuild")
