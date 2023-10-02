@@ -340,14 +340,15 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       Upper -> sqlizeNormalOrdinaryFuncall("upper"),
       Length -> sqlizeNormalOrdinaryFuncall("length"),
       Replace -> sqlizeNormalOrdinaryFuncall("replace"),
-      //    not tested yet
       Trim -> sqlizeNormalOrdinaryFuncall("trim"),
       TrimLeading -> sqlizeNormalOrdinaryFuncall("ltrim"),
       TrimTrailing -> sqlizeNormalOrdinaryFuncall("rtrim"),
+      //    needs implementation
       StartsWith -> sqlizeNormalOrdinaryFuncall("starts_with"),
       CaselessStartsWith -> uncased(sqlizeNormalOrdinaryFuncall("starts_with")),
       Contains -> sqlizeNormalOrdinaryFuncall("soql_contains"),
       CaselessContains -> uncased(sqlizeNormalOrdinaryFuncall("soql_contains")),
+//      numeric arguments of the following functions need to be parsed as int instead of decimal
       LeftPad -> sqlizeNormalOrdinaryFuncall("soql_left_pad"),
       RightPad -> sqlizeNormalOrdinaryFuncall("soql_right_pad"),
       Chr -> sqlizeNormalOrdinaryFuncall("soql_chr"),
@@ -359,6 +360,7 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       UnaryPlus -> sqlizeAntinegate,
       BinaryPlus -> sqlizeBinaryOp("+"),
       BinaryMinus -> sqlizeBinaryOp("-"),
+      //    not tested yet
       TimesNumNum -> sqlizeBinaryOp("*"),
       TimesDoubleDouble -> sqlizeBinaryOp("*"),
       TimesMoneyNum -> sqlizeBinaryOp("*"),

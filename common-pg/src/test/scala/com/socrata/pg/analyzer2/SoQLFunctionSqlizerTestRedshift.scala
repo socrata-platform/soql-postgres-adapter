@@ -243,9 +243,97 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   }
 
   test("trimming on both ends works") {
-    println(analyzeStatement("SELECT trim('a' from 'abc')"))
+    analyzeStatement("SELECT trim('   abc   ')") should equal("""SELECT trim(text '   abc   ') AS i1 FROM table1 AS x1""")
   }
 
+  test("trimming on leading spaces works") {
+    analyzeStatement("SELECT trim_leading('   abc   ')") should equal("""SELECT ltrim(text '   abc   ') AS i1 FROM table1 AS x1""")
+  }
+
+  test("trimming on trailing spaces works") {
+    analyzeStatement("SELECT trim_trailing('   abc   ')") should equal("""SELECT rtrim(text '   abc   ') AS i1 FROM table1 AS x1""")
+  }
+
+//  TODO implement starts_with, contains, pad in redshift
+  test("starts_with works") {
+    println(analyzeStatement("SELECT text, num WHERE starts_with(text, 'o')"))
+    /*
+    * starts_with isn't supported in redshift
+    * the workaround would be to use LEFT(column_name, length of matching string) == matching string
+    * */
+  }
+
+  test("contains works"){
+    println(analyzeStatement("SELECT text, num WHERE contains(text, 'a')"))
+    /*
+    * contains is not supported in redshift, instead we can use like '%matching_string%'
+    * */
+  }
+
+test("left_pad works") {
+  println(analyzeStatement("SELECT left_pad(text, 10, 'a'), num"))
+  /*
+  * the sql->soql conversion results in the following query:
+  * SELECT soql_left_pad(x1.text, 10 :: decimal(30, 7), text "a") AS i1, x1.num AS i2 FROM table1 AS x1
+  * but the following is what would work in redshift:
+  * SELECT LPAD(x1.text, 10 :: int, text 'a') AS i1, x1.num AS i2 FROM table1 AS x1
+  *
+  * changes that need to be made:
+  * the second argument of the previous function needs to be parsed as an int (instead of decimal)
+  *
+  * q: soql doesn't allow for the third argument to be missing. in redshift that's a possibility ... is this something that we want to add?
+  * */
+}
+
+  test("chr() works"){
+    println(analyzeStatement("SELECT chr(90)"))
+    /*
+    * the analyzer v2 returns the following:
+    * SELECT soql_chr(90 :: decimal(30, 7)) AS i1 FROM table1 AS x1
+    * for redshift:
+    * the number needs to be parsed as an int
+    * */
+  }
+
+//  requires the parameter to be an int
+  test("substring(characters, start_index base 1) works"){
+    analyzeStatement("SELECT substring('abcdefghijk', 3)") should equal("""SELECT substring(text 'abcdefghijk', 3 :: int) AS i1 FROM table1 AS x1""")
+  }
+
+  //  requires the parameter to be an int
+  test("substring(characters, start_index base 1, length) works") {
+    analyzeStatement("SELECT substring('abcdefghijk', 3, 4)") should equal("""SELECT substring(text 'abcdefghijk', 3 :: int, 4 :: int) AS i1 FROM table1 AS x1""")
+  }
+
+  //  requires the parameter to be an int
+  test("split_part works") {
+    analyzeStatement("SELECT split_part(text, '.', 3)") should equal("""SELECT split_part(x1.text, text '.', 3 :: int) AS i1 FROM table1 AS x1""")
+  }
+
+  test("uniary minus works") {
+    analyzeStatement("SELECT text, - num") should equal("""SELECT x1.text AS i1, -(x1.num) AS i2 FROM table1 AS x1""")
+  }
+
+  test("uniary plus works") {
+    analyzeStatement("SELECT text, + num") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1""")
+  }
+
+//  when numbers are casted as decimal(30, 7) that also means that zero is displayed as 0E-7. would that be an issue for our customers?
+  test("binary minus works") {
+    analyzeStatement("SELECT text, num - 1") should equal("""SELECT x1.text AS i1, (x1.num) - (1 :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
+  }
+
+  test("binary plus works") {
+    analyzeStatement("SELECT text, num + 1") should equal("""SELECT x1.text AS i1, (x1.num) + (1 :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
+  }
+
+  test("num times num works") {
+    analyzeStatement("SELECT text, num * 2") should equal("""SELECT x1.text AS i1, (x1.num) * (2 :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
+  }
+
+  test("simple numeric types works") {
+    println(analyzeStatement("SELECT chr(2.2)"))
+  }
 
   test("tst") {
     onlyRunIf(Redshift) {
