@@ -24,7 +24,7 @@ import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.store.index.SoQLIndexableRep
 import com.socrata.soql.{AnalysisContext, BinaryTree, Compound, Leaf, ParameterSpec, SoQLAnalysis, SoQLAnalyzer}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
-import com.socrata.soql.analyzer2.{UnparsedFoundTables, FoundTablesTableFinder, DatabaseColumnName, DatabaseTableName}
+import com.socrata.soql.analyzer2.{FoundTables, DatabaseColumnName, DatabaseTableName}
 import com.socrata.soql.stdlib.analyzer2.{UserParameters, SoQLRewritePassHelpers}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, DatasetContext, ResourceName, TableName}
@@ -182,7 +182,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
         }
 
         RollupAnalyzer(pgu, copyInfo, rollupInfo) match {
-          case Some((analysis, locationSubcolumns, cryptProviders)) =>
+          case Some((foundTables, analysis, locationSubcolumns, cryptProviders)) =>
             val sqlizer = new SoQLSqlizer(SqlUtils.escapeString(pgu.conn, _), cryptProviders, Map.empty, locationSubcolumns)
 
             val (denormSql, augSchema, _) = sqlizer.sqlize(analysis, rewriteOutputColumns = false)
@@ -192,7 +192,8 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
             // OK COOL!  We're all ready to go!
 
-            val create = d"CREATE TABLE" +#+ Doc(rollupInfo.tableName) +#+ d"(" ++
+            val tableName = Doc(rollupInfo.tableName)
+            val create = d"CREATE TABLE" +#+ tableName +#+ d"(" ++
               schema.iterator.flatMap { case (label, rep) =>
                 rep.expandedDatabaseColumns(label).zip(rep.expandedDatabaseTypes).map { case (colName, colTyp) =>
                   colName +#+ colTyp
@@ -200,17 +201,27 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
               }.toSeq.punctuate(d",").hsep ++
               d")" ++ Doc(tablespaceSql)
 
-            val populate = d"INSERT INTO" +#+ Doc(rollupInfo.tableName) +#+ d"(" ++
+            val populate = d"INSERT INTO" +#+ tableName +#+ d"(" ++
               schema.iterator.flatMap { case (label, rep) =>
                 rep.expandedDatabaseColumns(label)
               }.toSeq.punctuate(d",").hsep ++
               d")" +#+
               sql
 
-            val searchIdxSql = new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true).
-              searchTerm(schema).
-              map { searchTerm =>
-                d"CREATE INDEX IF NOT EXISTS idx_" ++ Doc(rollupInfo.tableName) ++ d"_fts ON" +#+ Doc(rollupInfo.tableName) +#+ d"USING GIN (to_tsvector('english'," ++ searchTerm ++ d"))" ++ Doc(tablespaceSql)
+            val searchIdxSql =
+              foundTables.initialQuery match {
+                case FoundTables.Saved(_) =>
+                  // We'll only create a full-text-search index if
+                  // this query looks like a materialized view, since
+                  // FTS indices in particular are heavyweight to
+                  // compute and store.
+                  new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true).
+                    searchTerm(schema).
+                    map { searchTerm =>
+                      d"CREATE INDEX IF NOT EXISTS idx_" ++ tableName ++ d"_fts ON" +#+ tableName +#+ d"USING GIN (to_tsvector('english'," ++ searchTerm ++ d"))" ++ Doc(tablespaceSql)
+                    }
+                case _ =>
+                  None
               }
 
             logger.info("Actually building new rollup!")

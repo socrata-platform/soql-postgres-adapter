@@ -72,7 +72,7 @@ object RollupAnalyzer {
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     currentCopy: CopyInfo,
     rollupInfo: LocalRollupInfo
-  ): Option[(SoQLAnalysis[DatabaseNamesMetaTypes], LocationSubcolumnsMap, CryptProviderProvider)] =
+  ): Option[(FoundTables[RollupMetaTypes], SoQLAnalysis[DatabaseNamesMetaTypes], LocationSubcolumnsMap, CryptProviderProvider)] =
   {
     val NewRollupSoqlInfo(foundTablesRaw, locationSubcolumnsRaw, rewritePasses, userParameters) = try {
       JsonUtil.parseJson[NewRollupSoqlInfo](rollupInfo.soql) match {
@@ -210,6 +210,6 @@ object RollupAnalyzer {
       }
     }
 
-    Some((analysis, RewriteSubcolumns(locationSubcolumns, copyCache), cryptProviders))
+    Some((foundTables, analysis, RewriteSubcolumns(locationSubcolumns, copyCache), cryptProviders))
   }
 }

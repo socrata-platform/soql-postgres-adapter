@@ -84,7 +84,7 @@ object ProcessQuery {
           filter(_.soql.startsWith("{")).
           filter { rollup => tableExists(pgu, rollup.tableName) }.
           flatMap { rollup => RollupAnalyzer(pgu, copy, rollup).map((rollup, _)) }.
-          map { case (rollup, (analysis, _locationSubcolumnsMap, _cryptProvider)) =>
+          map { case (rollup, (_foundTables, analysis, _locationSubcolumnsMap, _cryptProvider)) =>
             // don't care about the other two things because:
             //   * we're not going to be sqlizing this rollup
             //   * any referenced datasets we already know about
