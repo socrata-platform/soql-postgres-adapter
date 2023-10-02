@@ -285,29 +285,20 @@ test("left_pad works") {
   * */
 }
 
-  test("chr() works"){
-    println(analyzeStatement("SELECT chr(90)"))
-    /*
-    * the analyzer v2 returns the following:
-    * SELECT soql_chr(90 :: decimal(30, 7)) AS i1 FROM table1 AS x1
-    * for redshift:
-    * the number needs to be parsed as an int
-    * */
+  test("chr() works") {
+    analyzeStatement("SELECT chr(50.2)") should equal("""SELECT chr(50.2 :: decimal(30, 7) :: int) AS i1 FROM table1 AS x1""")
   }
 
-//  requires the parameter to be an int
   test("substring(characters, start_index base 1) works"){
-    analyzeStatement("SELECT substring('abcdefghijk', 3)") should equal("""SELECT substring(text 'abcdefghijk', 3 :: int) AS i1 FROM table1 AS x1""")
+    analyzeStatement("SELECT substring('abcdefghijk', 3)") should equal("""SELECT substring(text 'abcdefghijk', 3 :: decimal(30, 7) :: int) AS i1 FROM table1 AS x1""")
   }
 
-  //  requires the parameter to be an int
   test("substring(characters, start_index base 1, length) works") {
-    analyzeStatement("SELECT substring('abcdefghijk', 3, 4)") should equal("""SELECT substring(text 'abcdefghijk', 3 :: int, 4 :: int) AS i1 FROM table1 AS x1""")
+    analyzeStatement("SELECT substring('abcdefghijk', 3, 4)") should equal("""SELECT substring(text 'abcdefghijk', 3 :: decimal(30, 7) :: int, 4 :: decimal(30, 7) :: int) AS i1 FROM table1 AS x1""")
   }
 
-  //  requires the parameter to be an int
   test("split_part works") {
-    analyzeStatement("SELECT split_part(text, '.', 3)") should equal("""SELECT split_part(x1.text, text '.', 3 :: int) AS i1 FROM table1 AS x1""")
+    analyzeStatement("SELECT split_part(text, '.', 3)") should equal("""SELECT split_part(x1.text, text '.', 3 :: decimal(30, 7) :: int) AS i1 FROM table1 AS x1""")
   }
 
   test("uniary minus works") {
@@ -331,9 +322,6 @@ test("left_pad works") {
     analyzeStatement("SELECT text, num * 2") should equal("""SELECT x1.text AS i1, (x1.num) * (2 :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
   }
 
-  test("simple numeric types works") {
-    println(analyzeStatement("SELECT chr(2.2)"))
-  }
 
   test("tst") {
     onlyRunIf(Redshift) {

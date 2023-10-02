@@ -363,8 +363,19 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
           case _ => None
         }
       ),
-      Substr3 -> sqlizeNormalOrdinaryFuncall("soql_substring"),
-      SplitPart -> sqlizeNormalOrdinaryFuncall("soql_split_part"),
+      Substr3 -> sqlizeNormalOrdinaryFuncall("substring",
+        castType = (_, idx) => idx match {
+          case 1 => Some(Doc("int"))
+          case 2 => Some(Doc("int"))
+          case _ => None
+        }
+      ),
+      SplitPart -> sqlizeNormalOrdinaryFuncall("split_part",
+        castType = (_, idx) => idx match {
+          case 2 => Some(Doc("int"))
+          case _ => None
+        }
+      ),
 
       UnaryMinus -> sqlizeNegate,
       UnaryPlus -> sqlizeAntinegate,
