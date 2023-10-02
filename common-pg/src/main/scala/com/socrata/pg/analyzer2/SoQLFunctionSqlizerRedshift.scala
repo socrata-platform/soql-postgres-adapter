@@ -351,8 +351,18 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
 //      numeric arguments of the following functions need to be parsed as int instead of decimal
       LeftPad -> sqlizeNormalOrdinaryFuncall("soql_left_pad"),
       RightPad -> sqlizeNormalOrdinaryFuncall("soql_right_pad"),
-      Chr -> sqlizeNormalOrdinaryFuncall("soql_chr"),
-      Substr2 -> sqlizeNormalOrdinaryFuncall("soql_substring"),
+      Chr -> sqlizeNormalOrdinaryFuncall("chr",
+        castType = (_, idx) => idx match {
+          case 0 => Some(Doc("int"))
+          case _ => None
+        }
+      ),
+      Substr2 -> sqlizeNormalOrdinaryFuncall("substring",
+        castType = (_, idx) => idx match {
+          case 1 => Some(Doc("int"))
+          case _ => None
+        }
+      ),
       Substr3 -> sqlizeNormalOrdinaryFuncall("soql_substring"),
       SplitPart -> sqlizeNormalOrdinaryFuncall("soql_split_part"),
 
