@@ -18,7 +18,7 @@ class RollupExactTest extends FunSuite with MustMatchers with RollupTestHelper w
     val Right(analysis) = analyzer(foundTables, UserParameters.empty)
     val select = analysis.statement.asInstanceOf[Select]
 
-    val rollup = TestRollupInfo("rollup", tf, "select text, num * 5, num from @twocol where num = 5 order by text")
+    val rollup = TestRollupInfo(1, "rollup", tf, "select text, num * 5, num from @twocol where num = 5 order by text")
     val Some(result) = TestRollupExact(select, rollup, analysis.labelProvider)
 
     locally {
@@ -38,7 +38,7 @@ class RollupExactTest extends FunSuite with MustMatchers with RollupTestHelper w
     val Right(analysis) = analyzer(foundTables, UserParameters.empty)
     val select = analysis.statement.asInstanceOf[Select]
 
-    val rollup = TestRollupInfo("rollup", tf, "select text, num * 5, bottom_dword(num) from @twocol where num = 5 order by text")
+    val rollup = TestRollupInfo(1, "rollup", tf, "select text, num * 5, bottom_dword(num) from @twocol where num = 5 order by text")
     val Some(result) = TestRollupExact(select, rollup, analysis.labelProvider)
 
     locally {
@@ -58,7 +58,7 @@ class RollupExactTest extends FunSuite with MustMatchers with RollupTestHelper w
     val Right(analysis) = analyzer(foundTables, UserParameters.empty)
     val select = analysis.statement.asInstanceOf[Select]
 
-    val rollup = TestRollupInfo("rollup", tf, "select text, num, num+num from @twocol |> select text, num * 5, bottom_dword(num) where num = 5 order by text")
+    val rollup = TestRollupInfo(1, "rollup", tf, "select text, num, num+num from @twocol |> select text, num * 5, bottom_dword(num) where num = 5 order by text")
     val Some(result) = TestRollupExact(select, rollup, analysis.labelProvider)
 
     locally {
@@ -78,7 +78,7 @@ class RollupExactTest extends FunSuite with MustMatchers with RollupTestHelper w
     val Right(analysis) = analyzer(foundTables, UserParameters.empty)
     val select = analysis.statement.asInstanceOf[Select]
 
-    val rollup = TestRollupInfo("rollup", tf, "select text, num, sum(another_num) from @threecol group by text, num")
+    val rollup = TestRollupInfo(1, "rollup", tf, "select text, num, sum(another_num) from @threecol group by text, num")
     val Some(result) = TestRollupExact(select, rollup, analysis.labelProvider)
 
     locally {
@@ -98,7 +98,7 @@ class RollupExactTest extends FunSuite with MustMatchers with RollupTestHelper w
     val Right(analysis) = analyzer(foundTables, UserParameters.empty)
     val select = analysis.statement.asInstanceOf[Select]
 
-    val rollup = TestRollupInfo("rollup", tf, "select bottom_dword(num1), max(num2) from @twocol group by bottom_dword(num1)")
+    val rollup = TestRollupInfo(1, "rollup", tf, "select bottom_dword(num1), max(num2) from @twocol group by bottom_dword(num1)")
     val Some(result) = TestRollupExact(select, rollup, analysis.labelProvider)
 
     locally {
@@ -118,7 +118,7 @@ class RollupExactTest extends FunSuite with MustMatchers with RollupTestHelper w
     val Right(analysis) = analyzer(foundTables, UserParameters.empty)
     val select = analysis.statement.asInstanceOf[Select]
 
-    val rollup = TestRollupInfo("rollup", tf, "select * from @twocol where num > 5")
+    val rollup = TestRollupInfo(1, "rollup", tf, "select * from @twocol where num > 5")
     val Some(result) = TestRollupExact(select, rollup, analysis.labelProvider)
 
     locally {
@@ -138,7 +138,7 @@ class RollupExactTest extends FunSuite with MustMatchers with RollupTestHelper w
     val Right(analysis) = analyzer(foundTables, UserParameters.empty)
     val select = analysis.statement.asInstanceOf[Select]
 
-    val rollup = TestRollupInfo("rollup", tf, "select text, sum(num), count(num) from @twocol group by text")
+    val rollup = TestRollupInfo(1, "rollup", tf, "select text, sum(num), count(num) from @twocol group by text")
     val Some(result) = TestRollupExact(select, rollup, analysis.labelProvider)
 
     locally {
@@ -158,7 +158,7 @@ class RollupExactTest extends FunSuite with MustMatchers with RollupTestHelper w
     val Right(analysis) = analyzer(foundTables, UserParameters.empty)
     val select = analysis.statement.asInstanceOf[Select]
 
-    val rollup = TestRollupInfo("rollup", tf, "select text1, text2, sum(num), count(num) from @twocol group by text1, text2")
+    val rollup = TestRollupInfo(1, "rollup", tf, "select text1, text2, sum(num), count(num) from @twocol group by text1, text2")
     val Some(result) = TestRollupExact(select, rollup, analysis.labelProvider)
 
     locally {
@@ -178,7 +178,7 @@ class RollupExactTest extends FunSuite with MustMatchers with RollupTestHelper w
     val Right(analysis) = analyzer(foundTables, UserParameters.empty)
     val select = analysis.statement.asInstanceOf[Select]
 
-    val rollup = TestRollupInfo("rollup", tf, "select text1, text2, sum(num) from @threecol group by text1, text2")
+    val rollup = TestRollupInfo(1, "rollup", tf, "select text1, text2, sum(num) from @threecol group by text1, text2")
     TestRollupExact(select, rollup, analysis.labelProvider) must be (None)
   }
 
@@ -192,7 +192,7 @@ class RollupExactTest extends FunSuite with MustMatchers with RollupTestHelper w
     val Right(analysis) = analyzer(foundTables, UserParameters.empty)
     val select = analysis.statement.asInstanceOf[Select]
 
-    val rollup = TestRollupInfo("rollup", tf, "select text1, text2, sum(num) from @threecol group by text1, text2")
+    val rollup = TestRollupInfo(1, "rollup", tf, "select text1, text2, sum(num) from @threecol group by text1, text2")
     val Some(result) = TestRollupExact(select, rollup, analysis.labelProvider)
 
     locally {
@@ -212,7 +212,7 @@ class RollupExactTest extends FunSuite with MustMatchers with RollupTestHelper w
     val Right(analysis) = analyzer(foundTables, UserParameters.empty)
     val select = analysis.statement.asInstanceOf[Select]
 
-    val rollup = TestRollupInfo("rollup", tf, "select text1, text2, sum(num) from @threecol where text2 = 'world' group by text1, text2")
+    val rollup = TestRollupInfo(1, "rollup", tf, "select text1, text2, sum(num) from @threecol where text2 = 'world' group by text1, text2")
     val Some(result) = TestRollupExact(select, rollup, analysis.labelProvider)
 
     locally {
@@ -232,7 +232,7 @@ class RollupExactTest extends FunSuite with MustMatchers with RollupTestHelper w
     val Right(analysis) = analyzer(foundTables, UserParameters.empty)
     val select = analysis.statement.asInstanceOf[Select]
 
-    val rollup = TestRollupInfo("rollup", tf, "select text1, text2, sum(num) from @threecol where text1 = 'hello' group by text1, text2")
+    val rollup = TestRollupInfo(1, "rollup", tf, "select text1, text2, sum(num) from @threecol where text1 = 'hello' group by text1, text2")
     TestRollupExact(select, rollup, analysis.labelProvider) must be (None)
   }
 
@@ -246,7 +246,7 @@ class RollupExactTest extends FunSuite with MustMatchers with RollupTestHelper w
     val Right(analysis) = analyzer(foundTables, UserParameters.empty)
     val select = analysis.statement.asInstanceOf[Select]
 
-    val rollup = TestRollupInfo("rollup", tf, "select text1, text2, sum(num) from @threecol group by text1, text2")
+    val rollup = TestRollupInfo(1, "rollup", tf, "select text1, text2, sum(num) from @threecol group by text1, text2")
     TestRollupExact(select, rollup, analysis.labelProvider) must be (None)
   }
 
@@ -260,7 +260,7 @@ class RollupExactTest extends FunSuite with MustMatchers with RollupTestHelper w
     val Right(analysis) = analyzer(foundTables, UserParameters.empty)
     val select = analysis.statement.asInstanceOf[Select]
 
-    val rollup = TestRollupInfo("rollup", tf, "select text1, text2, sum(num) from @threecol group by text1, text2")
+    val rollup = TestRollupInfo(1, "rollup", tf, "select text1, text2, sum(num) from @threecol group by text1, text2")
     val Some(result) = TestRollupExact(select, rollup, analysis.labelProvider)
 
     locally {
@@ -280,7 +280,7 @@ class RollupExactTest extends FunSuite with MustMatchers with RollupTestHelper w
     val Right(analysis) = analyzer(foundTables, UserParameters.empty)
     val select = analysis.statement.asInstanceOf[Select]
 
-    val rollup = TestRollupInfo("rollup", tf, "select text1, text2, sum(num) from @threecol where text2 = 'world' group by text1, text2")
+    val rollup = TestRollupInfo(1, "rollup", tf, "select text1, text2, sum(num) from @threecol where text2 = 'world' group by text1, text2")
     val Some(result) = TestRollupExact(select, rollup, analysis.labelProvider)
 
     locally {
@@ -300,7 +300,7 @@ class RollupExactTest extends FunSuite with MustMatchers with RollupTestHelper w
     val Right(analysis) = analyzer(foundTables, UserParameters.empty)
     val select = analysis.statement.asInstanceOf[Select]
 
-    val rollup = TestRollupInfo("rollup", tf, "select text1, text2, sum(num) from @threecol where text1 = 'hello' group by text1, text2")
+    val rollup = TestRollupInfo(1, "rollup", tf, "select text1, text2, sum(num) from @threecol where text1 = 'hello' group by text1, text2")
     TestRollupExact(select, rollup, analysis.labelProvider) must be (None)
   }
 }

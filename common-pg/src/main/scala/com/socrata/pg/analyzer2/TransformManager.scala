@@ -7,6 +7,8 @@ import org.slf4j.LoggerFactory
 
 import com.socrata.soql.analyzer2._
 
+import com.socrata.pg.store.RollupId
+
 final abstract class TransformManager
 
 object TransformManager {
@@ -19,7 +21,7 @@ object TransformManager {
     rewritePassHelpers: rewrite.RewritePassHelpers[MT],
     rollupExact: rollup.RollupExact[MT],
     stringifier: Stringifier[MT]
-  )(implicit ordering: Ordering[MT#DatabaseColumnNameImpl]): Vector[SoQLAnalysis[MT]] = {
+  )(implicit ordering: Ordering[MT#DatabaseColumnNameImpl]): Vector[(SoQLAnalysis[MT], Set[RollupId])] = {
     log.debug("Rewriting query:\n  {}", stringifier.statement(analysis.statement).indent(2))
 
     val initialRollups = doRollup(analysis, rollupExact, rollups)
@@ -32,11 +34,7 @@ object TransformManager {
           val newAnalysis =
             analysis.applyPasses(passes, rewritePassHelpers)
 
-          val rewrittenRollups = rolledUp.map { wsa =>
-            new WrappedSoQLAnalysis(wsa.analysis)
-          }
-
-          val newRollups = rewrittenRollups ++ doRollup(newAnalysis, rollupExact, rollups)
+          val newRollups = rolledUp ++ doRollup(newAnalysis, rollupExact, rollups)
 
           log.debug("After {}:\n  {}", passes: Any, stringifier.statement(newAnalysis.statement).indent(2))
           log.debug("Candidate rollups:\n  {}", LazyToString(printRollups(newRollups, stringifier)).indent(2))
@@ -44,28 +42,34 @@ object TransformManager {
           (newAnalysis, newRollups)
       }
 
-    Vector(resultAnalysis) ++ rolledUp.map(_.analysis)
+    Vector((resultAnalysis, Set.empty[RollupId])) ++ rolledUp.map { wa =>
+      (wa.analysis, wa.rollupIds)
+    }
   }
 
   private def printRollups[MT <: MetaTypes](rollups: Iterable[WrappedSoQLAnalysis[MT]], stringifier: Stringifier[MT]): String =
     rollups.iterator.map { wsa => stringifier.statement(wsa.analysis.statement) }.mkString(";\n")
 
-  private class WrappedSoQLAnalysis[MT <: MetaTypes](val analysis: SoQLAnalysis[MT]) {
-    override def hashCode = analysis.statement.hashCode
-    override def equals(o: Any) =
-      o match {
-        case that: WrappedSoQLAnalysis[_] => this.analysis.statement == that.analysis.statement
-        case _ => false
-      }
-  }
+  private case class WrappedSoQLAnalysis[MT <: MetaTypes](analysis: SoQLAnalysis[MT], rollupIds: Set[RollupId])
 
   private def doRollup[MT <: MetaTypes](
     analysis: SoQLAnalysis[MT],
     rollupExact: rollup.RollupExact[MT],
     rollups: Seq[rollup.RollupInfo[MT]]
-  )(implicit ordering: Ordering[MT#DatabaseColumnNameImpl]) =
-    analysis.modifySeq { (labelProvider, statement) =>
-      val rr = new rollup.RollupRewriter(labelProvider, rollupExact, rollups)
-      rr.rollup(statement)
-    }.map(new WrappedSoQLAnalysis(_))
+  )(implicit ordering: Ordering[MT#DatabaseColumnNameImpl]): Seq[WrappedSoQLAnalysis[MT]] = {
+    // ugh - modifySeq doesn't play nicely with returning additional
+    // info in addition to the new analysis, so we need to pack that
+    // away in a var here and then reassemble afterward.
+    var rollupIdses = Seq.empty[Set[RollupId]]
+    val newAnalyses =
+      analysis.modifySeq { (labelProvider, statement) =>
+        val rr = new rollup.RollupRewriter(labelProvider, rollupExact, rollups)
+        val rewritten = rr.rollup(statement)
+        rollupIdses = rewritten.map(_._2)
+        rewritten.map(_._1)
+      }.toVector
+    newAnalyses.lazyZip(rollupIdses).map { (analysis, rollupIds) =>
+      new WrappedSoQLAnalysis(analysis, rollupIds)
+    }
+  }
 }

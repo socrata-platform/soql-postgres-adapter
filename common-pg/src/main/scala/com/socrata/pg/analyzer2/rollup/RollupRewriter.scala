@@ -9,6 +9,7 @@ import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, Provenance}
 
 import com.socrata.pg.analyzer2.SqlizerUniverse
+import com.socrata.pg.store.RollupId
 
 object RollupRewriter {
   private val log = LoggerFactory.getLogger(classOf[RollupRewriter[_]])
@@ -25,14 +26,16 @@ class RollupRewriter[MT <: MetaTypes](
   // (not any sub-parts of the select!).  This needs to produce
   // statements with the same output schema (in terms of column labels
   // and types) as the given select.
-  private def rollupSelectExact(select: Select): Seq[Statement] =
-    rollups.flatMap(rollupExact(select, _, labelProvider))
+  private def rollupSelectExact(select: Select): Seq[(Statement, Set[RollupId])] =
+    rollups.flatMap { ri =>
+      rollupExact(select, ri, labelProvider).map((_, Set(ri.id)))
+    }
 
   // See if there are rollup that can be used to answer _this_
   // combined tables (not any sub-parts of the combined tables!).
   // This needs to produce statements with the same output schema (in
   // terms of column labels and types) as the given select.
-  private def rollupCombinedExact(combined: CombinedTables): Seq[Statement] = {
+  private def rollupCombinedExact(combined: CombinedTables): Seq[(Statement, Set[RollupId])] = {
     rollups.flatMap {
       // This is stronger than it needs to be.  Ways it can be
       // weakened:
@@ -43,27 +46,30 @@ class RollupRewriter[MT <: MetaTypes](
         val from = ri.from(labelProvider)
 
         Some(
-          Select(
-            Distinctiveness.Indistinct(),
-            OrderedMap() ++ (combined.schema.toStream, from.columns.toStream).zipped.map {
-              case ((sourceLabel, sourceEnt), (rollupCol, rollupEnt)) =>
-                assert(sourceEnt.name == rollupEnt.name)
-                assert(sourceEnt.typ == rollupEnt.typ)
-                sourceLabel -> NamedExpr(
-                  PhysicalColumn[MT](from.label, from.tableName, rollupCol, sourceEnt.typ)(AtomicPositionInfo.None),
-                  sourceEnt.name,
-                  sourceEnt.isSynthetic
-                )
-            },
-            from,
-            None,
-            Nil,
-            None,
-            Nil,
-            None,
-            None,
-            None,
-            Set.empty
+          (
+            Select(
+              Distinctiveness.Indistinct(),
+              OrderedMap() ++ (combined.schema.toStream, from.columns.toStream).zipped.map {
+                case ((sourceLabel, sourceEnt), (rollupCol, rollupEnt)) =>
+                  assert(sourceEnt.name == rollupEnt.name)
+                  assert(sourceEnt.typ == rollupEnt.typ)
+                  sourceLabel -> NamedExpr(
+                    PhysicalColumn[MT](from.label, from.tableName, rollupCol, sourceEnt.typ)(AtomicPositionInfo.None),
+                    sourceEnt.name,
+                    sourceEnt.isSynthetic
+                  )
+              },
+              from,
+              None,
+              Nil,
+              None,
+              Nil,
+              None,
+              None,
+              None,
+              Set.empty
+            ),
+            Set(ri.id)
           )
         )
       case _ =>
@@ -73,13 +79,13 @@ class RollupRewriter[MT <: MetaTypes](
 
   // Attempt to roll up this statement; this will produce no results
   // if no rollups apply.
-  final def rollup(stmt: Statement): Seq[Statement] = {
+  final def rollup(stmt: Statement): Seq[(Statement, Set[RollupId])] = {
     rollup(stmt, prefixesAllowed = true)
   }
 
   // Attempt to roll up this statement; this will produce no results
   // if no rollups apply.
-  private def rollup(stmt: Statement, prefixesAllowed: Boolean): Seq[Statement] = {
+  private def rollup(stmt: Statement, prefixesAllowed: Boolean): Seq[(Statement, Set[RollupId])] = {
     stmt match {
       case select: Select =>
         if(select.hint(SelectHint.NoRollup)) {
@@ -106,11 +112,11 @@ class RollupRewriter[MT <: MetaTypes](
             Nil
           } else {
             for {
-              newLeft <- left +: newLefts
-              newRight <- right +: newRights
+              (newLeft, leftRollups) <- (left, Set.empty) +: newLefts
+              (newRight, rightRollups) <- (right, Set.empty) +: newRights
               if (newLeft ne left) || (newRight ne right)
             } yield {
-              CombinedTables(op, newLeft, newRight)
+              (CombinedTables(op, newLeft, newRight), leftRollups ++ rightRollups)
             }
           }
         }
@@ -137,12 +143,12 @@ class RollupRewriter[MT <: MetaTypes](
   //
   // The most annoying part is that I'm not actually sure this is a
   // useful thing to do :)
-  private def rollupPrefixes(select: Select): Seq[Statement] =
-    rollupPrefixes(select.from, select).map { case (newFrom, columnMap) =>
-      fixupColumnReferences(select.copy(from = newFrom), columnMap)
+  private def rollupPrefixes(select: Select): Seq[(Statement, Set[RollupId])] =
+    rollupPrefixes(select.from, select).map { case (newFrom, columnMap, rollupIds) =>
+      (fixupColumnReferences(select.copy(from = newFrom), columnMap), rollupIds)
     }
 
-  private def rollupPrefixes(from: From, container: Select): Seq[(From, Map[Col, VirtCol])] =
+  private def rollupPrefixes(from: From, container: Select): Seq[(From, Map[Col, VirtCol], Set[RollupId])] =
     from match {
       case af: AtomicFrom =>
         Nil
@@ -152,42 +158,48 @@ class RollupRewriter[MT <: MetaTypes](
           // recomputing the demandedColumns for each prefix, which
           // involves a walk over the "container" select.  It'd be
           // nice not to do that.
-          rollupPrefixes(join.left, container).flatMap { case (newLeft, columnMap) =>
-            rollupAtomicFrom(join.right).map { newRight =>
-              (join.copy(left = newLeft, right = newRight), columnMap)
+          rollupPrefixes(join.left, container).flatMap { case (newLeft, columnMap, rollupIds) =>
+            rollupAtomicFrom(join.right).map { case (newRight, rightRollupIds) =>
+              (join.copy(left = newLeft, right = newRight), columnMap, rollupIds ++ rightRollupIds)
             }
           }
         }
     }
 
-  final def rollupSubqueries(select: Select): Seq[Select] = {
-    val newFroms = select.from.reduce[Seq[From]](
-      { leftmost => leftmost +: rollupAtomicFrom(leftmost) },
+  final def rollupSubqueries(select: Select): Seq[(Select, Set[RollupId])] = {
+    val newFroms = select.from.reduce[Seq[(From, Set[RollupId])]](
+      { leftmost => (leftmost, Set.empty[RollupId]) +: rollupAtomicFrom(leftmost) },
       { (acc, join) =>
         val Join(joinType, lateral, left, right, on) = join
         for {
-          newLeft <- acc
-          newRight <- right +: rollupAtomicFrom(right)
+          (newLeft, leftRollupIds) <- acc
+          (newRight, rightRollupIds) <- (right, Set.empty) +: rollupAtomicFrom(right)
         } yield {
-          Join(joinType, lateral, newLeft, newRight, on)
+          (Join(joinType, lateral, newLeft, newRight, on), leftRollupIds ++ rightRollupIds)
         }
       }
     )
 
-    newFroms.filterNot(_ == select.from).map { newFrom => select.copy(from = newFrom) }
+    newFroms.
+      filterNot(_._2.isEmpty).
+      map { case (newFrom, rollupIds) =>
+        (select.copy(from = newFrom), rollupIds)
+      }
   }
 
-  private def rollupAtomicFrom(from: AtomicFrom): Seq[AtomicFrom] = {
+  private def rollupAtomicFrom(from: AtomicFrom): Seq[(AtomicFrom, Set[RollupId])] = {
     from match {
       case FromStatement(stmt, label, resourceName, alias) =>
-        rollup(stmt).map(FromStatement(_, label, resourceName, alias))
+        rollup(stmt).map { case (stmt, rollupIds) =>
+          (FromStatement(stmt, label, resourceName, alias), rollupIds)
+        }
       case other =>
         Nil
     }
   }
 
   // see if there are rollups that match `select ${all the columns} from $from`...
-  private def rollupPrefix(from: Join, demandedColumns: Map[Col, CT]): Seq[(FromStatement, Map[Col, VirtCol])] = {
+  private def rollupPrefix(from: Join, demandedColumns: Map[Col, CT]): Seq[(FromStatement, Map[Col, VirtCol], Set[RollupId])] = {
     val ord1 = Ordering[(Int, Int)]
     val ord2 = Ordering[(Int, MT#DatabaseColumnNameImpl)]
     val orderedDemandedColumns: Seq[(Col, CT)] = demandedColumns.toSeq.
@@ -228,8 +240,8 @@ class RollupRewriter[MT <: MetaTypes](
         hint = Set.empty
       )
 
-    rollup(target, prefixesAllowed = false).map { rewritten =>
-      (FromStatement(rewritten, newTable, None, None), columnMap)
+    rollup(target, prefixesAllowed = false).map { case (rewritten, rollupIds) =>
+      (FromStatement(rewritten, newTable, None, None), columnMap, rollupIds)
     }
   }
 
