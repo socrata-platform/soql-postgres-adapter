@@ -254,7 +254,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     analyzeStatement("SELECT trim_trailing('   abc   ')") should equal("""SELECT rtrim(text '   abc   ') AS i1 FROM table1 AS x1""")
   }
 
-//  TODO implement starts_with, contains, pad in redshift
+//  TODO implement starts_with, contains in redshift
   test("starts_with works") {
     println(analyzeStatement("SELECT text, num WHERE starts_with(text, 'o')"))
     /*
@@ -270,20 +270,13 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     * */
   }
 
-test("left_pad works") {
-  println(analyzeStatement("SELECT left_pad(text, 10, 'a'), num"))
-  /*
-  * the sql->soql conversion results in the following query:
-  * SELECT soql_left_pad(x1.text, 10 :: decimal(30, 7), text "a") AS i1, x1.num AS i2 FROM table1 AS x1
-  * but the following is what would work in redshift:
-  * SELECT LPAD(x1.text, 10 :: int, text 'a') AS i1, x1.num AS i2 FROM table1 AS x1
-  *
-  * changes that need to be made:
-  * the second argument of the previous function needs to be parsed as an int (instead of decimal)
-  *
-  * q: soql doesn't allow for the third argument to be missing. in redshift that's a possibility ... is this something that we want to add?
-  * */
-}
+  test("left_pad works") {
+    analyzeStatement("SELECT left_pad(text, 10, 'a'), num") should equal("""SELECT lpad(x1.text, 10 :: decimal(30, 7) :: int, text 'a') AS i1, x1.num AS i2 FROM table1 AS x1""")
+  }
+
+  test("right_pad works") {
+    analyzeStatement("SELECT right_pad(text, 10, 'a'), num") should equal("""SELECT rpad(x1.text, 10 :: decimal(30, 7) :: int, text 'a') AS i1, x1.num AS i2 FROM table1 AS x1""")
+  }
 
   test("chr() works") {
     analyzeStatement("SELECT chr(50.2)") should equal("""SELECT chr(50.2 :: decimal(30, 7) :: int) AS i1 FROM table1 AS x1""")
@@ -322,6 +315,9 @@ test("left_pad works") {
     analyzeStatement("SELECT text, num * 2") should equal("""SELECT x1.text AS i1, (x1.num) * (2 :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
   }
 
+  test("doube times double works") {
+    println(analyzeStatement("SELECT 5.4567 * 9.94837"))
+  }
 
   test("tst") {
     onlyRunIf(Redshift) {
