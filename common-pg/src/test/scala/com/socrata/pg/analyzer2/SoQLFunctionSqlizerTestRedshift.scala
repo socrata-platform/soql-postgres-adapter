@@ -105,6 +105,10 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     sql
   }
 
+  test("foo") {
+    println(analyzeStatement("select signed_magnitude_linear(12, 3)"))
+  }
+
   test("is null works") {
     analyzeStatement("SELECT text, num WHERE text is null") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (x1.text) IS NULL""")
   }
