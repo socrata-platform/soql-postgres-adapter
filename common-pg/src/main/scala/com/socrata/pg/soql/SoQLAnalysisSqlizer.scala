@@ -302,8 +302,6 @@ trait SoQLAnalysisSqlizer {
 
     val joinTableAliases = joins.foldLeft(Map.empty[String, String]) { (acc, j) =>
       j.from.subAnalysis match {
-        case Left(TableName(name, None)) =>
-          acc
         case Left(TableName(name, alias)) =>
           acc + (alias.getOrElse(name) -> name)
         case Right(SubAnalysis(analyses, alias)) =>
@@ -312,35 +310,30 @@ trait SoQLAnalysisSqlizer {
     }
 
     val repByQualifier = rep.groupBy(_._1.qualifier)
-    val repFrom = analysis.from.foldLeft(Map.empty[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]]) { (acc, tableName) =>
-      tableName match {
-        case TableName(name, a@Some(alias)) =>
-          val joinRep = repByQualifier(Some(name))
+    val repFrom = analysis.from.foldLeft(Map.empty[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]]) { case (acc, TableName(name, alias)) =>
+      repByQualifier.get(Some(alias.getOrElse(name))) match {
+        case Some(joinRep) =>
           val newJoinRep = joinRep.map { case (QualifiedUserColumnId(qualifier, userColumnId), sqlColumnRep) =>
-            (QualifiedUserColumnId(a, userColumnId), sqlColumnRep)
+            (QualifiedUserColumnId(None, userColumnId), sqlColumnRep)
           }
           acc ++ newJoinRep
-        case TableName(name, None) =>
-          repByQualifier.get(Some(name)) match {
-            case Some(joinRep) =>
-              val newJoinRep = joinRep.map { case (QualifiedUserColumnId(qualifier, userColumnId), sqlColumnRep) =>
-                (QualifiedUserColumnId(None, userColumnId), sqlColumnRep)
-              }
-              acc ++ newJoinRep
-            case None =>
-              acc
-          }
+        case None =>
+          acc
       }
     }
 
     val repJoins = joins.foldLeft(repFrom) { (acc, join) =>
       join.from.subAnalysis match {
-        case Left(TableName(name, a@Some(alias))) =>
-          val joinRep = repByQualifier(Some(name))
-          val newJoinRep = joinRep.map { case (QualifiedUserColumnId(qualifier, userColumnId), sqlColumnRep) =>
-            (QualifiedUserColumnId(a, userColumnId), sqlColumnRep)
+        case Left(TableName(name, alias)) =>
+          repByQualifier.get(Some(alias.getOrElse(name))) match {
+            case Some(joinRep) =>
+              val newJoinRep = joinRep.map { case (QualifiedUserColumnId(qualifier, userColumnId), sqlColumnRep) =>
+                (QualifiedUserColumnId(Some(alias.getOrElse(name)), userColumnId), sqlColumnRep)
+              }
+              acc ++ newJoinRep
+            case None =>
+              acc
           }
-          acc ++ newJoinRep
         case _ =>
           acc
       }
@@ -409,7 +402,7 @@ trait SoQLAnalysisSqlizer {
           val key = TableName(tableName.name, None)
           val realTableName = tableNames(key)
           val qualifier = tableName.qualifier
-          val tn = if (tableName.alias.isEmpty) realTableName else s"""$realTableName as "$qualifier""""
+          val tn = s"""$realTableName as "$qualifier""""
           (tn, Nil)
       }
 
