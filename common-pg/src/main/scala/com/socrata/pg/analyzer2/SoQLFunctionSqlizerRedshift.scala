@@ -6,6 +6,7 @@ import com.socrata.soql.collection.NonEmptySeq
 import com.socrata.soql.types._
 import com.socrata.soql.functions.SoQLFunctions._
 import com.socrata.soql.functions.{Function, MonomorphicFunction, SoQLTypeInfo}
+import SoQLFunctionSqlizerRedshift._
 
 class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQLType; type ColumnValue = SoQLValue })] extends FuncallSqlizer[MT] {
   import SoQLTypeInfo.hasType
@@ -35,20 +36,20 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
   def numericize(sqlizer: OrdinaryFunctionSqlizer) = ofs { (f, args, ctx) =>
     val e = sqlizer(f, args, ctx)
     assert(e.typ == SoQLNumber)
-    ExprSql(e.compressed.sql.parenthesized +#+ d":: FLOAT8", f)
+    ExprSql(e.compressed.sql.parenthesized +#+ d":: $numericType", f)
   }
 
   // need to change this
   def numericize(sqlizer: AggregateFunctionSqlizer) = afs { (f, args, filter, ctx) =>
     val e = sqlizer(f, args, filter, ctx)
     assert(e.typ == SoQLNumber)
-    ExprSql(e.compressed.sql.parenthesized +#+ d":: numeric", f)
+    ExprSql(e.compressed.sql.parenthesized +#+ d":: $numericType", f)
   }
 
   def numericize(sqlizer: WindowedFunctionSqlizer) = wfs { (f, args, filter, partitionBy, orderBy, ctx) =>
     val e = sqlizer(f, args, filter, partitionBy, orderBy, ctx)
     assert(e.typ == SoQLNumber)
-    ExprSql(e.compressed.sql.parenthesized +#+ d":: numeric", f)
+    ExprSql(e.compressed.sql.parenthesized +#+ d":: $numericType", f)
   }
 
   def sqlizeNormalOrdinaryWithWrapper(name: String, wrapper: String) = ofs { (f, args, ctx) =>
@@ -718,4 +719,8 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
     assert(e.function.needsWindow || e.function.isAggregate)
     windowedFunctionMap(e.function.function.identity)(e, args, filter, partitionBy, orderBy, ctx)
   }
+}
+
+object SoQLFunctionSqlizerRedshift {
+    val numericType = "decimal(30, 7)"
 }
