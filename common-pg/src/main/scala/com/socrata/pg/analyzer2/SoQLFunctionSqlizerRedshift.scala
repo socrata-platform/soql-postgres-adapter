@@ -10,14 +10,13 @@ import com.socrata.soql.functions.{Function, MonomorphicFunction, SoQLTypeInfo}
 class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQLType; type ColumnValue = SoQLValue })] extends FuncallSqlizer[MT] {
   import SoQLTypeInfo.hasType
 
-  case class Arg(i: Int)
   implicit class ExprInterpolator(sc: StringContext) {
     def expr(args: Any*): OrdinaryFunctionSqlizer =
       ofs { (f, runtimeArgs, ctx) =>
         assert(args.length >= f.function.minArity)
         assert(f.function.allParameters.startsWith(runtimeArgs.map(_.typ)))
 
-        val expandedRuntimeArgs = args.map(_.asInstanceOf[Arg]).map { case Arg(n) => runtimeArgs.toList(n)}
+        val expandedRuntimeArgs = args.map(_.asInstanceOf[Int]).map(n => runtimeArgs.toList(n))
 
       val sql = Doc(sc.s(expandedRuntimeArgs.map(_.compressed.sql): _*))
       ExprSql(sql, f)
@@ -428,10 +427,13 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       Floor -> sqlizeNormalOrdinaryFuncall("floor"),
       Round -> sqlizeNormalOrdinaryFuncall("soql_round"),
       WidthBucket -> numericize(sqlizeNormalOrdinaryFuncall("width_bucket")),
-      SignedMagnitude10 -> expr"(sign(${Arg(0)}) * length(floor(abs(${Arg(0)})) :: text)) :: numeric",
+      SignedMagnitude10 ->
+        comment(expr"(sign(${0}) * length(floor(abs(${0})) :: text)) :: numeric",
+          comment = "soql_signed_magnitude_10"
+        ),
       SignedMagnitudeLinear ->
-        comment(expr"(case when ${Arg(1)} = 1 then floor(${Arg(0)}) else sign(${Arg(0)}) * floor(abs(${Arg(0)})/${Arg(1)} + 1) end) :: numeric",
-          comment = "magnitude linear"
+        comment(expr"(case when ${1} = 1 then floor(${0}) else sign(${0}) * floor(abs(${0})/${1} + 1) end) :: numeric",
+          comment = "soql_signed_magnitude_linear"
         ),
 
       // Timestamps
