@@ -14,6 +14,7 @@ import com.socrata.soql.functions._
 import com.typesafe.config.ConfigFactory
 import com.socrata.pg.config.StoreConfig
 import com.socrata.datacoordinator.common._
+import com.socrata.datacoordinator.secondary.DatasetInfo
 
 object SoQLFunctionSqlizerTestRedshift {
   final abstract class TestMT extends MetaTypes {
@@ -49,7 +50,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     val cryptProvider = obfuscation.CryptProvider.zeros
 
     override val repFor = new SoQLRepProviderRedshift[TestMT](_ => Some(cryptProvider), namespace, Map.empty, Map.empty) {
-      def mkStringLiteral(s: String) = Doc(JString(s).toString)
+      def mkStringLiteral(string: String) = Doc(s"'$string'")
     }
 
     override val funcallSqlizer = new SoQLFunctionSqlizerRedshift
@@ -100,6 +101,13 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     if(useSelectListReferences) analysis = analysis.useSelectListReferences
 
     val sql = sqlizer(analysis.statement).sql.layoutSingleLine.toString
+
+    onlyRunIf(Redshift) {
+      withDb { conn =>
+        val (pgu, copyInfo, sLoader) = createTable(conn, Some(DatasetInfo("oi", "oi", "super secret".getBytes(), Some("ooh"))))
+        println(copyInfo)
+      }
+    }
 
     sql
   }
@@ -327,12 +335,6 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
   test("floor works") {
     analyzeStatement("SELECT floor(9.89)") should equal("""SELECT floor(9.89 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
-  }
-
-  test("tst") {
-    onlyRunIf(Redshift) {
-      withPgu { n => ???}
-    }
   }
 
   test("basic search") {
