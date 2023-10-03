@@ -102,11 +102,12 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
     val sql = sqlizer(analysis.statement).sql.layoutSingleLine.toString
 
+    println(sql)
     sql
   }
 
   test("foo") {
-    println(analyzeStatement("select signed_magnitude_linear(12, 3) + 18"))
+    analyzeStatement("select signed_magnitude_linear(12, 3) + 18")
   }
 
   test("is null works") {
