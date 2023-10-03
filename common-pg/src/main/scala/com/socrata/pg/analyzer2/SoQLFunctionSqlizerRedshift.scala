@@ -28,6 +28,11 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
   def wrap(e: Expr, exprSql: ExprSql, wrapper: String, additionalWrapperArgs: Doc*) =
     ExprSql((exprSql.compressed.sql +: additionalWrapperArgs).funcall(Doc(wrapper)), e)
 
+  def comment(sqlizer: OrdinaryFunctionSqlizer, comment: String) = ofs { (f, args, ctx) =>
+    val e = sqlizer(f, args, ctx)
+    ExprSql(d"/*" +#+ Doc(comment) +#+ Doc("*/") +#+ e.compressed.sql.parenthesized, f)
+  }
+
   def numericize(sqlizer: OrdinaryFunctionSqlizer) = ofs { (f, args, ctx) =>
     val e = sqlizer(f, args, ctx)
     assert(e.typ == SoQLNumber)
@@ -425,7 +430,9 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       WidthBucket -> numericize(sqlizeNormalOrdinaryFuncall("width_bucket")),
       SignedMagnitude10 -> expr"(sign(${Arg(0)}) * length(floor(abs(${Arg(0)})) :: text)) :: numeric",
       SignedMagnitudeLinear ->
-        expr"(case when ${Arg(1)} = 1 then floor(${Arg(0)}) else sign(${Arg(0)}) * floor(abs(${Arg(0)})/${Arg(1)} + 1) end) :: numeric",
+        comment(expr"(case when ${Arg(1)} = 1 then floor(${Arg(0)}) else sign(${Arg(0)}) * floor(abs(${Arg(0)})/${Arg(1)} + 1) end) :: numeric",
+          comment = "magnitude linear"
+        ),
 
       // Timestamps
       ToFloatingTimestamp -> sqlizeBinaryOp("at time zone"),

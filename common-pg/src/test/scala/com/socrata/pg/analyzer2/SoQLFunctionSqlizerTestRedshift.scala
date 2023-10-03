@@ -106,7 +106,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   }
 
   test("foo") {
-    println(analyzeStatement("select signed_magnitude_linear(12, 3)"))
+    println(analyzeStatement("select signed_magnitude_linear(12, 3) + 18"))
   }
 
   test("is null works") {
