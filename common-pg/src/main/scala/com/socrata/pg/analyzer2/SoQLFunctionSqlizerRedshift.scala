@@ -306,7 +306,6 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
 
   val ordinaryFunctionMap = (
     Seq[(Function[CT], OrdinaryFunctionSqlizer)](
-//    is tested
       IsNull -> sqlizeIsNull,
       IsNotNull -> sqlizeIsNotNull,
 
@@ -343,12 +342,10 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       Trim -> sqlizeNormalOrdinaryFuncall("trim"),
       TrimLeading -> sqlizeNormalOrdinaryFuncall("ltrim"),
       TrimTrailing -> sqlizeNormalOrdinaryFuncall("rtrim"),
-      //    needs implementation
       StartsWith -> sqlizeNormalOrdinaryFuncall("starts_with"),
       CaselessStartsWith -> uncased(sqlizeNormalOrdinaryFuncall("starts_with")),
       Contains -> sqlizeNormalOrdinaryFuncall("soql_contains"),
       CaselessContains -> uncased(sqlizeNormalOrdinaryFuncall("soql_contains")),
-//      tested
       LeftPad -> sqlizeNormalOrdinaryFuncall("lpad",
         castType = (_, idx) => idx match {
           case 1 => Some(Doc("int"))
@@ -392,7 +389,6 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       BinaryPlus -> sqlizeBinaryOp("+"),
       BinaryMinus -> sqlizeBinaryOp("-"),
       TimesNumNum -> sqlizeBinaryOp("*"),
-      //    not tested yet
       TimesDoubleDouble -> sqlizeBinaryOp("*"),
       TimesMoneyNum -> sqlizeBinaryOp("*"),
       TimesNumMoney -> sqlizeBinaryOp("*"),

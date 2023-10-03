@@ -254,22 +254,6 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     analyzeStatement("SELECT trim_trailing('   abc   ')") should equal("""SELECT rtrim(text '   abc   ') AS i1 FROM table1 AS x1""")
   }
 
-//  TODO implement starts_with, contains in redshift
-  test("starts_with works") {
-    println(analyzeStatement("SELECT text, num WHERE starts_with(text, 'o')"))
-    /*
-    * starts_with isn't supported in redshift
-    * the workaround would be to use LEFT(column_name, length of matching string) == matching string
-    * */
-  }
-
-  test("contains works"){
-    println(analyzeStatement("SELECT text, num WHERE contains(text, 'a')"))
-    /*
-    * contains is not supported in redshift, instead we can use like '%matching_string%'
-    * */
-  }
-
   test("left_pad works") {
     analyzeStatement("SELECT left_pad(text, 10, 'a'), num") should equal("""SELECT lpad(x1.text, 10 :: decimal(30, 7) :: int, text 'a') AS i1, x1.num AS i2 FROM table1 AS x1""")
   }
@@ -302,7 +286,6 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     analyzeStatement("SELECT text, + num") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1""")
   }
 
-//  when numbers are casted as decimal(30, 7) that also means that zero is displayed as 0E-7. would that be an issue for our customers?
   test("binary minus works") {
     analyzeStatement("SELECT text, num - 1") should equal("""SELECT x1.text AS i1, (x1.num) - (1 :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
   }
@@ -316,7 +299,35 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   }
 
   test("doube times double works") {
-    println(analyzeStatement("SELECT 5.4567 * 9.94837"))
+    analyzeStatement("SELECT 5.4567 * 9.94837") should equal("""SELECT (5.4567 :: decimal(30, 7)) * (9.94837 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
+  }
+
+  test("division works") {
+    analyzeStatement("SELECT 6.4354 / 3.423") should equal("""SELECT (6.4354 :: decimal(30, 7)) / (3.423 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
+  }
+
+  test("exponents work") {
+    analyzeStatement("SELECT 7.4234 ^ 2") should equal("""SELECT (7.4234 :: decimal(30, 7)) ^ (2 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
+  }
+
+  test("modulo works") {
+    analyzeStatement("SELECT 6.435 % 3.432") should equal("""SELECT (6.435 :: decimal(30, 7)) % (3.432 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
+  }
+
+  test("ln works") {
+    analyzeStatement("SELECT ln(16)") should equal("""SELECT ln(16 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
+  }
+
+  test("absolute works") {
+    analyzeStatement("SELECT abs(-1.234)") should equal("""SELECT abs(-1.234 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
+  }
+
+  test("ceil() works") {
+    analyzeStatement("SELECT ceil(4.234)") should equal("""SELECT ceil(4.234 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
+  }
+
+  test("floor works") {
+    analyzeStatement("SELECT floor(9.89)") should equal("""SELECT floor(9.89 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
   }
 
   test("tst") {
