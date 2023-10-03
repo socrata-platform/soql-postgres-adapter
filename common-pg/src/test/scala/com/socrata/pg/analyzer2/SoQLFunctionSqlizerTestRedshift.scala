@@ -102,13 +102,6 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
     val sql = sqlizer(analysis.statement).sql.layoutSingleLine.toString
 
-    onlyRunIf(Redshift) {
-      withDb { conn =>
-        val (pgu, copyInfo, sLoader) = createTable(conn, Some(DatasetInfo("oi", "oi", "super secret".getBytes(), Some("ooh"))))
-        println(copyInfo)
-      }
-    }
-
     sql
   }
 
