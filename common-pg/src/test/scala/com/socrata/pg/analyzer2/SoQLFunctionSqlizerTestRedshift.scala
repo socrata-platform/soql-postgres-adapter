@@ -49,7 +49,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     val cryptProvider = obfuscation.CryptProvider.zeros
 
     override val repFor = new SoQLRepProviderRedshift[TestMT](_ => Some(cryptProvider), namespace, Map.empty, Map.empty) {
-      def mkStringLiteral(s: String) = Doc(JString(s).toString)
+      def mkStringLiteral(s: String) = d"'"++Doc(s)++d"'"
     }
 
     override val funcallSqlizer = new SoQLFunctionSqlizerRedshift
@@ -364,6 +364,161 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     analyze("date_extract_d('2001-01-01T12:34:56.789')") should equal ("""extract(day from (timestamp without time zone "2001-01-01T12:34:56.789"))""")
   }
 
+  test("ToFloatingTimestamp") {
+    analyze("""to_floating_timestamp("2022-12-31T23:59:59Z", "America/New_York")""") should equal(
+      """(timestamp with time zone '2022-12-31T23:59:59.000Z') at time zone (text 'America/New_York')"""
+    )
+  }
+
+  test("FloatingTimeStampTruncYmd") {
+    analyze("date_trunc_ymd('2022-12-31T23:59:59')") should equal(
+      """date_trunc('day', timestamp without time zone '2022-12-31T23:59:59.000')"""
+    )
+  }
+
+  test("FloatingTimeStampTruncYm") {
+    analyze("date_trunc_ym('2022-12-31T23:59:59')") should equal(
+      """date_trunc('month', timestamp without time zone '2022-12-31T23:59:59.000')"""
+    )
+  }
+
+  test("FloatingTimeStampTruncY") {
+    analyze("date_trunc_y('2022-12-31T23:59:59')") should equal(
+      """date_trunc('year', timestamp without time zone '2022-12-31T23:59:59.000')"""
+    )
+  }
+
+  test("FixedTimeStampZTruncYmd") {
+    analyze("datez_trunc_ymd('2022-12-31T23:59:59Z')") should equal(
+      """date_trunc('day', timestamp with time zone '2022-12-31T23:59:59.000Z')"""
+    )
+  }
+
+  test("FixedTimeStampZTruncYm") {
+    analyze("datez_trunc_ym('2022-12-31T23:59:59Z')") should equal(
+      """date_trunc('month', timestamp with time zone '2022-12-31T23:59:59.000Z')"""
+    )
+  }
+
+  test("FixedTimeStampZTruncY") {
+    analyze("datez_trunc_y('2022-12-31T23:59:59Z')") should equal(
+      """date_trunc('year', timestamp with time zone '2022-12-31T23:59:59.000Z')"""
+    )
+  }
+
+  test("FixedTimeStampTruncYmdAtTimeZone") {
+    analyze("date_trunc_ymd('2022-12-31T23:59:59Z', 'America/New_York')") should equal(
+      """date_trunc('day', (timestamp with time zone '2022-12-31T23:59:59.000Z') at time zone (text 'America/New_York'))"""
+    )
+  }
+
+  test("FixedTimeStampTruncYmAtTimeZone") {
+    analyze("date_trunc_ym('2022-12-31T23:59:59Z', 'America/New_York')") should equal(
+      """date_trunc('month', (timestamp with time zone '2022-12-31T23:59:59.000Z') at time zone (text 'America/New_York'))"""
+    )
+  }
+
+  test("FixedTimeStampTruncYAtTimeZone") {
+    analyze("date_trunc_y('2022-12-31T23:59:59Z', 'America/New_York')") should equal(
+      """date_trunc('year', (timestamp with time zone '2022-12-31T23:59:59.000Z') at time zone (text 'America/New_York'))"""
+    )
+  }
+
+  test("FloatingTimeStampExtractY") {
+    analyze("date_extract_y('2022-12-31T23:59:59')") should equal(
+      """extract(year from timestamp without time zone '2022-12-31T23:59:59.000')"""
+    )
+  }
+
+  test("FloatingTimeStampExtractM") {
+    analyze("date_extract_m('2022-12-31T23:59:59')") should equal(
+      """extract(month from timestamp without time zone '2022-12-31T23:59:59.000')"""
+    )
+  }
+
+  test("FloatingTimeStampExtractD") {
+    analyze("date_extract_d('2022-12-31T23:59:59')") should equal(
+      """extract(day from timestamp without time zone '2022-12-31T23:59:59.000')"""
+    )
+  }
+
+  test("FloatingTimeStampExtractHh") {
+    analyze("date_extract_hh('2022-12-31T23:59:59')") should equal(
+      """extract(hour from timestamp without time zone '2022-12-31T23:59:59.000')"""
+    )
+  }
+
+  test("FloatingTimeStampExtractMm") {
+    analyze("date_extract_mm('2022-12-31T23:59:59')") should equal(
+      """extract(minute from timestamp without time zone '2022-12-31T23:59:59.000')"""
+    )
+  }
+
+  test("FloatingTimeStampExtractSs") {
+    analyze("date_extract_ss('2022-12-31T23:59:59')") should equal(
+      """extract(second from timestamp without time zone '2022-12-31T23:59:59.000')"""
+    )
+  }
+
+  test("FloatingTimeStampExtractDow") {
+    analyze("date_extract_dow('2022-12-31T23:59:59')") should equal(
+      """extract(dayofweek from timestamp without time zone '2022-12-31T23:59:59.000')"""
+    )
+  }
+
+  test("FloatingTimeStampExtractWoy") {
+    analyze("date_extract_woy('2022-12-31T23:59:59')") should equal(
+      """extract(week from timestamp without time zone '2022-12-31T23:59:59.000')"""
+    )
+  }
+
+  test("FloatingTimestampExtractIsoY") {
+    analyze("date_extract_iso_y('2022-12-31T23:59:59')") should equal(
+      """extract(year from timestamp without time zone '2022-12-31T23:59:59.000')"""
+    )
+  }
+
+  test("EpochSeconds") {
+    analyze("epoch_seconds('2022-12-31T23:59:59Z')") should equal(
+      """extract(epoch from timestamp with time zone '2022-12-31T23:59:59.000Z')"""
+    )
+  }
+
+  test("TimeStampDiffD") {
+    analyze("date_diff_d('2022-12-31T23:59:59Z', '2022-01-01T00:00:00Z')") should equal(
+      """datediff(day, timestamp with time zone '2022-12-31T23:59:59.000Z' at time zone (text 'UTC'), timestamp with time zone '2022-01-01T00:00:00.000Z' at time zone (text 'UTC'))"""
+    )
+  }
+
+
+  //TODO need to handle period -> interval
+  test("TimeStampAdd") {
+    analyze("date_add('2022-12-31T23:59:59Z', 'P1DT1H')") should equal(
+      """dateadd(week, 5, timestamp with time zone '2022-12-31T23:59:59.000Z' at time zone (text 'UTC'))"""
+    )
+  }
+
+  //TODO need to handle period -> interval
+  test("TimeStampPlus") {
+    analyze("select timestamp_plus('2022-12-31T23:59:59', interval '1 day')") should equal(
+      """select (timestamp without time zone '2022-12-31T23:59:59') + interval '1 day'"""
+    )
+  }
+
+  //TODO need to handle period -> interval
+  test("TimeStampMinus") {
+    analyze("select timestamp_minus('2022-12-31T23:59:59', interval '1 day')") should equal(
+      """select (timestamp without time zone '2022-12-31T23:59:59') - interval '1 day'"""
+    )
+  }
+
+  test("GetUtcDate") {
+    analyze("get_utc_date()") should equal(
+      """current_date at time zone 'UTC'"""
+    )
+  }
+
+
   test("Functions are correctly classified") {
     // The "contains" check is because of the TsVector fake functions
     // that search gets rewritten into
@@ -398,4 +553,6 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
       }
     }
   }
+
+
 }
