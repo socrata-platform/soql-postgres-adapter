@@ -30,7 +30,7 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
 
   def comment(sqlizer: OrdinaryFunctionSqlizer, comment: String) = ofs { (f, args, ctx) =>
     val e = sqlizer(f, args, ctx)
-    ExprSql(d"/*" +#+ Doc(comment) +#+ Doc("*/") +#+ e.compressed.sql.parenthesized, f)
+    ExprSql((d"/*" +#+ Doc(comment) +#+ Doc("*/") +#+ e.compressed.sql).parenthesized, f)
   }
 
   def numericize(sqlizer: OrdinaryFunctionSqlizer) = ofs { (f, args, ctx) =>

@@ -456,6 +456,13 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     )
   }
 
+  test("SignedMagnitude10") {
+    analyzeStatement("select signed_magnitude_10(num)") should equal("SELECT (/* soql_signed_magnitude_10 */ (sign(x1.num) * length(floor(abs(x1.num)) :: text)) :: numeric) AS i1 FROM table1 AS x1")
+  }
+
+  test("SignedMagnitudeLinear") {
+    analyzeStatement("select signed_magnitude_Linear(num, 8)") should equal("SELECT (/* soql_signed_magnitude_linear */ (case when 8 :: decimal(30, 7) = 1 then floor(x1.num) else sign(x1.num) * floor(abs(x1.num)/8 :: decimal(30, 7) + 1) end) :: numeric) AS i1 FROM table1 AS x1")
+  }
 
   //TODO need to handle period -> interval
   ignore("TimeStampAdd") {
