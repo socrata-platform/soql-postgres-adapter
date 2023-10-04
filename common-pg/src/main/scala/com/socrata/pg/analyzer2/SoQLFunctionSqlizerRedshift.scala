@@ -6,30 +6,50 @@ import com.socrata.soql.collection.NonEmptySeq
 import com.socrata.soql.types._
 import com.socrata.soql.functions.SoQLFunctions._
 import com.socrata.soql.functions.{Function, MonomorphicFunction, SoQLTypeInfo}
+import SoQLFunctionSqlizerRedshift._
 
 class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQLType; type ColumnValue = SoQLValue })] extends FuncallSqlizer[MT] {
   import SoQLTypeInfo.hasType
 
+  implicit class ExprInterpolator(sc: StringContext) {
+    def expr(args: Any*): OrdinaryFunctionSqlizer =
+      ofs { (f, runtimeArgs, ctx) =>
+        assert(args.length >= f.function.minArity)
+        assert(f.function.allParameters.startsWith(runtimeArgs.map(_.typ)))
+
+        val expandedRuntimeArgs = args.map(_.asInstanceOf[Int]).map(n => runtimeArgs.toList(n))
+
+      val sql = Doc(sc.s(expandedRuntimeArgs.map(_.compressed.sql): _*))
+      ExprSql(sql, f)
+    }
+  }
+
+
   def wrap(e: Expr, exprSql: ExprSql, wrapper: String, additionalWrapperArgs: Doc*) =
     ExprSql((exprSql.compressed.sql +: additionalWrapperArgs).funcall(Doc(wrapper)), e)
+
+  def comment(sqlizer: OrdinaryFunctionSqlizer, comment: String) = ofs { (f, args, ctx) =>
+    val e = sqlizer(f, args, ctx)
+    ExprSql(d"/*" +#+ Doc(comment) +#+ Doc("*/") +#+ e.compressed.sql.parenthesized, f)
+  }
 
   def numericize(sqlizer: OrdinaryFunctionSqlizer) = ofs { (f, args, ctx) =>
     val e = sqlizer(f, args, ctx)
     assert(e.typ == SoQLNumber)
-    ExprSql(e.compressed.sql.parenthesized +#+ d":: FLOAT8", f)
+    ExprSql(e.compressed.sql.parenthesized +#+ d":: $numericType", f)
   }
 
   // need to change this
   def numericize(sqlizer: AggregateFunctionSqlizer) = afs { (f, args, filter, ctx) =>
     val e = sqlizer(f, args, filter, ctx)
     assert(e.typ == SoQLNumber)
-    ExprSql(e.compressed.sql.parenthesized +#+ d":: numeric", f)
+    ExprSql(e.compressed.sql.parenthesized +#+ d":: $numericType", f)
   }
 
   def numericize(sqlizer: WindowedFunctionSqlizer) = wfs { (f, args, filter, partitionBy, orderBy, ctx) =>
     val e = sqlizer(f, args, filter, partitionBy, orderBy, ctx)
     assert(e.typ == SoQLNumber)
-    ExprSql(e.compressed.sql.parenthesized +#+ d":: numeric", f)
+    ExprSql(e.compressed.sql.parenthesized +#+ d":: $numericType", f)
   }
 
   def sqlizeNormalOrdinaryWithWrapper(name: String, wrapper: String) = ofs { (f, args, ctx) =>
@@ -306,7 +326,6 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
 
   val ordinaryFunctionMap = (
     Seq[(Function[CT], OrdinaryFunctionSqlizer)](
-//    is tested
       IsNull -> sqlizeIsNull,
       IsNotNull -> sqlizeIsNotNull,
 
@@ -340,7 +359,6 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       Upper -> sqlizeNormalOrdinaryFuncall("upper"),
       Length -> sqlizeNormalOrdinaryFuncall("length"),
       Replace -> sqlizeNormalOrdinaryFuncall("replace"),
-      //    not tested yet
       Trim -> sqlizeNormalOrdinaryFuncall("trim"),
       TrimLeading -> sqlizeNormalOrdinaryFuncall("ltrim"),
       TrimTrailing -> sqlizeNormalOrdinaryFuncall("rtrim"),
@@ -348,8 +366,18 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       CaselessStartsWith -> uncased(sqlizeNormalOrdinaryFuncall("starts_with")),
       Contains -> sqlizeNormalOrdinaryFuncall("soql_contains"),
       CaselessContains -> uncased(sqlizeNormalOrdinaryFuncall("soql_contains")),
-      LeftPad -> sqlizeNormalOrdinaryFuncall("soql_left_pad"),
-      RightPad -> sqlizeNormalOrdinaryFuncall("soql_right_pad"),
+      LeftPad -> sqlizeNormalOrdinaryFuncall("lpad",
+        castType = (_, idx) => idx match {
+          case 1 => Some(Doc("int"))
+          case _ => None
+        }
+      ),
+      RightPad -> sqlizeNormalOrdinaryFuncall("rpad",
+        castType = (_, idx) => idx match {
+          case 1 => Some(Doc("int"))
+          case _ => None
+        }
+      ),
       Chr -> sqlizeNormalOrdinaryFuncall("chr",
         castType = (_, idx) => idx match {
           case 0 => Some(Doc("int"))
@@ -362,8 +390,19 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
           case _ => None
         }
       ),
-      Substr3 -> sqlizeNormalOrdinaryFuncall("soql_substring"),
-      SplitPart -> sqlizeNormalOrdinaryFuncall("soql_split_part"),
+      Substr3 -> sqlizeNormalOrdinaryFuncall("substring",
+        castType = (_, idx) => idx match {
+          case 1 => Some(Doc("int"))
+          case 2 => Some(Doc("int"))
+          case _ => None
+        }
+      ),
+      SplitPart -> sqlizeNormalOrdinaryFuncall("split_part",
+        castType = (_, idx) => idx match {
+          case 2 => Some(Doc("int"))
+          case _ => None
+        }
+      ),
 
       UnaryMinus -> sqlizeNegate,
       UnaryPlus -> sqlizeAntinegate,
@@ -389,8 +428,14 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       Floor -> sqlizeNormalOrdinaryFuncall("floor"),
       Round -> sqlizeNormalOrdinaryFuncall("soql_round"),
       WidthBucket -> numericize(sqlizeNormalOrdinaryFuncall("width_bucket")),
-      SignedMagnitude10 -> sqlizeNormalOrdinaryFuncall("soql_signed_magnitude_10"),
-      SignedMagnitudeLinear -> sqlizeNormalOrdinaryFuncall("soql_signed_magnitude_linear"),
+      SignedMagnitude10 ->
+        comment(expr"(sign(${0}) * length(floor(abs(${0})) :: text)) :: numeric",
+          comment = "soql_signed_magnitude_10"
+        ),
+      SignedMagnitudeLinear ->
+        comment(expr"(case when ${1} = 1 then floor(${0}) else sign(${0}) * floor(abs(${0})/${1} + 1) end) :: numeric",
+          comment = "soql_signed_magnitude_linear"
+        ),
 
       // Timestamps
       ToFloatingTimestamp -> sqlizeBinaryOp("at time zone"),
@@ -688,4 +733,8 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
     assert(e.function.needsWindow || e.function.isAggregate)
     windowedFunctionMap(e.function.function.identity)(e, args, filter, partitionBy, orderBy, ctx)
   }
+}
+
+object SoQLFunctionSqlizerRedshift {
+    val numericType = "decimal(30, 7)"
 }

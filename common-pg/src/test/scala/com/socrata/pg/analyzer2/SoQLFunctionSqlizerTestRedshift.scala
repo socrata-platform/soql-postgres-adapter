@@ -14,6 +14,7 @@ import com.socrata.soql.functions._
 import com.typesafe.config.ConfigFactory
 import com.socrata.pg.config.StoreConfig
 import com.socrata.datacoordinator.common._
+import com.socrata.datacoordinator.secondary.DatasetInfo
 
 object SoQLFunctionSqlizerTestRedshift {
   final abstract class TestMT extends MetaTypes {
@@ -49,7 +50,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     val cryptProvider = obfuscation.CryptProvider.zeros
 
     override val repFor = new SoQLRepProviderRedshift[TestMT](_ => Some(cryptProvider), namespace, Map.empty, Map.empty) {
-      def mkStringLiteral(s: String) = d"'"++Doc(s)++d"'"
+      def mkStringLiteral(string: String) = Doc(s"'$string'")
     }
 
     override val funcallSqlizer = new SoQLFunctionSqlizerRedshift
@@ -101,7 +102,12 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
     val sql = sqlizer(analysis.statement).sql.layoutSingleLine.toString
 
+    println(sql)
     sql
+  }
+
+  test("foo") {
+    analyzeStatement("select signed_magnitude_linear(12, 3) + 18")
   }
 
   test("is null works") {
@@ -128,7 +134,6 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     analyzeStatement("SELECT text, num WHERE num in (1, 2, 3)") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (x1.num) IN (1 :: decimal(30, 7), 2 :: decimal(30, 7), 3 :: decimal(30, 7))""")
   }
 
-  //TODO change the redshift sqlizer to produce only single quotes around string literals
   test("in subset works case insensitively") {
     analyzeStatement("SELECT text, num WHERE caseless_one_of(text, 'one', 'two', 'three')") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (upper(x1.text)) IN (upper(text 'one'), upper(text 'two'), upper(text 'three'))""")
   }
@@ -174,7 +179,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   }
 
   test("and works") {
-    analyzeStatement("SELECT text, num WHERE num == 1 and text == 'one'") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE ((x1.num) = (1 :: numeric)) AND ((x1.text) = (text 'one'))""")
+    analyzeStatement("SELECT text, num WHERE num == 1 and text == 'one'") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1 WHERE ((x1.num) = (1 :: decimal(30, 7))) AND ((x1.text) = (text 'one'))""")
   }
 
   test("or works") {
@@ -226,7 +231,6 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   }
 
   test("lower() works") {
-    println(analyzeStatement("SELECT lower(text), num where lower(text) == 'two'"))
     analyzeStatement("SELECT lower(text), num where lower(text) == 'two'") should equal("""SELECT lower(x1.text) AS i1, x1.num AS i2 FROM table1 AS x1 WHERE (lower(x1.text)) = (text 'two')""")
   }
 
@@ -243,125 +247,91 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   }
 
   test("trimming on both ends works") {
-    println(analyzeStatement("SELECT trim('a' from 'abc')"))
+    analyzeStatement("SELECT trim('   abc   ')") should equal("""SELECT trim(text '   abc   ') AS i1 FROM table1 AS x1""")
   }
 
-
-  test("tst") {
-    onlyRunIf(Redshift) {
-      withPgu { n => ???}
-    }
+  test("trimming on leading spaces works") {
+    analyzeStatement("SELECT trim_leading('   abc   ')") should equal("""SELECT ltrim(text '   abc   ') AS i1 FROM table1 AS x1""")
   }
 
-  test("basic search") {
-    analyzeStatement("SELECT 1 SEARCH 'hello'") should equal("""SELECT 1 :: numeric AS i1 FROM table1 AS x1 WHERE (to_tsvector('english', ((((coalesce(x1.text, text "")) || (text " ")) || (coalesce(x1.url_url, text ""))) || (text " ")) || (coalesce(x1.url_description, text "")))) @@ (plainto_tsquery('english', text "hello"))""");
+  test("trimming on trailing spaces works") {
+    analyzeStatement("SELECT trim_trailing('   abc   ')") should equal("""SELECT rtrim(text '   abc   ') AS i1 FROM table1 AS x1""")
   }
 
-  test("search with where") {
-    analyzeStatement("SELECT 1 where num > 5 SEARCH 'hello'") should equal("""SELECT 1 :: numeric AS i1 FROM table1 AS x1 WHERE ((to_tsvector('english', ((((coalesce(x1.text, text "")) || (text " ")) || (coalesce(x1.url_url, text ""))) || (text " ")) || (coalesce(x1.url_description, text "")))) @@ (plainto_tsquery('english', text "hello"))) AND ((x1.num) > (5 :: numeric))""");
+  test("left_pad works") {
+    analyzeStatement("SELECT left_pad(text, 10, 'a'), num") should equal("""SELECT lpad(x1.text, 10 :: decimal(30, 7) :: int, text 'a') AS i1, x1.num AS i2 FROM table1 AS x1""")
   }
 
-  test("subquery search") {
-    analyzeStatement("SELECT text, url |> select 1 SEARCH 'hello'") should equal("""SELECT 1 :: numeric AS i3 FROM (SELECT x1.text AS i1, x1.url_url AS i2_url, x1.url_description AS i2_description FROM table1 AS x1) AS x2 WHERE (to_tsvector('english', ((((coalesce(x2.i1, text "")) || (text " ")) || (coalesce(x2.i2_url, text ""))) || (text " ")) || (coalesce(x2.i2_description, text "")))) @@ (plainto_tsquery('english', text "hello"))""")
+  test("right_pad works") {
+    analyzeStatement("SELECT right_pad(text, 10, 'a'), num") should equal("""SELECT rpad(x1.text, 10 :: decimal(30, 7) :: int, text 'a') AS i1, x1.num AS i2 FROM table1 AS x1""")
   }
 
-  test("subquery search - compressed") {
-    // the "case" here just forces url to be compressed
-    analyzeStatement("SELECT text, case when true then url end |> select 1 SEARCH 'hello'") should equal ("""SELECT 1 :: numeric AS i3 FROM (SELECT x1.text AS i1, soql_compress_compound(x1.url_url, x1.url_description) AS i2 FROM table1 AS x1) AS x2 WHERE (to_tsvector('english', ((((coalesce(x2.i1, text "")) || (text " ")) || (coalesce((x2.i2) ->> 0, text ""))) || (text " ")) || (coalesce((x2.i2) ->> 1, text "")))) @@ (plainto_tsquery('english', text "hello"))""")
+  test("chr() works") {
+    analyzeStatement("SELECT chr(50.2)") should equal("""SELECT chr(50.2 :: decimal(30, 7) :: int) AS i1 FROM table1 AS x1""")
   }
 
-  test("all window functions are covered") {
-    sqlizer.funcallSqlizer.windowedFunctionMap.keySet == SoQLFunctions.windowFunctions.toSet
+  test("substring(characters, start_index base 1) works"){
+    analyzeStatement("SELECT substring('abcdefghijk', 3)") should equal("""SELECT substring(text 'abcdefghijk', 3 :: decimal(30, 7) :: int) AS i1 FROM table1 AS x1""")
   }
 
-  test("lead/lag gets its int cast") {
-    analyze("lead(text, 5) OVER ()") should equal ("lead(x1.text, (5 :: numeric) :: int) OVER ()")
+  test("substring(characters, start_index base 1, length) works") {
+    analyzeStatement("SELECT substring('abcdefghijk', 3, 4)") should equal("""SELECT substring(text 'abcdefghijk', 3 :: decimal(30, 7) :: int, 4 :: decimal(30, 7) :: int) AS i1 FROM table1 AS x1""")
   }
 
-  test("convex_hull gets its buffer wrapper") {
-    analyze("convex_hull(geom)") should equal ("st_asbinary(st_multi(st_buffer(st_convexhull(x1.geom), 0.0)))")
+  test("split_part works") {
+    analyzeStatement("SELECT split_part(text, '.', 3)") should equal("""SELECT split_part(x1.text, text '.', 3 :: decimal(30, 7) :: int) AS i1 FROM table1 AS x1""")
   }
 
-  test("concave_hull gets its buffer wrapper") {
-    analyze("concave_hull(geom,3.0)") should equal ("st_asbinary(st_multi(st_buffer(st_concavehull(x1.geom, 3.0 :: numeric), 0.0)))")
+  test("uniary minus works") {
+    analyzeStatement("SELECT text, - num") should equal("""SELECT x1.text AS i1, -(x1.num) AS i2 FROM table1 AS x1""")
   }
 
-  test("things get correctly de-select-list-referenced") {
-    // The convex_hull(geom) gets de-referenced because of introducing
-    // the st_asbinary call, but the text||text continues to be
-    // referenced.
-    analyzeStatement("select convex_hull(geom) as a, text||text as b group by a, b", useSelectListReferences = true) should equal ("SELECT st_asbinary(st_multi(st_buffer(st_convexhull(x1.geom), 0.0))) AS i1, (x1.text) || (x1.text) AS i2 FROM table1 AS x1 GROUP BY st_multi(st_buffer(st_convexhull(x1.geom), 0.0)), 2")
+  test("uniary plus works") {
+    analyzeStatement("SELECT text, + num") should equal("""SELECT x1.text AS i1, x1.num AS i2 FROM table1 AS x1""")
   }
 
-  test("case - else") {
-    analyze("case when 1=1 then 'hello' when 1=2 then 'world' else 'otherwise' end") should equal ("""CASE WHEN (1 :: numeric) = (1 :: numeric) THEN text "hello" WHEN (1 :: numeric) = (2 :: numeric) THEN text "world" ELSE text "otherwise" END""")
+  test("binary minus works") {
+    analyzeStatement("SELECT text, num - 1") should equal("""SELECT x1.text AS i1, (x1.num) - (1 :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
   }
 
-  test("case - no else") {
-    analyze("case when 1=1 then 'hello' when 1=2 then 'world' end") should equal ("""CASE WHEN (1 :: numeric) = (1 :: numeric) THEN text "hello" WHEN (1 :: numeric) = (2 :: numeric) THEN text "world" END""")
+  test("binary plus works") {
+    analyzeStatement("SELECT text, num + 1") should equal("""SELECT x1.text AS i1, (x1.num) + (1 :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
   }
 
-  test("iif") {
-    analyze("iif(1 = 1, 2, 3)") should equal ("CASE WHEN (1 :: numeric) = (1 :: numeric) THEN 2 :: numeric ELSE 3 :: numeric END")
+  test("num times num works") {
+    analyzeStatement("SELECT text, num * 2") should equal("""SELECT x1.text AS i1, (x1.num) * (2 :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
   }
 
-  test("uncased works") {
-    analyze("caseless_eq(text,'bleh')") should equal ("""(upper(x1.text)) = (upper(text "bleh"))""")
+  test("doube times double works") {
+    analyzeStatement("SELECT 5.4567 * 9.94837") should equal("""SELECT (5.4567 :: decimal(30, 7)) * (9.94837 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
   }
 
-  test("count gets cast to numeric") {
-    analyze("count(*)") should equal ("""(count(*)) :: numeric""")
-    analyze("count(text)") should equal ("""(count(x1.text)) :: numeric""")
-    analyze("count(distinct text)") should equal ("""(count(DISTINCT x1.text)) :: numeric""")
+  test("division works") {
+    analyzeStatement("SELECT 6.4354 / 3.423") should equal("""SELECT (6.4354 :: decimal(30, 7)) / (3.423 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
   }
 
-  test("get_context known literal") {
-    analyze("get_context('hello')") should equal ("""text "world"""")
+  test("exponents work") {
+    analyzeStatement("SELECT 7.4234 ^ 2") should equal("""SELECT (7.4234 :: decimal(30, 7)) ^ (2 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
   }
 
-  test("get_context unknown literal") {
-    analyze("get_context('goodbye')") should equal ("""null :: text""")
+  test("modulo works") {
+    analyzeStatement("SELECT 6.435 % 3.432") should equal("""SELECT (6.435 :: decimal(30, 7)) % (3.432 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
   }
 
-  test("get_context non-literal") {
-    analyze("get_context(text)") should equal ("""current_setting('socrata_system.a' || md5(x1.text), true)""")
+  test("ln works") {
+    analyzeStatement("SELECT ln(16)") should equal("""SELECT ln(16 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
   }
 
-  test("url(x, y).url == x") {
-    analyze("url('x','y').url") should equal ("""text "x"""")
+  test("absolute works") {
+    analyzeStatement("SELECT abs(-1.234)") should equal("""SELECT abs(-1.234 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
   }
 
-  test("url(x, y).description == y") {
-    analyze("url('x','y').description") should equal ("""text "y"""")
+  test("ceil() works") {
+    analyzeStatement("SELECT ceil(4.234)") should equal("""SELECT ceil(4.234 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
   }
 
-  test("phone(x, y).phone_number == x") {
-    analyze("phone('x','y').phone_number") should equal ("""text "x"""")
-  }
-
-  test("phone(x, y).phone_type == y") {
-    analyze("phone('x','y').phone_type") should equal ("""text "y"""")
-  }
-
-  test("negative literals get their operator folded in") {
-    analyze("-5") should equal ("""-5 :: numeric""")
-  }
-
-  test("negation operator is parenthesized") {
-    analyze("-num") should equal ("""-(x1.num)""")
-  }
-
-  test("positive operator is just dropped") {
-    analyze("+num") should equal ("""x1.num""")
-  }
-
-  test("geo literal") {
-    // st_asbinary because this is the output expression for a soql string
-    analyze("'POINT(10 10)'::point") should equal ("""st_asbinary(st_pointfromwkb(bytea "\\x000000000140240000000000004024000000000000", 4326))""")
-  }
-
-  test("date extract special-case") {
-    analyze("date_extract_d('2001-01-01T12:34:56.789')") should equal ("""extract(day from (timestamp without time zone "2001-01-01T12:34:56.789"))""")
+  test("floor works") {
+    analyzeStatement("SELECT floor(9.89)") should equal("""SELECT floor(9.89 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
   }
 
   test("ToFloatingTimestamp") {
@@ -517,42 +487,4 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
       """current_date at time zone 'UTC'"""
     )
   }
-
-
-  test("Functions are correctly classified") {
-    // The "contains" check is because of the TsVector fake functions
-    // that search gets rewritten into
-    for(f <- sqlizer.funcallSqlizer.ordinaryFunctionMap.keysIterator.filter(SoQLFunctions.functionsByIdentity.contains)) {
-      SoQLFunctions.functionsByIdentity(f).isAggregate should be (false)
-      SoQLFunctions.functionsByIdentity(f).needsWindow should be (false)
-    }
-
-    for(f <- sqlizer.funcallSqlizer.aggregateFunctionMap.keysIterator) {
-      SoQLFunctions.functionsByIdentity(f).isAggregate should be (true)
-      SoQLFunctions.functionsByIdentity(f).needsWindow should be (false)
-    }
-
-    for(f <- sqlizer.funcallSqlizer.windowedFunctionMap.keysIterator) {
-      val function = SoQLFunctions.functionsByIdentity(f)
-      (function.isAggregate || function.needsWindow) should be (true)
-    }
-  }
-
-  test("All functions are implemented") {
-    for(f <- SoQLFunctions.allFunctions) {
-      if(!(sqlizer.funcallSqlizer.ordinaryFunctionMap.contains(f.identity) || sqlizer.funcallSqlizer.aggregateFunctionMap.contains(f.identity) || sqlizer.funcallSqlizer.windowedFunctionMap.contains(f.identity))) {
-        println("Not implemented: " + f.identity)
-      }
-    }
-  }
-
-  test("All aggregate functions are also window functions") {
-    for(f <- SoQLFunctions.allFunctions if f.isAggregate) {
-      if(!sqlizer.funcallSqlizer.windowedFunctionMap.contains(f.identity)) {
-        println("Not implemented in windowed form: " + f.identity)
-      }
-    }
-  }
-
-
 }

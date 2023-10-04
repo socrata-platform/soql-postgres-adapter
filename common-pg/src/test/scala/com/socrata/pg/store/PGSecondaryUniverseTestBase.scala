@@ -29,15 +29,15 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
 
   val config: StoreConfig
 
-  def withDb[T](f: (Connection) => T, dbType: Option[DbType] = None): T = {
-    val database = config.database.database
+  def withDb[T](f: (Connection) => T): T = {
+    val database = config.database
     val user = config.database.username
     val pass = config.database.password
     val port = config.database.port
     val host = config.database.host
 
 
-    dbType.getOrElse(config.database.dbType) match {
+    config.database.dbType match {
       case Postgres =>
         val loglevel = 0; // 2 = debug, 0 = default
 
@@ -53,12 +53,12 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
     }
   }
 
-  def withPgu[T](f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T, dbType: Option[DbType] = None): T =
+  def withPgu[T](f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T =
     withDb(
       { conn =>
         val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
         f(pgu)
-      }, dbType
+      }
     )
 
   def onlyRunIf[T](dbType: DbType)(fn: => T): Option[T] =
