@@ -270,13 +270,7 @@ object ProcessQuery {
     val locale = "en_US"
 
     val laidOutSql: SimpleDocStream[SqlizeAnnotation[DatabaseNamesMetaTypes]] = sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded))
-    println("================", "laidOutSql")
-    println(laidOutSql)
     val renderedSql = laidOutSql.toString
-
-    println("================", "renderedSql")
-    println(renderedSql)
-
     val debugFields =
       debug.map { debug =>
         Seq(
