@@ -460,18 +460,7 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       EpochSeconds -> extractDatePart("epoch"),
       TimeStampDiffD -> dateDiffIn("day","UTC"),
       //TODO
-      TimeStampAdd -> ofs { (e, args, ctx) =>
-        assert(args.length == 2)
-        val Seq(timestamp,period) = args.take(2)
-        println(period.asInstanceOf[SoQLInterval])
-        val extractFunc = d"dateadd"
-        val datePart = "week"
-        val interval = 5
-        val timeZone = "UTC"
-
-        val preparedArgs = Seq(d"$datePart",d"$interval",timestamp.compressed.sql+#+d"at time zone (text '$timeZone')")
-        ExprSql(preparedArgs.funcall(extractFunc).group, e)
-      },  // These two are exactly
+      TimeStampAdd -> sqlizeBinaryOp("+"),  // These two are exactly
       //TODO
       TimeStampPlus -> sqlizeBinaryOp("+"), // the same function??
       //TODO
