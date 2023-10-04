@@ -445,24 +445,27 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       FixedTimeStampZTruncYmd -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'day'")),
       FixedTimeStampZTruncYm -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'month'")),
       FixedTimeStampZTruncY -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'year'")),
-      FixedTimeStampTruncYmdAtTimeZone -> sqlizeNormalOrdinaryFuncall("soql_trunc_fixed_timestamp_at_timezone", prefixArgs = Seq(d"'day'")),
-      FixedTimeStampTruncYmAtTimeZone -> sqlizeNormalOrdinaryFuncall("soql_trunc_fixed_timestamp_at_timezone", prefixArgs = Seq(d"'month'")),
-      FixedTimeStampTruncYAtTimeZone -> sqlizeNormalOrdinaryFuncall("soql_trunc_fixed_timestamp_at_timezone", prefixArgs = Seq(d"'year'")),
-      FloatingTimeStampExtractY -> sqlizeExtractDateSubfield(d"year"),
-      FloatingTimeStampExtractM -> sqlizeExtractDateSubfield(d"month"),
-      FloatingTimeStampExtractD -> sqlizeExtractDateSubfield(d"day"),
-      FloatingTimeStampExtractHh -> sqlizeExtractDateSubfield(d"hour"),
-      FloatingTimeStampExtractMm -> sqlizeExtractDateSubfield(d"minute"),
-      FloatingTimeStampExtractSs -> sqlizeExtractDateSubfield(d"second"),
-      FloatingTimeStampExtractDow -> sqlizeExtractDateSubfield(d"dow"),
-      FloatingTimeStampExtractWoy -> sqlizeExtractDateSubfield(d"week"),
-      FloatingTimestampExtractIsoY -> sqlizeExtractDateSubfield(d"isoyear"),
-      EpochSeconds -> sqlizeNormalOrdinaryFuncall("soql_epoch_seconds"),
-      TimeStampDiffD -> sqlizeNormalOrdinaryFuncall("soql_timestamp_diff_d"),
+      FixedTimeStampTruncYmdAtTimeZone -> binaryOpCallFunctionPrefix("at time zone", "date_trunc", prefixArgs = Seq(d"'day'")),
+      FixedTimeStampTruncYmAtTimeZone -> binaryOpCallFunctionPrefix("at time zone", "date_trunc", prefixArgs = Seq(d"'month'")),
+      FixedTimeStampTruncYAtTimeZone -> binaryOpCallFunctionPrefix("at time zone", "date_trunc", prefixArgs = Seq(d"'year'")),
+      FloatingTimeStampExtractY -> extractDatePart("year"),
+      FloatingTimeStampExtractM -> extractDatePart("month"),
+      FloatingTimeStampExtractD -> extractDatePart("day"),
+      FloatingTimeStampExtractHh -> extractDatePart("hour"),
+      FloatingTimeStampExtractMm -> extractDatePart("minute"),
+      FloatingTimeStampExtractSs -> extractDatePart("second"),
+      FloatingTimeStampExtractDow -> extractDatePart("dayofweek"),
+      FloatingTimeStampExtractWoy -> extractDatePart("week"),
+      FloatingTimestampExtractIsoY -> extractDatePart("year"),
+      EpochSeconds -> extractDatePart("epoch"),
+      TimeStampDiffD -> dateDiffIn("day","UTC"),
+      //TODO
       TimeStampAdd -> sqlizeBinaryOp("+"),  // These two are exactly
+      //TODO
       TimeStampPlus -> sqlizeBinaryOp("+"), // the same function??
+      //TODO
       TimeStampMinus -> sqlizeBinaryOp("-"),
-      GetUtcDate -> sqlizeGetUtcDate,
+      GetUtcDate -> literal(d"current_date at time zone 'UTC'"),
 
       // Geo-casts
       TextToPoint -> sqlizeGeomCast("st_pointfromtext"),
