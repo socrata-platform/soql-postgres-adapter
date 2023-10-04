@@ -36,7 +36,7 @@ case class Postgres(
   override def isRollup(dtn: DatabaseTableName) = dtn.name.isRollup
 
   override def mkRepProvider(physicalTableFor: Map[AutoTableLabel, DatabaseTableName]): Rep.Provider[DatabaseNamesMetaTypes] =
-    new SoQLRepProvider[DatabaseNamesMetaTypes](
+    new SoQLRepProviderPostgres[DatabaseNamesMetaTypes](
       cryptProviderProvider,
       namespace,
       toProvenance,
@@ -123,7 +123,7 @@ case class Redshift(
 
 object Postgres extends SqlizerUniverse[DatabaseNamesMetaTypes] {
   type LocationSubcolumns = Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]]
-  private val funcallSqlizer = new SoQLFunctionSqlizer[DatabaseNamesMetaTypes]
+  private val funcallSqlizer = new SoQLFunctionSqlizerPostgres[DatabaseNamesMetaTypes]
   private val rewriteSearch = new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true)
 }
 

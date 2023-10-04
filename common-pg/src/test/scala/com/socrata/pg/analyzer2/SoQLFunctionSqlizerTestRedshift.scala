@@ -15,6 +15,7 @@ import com.typesafe.config.ConfigFactory
 import com.socrata.pg.config.StoreConfig
 import com.socrata.datacoordinator.common._
 import com.socrata.datacoordinator.secondary.DatasetInfo
+import com.socrata.soql.environment.Provenance
 
 object SoQLFunctionSqlizerTestRedshift {
   final abstract class TestMT extends MetaTypes {
@@ -24,16 +25,28 @@ object SoQLFunctionSqlizerTestRedshift {
     type DatabaseTableNameImpl = String
     type DatabaseColumnNameImpl = String
   }
+
+  object ProvenanceMapper extends types.ProvenanceMapper[TestMT] {
+    def toProvenance(dtn: types.DatabaseTableName[TestMT]): Provenance = {
+      val DatabaseTableName(name) = dtn
+      Provenance(name)
+    }
+
+    def fromProvenance(prov: Provenance): types.DatabaseTableName[TestMT] = {
+      val Provenance(name) = prov
+      DatabaseTableName(name)
+    }
+  }
 }
 
-class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with SqlizerUniverse[SoQLFunctionSqlizerTest.TestMT] with PGSecondaryUniverseTestBase {
+class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with SqlizerUniverse[SoQLFunctionSqlizerTestRedshift.TestMT] with PGSecondaryUniverseTestBase {
 
   override val config = {
     val config = ConfigFactory.load()
     new StoreConfig(config.getConfig("com.socrata.pg.store.secondary"), "")
   }
 
-  type TestMT = SoQLFunctionSqlizerTest.TestMT
+  type TestMT = SoQLFunctionSqlizerTestRedshift.TestMT
 
   val sqlizer = new Sqlizer {
     override val namespace = new SqlNamespaces {
@@ -47,7 +60,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
       }
     }
 
-    override val toProvenance = SoQLFunctionSqlizerTest.ProvenanceMapper
+    override val toProvenance = SoQLFunctionSqlizerTestRedshift.ProvenanceMapper
     def isRollup(dtn: DatabaseTableName) = false
 
     val cryptProvider = obfuscation.CryptProvider.zeros
@@ -70,7 +83,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
   def tableFinder(items: ((Int, String), Thing[Int, SoQLType])*) =
     new MockTableFinder[TestMT](items.toMap)
-  val analyzer = new SoQLAnalyzer[TestMT](SoQLTypeInfo, SoQLFunctionInfo, SoQLFunctionSqlizerTest.ProvenanceMapper)
+  val analyzer = new SoQLAnalyzer[TestMT](SoQLTypeInfo, SoQLFunctionInfo, SoQLFunctionSqlizerTestRedshift.ProvenanceMapper)
   def analyze(soqlexpr: String): String = {
     val s = analyzeStatement(s"SELECT ($soqlexpr)")
     val prefix = "SELECT "

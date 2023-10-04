@@ -16,7 +16,7 @@ import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.Provenance
 import com.socrata.soql.types._
 
-abstract class SoQLRepProvider[MT <: MetaTypes with ({type ColumnType = SoQLType; type ColumnValue = SoQLValue; type DatabaseColumnNameImpl = String})](
+abstract class SoQLRepProviderPostgres[MT <: MetaTypes with ({type ColumnType = SoQLType; type ColumnValue = SoQLValue; type DatabaseColumnNameImpl = String})](
   cryptProviders: CryptProviderProvider,
   override val namespace: SqlNamespaces[MT],
   override val toProvenance: types.ToProvenance[MT],

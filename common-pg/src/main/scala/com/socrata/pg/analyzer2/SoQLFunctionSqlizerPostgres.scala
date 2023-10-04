@@ -7,7 +7,7 @@ import com.socrata.soql.types._
 import com.socrata.soql.functions.SoQLFunctions._
 import com.socrata.soql.functions.{Function, MonomorphicFunction, SoQLTypeInfo}
 
-class SoQLFunctionSqlizer[MT <: MetaTypes with ({ type ColumnType = SoQLType; type ColumnValue = SoQLValue })] extends FuncallSqlizer[MT] {
+class SoQLFunctionSqlizerPostgres[MT <: MetaTypes with ({ type ColumnType = SoQLType; type ColumnValue = SoQLValue })] extends FuncallSqlizer[MT] {
   import SoQLTypeInfo.hasType
 
   def wrap(e: Expr, exprSql: ExprSql, wrapper: String, additionalWrapperArgs: Doc*) =
