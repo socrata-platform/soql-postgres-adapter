@@ -30,7 +30,7 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
   val config: StoreConfig
 
   def withDb[T](f: (Connection) => T): T = {
-    val database = config.database
+    val database = config.database.database
     val user = config.database.username
     val pass = config.database.password
     val port = config.database.port
