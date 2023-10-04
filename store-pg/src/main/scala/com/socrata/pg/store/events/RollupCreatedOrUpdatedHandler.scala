@@ -24,13 +24,21 @@ case class RollupCreatedOrUpdatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQL
   )
 
   def updateRollupRelationships(rollupInfo: LocalRollupInfo): Unit ={
-    for(tableName<-parseAndCollectTableNames(rollupInfo)){
-      pgu.datasetMapReader.datasetInfoByResourceName(new ResourceName(tableName)) match{
-        case Some(dataSetInfo)=>
+    for(tableNameOrInternalName <- parseAndCollectTableNames(rollupInfo)) {
+      val dsInfo = tableNameOrInternalName match {
+        case Left(tableName) =>
+          pgu.datasetMapReader.datasetInfoByResourceName(new ResourceName(tableName))
+        case Right(dsInternalName) =>
+          pgu.datasetMapReader.datasetInfoByInternalName(dsInternalName)
+      }
+      dsInfo match {
+        case Some(dataSetInfo) if dataSetInfo.systemId != copyInfo.datasetInfo.systemId =>
           logger.info(s"dataset '${rollupInfo.copyInfo.datasetInfo.resourceName.getOrElse(rollupInfo.copyInfo.datasetInfo.systemId)}' rollup '${rollupInfo.name}' relates to dataset '${dataSetInfo.resourceName.getOrElse(dataSetInfo.systemId)}'")
-        pgu.datasetMapWriter.createRollupRelationship(rollupInfo,pgu.datasetMapReader.latest(dataSetInfo))
+          pgu.datasetMapWriter.createRollupRelationship(rollupInfo,pgu.datasetMapReader.latest(dataSetInfo))
+        case Some(_) =>
+          logger.debug("Not adding a relationship from a dataset to itself")
         case None=>
-          logger.error(s"Could not find a dataset with identifier '${tableName}'")
+          logger.error(s"Could not find a dataset with identifier '${tableNameOrInternalName}'")
       }
     }
   }

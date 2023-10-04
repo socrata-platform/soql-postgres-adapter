@@ -2,8 +2,12 @@ package com.socrata.pg.server.analyzer2
 
 import scala.collection.{mutable => scm}
 
+import java.io.{BufferedWriter, OutputStreamWriter}
+import java.nio.charset.StandardCharsets
 import java.sql.{Connection, PreparedStatement}
+import java.time.{Clock, LocalDateTime}
 import java.util.Base64
+import java.util.zip.GZIPOutputStream
 
 import com.rojoma.json.v3.ast.{JArray, JString, JValue, JNull}
 import com.rojoma.json.v3.interpolation._
@@ -22,17 +26,25 @@ import com.socrata.prettyprint.{SimpleDocStream, SimpleDocTree, tree => doctree}
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName, ResourceName}
+import com.socrata.soql.environment.{ColumnName, ResourceName, Provenance}
 import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLID, SoQLVersion, SoQLNull}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.sql.Debug
+import com.socrata.soql.stdlib.analyzer2.SoQLRewritePassHelpers
+import com.socrata.datacoordinator.id.RollupName
 import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
 import com.socrata.datacoordinator.common.soql.SoQLRep
+import com.socrata.metrics.rollup.RollupMetrics
+import com.socrata.metrics.rollup.events.RollupHit
 
-import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, RollupRewriter}
-import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils}
+import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, TransformManager, Stringifier, CostEstimator, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, SqlNamespaces}
+import com.socrata.pg.analyzer2.metatypes.{CopyCache, InputMetaTypes, DatabaseMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName}
+import com.socrata.pg.analyzer2.rollup.{SoQLRollupExact, RollupInfo}
+import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils, RollupAnalyzer, RollupId}
 import com.socrata.pg.server.CJSONWriter
 import com.socrata.datacoordinator.common.DbType
+import com.socrata.pg.analyzer2.ActualSqlizer
+import com.socrata.datacoordinator.common.Postgres
 
 final abstract class ProcessQuery
 object ProcessQuery {
@@ -57,12 +69,14 @@ object ProcessQuery {
     // ok, we have our analysis which is in terms of internal names
     // and column ids, and we want to turn that into having them in
     // terms of copies and columns
-    val copyCache = new CopyCache(pgu)
-    val metadataAnalysis = DatabaseMetaTypes.rewriteFrom(analysis, copyCache)
+    val copyCache = new InputMetaTypes.CopyCache(pgu)
+
+    val dmtState = new DatabaseMetaTypes
+    val metadataAnalysis = dmtState.rewriteFrom(analysis, copyCache, InputMetaTypes.provenanceMapper)
 
     // Then we'll rewrite that analysis in terms of actual physical
     // database names, after building our crypt providers.
-    implicit val cryptProviders = CryptProvidersByCanonicalName(metadataAnalysis.statement)
+    implicit val cryptProviders: CryptProviderProvider = CryptProvidersByDatabaseNamesProvenance(metadataAnalysis.statement)
 
     // but first. produce a string of the analysis for etagging purposes
     val stringifiedAnalysis = locally {
@@ -70,50 +84,75 @@ object ProcessQuery {
       analysis.statement.debugDoc.layoutPretty(LayoutOptions(PageWidth.Unbounded)).toString
     }
 
-    def rollupRewriter = RollupRewriter.fromPostgres[DatabaseNamesMetaTypes](pgu)
+    val relevantRollups = copyCache.allCopies.
+      flatMap { copy =>
+        pgu.datasetMapReader.rollups(copy).
+          iterator.
+          filter { rollup => rollup.isNewAnalyzer && tableExists(pgu, rollup.tableName) }.
+          flatMap { rollup => RollupAnalyzer(pgu, copy, rollup).map((rollup, _)) }.
+          map { case (rollup, (_foundTables, analysis, _locationSubcolumnsMap, _cryptProvider)) =>
+            // don't care about the other two things because:
+            //   * we're not going to be sqlizing this rollup
+            //   * any referenced datasets we already know about
+            new RollupInfo[DatabaseNamesMetaTypes] with QueryServerRollupInfo {
+              override val id = rollup.systemId
+              override val statement = analysis.statement
+              override val resourceName = ScopedResourceName(-1, ResourceName(s"rollup:${rollup.copyInfo.datasetInfo.systemId}/${rollup.copyInfo.systemId}/${rollup.name.underlying}"))
+              override val databaseName = DatabaseTableName(AugmentedTableName(rollup.tableName, isRollup = true))
+
+              // Needed for metrics
+              override val rollupDatasetName = rollup.copyInfo.datasetInfo.resourceName
+              override val rollupName = rollup.name
+
+              private val columns = statement.schema.keysIterator.toArray
+              override def databaseColumnNameOfIndex(idx: Int) =
+                DatabaseColumnName(SqlNamespaces.columnBase(columns(idx)))
+            }
+          }
+      }
 
     // Intermixed rewrites and rollups: rollups are attemted before
     // each group of rewrite passes and after all rewrite passes have
     // happened.
-    val nameAnalysis = locally {
-      val postRewrites =
-        passes.foldLeft(DatabaseNamesMetaTypes.rewriteFrom(metadataAnalysis)) { (nameAnalysis, batch) =>
-          locally {
-            import DatabaseNamesMetaTypes.DebugHelper._
-            log.debug("Statement before applying rollups:\n{}", Lazy(nameAnalysis.statement.debugStr))
-          }
-          val effectiveAnalysis = rollupRewriter.applyRollups(nameAnalysis)
-          locally {
-            import DatabaseNamesMetaTypes.DebugHelper._
-            log.debug("Statement before applying rewrites {}:\n{}", batch:Any, Lazy(nameAnalysis.statement.debugStr))
-          }
-          effectiveAnalysis.applyPasses(
-            batch,
-            RewritePasses.isLiteralTrue,
-            RewritePasses.isOrderable,
-            RewritePasses.and
-          )
-        }
-
-      locally {
-        import DatabaseNamesMetaTypes.DebugHelper._
-        log.debug("Statement before applying rollups:\n{}", Lazy(postRewrites.statement.debugStr))
-      }
-      rollupRewriter.applyRollups(postRewrites)
-    }
-
-    locally {
+    val nameAnalyses = locally {
       import DatabaseNamesMetaTypes.DebugHelper._
-      log.debug("Statement after applying all rewrites and rollups:\n{}", Lazy(nameAnalysis.statement.debugStr))
+
+      TransformManager[DatabaseNamesMetaTypes](
+        DatabaseNamesMetaTypes.rewriteFrom(dmtState, metadataAnalysis),
+        relevantRollups,
+        passes,
+        new SoQLRewritePassHelpers,
+        new SoQLRollupExact(Stringifier.pretty),
+        Stringifier.pretty
+      )
     }
 
-    val physicalTableFor: Map[AutoTableLabel, types.DatabaseTableName[DatabaseNamesMetaTypes]] =
-      if(request.locationSubcolumns.isEmpty) Map.empty
-      else physicalTableMap(nameAnalysis)
+    case class Sqlized(
+      analysis: SoQLAnalysis[DatabaseNamesMetaTypes],
+      rollups: Seq[QueryServerRollupInfo],
+      sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]],
+      extractor: ResultExtractor[DatabaseNamesMetaTypes],
+      nonliteralSystemContextLookupFound: Boolean,
+      now: Option[DateTime],
+      estimatedCost: Double
+    )
 
-    val sqlizer = ActualSqlizer.choose(sqlizerType)(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, rewriteSubcolumns(request.locationSubcolumns, copyCache), physicalTableFor)
-    val Sqlizer.Result(sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]], extractor, nonliteralSystemContextLookupFound, now) = sqlizer(nameAnalysis.statement)
-    log.info("================================================================Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
+    val onlyOne = nameAnalyses.lengthCompare(1) == 0
+    val sqlized = nameAnalyses.map { nameAnalysis =>
+      val sqlizer = ActualSqlizer.choose(sqlizerType)(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, RewriteSubcolumns[InputMetaTypes](request.locationSubcolumns, copyCache))
+      val Sqlizer.Result(sql, extractor, nonliteralSystemContextLookupFound, now) = sqlizer(nameAnalysis._1)
+      log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
+
+      Sqlized(
+        nameAnalysis._1,
+        relevantRollups.filter { rr => nameAnalysis._2.contains(rr.id) },
+        sql,
+        extractor,
+        nonliteralSystemContextLookupFound,
+        now,
+        if(onlyOne) 0.0 else CostEstimator(pgu.conn, sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded)).toString)
+      )
+    }.minBy(_.estimatedCost)
 
     // Our etag will be the hash of the inputs that affect the result of the query
     val etag = ETagify(
@@ -124,7 +163,7 @@ object ProcessQuery {
       request.locationSubcolumns,
       passes,
       request.debug,
-      now
+      sqlized.now
     )
 
     // "last modified" is problematic because it doesn't include
@@ -136,14 +175,15 @@ object ProcessQuery {
     precondition.check(Some(etag), sideEffectFree = true) match {
       case Precondition.Passed =>
         fulfillRequest(
-          if(nonliteralSystemContextLookupFound) Some(systemContext) else None,
+          if(sqlized.nonliteralSystemContextLookupFound) Some(systemContext) else None,
           copyCache,
           etag,
           pgu,
-          sql,
-          nameAnalysis,
+          sqlized.sql,
+          sqlized.analysis,
+          sqlized.rollups,
           cryptProviders,
-          extractor,
+          sqlized.extractor,
           lastModified,
           request.debug,
           rs
@@ -154,6 +194,24 @@ object ProcessQuery {
       case Precondition.FailedBecauseNoMatch =>
         log.debug("if-match resulted in a miss")
         PreconditionFailed ~> ETag(etag)
+    }
+  }
+
+  trait QueryServerRollupInfo {
+    val rollupDatasetName: Option[String]
+    val rollupName: RollupName
+  }
+
+  def tableExists(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], table: String): Boolean = {
+    for {
+      stmt <- managed(pgu.conn.prepareStatement("SELECT exists(select 1 from pg_tables where schemaname = 'public' and tablename = ?)")).
+        and(_.setString(1, table))
+      rs <- managed(stmt.executeQuery())
+    } {
+      if(!rs.next()) {
+        throw new Exception("`SELECT exists(..)` returned nothing??")
+      }
+      rs.getBoolean(1)
     }
   }
 
@@ -197,11 +255,12 @@ object ProcessQuery {
 
   def fulfillRequest(
     systemContext: Option[Map[String, String]],
-    copyCache: CopyCache,
+    copyCache: CopyCache[InputMetaTypes],
     etag: EntityTag,
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]],
     nameAnalysis: com.socrata.soql.analyzer2.SoQLAnalysis[DatabaseNamesMetaTypes],
+    rollups: Seq[QueryServerRollupInfo],
     cryptProviders: CryptProviderProvider,
     extractor: ResultExtractor[DatabaseNamesMetaTypes],
     lastModified: DateTime,
@@ -242,8 +301,10 @@ object ProcessQuery {
         ).flatten.toMap
       }
 
+    val preventRun = debug.fold(false)(_.inhibitRun)
+
     val rows =
-      if(debug.fold(false)(_.inhibitRun)) {
+      if(preventRun) {
         Iterator.empty
       } else {
         try {
@@ -258,32 +319,50 @@ object ProcessQuery {
         }
       }
 
-    ETag(etag) ~> LastModified(lastModified) ~> Write("application/json; content-type=utf-8") { writer =>
-      writer.write("[{")
-      for(debugFields <- debugFields) {
-        writer.write("\"debug\":%s\n ,".format(JsonUtil.renderJson(debugFields, pretty = false)))
+    if(!preventRun) {
+      for(ri <- rollups) {
+        RollupMetrics.digest(
+          RollupHit(
+            ri.rollupDatasetName.getOrElse("unknown"),
+            ri.rollupName.underlying,
+            LocalDateTime.now(Clock.systemUTC())
+          )
+        )
       }
-      writer.write("\"fingerprint\":%s\n ,".format(JString(Base64.getUrlEncoder.withoutPadding.encodeToString(etag.asBytes))))
-      writer.write("\"last_modified\":%s\n ,".format(JString(CJSONWriter.dateTimeFormat.print(lastModified))))
-      writer.write("\"locale\":%s\n ,".format(JString(locale)))
-      writer.write("\"schema\":")
+    }
 
-      @AutomaticJsonEncode
-      case class Field(c: ColumnName, t: SoQLType)
+    ETag(etag) ~> LastModified(lastModified) ~> ContentType("application/x-socrata-gzipped-cjson") ~> Stream { rawOutputStream =>
+      for {
+        gzos <- managed(new GZIPOutputStream(rawOutputStream))
+        osw <- managed(new OutputStreamWriter(gzos, StandardCharsets.UTF_8))
+        writer <- managed(new BufferedWriter(osw))
+      } {
+        writer.write("[{")
+        for(debugFields <- debugFields) {
+          writer.write("\"debug\":%s\n ,".format(JsonUtil.renderJson(debugFields, pretty = false)))
+        }
+        writer.write("\"fingerprint\":%s\n ,".format(JString(Base64.getUrlEncoder.withoutPadding.encodeToString(etag.asBytes))))
+        writer.write("\"last_modified\":%s\n ,".format(JString(CJSONWriter.dateTimeFormat.print(lastModified))))
+        writer.write("\"locale\":%s\n ,".format(JString(locale)))
+        writer.write("\"schema\":")
 
-      val reformattedSchema = nameAnalysis.statement.schema.values.map { case Statement.SchemaEntry(cn, typ, _isSynthetic) =>
-        Field(cn, typ)
-      }.toArray
+        @AutomaticJsonEncode
+        case class Field(c: ColumnName, t: SoQLType)
 
-      JsonUtil.writeJson(writer, reformattedSchema)
-      writer.write("\n }")
+        val reformattedSchema = nameAnalysis.statement.schema.values.map { case Statement.SchemaEntry(cn, typ, _isSynthetic) =>
+          Field(cn, typ)
+        }.toArray
 
-      for(row <- rows) {
-        writer.write("\n,")
-        CompactJsonWriter.toWriter(writer, JArray(row))
+        JsonUtil.writeJson(writer, reformattedSchema)
+        writer.write("\n }")
+
+        for(row <- rows) {
+          writer.write("\n,")
+          CompactJsonWriter.toWriter(writer, JArray(row))
+        }
+
+        writer.write("\n]\n")
       }
-
-      writer.write("\n]\n")
     }
   }
 
@@ -304,8 +383,8 @@ object ProcessQuery {
       private var done = false
       private var ready = false
 
-      private var idReps = new scm.HashMap[Option[String], JsonColumnWriteRep[SoQLType, SoQLValue]]
-      private var versionReps = new scm.HashMap[Option[String], JsonColumnWriteRep[SoQLType, SoQLValue]]
+      private var idReps = new scm.HashMap[Option[Provenance], JsonColumnWriteRep[SoQLType, SoQLValue]]
+      private var versionReps = new scm.HashMap[Option[Provenance], JsonColumnWriteRep[SoQLType, SoQLValue]]
 
       private val types = extractor.schema.values.toArray
       private val width = types.length
@@ -402,59 +481,6 @@ object ProcessQuery {
         stmt.executeQuery().close()
       }
     }
-  }
-
-  def rewriteSubcolumns(
-    colMap: Map[types.DatabaseTableName[InputMetaTypes], Map[types.DatabaseColumnName[InputMetaTypes], Seq[Option[types.DatabaseColumnName[InputMetaTypes]]]]],
-    copyCache: CopyCache
-  ): Map[types.DatabaseTableName[DatabaseNamesMetaTypes], Map[types.DatabaseColumnName[DatabaseNamesMetaTypes], Seq[Option[types.DatabaseColumnName[DatabaseNamesMetaTypes]]]]] = {
-    colMap.map { case (dtn, cols) =>
-      val (copyInfo, newColMap) = copyCache(dtn).get // TODO proper error
-      DatabaseTableName(copyInfo.dataTableName) -> cols.map { case (DatabaseColumnName(mainCol), auxCols) =>
-        val rewrittenMainCol = DatabaseColumnName(newColMap.get(mainCol).get.physicalColumnBase) // TODO proper error
-        val rewrittenAuxCols = auxCols.map {
-          case Some(DatabaseColumnName(auxCol)) =>
-            Some(DatabaseColumnName(newColMap.get(auxCol).get.physicalColumnBase)) // TODO proper error
-          case None =>
-            None
-        }
-        rewrittenMainCol -> rewrittenAuxCols
-      }
-    }
-  }
-
-  def physicalTableMap[MT <: MetaTypes](analysis: SoQLAnalysis[MT]): Map[AutoTableLabel, types.DatabaseTableName[MT]] = {
-    object Go extends SqlizerUniverse[MT] {
-      type Acc = Map[AutoTableLabel, DatabaseTableName]
-      def walkStatement(stmt: Statement, acc: Acc): Acc =
-        stmt match {
-          case CombinedTables(_, left, right) =>
-            walkStatement(left, walkStatement(right, acc))
-          case CTE(_defLbl, _defAlias, defQ, _matHint, useQ) =>
-            walkStatement(defQ, walkStatement(useQ, acc))
-          case Values(_, _) =>
-            acc
-          case s: Select =>
-            walkFrom(s.from, acc)
-        }
-
-      def walkFrom(from: From, acc: Acc): Acc =
-        from.reduce[Acc](
-          walkAtomicFrom(_, acc),
-          { (acc, join) => walkAtomicFrom(join.right, acc) }
-        )
-
-      def walkAtomicFrom(from: AtomicFrom, acc: Acc): Acc =
-        from match {
-          case fs: FromStatement =>
-            walkStatement(fs.statement, acc)
-          case fsr: FromSingleRow =>
-            acc
-          case ft: FromTable =>
-            acc + (ft.label -> ft.tableName)
-        }
-    }
-    Go.walkStatement(analysis.statement, Map.empty)
   }
 
   def prettierSql[MT <: MetaTypes](analysis: SoQLAnalysis[MT], doc: Doc[SqlizeAnnotation[MT]]): String = {

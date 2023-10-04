@@ -13,20 +13,39 @@ import org.postgresql.util.PGInterval
 
 import com.socrata.prettyprint.prelude._
 import com.socrata.soql.analyzer2._
+import com.socrata.soql.environment.Provenance
 import com.socrata.soql.types._
 
 abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = SoQLType; type ColumnValue = SoQLValue; type DatabaseColumnNameImpl = String})](
   cryptProviders: CryptProviderProvider,
   override val namespace: SqlNamespaces[MT],
+  override val toProvenance: types.ToProvenance[MT],
+  override val isRollup: types.DatabaseTableName[MT] => Boolean,
   locationSubcolumns: Map[types.DatabaseTableName[MT], Map[types.DatabaseColumnName[MT], Seq[Option[types.DatabaseColumnName[MT]]]]],
   physicalTableFor: Map[AutoTableLabel, types.DatabaseTableName[MT]]
 ) extends Rep.Provider[MT] {
   def apply(typ: SoQLType) = reps(typ)
 
+  private def createTextlikeIndices(idxBaseName: DocNothing, tableName: DatabaseTableName, colName: DocNothing) = {
+    val databaseName = namespace.databaseTableName(tableName)
+    Seq(
+      d"CREATE INDEX IF NOT EXISTS" +#+ idxBaseName ++ d"_u" +#+ d"ON" +#+ databaseName +#+ d"(upper(" ++ colName ++ d") text_pattern_ops)",
+      d"CREATE INDEX IF NOT EXISTS" +#+ idxBaseName ++ d"_tpo" +#+ d"ON" +#+ databaseName +#+ d"(" ++ colName +#+ d"text_pattern_ops)",
+      d"CREATE INDEX IF NOT EXISTS" +#+ idxBaseName ++ d"_nl" +#+ d"ON" +#+ databaseName +#+ d"(" ++ colName +#+ d"nulls last)",
+      d"CREATE INDEX IF NOT EXISTS" +#+ idxBaseName ++ d"_unl" +#+ d"ON" +#+ databaseName +#+ d"(upper(" ++ colName ++ d") nulls last)"
+    )
+  }
+
+  private def createSimpleIndices(idxName: DocNothing, tableName: DatabaseTableName, colName: DocNothing) = {
+    Seq(
+      d"CREATE INDEX IF NOT EXISTS" +#+ idxName +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"(" ++ colName ++ d")"
+    )
+  }
+
   abstract class GeometryRep[T <: Geometry](t: SoQLType with SoQLGeometryLike[T], ctor: T => CV, name: String) extends SingleColumnRep(t, d"geometry") {
     private val open = d"st_${name}fromwkb"
 
-    def literal(e: LiteralValue) = {
+    override def literal(e: LiteralValue) = {
       val geo = downcast(e.value)
       ExprSql(Seq(mkByteaLiteral(t.WkbRep(geo)), Geo.defaultSRIDLiteral).funcall(open), e)
     }
@@ -39,21 +58,35 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
       ExprSql(raw.compressed.sql.funcall(d"st_asbinary"), raw.expr)
     }
 
-    def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
+    override def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
       Option(rs.getBytes(dbCol)).flatMap { bytes =>
         t.WkbRep.unapply(bytes) // TODO: this just turns invalid values into null, we should probably be noisier than that
       }.map(ctor).getOrElse(SoQLNull)
     }
+
+    override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
+      Seq(
+        d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, label) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"USING GIST (" ++ compressedDatabaseColumn(label) ++ d")"
+      )
   }
 
   val reps = Map[SoQLType, Rep](
     SoQLID -> new ProvenancedRep(SoQLID, d"bigint") {
-      def provenanceOf(e: LiteralValue) = {
+      override def provenanceOf(e: LiteralValue) = {
         val rawId = e.value.asInstanceOf[SoQLID]
-        rawId.provenance.map(CanonicalName(_)).toSet
+        Set(rawId.provenance)
       }
 
-      def literal(e: LiteralValue) = {
+      override def compressedSubColumns(table: String, column: ColumnLabel) = {
+        val sourceName = compressedDatabaseColumn(column)
+        val Seq(provenancedName, dataName) = expandedDatabaseColumns(column)
+        Seq(
+          d"(" ++ Doc(table) ++ d"." ++ sourceName ++ d") ->> 0 AS" +#+ provenancedName,
+          d"((" ++ Doc(table) ++ d"." ++ sourceName ++ d") ->> 1) :: bigint AS" +#+ dataName,
+        )
+      }
+
+      override def literal(e: LiteralValue) = {
         val rawId = e.value.asInstanceOf[SoQLID]
         val rawFormatted = SoQLID.FormattedButUnobfuscatedStringRep(rawId)
         // ok, "rawFormatted" is the string as the user entered it.
@@ -63,10 +96,10 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
         val provenanceLit =
           rawId.provenance match {
             case None => d"null :: text"
-            case Some(s) => mkTextLiteral(s)
+            case Some(Provenance(s)) => mkTextLiteral(s)
           }
         val numLit =
-          rawId.provenance.map(CanonicalName(_)).flatMap(cryptProviders) match {
+          rawId.provenance.flatMap(cryptProviders.forProvenance) match {
             case None =>
               Doc(rawId.value.toString) +#+ d":: bigint"
             case Some(cryptProvider) =>
@@ -78,8 +111,8 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
         ExprSql.Expanded[MT](Seq(provenanceLit, numLit), e)
       }
 
-      protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {
-        val provenance = Option(rs.getString(dbCol))
+      override protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {
+        val provenance = Option(rs.getString(dbCol)).map(Provenance(_))
         val valueRaw = rs.getLong(dbCol + 1)
 
         if(rs.wasNull) {
@@ -91,7 +124,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
         }
       }
 
-      protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV = {
+      override protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getString(dbCol)) match {
           case None =>
             SoQLNull
@@ -99,7 +132,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
             JsonUtil.parseJson[(Either[JNull, String], Long)](v) match {
               case Right((Right(prov), v)) =>
                 val result = SoQLID(v)
-                result.provenance = Some(prov)
+                result.provenance = Some(Provenance(prov))
                 result
               case Right((Left(JNull), v)) =>
                 SoQLID(v)
@@ -108,14 +141,34 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
             }
         }
       }
+
+      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
+        if(isRollup(tableName)) {
+          Seq(
+            d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, label) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"(" ++ expandedDatabaseColumns(label).commaSep ++ d")"
+          )
+        } else {
+          Seq(
+            d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, label) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"(" ++ compressedDatabaseColumn(label) ++ d")"
+          )
+        }
     },
     SoQLVersion -> new ProvenancedRep(SoQLVersion, d"bigint") {
-      def provenanceOf(e: LiteralValue) = {
+      override def provenanceOf(e: LiteralValue) = {
         val rawId = e.value.asInstanceOf[SoQLVersion]
-        rawId.provenance.map(CanonicalName(_)).toSet
+        Set(rawId.provenance)
       }
 
-      def literal(e: LiteralValue) = {
+      override def compressedSubColumns(table: String, column: ColumnLabel) = {
+        val sourceName = compressedDatabaseColumn(column)
+        val Seq(provenancedName, dataName) = expandedDatabaseColumns(column)
+        Seq(
+          d"(" ++ Doc(table) ++ d"." ++ sourceName ++ d") ->> 0 AS" +#+ provenancedName,
+          d"((" ++ Doc(table) ++ d"." ++ sourceName ++ d") ->> 1) :: bigint AS" +#+ dataName,
+        )
+      }
+
+      override def literal(e: LiteralValue) = {
         val rawId = e.value.asInstanceOf[SoQLVersion]
         val rawFormatted = SoQLVersion.FormattedButUnobfuscatedStringRep(rawId)
         // ok, "rawFormatted" is the string as the user entered it.
@@ -125,10 +178,10 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
         val provenanceLit =
           rawId.provenance match {
             case None => d"null :: text"
-            case Some(s) => mkTextLiteral(s)
+            case Some(Provenance(s)) => mkTextLiteral(s)
           }
         val numLit =
-          rawId.provenance.map(CanonicalName(_)).flatMap(cryptProviders) match {
+          rawId.provenance.flatMap(cryptProviders.forProvenance) match {
             case None =>
               Doc(rawId.value.toString) +#+ d":: bigint"
             case Some(cryptProvider) =>
@@ -140,8 +193,8 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
         ExprSql.Expanded[MT](Seq(provenanceLit, numLit), e)
       }
 
-      protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {
-        val provenance = Option(rs.getString(dbCol))
+      override protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {
+        val provenance = Option(rs.getString(dbCol)).map(Provenance(_))
         val valueRaw = rs.getLong(dbCol + 1)
 
         if(rs.wasNull) {
@@ -153,7 +206,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
         }
       }
 
-      protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV = {
+      override protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getString(dbCol)) match {
           case None =>
             SoQLNull
@@ -161,7 +214,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
             JsonUtil.parseJson[(Either[JNull, String], Long)](v) match {
               case Right((Right(prov), v)) =>
                 val result = SoQLVersion(v)
-                result.provenance = Some(prov)
+                result.provenance = Some(Provenance(prov))
                 result
               case Right((Left(JNull), v)) =>
                 SoQLVersion(v)
@@ -170,35 +223,48 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
             }
         }
       }
+
+      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
+        if(isRollup(tableName)) {
+          Seq(
+            d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, label) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"(" ++ expandedDatabaseColumns(label).commaSep ++ d")"
+          )
+        } else {
+          Seq(
+            d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, label) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"(" ++ compressedDatabaseColumn(label) ++ d")"
+          )
+        }
     },
 
     // ATOMIC REPS
 
     SoQLText -> new SingleColumnRep(SoQLText, d"text") {
-      def literal(e: LiteralValue) = {
+      override def literal(e: LiteralValue) = {
         val SoQLText(s) = e.value
         ExprSql(mkTextLiteral(s), e)
       }
-      protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
+      override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getString(dbCol)) match {
           case None => SoQLNull
           case Some(t) => SoQLText(t)
         }
       }
+      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
+        createTextlikeIndices(namespace.indexName(tableName, label), tableName, compressedDatabaseColumn(label))
     },
-//TODO make sure the scale and precision are right
-//TODO make sure money is correct $$$$
     SoQLNumber -> new SingleColumnRep(SoQLNumber, Doc(SoQLFunctionSqlizerRedshift.numericType)) {
-      def literal(e: LiteralValue) = {
+      override def literal(e: LiteralValue) = {
         val SoQLNumber(n) = e.value
         ExprSql(Doc(n.toString) +#+ d"::" +#+ sqlType, e)
       }
-      protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
+      override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getBigDecimal(dbCol)) match {
           case None => SoQLNull
           case Some(t) => SoQLNumber(t)
         }
       }
+      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
+        createSimpleIndices(namespace.indexName(tableName, label), tableName, compressedDatabaseColumn(label))
     },
     SoQLBoolean -> new SingleColumnRep(SoQLBoolean, d"boolean") {
       def literal(e: LiteralValue) = {
@@ -213,6 +279,8 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
           SoQLBoolean(v)
         }
       }
+      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
+        createSimpleIndices(namespace.indexName(tableName, label), tableName, compressedDatabaseColumn(label))
     },
     SoQLFixedTimestamp -> new SingleColumnRep(SoQLFixedTimestamp, d"timestamp with time zone") {
       def literal(e: LiteralValue) = {
@@ -223,6 +291,8 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
       }
+      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
+        createSimpleIndices(namespace.indexName(tableName, label), tableName, compressedDatabaseColumn(label))
     },
     SoQLFloatingTimestamp -> new SingleColumnRep(SoQLFloatingTimestamp, d"timestamp without time zone") {
       def literal(e: LiteralValue) = {
@@ -233,6 +303,8 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
       }
+      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
+        createSimpleIndices(namespace.indexName(tableName, label), tableName, compressedDatabaseColumn(label))
     },
     SoQLDate -> new SingleColumnRep(SoQLDate, d"date") {
       def literal(e: LiteralValue) = {
@@ -243,6 +315,8 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
       }
+      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
+        createSimpleIndices(namespace.indexName(tableName, label), tableName, compressedDatabaseColumn(label))
     },
     SoQLTime -> new SingleColumnRep(SoQLTime, d"time without time zone") {
       def literal(e: LiteralValue) = {
@@ -253,6 +327,8 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
       }
+      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
+        createSimpleIndices(namespace.indexName(tableName, label), tableName, compressedDatabaseColumn(label))
     },
     SoQLJson -> new SingleColumnRep(SoQLJson, d"jsonb") {
       def literal(e: LiteralValue) = {
@@ -263,11 +339,15 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
       }
+      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
+        Seq(
+          d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, label) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"USING GIN (" ++ compressedDatabaseColumn(label) ++ d")"
+        )
     },
 
     SoQLDocument -> new SingleColumnRep(SoQLDocument, d"jsonb") {
-      def literal(e: LiteralValue) = ??? // no such thing as a doc liteal
-      protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
+      override def literal(e: LiteralValue) = ??? // no such thing as a doc liteal
+      override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getString(dbCol)) match {
           case Some(s) =>
             JsonUtil.parseJson[SoQLDocument](s) match {
@@ -278,14 +358,15 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
             SoQLNull
         }
       }
+      override def indices(tableName: DatabaseTableName, label: ColumnLabel) = Nil
     },
 
     SoQLInterval -> new SingleColumnRep(SoQLInterval, d"interval") {
-      def literal(e: LiteralValue) = {
+      override def literal(e: LiteralValue) = {
         val SoQLInterval(p) = e.value
         ExprSql(d"interval" +#+ mkStringLiteral(SoQLInterval.StringRep(p)), e)
       }
-      protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
+      override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getObject(dbCol).asInstanceOf[PGInterval]) match {
           case Some(pgInterval) =>
             val period = new Period(pgInterval.getYears, pgInterval.getMonths, 0, pgInterval.getDays, pgInterval.getHours, pgInterval.getMinutes, pgInterval.getWholeSeconds, pgInterval.getMicroSeconds / 1000)
@@ -294,6 +375,8 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
             SoQLNull
         }
       }
+      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
+        createSimpleIndices(namespace.indexName(tableName, label), tableName, compressedDatabaseColumn(label))
     },
 
     SoQLPoint -> new GeometryRep(SoQLPoint, SoQLPoint(_), "point") {
@@ -323,20 +406,31 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
     // COMPOUND REPS
 
     SoQLPhone -> new CompoundColumnRep(SoQLPhone) {
-      def nullLiteral(e: NullLiteral) =
+      override def nullLiteral(e: NullLiteral) =
         ExprSql.Expanded[MT](Seq(d"null :: text", d"null :: text"), e)
 
-      def expandedColumnCount = 2
+      override def expandedColumnCount = 2
 
-      def expandedDatabaseColumns(name: ColumnLabel) = {
+      override def expandedDatabaseColumns(name: ColumnLabel) = {
         val base = namespace.columnBase(name)
         Seq(base ++ d"_number", base ++ d"_type")
       }
 
-      def compressedDatabaseColumn(name: ColumnLabel) =
+      override def expandedDatabaseTypes = Seq(d"text", d"text")
+
+      override def compressedSubColumns(table: String, column: ColumnLabel) = {
+        val sourceName = compressedDatabaseColumn(column)
+        val Seq(provenancedName, dataName) = expandedDatabaseColumns(column)
+        Seq(
+          d"(" ++ Doc(table) ++ d"." ++ sourceName ++ d") ->> 0 AS" +#+ provenancedName,
+          d"(" ++ Doc(table) ++ d"." ++ sourceName ++ d") ->> 1 AS" +#+ dataName,
+        )
+      }
+
+      override def compressedDatabaseColumn(name: ColumnLabel) =
         namespace.columnBase(name)
 
-      def literal(e: LiteralValue) = {
+      override def literal(e: LiteralValue) = {
         val ph@SoQLPhone(_, _) = e.value
 
         ph match {
@@ -356,17 +450,17 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
         }
       }
 
-      def subcolInfo(field: String) =
+      override def subcolInfo(field: String) =
         field match {
           case "phone_number" => SubcolInfo[MT](SoQLPhone, 0, "text", SoQLText, _.parenthesized +#+ d"->> 0")
           case "phone_type" => SubcolInfo[MT](SoQLPhone, 1, "text", SoQLText, _.parenthesized +#+ d"->> 1")
         }
 
       private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.PhoneRep("")
-      protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {
+      override protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
       }
-      protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV = {
+      override protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getString(dbCol)) match {
           case None =>
             SoQLNull
@@ -385,6 +479,11 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
             }
         }
       }
+      override def indices(tableName: DatabaseTableName, label: ColumnLabel) = {
+        val Seq(numberCol, typeCol) = expandedDatabaseColumns(label)
+        createTextlikeIndices(namespace.indexName(tableName, label, "number"), tableName, numberCol) ++
+          createTextlikeIndices(namespace.indexName(tableName, label, "type"), tableName, typeCol)
+      }
     },
 
     SoQLLocation -> new CompoundColumnRep(SoQLLocation) {
@@ -402,25 +501,39 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
           col)
       }
 
-      def nullLiteral(e: NullLiteral) =
-        ExprSql.Expanded[MT](Seq(d"null :: point", d"null :: text", d"null :: text", d"null :: text", d"null :: text"), e)
+      override def nullLiteral(e: NullLiteral) =
+        ExprSql.Expanded[MT](Seq(d"null :: geometry", d"null :: text", d"null :: text", d"null :: text", d"null :: text"), e)
 
-      def expandedColumnCount = 5
+      override def expandedColumnCount = 5
 
-      def expandedDatabaseColumns(name: ColumnLabel) = {
+      override def expandedDatabaseTypes = Seq(d"geometry", d"text", d"text", d"text", d"text")
+
+      override def compressedSubColumns(table: String, column: ColumnLabel) = {
+        val sourceName = compressedDatabaseColumn(column)
+        val Seq(ptName, addressName, cityName, stateName, zipName) = expandedDatabaseColumns(column)
+        Seq(
+          d"soql_extract_compressed_location_point(" ++ Doc(table) ++ d"." ++ sourceName ++ d") AS" +#+ ptName,
+          d"(" ++ Doc(table) ++ d"." ++ sourceName ++ d") ->> 1 AS" +#+ addressName,
+          d"(" ++ Doc(table) ++ d"." ++ sourceName ++ d") ->> 2 AS" +#+ cityName,
+          d"(" ++ Doc(table) ++ d"." ++ sourceName ++ d") ->> 3 AS" +#+ stateName,
+          d"(" ++ Doc(table) ++ d"." ++ sourceName ++ d") ->> 4 AS" +#+ zipName,
+        )
+      }
+
+      override def expandedDatabaseColumns(name: ColumnLabel) = {
         val base = namespace.columnBase(name)
         Seq(base, base ++ d"_address", base ++ d"_city", base ++ d"_state", base ++ d"_zip")
       }
 
-      def compressedDatabaseColumn(name: ColumnLabel) =
+      override def compressedDatabaseColumn(name: ColumnLabel) =
         namespace.columnBase(name)
 
-      def literal(e: LiteralValue) = {
+      override def literal(e: LiteralValue) = {
         val loc@SoQLLocation(_, _, _) = e.value
         ??? // No such thing as a location literal
       }
 
-      def subcolInfo(field: String) =
+      override def subcolInfo(field: String) =
         field match {
           case "point" => SubcolInfo[MT](SoQLLocation, 0, "geometry", SoQLPoint, { e => Seq(e.parenthesized).funcall(d"soql_extract_compressed_location_point") })
           case "address" => SubcolInfo[MT](SoQLLocation, 1, "text", SoQLText, _.parenthesized +#+ d"->> 1")
@@ -428,6 +541,20 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
           case "state" => SubcolInfo[MT](SoQLLocation, 3, "text", SoQLText, _.parenthesized +#+ d"->> 3")
           case "zip" => SubcolInfo[MT](SoQLLocation, 4, "text", SoQLText, _.parenthesized +#+ d"->> 4")
         }
+
+      override def indices(tableName: DatabaseTableName, label: ColumnLabel) = {
+        val Seq(pointCol, addressCol, cityCol, stateCol, zipCol) = expandedDatabaseColumns(label)
+
+        val textIndices =
+          createTextlikeIndices(namespace.indexName(tableName, label, "address"), tableName, addressCol) ++
+          createTextlikeIndices(namespace.indexName(tableName, label, "city"), tableName, cityCol) ++
+          createTextlikeIndices(namespace.indexName(tableName, label, "state"), tableName, stateCol) ++
+          createTextlikeIndices(namespace.indexName(tableName, label, "zip"), tableName, zipCol)
+
+        textIndices ++ Seq(
+          d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, label, "point") +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"USING GIST (" ++ pointCol ++ d")"
+        )
+      }
 
       override def hasTopLevelWrapper = true
       override def wrapTopLevel(raw: ExprSql) = {
@@ -463,7 +590,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
           )
         }
 
-      protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {
+      override protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {
         locify(
           Option(rs.getBytes(dbCol)).flatMap { bytes =>
             SoQLPoint.WkbRep.unapply(bytes)
@@ -475,7 +602,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
         )
       }
 
-      protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV = {
+      override protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getString(dbCol)) match {
           case None =>
             SoQLNull
@@ -496,22 +623,32 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
       }
     },
 
-    // make sure compound data uses SUPER instead of jsonb
     SoQLUrl -> new CompoundColumnRep(SoQLUrl) {
-      def nullLiteral(e: NullLiteral) =
+      override def nullLiteral(e: NullLiteral) =
         ExprSql.Expanded[MT](Seq(d"null :: text", d"null :: text"), e)
 
-      def expandedColumnCount = 2
+      override def expandedColumnCount = 2
 
-      def expandedDatabaseColumns(name: ColumnLabel) = {
+      override def expandedDatabaseColumns(name: ColumnLabel) = {
         val base = namespace.columnBase(name)
         Seq(base ++ d"_url", base ++ d"_description")
       }
 
-      def compressedDatabaseColumn(name: ColumnLabel) =
+      override def expandedDatabaseTypes = Seq(d"text", d"text")
+
+      override def compressedSubColumns(table: String, column: ColumnLabel) = {
+        val sourceName = compressedDatabaseColumn(column)
+        val Seq(urlName, descName) = expandedDatabaseColumns(column)
+        Seq(
+          d"(" ++ Doc(table) ++ d"." ++ sourceName ++ d") ->> 0 AS" +#+ urlName,
+          d"(" ++ Doc(table) ++ d"." ++ sourceName ++ d") ->> 1 AS" +#+ descName,
+        )
+      }
+
+      override def compressedDatabaseColumn(name: ColumnLabel) =
         namespace.columnBase(name)
 
-      def literal(e: LiteralValue) = {
+      override def literal(e: LiteralValue) = {
         val url@SoQLUrl(_, _) = e.value
 
         url match {
@@ -531,17 +668,17 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
         }
       }
 
-      def subcolInfo(field: String) =
+      override def subcolInfo(field: String) =
         field match {
           case "url" => SubcolInfo[MT](SoQLUrl, 0, "text", SoQLText, _.parenthesized +#+ d"->> 0")
           case "description" => SubcolInfo[MT](SoQLUrl, 1, "text", SoQLText, _.parenthesized +#+ d"->> 1")
         }
 
       private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.UrlRep("")
-      protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {
+      override protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
       }
-      protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV = {
+      override protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getString(dbCol)) match {
           case None =>
             SoQLNull
@@ -559,6 +696,11 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
                 throw new Exception(err.english)
             }
         }
+      }
+      override def indices(tableName: DatabaseTableName, label: ColumnLabel) = {
+        val Seq(urlCol, descCol) = expandedDatabaseColumns(label)
+        createTextlikeIndices(namespace.indexName(tableName, label, "url"), tableName, urlCol) ++
+          createTextlikeIndices(namespace.indexName(tableName, label, "desc"), tableName, descCol)
       }
     }
   )

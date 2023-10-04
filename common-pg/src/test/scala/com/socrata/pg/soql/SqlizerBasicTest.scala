@@ -51,9 +51,9 @@ class SqlizerBasicTest extends SqlizerTest {
   test("concave hull") {
     val soql = "select concave_hull(point, 0.99), concave_hull(multiline, 0.89), concave_hull(multipolygon, 0.79)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ST_AsBinary((ST_Multi(ST_Buffer(ST_ConcaveHull("t1".point, 0.99),0.0)))),""" +
-      """ST_AsBinary((ST_Multi(ST_Buffer(ST_ConcaveHull("t1".multiline, 0.89),0.0)))),""" +
-      """ST_AsBinary((ST_Multi(ST_Buffer(ST_ConcaveHull("t1".multipolygon, 0.79),0.0)))) FROM t1""")
+    sql should be ("""SELECT ST_AsBinary((ST_Multi(ST_Buffer(ST_ConcaveHull("t1".point, (0.99::numeric)),0.0)))),""" +
+      """ST_AsBinary((ST_Multi(ST_Buffer(ST_ConcaveHull("t1".multiline, (0.89::numeric)),0.0)))),""" +
+      """ST_AsBinary((ST_Multi(ST_Buffer(ST_ConcaveHull("t1".multipolygon, (0.79::numeric)),0.0)))) FROM t1""")
     setParams.length should be (0)
   }
 
@@ -102,8 +102,8 @@ class SqlizerBasicTest extends SqlizerTest {
       """SELECT ((NOT ST_IsEmpty("t1".multipolygon))
         |     AND (ST_GeometryType("t1".multipolygon) = 'ST_Point'
         |     OR ST_GeometryType("t1".multipolygon) = 'ST_MultiPoint'
-        |     OR (ST_XMax("t1".multipolygon) - ST_XMin("t1".multipolygon)) >= 0.03
-        |     OR (ST_YMax("t1".multipolygon) - ST_YMin("t1".multipolygon)) >= 0.03) )
+        |     OR (ST_XMax("t1".multipolygon) - ST_XMin("t1".multipolygon)) >= (0.03::numeric)
+        |     OR (ST_YMax("t1".multipolygon) - ST_YMin("t1".multipolygon)) >= (0.03::numeric)) )
         | FROM t1""".stripMargin.replaceAll("\\s+", " ")
     sql.replaceAll("\\s+", " ") should be (expected)
     setParams.length should be (0)
@@ -178,21 +178,21 @@ class SqlizerBasicTest extends SqlizerTest {
   test("select text and number conversions") {
     val soql = "select 123::text, '123'::number"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT (123::varchar),(e'[[123]]'::numeric) FROM t1")
+    sql should be ("SELECT ((123::numeric)::varchar),(e'[[123]]'::numeric) FROM t1")
     setParams.length should be (0)
   }
 
   test("substring start parameter only") {
     val soql = "select substring(case_number, 1)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT (substring("t1".case_number, 1::int)) FROM t1""")
+    sql should be ("""SELECT (substring("t1".case_number, (1::numeric)::int)) FROM t1""")
     setParams.length should be (0)
   }
 
   test("substring two parameters") {
     val soql = "select substring(case_number, 1, 2)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT (substring("t1".case_number, 1::int, 2::int)) FROM t1""")
+    sql should be ("""SELECT (substring("t1".case_number, (1::numeric)::int, (2::numeric)::int)) FROM t1""")
     setParams.length should be (0)
   }
 
@@ -239,7 +239,7 @@ class SqlizerBasicTest extends SqlizerTest {
   test("signed magnitude linear") {
     val soql = "select signed_magnitude_linear(year, 42)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be("""SELECT (case when 42 = 1 then floor("t1".year) else sign("t1".year) * floor(abs("t1".year)/42 + 1) end) FROM t1""")
+    sql should be("""SELECT (case when (42::numeric) = 1 then floor("t1".year) else sign("t1".year) * floor(abs("t1".year)/(42::numeric) + 1) end) FROM t1""")
     setParams.length should be(0)
   }
 
@@ -338,35 +338,35 @@ class SqlizerBasicTest extends SqlizerTest {
   test("simplify multigeometry") {
     val soql = "select simplify(multipolygon, 0.5)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ST_AsBinary((ST_Multi(ST_Simplify("t1".multipolygon, 0.5)))) FROM t1""")
+    sql should be ("""SELECT ST_AsBinary((ST_Multi(ST_Simplify("t1".multipolygon, (0.5::numeric))))) FROM t1""")
     setParams.length should be (0)
   }
 
   test("simplify geometry") {
     val soql = "select simplify(polygon, 0.5)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ST_AsBinary((ST_Simplify("t1".polygon, 0.5))) FROM t1""")
+    sql should be ("""SELECT ST_AsBinary((ST_Simplify("t1".polygon, (0.5::numeric)))) FROM t1""")
     setParams.length should be (0)
   }
 
   test("simplify multigeometry preserving topology") {
     val soql = "select simplify_preserve_topology(multipolygon, 0.5)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ST_AsBinary((ST_Multi(ST_SimplifyPreserveTopology("t1".multipolygon, 0.5)))) FROM t1""")
+    sql should be ("""SELECT ST_AsBinary((ST_Multi(ST_SimplifyPreserveTopology("t1".multipolygon, (0.5::numeric))))) FROM t1""")
     setParams.length should be (0)
   }
 
   test("simplify geometry preserving topology") {
     val soql = "select simplify_preserve_topology(polygon, 0.5)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ST_AsBinary((ST_SimplifyPreserveTopology("t1".polygon, 0.5))) FROM t1""")
+    sql should be ("""SELECT ST_AsBinary((ST_SimplifyPreserveTopology("t1".polygon, (0.5::numeric)))) FROM t1""")
     setParams.length should be (0)
   }
 
   test("geometry snap to grid") {
     val soql = "select snap_to_grid(polygon, 0.5)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT ST_AsBinary((ST_SnapToGrid("t1".polygon, 0.5))) FROM t1""")
+    sql should be ("""SELECT ST_AsBinary((ST_SnapToGrid("t1".polygon, (0.5::numeric)))) FROM t1""")
     setParams.length should be (0)
   }
 
@@ -374,7 +374,7 @@ class SqlizerBasicTest extends SqlizerTest {
     val soql = "select curated_region_test(multipolygon, 20)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     sql.replaceAll("""\s+""", " ") should be ("""SELECT
-                  (case when st_npoints("t1".multipolygon) > 20 then 'too complex'
+                  (case when st_npoints("t1".multipolygon) > (20::numeric) then 'too complex'
                         when st_xmin("t1".multipolygon) < -180 or st_xmax("t1".multipolygon) > 180 or st_ymin("t1".multipolygon) < -90 or st_ymax("t1".multipolygon) > 90 then 'out of bounds'
                         when not st_isvalid("t1".multipolygon) then st_isvalidreason("t1".multipolygon)::text
                         when ("t1".multipolygon) is null then 'empty'
@@ -385,7 +385,7 @@ class SqlizerBasicTest extends SqlizerTest {
   test("group by literals with constants removed") {
     val soql = "select id, 'stRing' as a, 5 as b, 2*3 as c group by id, a, b, c"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT "t1".id,e'[[stRing]]',5,(2 * 3) FROM t1 GROUP BY "t1".id""")
+    sql should be ("""SELECT "t1".id,e'[[stRing]]',(5::numeric),((2::numeric) * (3::numeric)) FROM t1 GROUP BY "t1".id""")
     setParams.length should be (0)
   }
 
@@ -395,7 +395,7 @@ class SqlizerBasicTest extends SqlizerTest {
   test("group by all literals and constants stay when everything is a constant") {
     val soql = "select 'stRing' as a, 5 as b, 2*3 as c group by a, b, c"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT e'[[stRing]]',5,(2 * 3) FROM t1 GROUP BY 1,2,3")
+    sql should be ("SELECT e'[[stRing]]',(5::numeric),((2::numeric) * (3::numeric)) FROM t1 GROUP BY 1,2,3")
     setParams.length should be (0)
   }
 
@@ -498,7 +498,7 @@ class SqlizerBasicTest extends SqlizerTest {
     val ts2 = new Timestamp(dt2.getMillis)
     val ts3 = new Timestamp(dt3.getMillis)
     params should be (Seq(ts1, ts2, ts3))
-    sql should be ("SELECT 1 WHERE (((null = (?::timestamp)) or (null = (?::timestamp with time zone))) or (null = (?::timestamp with time zone)))")
+    sql should be ("SELECT (1::numeric) WHERE (((null = (?::timestamp)) or (null = (?::timestamp with time zone))) or (null = (?::timestamp with time zone)))")
   }
 
   test("timestamp literals use timestamp parameters in date_diff_d") {
@@ -514,7 +514,7 @@ class SqlizerBasicTest extends SqlizerTest {
     val ts3 = new Timestamp(dt3.getMillis)
     val ts4 = new Timestamp(dt4.getMillis)
     params should be (Seq(ts1, ts2, ts3, ts4))
-    sql should be ("SELECT 1 WHERE (((trunc((extract(epoch from (?::timestamp)) - extract(epoch from (?::timestamp)))::numeric / 86400)) is null) or ((trunc((extract(epoch from (?::timestamp with time zone)) - extract(epoch from (?::timestamp with time zone)))::numeric / 86400)) is null))")
+    sql should be ("SELECT (1::numeric) WHERE (((trunc((extract(epoch from (?::timestamp)) - extract(epoch from (?::timestamp)))::numeric / 86400)) is null) or ((trunc((extract(epoch from (?::timestamp with time zone)) - extract(epoch from (?::timestamp with time zone)))::numeric / 86400)) is null))")
   }
 
   test("indirect literals should not generate timestamp parameters") {
@@ -522,6 +522,6 @@ class SqlizerBasicTest extends SqlizerTest {
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     val params = setParams.map { (setParam) => setParam(None, 0).get }
     params should be (Seq("2021-12-", "25")) // all parameters are text, no Timestamps
-    sql should be ("SELECT 1 WHERE (((? || ?)::timestamp) is null)")
+    sql should be ("SELECT (1::numeric) WHERE (((? || ?)::timestamp) is null)")
   }
 }

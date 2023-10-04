@@ -76,7 +76,7 @@ object NumberLiteralSqlizer extends Sqlizer[NumberLiteral[SoQLType]] {
           setParams: Seq[SetParam],
           ctx: Context,
           escape: Escape): ParametricSql =
-    setSqlStmtParam(setBigDecimal)(lit)(rep, typeRep, setParams, ctx, escape)
+    setSqlStmtParam(setBigDecimal, "(" + _ + "::numeric)")(lit)(rep, typeRep, setParams, ctx, escape)
 
   /**
     * For row id/version where the underlying db type is long so that the proper index can be used.
@@ -87,7 +87,7 @@ object NumberLiteralSqlizer extends Sqlizer[NumberLiteral[SoQLType]] {
                    setParams: Seq[SetParam],
                    ctx: Context,
                    escape: Escape): ParametricSql = {
-    setSqlStmtParam(setLong)(lit)(rep, typeRep, setParams, ctx, escape)
+    setSqlStmtParam(setLong, "(" + _ + "::bigint)")(lit)(rep, typeRep, setParams, ctx, escape)
   }
 
   private def setBigDecimal(pStmt: PreparedStatement, pos: Integer, lit: NumberLiteral[SoQLType]): Unit =
@@ -96,7 +96,7 @@ object NumberLiteralSqlizer extends Sqlizer[NumberLiteral[SoQLType]] {
   private def setLong(pStmt: PreparedStatement, pos: Integer, lit: NumberLiteral[SoQLType]): Unit =
     pStmt.setLong(pos, lit.value.longValue)
 
-  private def setSqlStmtParam(setStmtParam: SetStmtParam)
+  private def setSqlStmtParam(setStmtParam: SetStmtParam, cast: String => String)
                              (lit: NumberLiteral[SoQLType])
                              (rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                               typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
@@ -105,9 +105,9 @@ object NumberLiteralSqlizer extends Sqlizer[NumberLiteral[SoQLType]] {
                               escape: Escape): ParametricSql = {
     ctx.get(SoqlPart) match {
       case Some(SoqlHaving) | Some(SoqlGroup) =>
-        ParametricSql(Seq(lit.value.bigDecimal.toPlainString), setParams)
+        ParametricSql(Seq(cast(lit.value.bigDecimal.toPlainString)), setParams)
       case Some(SoqlSelect) | Some(SoqlOrder) =>
-        ParametricSql(Seq(lit.value.bigDecimal.toPlainString + selectAlias(lit)(ctx)), setParams)
+        ParametricSql(Seq(cast(lit.value.bigDecimal.toPlainString) + selectAlias(lit)(ctx)), setParams)
       case _ =>
         val setParam = (stmt: Option[PreparedStatement], pos: Int) => {
           stmt.foreach(setStmtParam(_, pos, lit))

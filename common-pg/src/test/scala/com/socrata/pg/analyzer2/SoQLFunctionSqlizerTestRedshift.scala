@@ -47,11 +47,16 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
       }
     }
 
+    override val toProvenance = SoQLFunctionSqlizerTest.ProvenanceMapper
+    def isRollup(dtn: DatabaseTableName) = false
+
     val cryptProvider = obfuscation.CryptProvider.zeros
 
-    override val repFor = new SoQLRepProviderRedshift[TestMT](_ => Some(cryptProvider), namespace, Map.empty, Map.empty) {
-      def mkStringLiteral(string: String) = Doc(s"'$string'")
-    }
+    override def mkRepProvider(physicalTableFor: Map[AutoTableLabel, DatabaseTableName]) =
+      new SoQLRepProviderRedshift[TestMT](_ => Some(cryptProvider), namespace, toProvenance, isRollup, Map.empty, physicalTableFor) {
+        override def mkStringLiteral(s: String) = Doc(s"'$s'")
+      }
+
 
     override val funcallSqlizer = new SoQLFunctionSqlizerRedshift
 
@@ -65,7 +70,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
   def tableFinder(items: ((Int, String), Thing[Int, SoQLType])*) =
     new MockTableFinder[TestMT](items.toMap)
-  val analyzer = new SoQLAnalyzer[TestMT](SoQLTypeInfo, SoQLFunctionInfo)
+  val analyzer = new SoQLAnalyzer[TestMT](SoQLTypeInfo, SoQLFunctionInfo, SoQLFunctionSqlizerTest.ProvenanceMapper)
   def analyze(soqlexpr: String): String = {
     val s = analyzeStatement(s"SELECT ($soqlexpr)")
     val prefix = "SELECT "
@@ -100,7 +105,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
     if(useSelectListReferences) analysis = analysis.useSelectListReferences
 
-    val sql = sqlizer(analysis.statement).sql.layoutSingleLine.toString
+    val sql = sqlizer(analysis).sql.layoutSingleLine.toString
 
     println(sql)
     sql

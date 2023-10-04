@@ -5,39 +5,71 @@ import scala.collection.compat.immutable
 import scala.{collection => sc}
 
 import com.socrata.soql.analyzer2._
+import com.socrata.soql.environment.Provenance
 
-class ProvenanceTracker[MT <: MetaTypes] private (exprs: sc.Map[Expr[MT], Set[CanonicalName]]) extends SqlizerUniverse[MT] {
+class ProvenanceTracker[MT <: MetaTypes] private (
+  exprs: sc.Map[Expr[MT], ProvenanceTracker.Result]
+) extends SqlizerUniverse[MT] {
   // Returns the set of possible origin-tables for the value of this
   // expression.  In a tree where this is size <2 but demanded by an
   // expression with size >=2 is where provenances should start
   // getting tracked dynamically.
-  def apply(expr: Expr): Set[CanonicalName] =
+  def apply(expr: Expr): ProvenanceTracker.Result =
     exprs(expr)
 }
 
 object ProvenanceTracker {
-  def apply[MT <: MetaTypes](s: Statement[MT], provenanceOf: LiteralValue[MT] => Set[CanonicalName]): ProvenanceTracker[MT] = {
-    val builder = new Builder[MT](provenanceOf)
+  sealed abstract class Result {
+    def isPlural: Boolean
+    def ++(that: Result): Result
+  }
+  object Result {
+    val empty: Result = Known(Set.empty)
+  }
+  case class Known(possibilities: Set[Option[Provenance]]) extends Result {
+    val isPlural = possibilities.size > 1
+    def ++(that: Result) =
+      that match {
+        case Known(otherPossibilities) => Known(possibilities ++ otherPossibilities)
+        case Unknown => Unknown
+      }
+  }
+  case object Unknown extends Result {
+    def isPlural = true
+    def ++(that: Result) = this
+  }
+
+  def apply[MT <: MetaTypes](
+    s: Statement[MT],
+    provenanceOf: LiteralValue[MT] => Set[Option[Provenance]],
+    dtnToProvenance: types.ToProvenance[MT],
+    isRollup: types.DatabaseTableName[MT] => Boolean
+  ): ProvenanceTracker[MT] = {
+    val builder = new Builder[MT](provenanceOf, dtnToProvenance, isRollup)
     builder.processStatement(s)
     new ProvenanceTracker(builder.exprs)
   }
 
-  private class Builder[MT <: MetaTypes](provenanceOf: LiteralValue[MT] => Set[CanonicalName]) extends SqlizerUniverse[MT] {
-    val exprs = new scm.HashMap[Expr, Set[CanonicalName]]
-    val identifiers = new scm.HashMap[(AutoTableLabel, ColumnLabel), Set[CanonicalName]]
+  private class Builder[MT <: MetaTypes](
+    provenanceOf: LiteralValue[MT] => Set[Option[Provenance]],
+    dtnToProvenance: types.ToProvenance[MT],
+    isRollup: types.DatabaseTableName[MT] => Boolean
+  ) extends SqlizerUniverse[MT] {
+    val exprs = new scm.HashMap[Expr, Result]
+    val identifiers = new scm.HashMap[(AutoTableLabel, ColumnLabel), Result]
 
-    private val emptySLR = immutable.ArraySeq[Set[CanonicalName]]()
+    private val emptySLR = immutable.ArraySeq[Result]()
 
-    def processStatement(s: Statement): Seq[Set[CanonicalName]] = {
+    def processStatement(s: Statement): Seq[Result] = {
       s match {
         case CombinedTables(op, left, right) =>
-          (processStatement(left), processStatement(right)).zipped.map(_ union _)
+          (processStatement(left), processStatement(right)).zipped.map(_ ++ _)
         case CTE(defLabel, _defAlias, defQuery, _, useQuery) =>
           processStatement(defQuery)
           processStatement(useQuery)
 
         case Values(labels, values) =>
-          val result = Array.fill(labels.size)(Set.empty[CanonicalName])
+          val result = Array.fill(labels.size)(Result.empty)
           for(row <- values) {
             for((col, i) <- row.iterator.zipWithIndex) {
               val prov = processExpr(col, emptySLR)
@@ -52,7 +84,7 @@ object ProvenanceTracker {
 
           // Then selectList so that provs can be attached to selectListProvenances
           val selectListProvenances = locally {
-            val result = new Array[Set[CanonicalName]](selectList.size)
+            val result = new Array[Result](selectList.size)
             for((namedExpr, idx) <- selectList.valuesIterator.zipWithIndex) {
               result(idx) = processExpr(namedExpr.expr, emptySLR)
             }
@@ -105,7 +137,12 @@ object ProvenanceTracker {
         case _ : FromSingleRow =>
           // no structure here
         case ft: FromTable =>
-          val prov = Set(ft.canonicalName)
+          val prov =
+            if(isRollup(ft.tableName)) {
+              Unknown
+            } else {
+              Known(Set(Some(dtnToProvenance.toProvenance(ft.tableName))))
+            }
           for(col <- ft.columns.keysIterator) {
             identifiers += (ft.label, col) -> prov
           }
@@ -116,22 +153,22 @@ object ProvenanceTracker {
       }
     }
 
-    def processExpr(e: Expr, selectList: immutable.ArraySeq[Set[CanonicalName]]): Set[CanonicalName] = {
-      val prov: Set[CanonicalName] =
+    def processExpr(e: Expr, selectList: immutable.ArraySeq[Result]): Result = {
+      val prov: Result =
         e match {
           case l: LiteralValue =>
-            provenanceOf(l)
+            Known(provenanceOf(l))
           case c: Column =>
             identifiers((c.table, c.column))
           case n: NullLiteral =>
-            Set.empty
+            Result.empty
           case FunctionCall(_func, args) =>
-            args.foldLeft(Set.empty[CanonicalName]) { (acc, arg) =>
+            args.foldLeft(Result.empty) { (acc, arg) =>
               acc ++ processExpr(arg, emptySLR) // selectlistreferences must be top-level
             }
           case AggregateFunctionCall(_func, args, _distinct, filter) =>
             val argProvs =
-              args.foldLeft(Set.empty[CanonicalName]) { (acc, arg) =>
+              args.foldLeft(Result.empty) { (acc, arg) =>
                 acc ++ processExpr(arg, emptySLR)
               }
             filter.foldLeft(argProvs) { (acc, filter) =>
@@ -139,7 +176,7 @@ object ProvenanceTracker {
             }
           case WindowedFunctionCall(_func, args, filter, partitionBy, orderBy, _frame) =>
             val argProv =
-              args.foldLeft(Set.empty[CanonicalName]) { (acc, arg) =>
+              args.foldLeft(Result.empty) { (acc, arg) =>
                 acc ++ processExpr(arg, emptySLR)
               }
             val filterProv =

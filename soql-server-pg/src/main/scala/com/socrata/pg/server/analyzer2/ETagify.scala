@@ -17,6 +17,7 @@ import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.sql.Debug
 
 import com.socrata.pg.analyzer2.SqlizerUniverse
+import com.socrata.pg.analyzer2.metatypes.InputMetaTypes
 
 final abstract class ETagify
 

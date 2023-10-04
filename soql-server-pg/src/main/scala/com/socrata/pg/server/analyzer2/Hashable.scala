@@ -5,6 +5,8 @@ import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.sql.Debug
 
+import com.socrata.pg.analyzer2.metatypes.Stage
+
 trait Hashable[T] {
   def hash(hasher: Hasher, value: T): Unit
 
@@ -124,6 +126,7 @@ object Hashable {
           hasher.hashByte(9)
           hasher.hash(lim)
           hasher.hash(off)
+        case rewrite.Pass.RemoveOrderBy => hasher.hashByte(10)
       }
   }
 
@@ -165,5 +168,10 @@ object Hashable {
       hasher.hash(explainSpec)
       hasher.hash(inhibitRun)
     }
+  }
+
+  implicit object stage extends Hashable[Stage] {
+    override def hash(hasher: Hasher, value: Stage) = hasher.hashString(value.underlying)
+    override def isString = true
   }
 }

@@ -1,7 +1,7 @@
 package com.socrata.pg.store
 
 import com.rojoma.simplearm.v2._
-import com.socrata.datacoordinator.id.{CopyId, DatasetId, RollupName}
+import com.socrata.datacoordinator.id.{CopyId, DatasetId, RollupName, DatasetInternalName}
 import com.socrata.datacoordinator.truth.metadata.sql.{BasePostgresDatasetMapReader, PostgresDatasetMapReader}
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo, DatasetInfo, LifecycleStage, TypeNamespace}
 import com.socrata.datacoordinator.util.TimingReport
@@ -184,6 +184,13 @@ class PGSecondaryDatasetMapReader[CT](conn: Connection, tns: TypeNamespace[CT], 
         }
       }
     }
+  }
+
+  def datasetInfoByInternalName(datasetInternalName: DatasetInternalName): Option[DatasetInfo] = {
+    for {
+      id <- datasetIdForInternalName(datasetInternalName.underlying)
+      info <- datasetInfo(id)
+    } yield info
   }
 
   def pgTotalRelationSizeQuery = "select pg_total_relation_size(?)"

@@ -8,7 +8,7 @@ class SqlizerJoinTest  extends SqlizerTest {
   test("join wo alias") {
     val soql = "select case_number, primary_type, @type.description join @type on primary_type = @type.primary_type"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT "t1".case_number,"t1".primary_type,"t2".description FROM t1 JOIN t2 ON ("t1".primary_type = "t2".primary_type)""")
+    sql should be ("""SELECT "t1".case_number,"t1".primary_type,"_type".description FROM t1 JOIN t2 as "_type" ON ("t1".primary_type = "_type".primary_type)""")
     setParams.length should be (0)
   }
 
@@ -57,14 +57,14 @@ class SqlizerJoinTest  extends SqlizerTest {
   test("join to single_row") {
     val soql = "select 'bleh' join @single_row on true"
     val psql@ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
-    sql should be ("SELECT e'[[bleh]]' FROM t1 JOIN single_row ON ?")
+    sql should be ("""SELECT e'[[bleh]]' FROM t1 JOIN single_row as "_single_row" ON ?""")
     psql.paramsAsStrings should be (Seq("true"))
   }
 
   test("join to single_row in subselect") {
     val soql = "select 'bleh' join (select 1, 2, 3 from @single_row) as vars on true"
     val psql@ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT e'[[bleh]]' FROM t1 JOIN (SELECT 1 as "_1",2 as "_2",3 as "_3") as "_vars" ON ?""")
+    sql should be ("""SELECT e'[[bleh]]' FROM t1 JOIN (SELECT (1::numeric) as "_1",(2::numeric) as "_2",(3::numeric) as "_3") as "_vars" ON ?""")
     psql.paramsAsStrings should be (Seq("true"))
   }
 
@@ -108,7 +108,7 @@ class SqlizerJoinTest  extends SqlizerTest {
   test("join and date extract") {
     val soql = "select case_number, primary_type, date_extract_woy(@type.registered) join @type on primary_type = @type.primary_type"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
-    sql should be ("""SELECT "t1".case_number,"t1".primary_type,(extract(week from "t2".registered)::numeric) FROM t1 JOIN t2 ON ("t1".primary_type = "t2".primary_type)""")
+    sql should be ("""SELECT "t1".case_number,"t1".primary_type,(extract(week from "_type".registered)::numeric) FROM t1 JOIN t2 as "_type" ON ("t1".primary_type = "_type".primary_type)""")
     setParams.length should be (0)
   }
 
@@ -142,11 +142,11 @@ class SqlizerJoinTest  extends SqlizerTest {
 
     val expectedSql = """SELECT "t1".case_number FROM t1
       |     JOIN
-      |  (SELECT (coalesce((max("avg_temperature")),1)) as "coalesce_max_avg_temperature_1","year" as "year"
+      |  (SELECT (coalesce((max("avg_temperature")),(1::numeric))) as "coalesce_max_avg_temperature_1","year" as "year"
       |     FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1"
       |    WHERE ("avg_temperature" < ?) GROUP BY "year") as "_j1" ON ("t1".year = "_j1"."year")
       |     JOIN
-      |  (SELECT (coalesce((sum("avg_temperature")),3)) as "coalesce_sum_avg_temperature_3","year" as "year"
+      |  (SELECT (coalesce((sum("avg_temperature")),(3::numeric))) as "coalesce_sum_avg_temperature_3","year" as "year"
       |     FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1"
       |    WHERE ("avg_temperature" < ?) GROUP BY "year") as "_j2" ON ("t1".year = "_j2"."year")""".stripMargin
 
@@ -167,13 +167,13 @@ class SqlizerJoinTest  extends SqlizerTest {
          """
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
 
-    val expectedSql = """SELECT "case_number",11 FROM (SELECT "t1".case_number as "case_number" FROM t1
+    val expectedSql = """SELECT "case_number",(11::numeric) FROM (SELECT "t1".case_number as "case_number" FROM t1
                                   JOIN
-                                       (SELECT (coalesce((max("avg_temperature")),1)) as "coalesce_max_avg_temperature_1","year" as "year"
+                                       (SELECT (coalesce((max("avg_temperature")),(1::numeric))) as "coalesce_max_avg_temperature_1","year" as "year"
                                           FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1"
                                          WHERE ("avg_temperature" < ?) GROUP BY "year") as "_j1" ON ("t1".year = "_j1"."year")
                                   JOIN
-                                       (SELECT (coalesce((sum("avg_temperature")),3)) as "coalesce_sum_avg_temperature_3","year" as "year"
+                                       (SELECT (coalesce((sum("avg_temperature")),(3::numeric))) as "coalesce_sum_avg_temperature_3","year" as "year"
                                           FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1"
                                          WHERE ("avg_temperature" < ?) GROUP BY "year") as "_j2" ON ("t1".year = "_j2"."year")) AS "x1" WHERE (? = ?)"""
 
@@ -185,7 +185,7 @@ class SqlizerJoinTest  extends SqlizerTest {
 
   test("this alias") {
     val soql = "SELECT @t.id FROM @this as t"
-    val expected = """SELECT "_t".id FROM t1 as "_t""""
+    val expected = """SELECT "_t"."id" FROM t1 as "_t""""
     val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
     sql should be (expected)
   }
@@ -199,21 +199,21 @@ class SqlizerJoinTest  extends SqlizerTest {
 
   test("join chained soql and multiple this's") {
     val soql = "select @t.id from @this as t join (select name from @cat |> select @tc.name from @this as tc ) as c on true"
-    val expected = """SELECT "_t".id FROM t1 as "_t" JOIN (SELECT "_tc"."name" as "name" FROM (SELECT "name_45" as "name" FROM t11) as "_tc") as "_c" ON ?"""
+    val expected = """SELECT "_t"."id" FROM t1 as "_t" JOIN (SELECT "_tc"."name" as "name" FROM (SELECT "name_45" as "name" FROM t11) as "_tc") as "_c" ON ?"""
     val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
     sql should be (expected)
   }
 
   test("lateral join and this") {
     val soql = "select @t.id from @this as t join lateral (select name, @t.id from @cat) as c on true"
-    val expected = """SELECT "_t".id FROM t1 as "_t" JOIN LATERAL (SELECT "name_45" as "name","_t".id as "id" FROM t11) as "_c" ON ?"""
+    val expected = """SELECT "_t"."id" FROM t1 as "_t" JOIN LATERAL (SELECT "name_45" as "name","_t"."id" as "id" FROM t11) as "_c" ON ?"""
     val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
     sql should be (expected)
   }
 
   test("lateral join chained soql and this") {
     val soql = "select @t.id from @this as t join @dog as d on true join lateral (select name from @cat |> select name, @d.dog) as c on true"
-    val expected = """SELECT "_t".id FROM t1 as "_t" JOIN t12 as "_d" ON ?  JOIN LATERAL (SELECT "name" as "name","_d"."dog_58" as "dog" FROM (SELECT "name_45" as "name" FROM t11) AS "x1") as "_c" ON ?"""
+    val expected = """SELECT "_t"."id" FROM t1 as "_t" JOIN t12 as "_d" ON ?  JOIN LATERAL (SELECT "name" as "name","_d"."dog_58" as "dog" FROM (SELECT "name_45" as "name" FROM t11) AS "x1") as "_c" ON ?"""
     val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
     sql should be (expected)
   }
@@ -223,7 +223,7 @@ class SqlizerJoinTest  extends SqlizerTest {
       """SELECT @t.primary_type FROM @this as t UNION
          (SELECT breed, cat FROM @cat |> SELECT @c.cat FROM @this as c) UNION
          (SELECT breed, dog FROM @dog |> SELECT @d.dog FROM @this as d)"""
-    val expected = """SELECT "_t".primary_type FROM t1 as "_t" UNION (SELECT "_c"."cat" FROM (SELECT "breed_46" as "breed","cat_48" as "cat" FROM t11) as "_c") UNION (SELECT "_d"."dog" FROM (SELECT "breed_56" as "breed","dog_58" as "dog" FROM t12) as "_d")"""
+    val expected = """SELECT "_t"."primary_type" FROM t1 as "_t" UNION (SELECT "_c"."cat" FROM (SELECT "breed_46" as "breed","cat_48" as "cat" FROM t11) as "_c") UNION (SELECT "_d"."dog" FROM (SELECT "breed_56" as "breed","dog_58" as "dog" FROM t12) as "_d")"""
     val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
     sql should be (expected)
   }
@@ -235,7 +235,7 @@ class SqlizerJoinTest  extends SqlizerTest {
          SELECT name FROM @dog UNioN aLL
          SELECT name FROM @bird UnioN
          SELECT name FROM @fish"""
-    val expected = """(((SELECT "_t".primary_type FROM t1 as "_t" EXCEPT SELECT "name_45" FROM t11) INTERSECT SELECT "name_55" FROM t12) UNION ALL SELECT "name_65" FROM t13) UNION SELECT "name_65" FROM t14"""
+    val expected = """(((SELECT "_t"."primary_type" FROM t1 as "_t" EXCEPT SELECT "name_45" FROM t11) INTERSECT SELECT "name_55" FROM t12) UNION ALL SELECT "name_65" FROM t13) UNION SELECT "name_65" FROM t14"""
     val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive)
     sql should be (expected)
   }
@@ -258,7 +258,7 @@ class SqlizerJoinTest  extends SqlizerTest {
 
   test("@this alias does not spread into join more") {
     val soql = "SELECT primary_type |> SELECT @c.primary_type, @x.name FROM @this as c JOIN (SELECT name, @dog.breed, @bird.bird, @f.fish FROM @dog JOIN @bird on breed=@bird.breed JOIN @fish as f on breed=@f.breed) as x ON primary_type=@x.name"
-    val expected = """SELECT "_c"."primary_type","_x"."name" FROM (SELECT "t1".primary_type_7 as "primary_type" FROM t1) as "_c" JOIN (SELECT "name_55" as "name","_dog"."breed_56" as "breed","_bird"."bird_68" as "bird","_f"."fish_68" as "fish" FROM t12 JOIN t13 ON ("breed_56" = "_bird"."breed_66")  JOIN t14 as "_f" ON ("breed_56" = "_f"."breed_66")) as "_x" ON ("_c"."primary_type" = "_x"."name")"""
+    val expected = """SELECT "_c"."primary_type","_x"."name" FROM (SELECT "t1".primary_type_7 as "primary_type" FROM t1) as "_c" JOIN (SELECT "name_55" as "name","_dog"."breed_56" as "breed","_bird"."bird_68" as "bird","_f"."fish_68" as "fish" FROM t12 JOIN t13 as "_bird" ON ("breed_56" = "_bird"."breed_66")  JOIN t14 as "_f" ON ("breed_56" = "_f"."breed_66")) as "_x" ON ("_c"."primary_type" = "_x"."name")"""
     val ParametricSql(Seq(sql), _) = sqlize(soql, CaseSensitive, useRepsWithId = true)
     sql should be (expected)
   }

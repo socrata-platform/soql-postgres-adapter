@@ -1,11 +1,33 @@
 package com.socrata.pg.analyzer2
 
+import com.socrata.prettyprint.prelude._
+
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.functions.MonomorphicFunction
 
-object TestRewriteSearch extends RewriteSearch[SqlizerTest.TestMT] {
-  type TestMT = SqlizerTest.TestMT
+object TestRewriteSearch extends RewriteSearch[TestHelper.TestMT] {
+  type TestMT = TestHelper.TestMT
   import TestTypeInfo.hasType
+
+  override def searchTerm(schema: Iterable[(ColumnLabel, Rep[TestHelper.TestMT])]): Option[Doc[Nothing]] = {
+    val term =
+      schema.toSeq.flatMap { case (label, rep) =>
+        rep.typ match {
+          case TestText =>
+            rep.expandedDatabaseColumns(label)
+          case _ =>
+            Nil
+        }
+      }.map { col =>
+        Seq(col, d"''").funcall(d"coalesce")
+      }
+
+    if(term.nonEmpty) {
+      Some(term.concatWith { (a: Doc[Nothing], b: Doc[Nothing]) => a +#+ d"|| ' ' ||" +#+ b })
+    } else {
+      None
+    }
+  }
 
   override val searchBeforeQuery = true
 

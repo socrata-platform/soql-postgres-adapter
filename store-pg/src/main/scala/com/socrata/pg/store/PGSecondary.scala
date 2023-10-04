@@ -11,7 +11,7 @@ import com.socrata.pg.BuildInfo
 import com.mchange.v2.c3p0.DataSources
 import com.rojoma.json.v3.ast.{JObject, JString}
 import com.rojoma.simplearm.v2._
-import com.socrata.datacoordinator.id.{RollupName, DatasetId}
+import com.socrata.datacoordinator.id.{RollupName, DatasetId, DatasetInternalName}
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.secondary.Secondary.Cookie
@@ -267,36 +267,43 @@ class PGSecondary(val storeConfig: StoreConfig) extends Secondary[SoQLType, SoQL
     def compare(a: DatasetId, b: DatasetId) = a.underlying.compareTo(b.underlying)
   }
 
-  def tableNamesToDatasetIds(dmr: PGSecondaryDatasetMapReader[SoQLType], tableNames: Set[String]): SortedSet[DatasetId] = {
-    SortedSet() ++ tableNames.iterator.flatMap { name =>
-      dmr.datasetInfoByResourceName(new ResourceName(name)) match {
-        case Some(dsi) =>
-          Some(dsi.systemId)
-        case None =>
-          logger.warn("Told I have a rollup that references table {} but I can't find it", JString(name))
-          None
-      }
+  type NameSet = Set[Either[String, DatasetInternalName]]
+
+  def tableNamesToDatasetIds(dmr: PGSecondaryDatasetMapReader[SoQLType], tableNames: NameSet): SortedSet[DatasetId] = {
+    SortedSet() ++ tableNames.iterator.flatMap {
+      case Left(name) =>
+        dmr.datasetInfoByResourceName(new ResourceName(name)) match {
+          case Some(dsi) =>
+            Some(dsi.systemId)
+          case None =>
+            logger.warn("Told I have a rollup that references table {} but I can't find it", JString(name))
+            None
+        }
+      case Right(dsInternalName) =>
+        dmr.datasetInfoByInternalName(dsInternalName) match {
+          case Some(dsi) =>
+            Some(dsi.systemId)
+          case None =>
+            logger.warn("Told I have a rollup that references table {} but I can't find it", dsInternalName)
+            None
+        }
     }
   }
 
-  def relevantTableNames(rollup: RollupInfo): Set[String] = {
-    relevantTableNames(rollup.soql)
+  def relevantTableNames(rollup: RollupInfo): NameSet = {
+    RollupManager.parseAndCollectTableNames(rollup)
   }
 
-  def relevantTableNames(rollup: LocalRollupInfo): Set[String] = {
-    relevantTableNames(rollup.soql)
-  }
-
-  def relevantTableNames(soql: String): Set[String] = {
-    RollupManager.parseAndCollectTableNames(soql)
+  def relevantTableNames(rollup: LocalRollupInfo): NameSet = {
+    RollupManager.parseAndCollectTableNames(rollup)
   }
 
   // This is a little icky because rollups saved on other tables will
   // refer to their own table implicity (i.e., without a values
   // returned from relevantTableNames) so we'll track their dataset
   // ids directly.
-  def existingRollupsTableNamesAndOrIds(dmr: PGSecondaryDatasetMapReader[SoQLType], dsInfo: TruthDatasetInfo): (Set[String], Set[DatasetId]) = {
-    dmr.allCopies(dsInfo).foldLeft((Set.empty[String], Set(dsInfo.systemId))) { case ((names, ids), copy) =>
+  def existingRollupsTableNamesAndOrIds(dmr: PGSecondaryDatasetMapReader[SoQLType], dsInfo: TruthDatasetInfo): (NameSet, Set[DatasetId]) = {
+    dmr.allCopies(dsInfo).foldLeft[(NameSet, Set[DatasetId])]((Set.empty, Set(dsInfo.systemId))) { case ((names, ids), copy) =>
       val newNames =
         dmr.rollups(copy).foldLeft(names) { (acc, rollup) =>
           acc ++ relevantTableNames(rollup)
@@ -307,8 +314,8 @@ class PGSecondary(val storeConfig: StoreConfig) extends Secondary[SoQLType, SoQL
     }
   }
 
-  def newRollupsTableNames(rollups: Seq[RollupInfo]): Set[String] = {
-    rollups.foldLeft(Set.empty[String]) { (acc, rollup) =>
+  def newRollupsTableNames(rollups: Seq[RollupInfo]): NameSet = {
+    rollups.foldLeft[NameSet](Set.empty) { (acc, rollup) =>
       acc ++ relevantTableNames(rollup)
     }
   }
