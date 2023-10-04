@@ -465,7 +465,7 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       TimeStampPlus -> sqlizeBinaryOp("+"), // the same function??
       //TODO
       TimeStampMinus -> sqlizeBinaryOp("-"),
-      GetUtcDate -> literal(d"current_date at time zone 'UTC'"),
+      GetUtcDate -> expr"current_date at time zone 'UTC'",
 
       // Geo-casts
       TextToPoint -> sqlizeGeomCast("st_pointfromtext"),

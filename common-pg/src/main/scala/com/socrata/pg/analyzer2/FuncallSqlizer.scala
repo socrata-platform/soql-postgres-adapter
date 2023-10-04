@@ -119,7 +119,6 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     ExprSql(preparedArgs.funcall(extractFunc).group, e)
   }
 
-  def literal(doc: Doc) = ofs((e,args,ctx)=>ExprSql(doc,e))
   protected def sqlizeBinaryOp(operator: String) = {
     val op = Doc(operator)
     ofs { (e, args, ctx) =>
