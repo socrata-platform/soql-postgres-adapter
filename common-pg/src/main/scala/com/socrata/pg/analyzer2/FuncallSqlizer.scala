@@ -167,7 +167,7 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     sqlFunctionName: String,
     prefixArgs: Seq[Doc] = Nil,
     suffixArgs: Seq[Doc] = Nil,
-    castType: (Doc, Int) => Option[Doc] = (_, _) => None
+    castType: Int => Option[Doc] = _ => None
   ) = {
     val funcName = Doc(sqlFunctionName)
     ofs { (e, args, ctx) =>
@@ -175,7 +175,7 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
       assert(e.function.allParameters.startsWith(args.map(_.typ)))
 
       val castArgs = args.map(_.compressed.sql).zipWithIndex.map { case (arg, idx) =>
-        castType(arg, idx).map { cast =>
+        castType(idx).map { cast =>
           arg +#+ Doc("::") +#+ cast
         }.getOrElse(arg)
       }
