@@ -40,9 +40,6 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
 
   type OrdinaryFunctionSqlizer = (FunctionCall, Seq[ExprSql], DynamicContext) => ExprSql
 
-  implicit class OfsExtensions(val me: OrdinaryFunctionSqlizer) {
-    def ->(other: OrdinaryFunctionSqlizer) =  compose(me,other)
-  }
   protected def ofs(f: OrdinaryFunctionSqlizer) = f
   def sqlizeOrdinaryFunction(
     e: FunctionCall,
@@ -107,9 +104,6 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
 
     ExprSql(Doc(operator) ++ cmp.sql.parenthesized, e)
   }
-
-
-  def compose(left:OrdinaryFunctionSqlizer,right:OrdinaryFunctionSqlizer) = ofs((e, args, ctx) => right(e, Seq(left(e, args, ctx)), ctx))
 
   def extractDatePart(datePart: String)= ofs { (e, args, ctx) =>
     assert(args.length == 1)
