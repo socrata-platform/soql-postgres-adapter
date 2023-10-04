@@ -188,25 +188,6 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     }
   }
 
-  def binaryOpCallFunctionPrefix(
-                                   binaryOp: String,
-                                   sqlFunctionName: String,
-                                   prefixArgs: Seq[Doc] = Nil
-                                 ) = {
-    val funcName = Doc(sqlFunctionName)
-    ofs { (e, args, ctx) =>
-      assert(args.length==2)
-      val lhs = args(0).compressed.sql.parenthesized
-      val rhs = args(1).compressed.sql.parenthesized
-
-      val argsSql = (prefixArgs :+ (d"$lhs $binaryOp $rhs"))
-
-      val sql = argsSql.funcall(funcName)
-
-      ExprSql(sql.group, e)
-    }
-  }
-
   protected def sqlizeSubcol(typ: CT, field: String) = {
     ofs { (e, args, ctx) =>
       val rep = ctx.repFor(typ)

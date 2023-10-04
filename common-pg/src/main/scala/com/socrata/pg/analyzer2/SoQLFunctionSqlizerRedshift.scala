@@ -52,6 +52,27 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
     ExprSql(e.compressed.sql.parenthesized +#+ d":: $numericType", f)
   }
 
+  def binaryOpCallFunctionPrefix(
+    binaryOp: String,
+    sqlFunctionName: String,
+    prefixArgs: Seq[Doc] = Nil
+  ) = {
+    val funcName = Doc(sqlFunctionName)
+    ofs { (e, args, ctx) =>
+      assert(args.length==2)
+      val lhs = args(0).compressed.sql.parenthesized
+      val rhs = args(1).compressed.sql.parenthesized
+
+      val argsSql = (prefixArgs :+ (d"$lhs $binaryOp $rhs"))
+
+      val sql = argsSql.funcall(funcName)
+
+      ExprSql(sql.group, e)
+    }
+  }
+
+
+
   def sqlizeNormalOrdinaryWithWrapper(name: String, wrapper: String) = ofs { (f, args, ctx) =>
     val exprSql = sqlizeNormalOrdinaryFuncall(name)(f, args, ctx)
     wrap(f, exprSql, wrapper)
