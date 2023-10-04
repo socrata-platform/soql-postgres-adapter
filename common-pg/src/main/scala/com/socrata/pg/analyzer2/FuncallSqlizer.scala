@@ -195,9 +195,8 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   ) = {
     val funcName = Doc(sqlFunctionName)
     ofs { (e, args, ctx) =>
-      //TODO revaluate the compose thing
-//      assert(args.length >= e.function.minArity)
-//      assert(e.function.allParameters.startsWith(args.map(_.typ)))
+      assert(args.length >= e.function.minArity)
+      assert(e.function.allParameters.startsWith(args.map(_.typ)))
 
       val castArgs = args.map(_.compressed.sql).zipWithIndex.map { case (arg, idx) =>
         castType(arg, idx).map { cast =>
@@ -206,6 +205,25 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
       }
 
       val argsSql = (prefixArgs ++ castArgs ++ suffixArgs)
+
+      val sql = argsSql.funcall(funcName)
+
+      ExprSql(sql.group, e)
+    }
+  }
+
+  def binaryOpCallFunctionPrefix(
+                                   binaryOp: String,
+                                   sqlFunctionName: String,
+                                   prefixArgs: Seq[Doc] = Nil
+                                 ) = {
+    val funcName = Doc(sqlFunctionName)
+    ofs { (e, args, ctx) =>
+      assert(args.length==2)
+      val lhs = args(0).compressed.sql.parenthesized
+      val rhs = args(1).compressed.sql.parenthesized
+
+      val argsSql = (prefixArgs :+ (d"$lhs $binaryOp $rhs"))
 
       val sql = argsSql.funcall(funcName)
 
