@@ -12,17 +12,17 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
   import SoQLTypeInfo.hasType
 
   implicit class ExprInterpolator(sc: StringContext) {
-    def expr(args: Any*): OrdinaryFunctionSqlizer =
+    def expr(args: Int*): OrdinaryFunctionSqlizer =
       ofs { (f, runtimeArgs, ctx) =>
         assert(args.length >= f.function.minArity)
         assert(f.function.allParameters.startsWith(runtimeArgs.map(_.typ)))
 
-        val expandedRuntimeArgs = args.map(_.asInstanceOf[Int]).map(n => runtimeArgs.toList(n))
+        val renderedArgs = args.map(runtimeArgs(_).compressed.sql)
 
-      val sql = Doc(sc.s(expandedRuntimeArgs.map(_.compressed.sql): _*))
-      ExprSql(sql, f)
+        val sql = (Doc(sc.parts.head) +: (renderedArgs, sc.parts.tail).zipped.map { (arg, lit) => arg ++ Doc(lit) }).hcat
+        ExprSql(sql, f)
+      }
     }
-  }
 
 
   def wrap(e: Expr, exprSql: ExprSql, wrapper: String, additionalWrapperArgs: Doc*) =
