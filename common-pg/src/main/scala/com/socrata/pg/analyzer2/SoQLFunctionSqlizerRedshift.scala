@@ -19,7 +19,7 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
 
         val renderedArgs = args.map(runtimeArgs(_).compressed.sql)
 
-        val sql = (Doc(sc.parts.head) +: (renderedArgs, sc.parts.tail).zipped.map { (arg, lit) => arg ++ Doc(lit) }).hcat
+        val sql = (Doc(sc.parts.head) +: (renderedArgs, sc.parts.tail).zipped.map { (arg, part) => arg ++ Doc(part) }).hcat
         ExprSql(sql, f)
       }
     }
