@@ -348,6 +348,14 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     analyzeStatement("SELECT floor(9.89)") should equal("""SELECT floor(9.89 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
   }
 
+  test("contains works") {
+    analyzeStatement("SELECT text where contains(text, 'a')") should equal("""SELECT x1.text AS i1 FROM table1 AS x1 WHERE (/* soql_contains */ position(text 'a' in x1.text) <> 0)""")
+  }
+
+  test("caseless contains works") {
+    analyzeStatement("SELECT text where caseless_contains(text, 'o')") should equal("""SELECT x1.text AS i1 FROM table1 AS x1 WHERE (/* soql_contains */ position(upper(text 'o') in upper(x1.text)) <> 0)""")
+  }
+
   test("ToFloatingTimestamp") {
     analyze("""to_floating_timestamp("2022-12-31T23:59:59Z", "America/New_York")""") should equal(
       """(timestamp with time zone '2022-12-31T23:59:59.000Z') at time zone (text 'America/New_York')"""
