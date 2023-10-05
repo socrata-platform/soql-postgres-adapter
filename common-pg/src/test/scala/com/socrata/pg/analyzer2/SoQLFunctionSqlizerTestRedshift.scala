@@ -482,24 +482,21 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     analyzeStatement("select signed_magnitude_Linear(num, 8)") should equal("SELECT (/* soql_signed_magnitude_linear */ (case when (8 :: decimal(30, 7)) = 1 then floor(x1.num) else sign(x1.num) * floor(abs(x1.num)/(8 :: decimal(30, 7)) + 1) end) :: numeric) AS i1 FROM table1 AS x1")
   }
 
-  //TODO need to handle period -> interval
-  ignore("TimeStampAdd") {
+  test("TimeStampAdd") {
     analyze("date_add('2022-12-31T23:59:59Z', 'P1DT1H')") should equal(
-      """dateadd(week, 5, timestamp with time zone '2022-12-31T23:59:59.000Z' at time zone (text 'UTC'))"""
+      """(timestamp with time zone '2022-12-31T23:59:59.000Z') + (interval '1 days, 1 hours')"""
     )
   }
 
-  //TODO need to handle period -> interval
-  ignore("TimeStampPlus") {
-    analyze("select timestamp_plus('2022-12-31T23:59:59', interval '1 day')") should equal(
-      """select (timestamp without time zone '2022-12-31T23:59:59') + interval '1 day'"""
+  test("TimeStampPlus") {
+    analyze("('2022-12-31T23:59:59Z' + 'P1001Y1DT1H1S')") should equal(
+      """(timestamp with time zone '2022-12-31T23:59:59.000Z') + (interval '1 millenniums, 1 years, 1 days, 1 hours, 1 seconds')"""
     )
   }
 
-  //TODO need to handle period -> interval
-  ignore("TimeStampMinus") {
-    analyze("select timestamp_minus('2022-12-31T23:59:59', interval '1 day')") should equal(
-      """select (timestamp without time zone '2022-12-31T23:59:59') - interval '1 day'"""
+  test("TimeStampMinus") {
+    analyze("('2022-12-31T23:59:59Z' - 'P1001Y1DT1H1S')") should equal(
+      """(timestamp with time zone '2022-12-31T23:59:59.000Z') - (interval '1 millenniums, 1 years, 1 days, 1 hours, 1 seconds')"""
     )
   }
 

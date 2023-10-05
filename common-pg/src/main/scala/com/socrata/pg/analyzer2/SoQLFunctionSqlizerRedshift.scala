@@ -480,11 +480,8 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       FloatingTimestampExtractIsoY -> extractDatePart("year"),
       EpochSeconds -> extractDatePart("epoch"),
       TimeStampDiffD -> dateDiffIn("day","UTC"),
-      //TODO
-      TimeStampAdd -> sqlizeBinaryOp("+"),  // These two are exactly
-      //TODO
-      TimeStampPlus -> sqlizeBinaryOp("+"), // the same function??
-      //TODO
+      TimeStampAdd -> sqlizeBinaryOp("+"),  // Uses a func call ... date_add(...)
+      TimeStampPlus -> sqlizeBinaryOp("+"), // Uses an operator ... + ...
       TimeStampMinus -> sqlizeBinaryOp("-"),
       GetUtcDate -> expr"current_date at time zone 'UTC'",
 

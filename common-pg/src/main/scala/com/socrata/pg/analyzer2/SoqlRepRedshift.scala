@@ -364,9 +364,55 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
     SoQLInterval -> new SingleColumnRep(SoQLInterval, d"interval") {
       override def literal(e: LiteralValue) = {
         val SoQLInterval(p) = e.value
-        ExprSql(d"interval" +#+ mkStringLiteral(SoQLInterval.StringRep(p)), e)
+        ExprSql(d"interval" +#+ mkStringLiteral(periodToRedshiftInterval(p)), e)
+      }
+
+      def periodToRedshiftInterval(period: Period): String = {
+        var years = period.getYears
+        var months = period.getMonths
+        var weeks = period.getWeeks
+        var days = period.getDays
+        var hours = period.getHours
+        var minutes = period.getMinutes
+        var seconds = period.getSeconds
+        var millis = period.getMillis
+
+        val millennia = years / 1000
+        years = years % 1000
+
+        val centuries = years / 100
+        years = years % 100
+
+        val decades = years / 10
+        years = years % 10
+
+        val quarters = months / 3
+        months = months % 3
+
+        val millenniaPart = if (millennia != 0) s"$millennia millenniums" else ""
+        val centuryPart = if (centuries != 0) s"$centuries centuries" else ""
+        val decadePart = if (decades != 0) s"$decades decades" else ""
+        val yearPart = if (years != 0) s"$years years" else ""
+        val quarterPart = if (quarters != 0) s"$quarters quarters" else ""
+        val monthPart = if (months != 0) s"$months months" else ""
+        val weekPart = if (weeks != 0) s"$weeks weeks" else ""
+        val dayPart = if (days != 0) s"$days days" else ""
+        val hourPart = if (hours != 0) s"$hours hours" else ""
+        val minutePart = if (minutes != 0) s"$minutes minutes" else ""
+        val secondPart = if (seconds != 0) s"$seconds seconds" else ""
+        val millisPart = if (millis != 0) s"$millis milliseconds" else ""
+
+        val parts = List(millenniaPart, centuryPart, decadePart, yearPart, quarterPart, monthPart, weekPart, dayPart, hourPart, minutePart, secondPart, millisPart).filter(_.nonEmpty)
+        val interval = parts.mkString(", ")
+
+        if (interval.trim.isEmpty) {
+          throw new IllegalArgumentException("Period cannot be converted to a non-empty Redshift interval")
+        } else {
+          interval
+        }
       }
       override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
+        //TODO redshiftify, interval -> period
         Option(rs.getObject(dbCol).asInstanceOf[PGInterval]) match {
           case Some(pgInterval) =>
             val period = new Period(pgInterval.getYears, pgInterval.getMonths, 0, pgInterval.getDays, pgInterval.getHours, pgInterval.getMinutes, pgInterval.getWholeSeconds, pgInterval.getMicroSeconds / 1000)
