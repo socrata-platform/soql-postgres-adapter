@@ -356,6 +356,14 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     analyzeStatement("SELECT text where caseless_contains(text, 'o')") should equal("""SELECT x1.text AS i1 FROM table1 AS x1 WHERE (/* soql_contains */ position(upper(text 'o') in upper(x1.text)) <> 0)""")
   }
 
+  test("starts_with works") {
+    analyzeStatement("SELECT text where starts_with(text, 'o')") should equal("""SELECT x1.text AS i1 FROM table1 AS x1 WHERE (/* start_with */ text 'o' = left(x1.text, length(text 'o')))""")
+  }
+
+  test("caseless starts_with works") {
+    analyzeStatement("SELECT text where caseless_starts_with(text, 'o')")
+  }
+
   test("ToFloatingTimestamp") {
     analyze("""to_floating_timestamp("2022-12-31T23:59:59Z", "America/New_York")""") should equal(
       """(timestamp with time zone '2022-12-31T23:59:59.000Z') at time zone (text 'America/New_York')"""
