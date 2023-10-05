@@ -361,7 +361,11 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   }
 
   test("caseless starts_with works") {
-    analyzeStatement("SELECT text where caseless_starts_with(text, 'o')")
+    analyzeStatement("SELECT text where caseless_starts_with(text, 'o')") should equal("""SELECT x1.text AS i1 FROM table1 AS x1 WHERE (/* start_with */ upper(text 'o') = left(upper(x1.text), length(upper(text 'o'))))""")
+  }
+
+  test("round works") {
+    analyzeStatement("SELECT text, round(num, 2)") should equal("""SELECT x1.text AS i1, (/* soql_round */ round(x1.num, 2 :: decimal(30, 7) :: int) :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
   }
 
   test("ToFloatingTimestamp") {
