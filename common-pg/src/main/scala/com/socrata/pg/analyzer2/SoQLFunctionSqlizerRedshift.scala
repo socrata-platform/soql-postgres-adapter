@@ -447,16 +447,14 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       Absolute -> sqlizeNormalOrdinaryFuncall("abs"),
       Ceiling -> sqlizeNormalOrdinaryFuncall("ceil"),
       Floor -> sqlizeNormalOrdinaryFuncall("floor"),
-//      Round -> sqlizeNormalOrdinaryFuncall("soql_round"),
-//      select round(num, prec :: int) :: numeric;
       Round -> comment(expr"round(${0}, ${1} :: int) :: decimal(30, 7)", comment = "soql_round"),
       WidthBucket -> numericize(sqlizeNormalOrdinaryFuncall("width_bucket")),
       SignedMagnitude10 ->
-        comment(expr"(sign(${0}) * length(floor(abs(${0})) :: text)) :: numeric",
+        comment(expr"(sign(${0}) * length(floor(abs(${0})) :: text)) :: decimal(30, 7)",
           comment = "soql_signed_magnitude_10"
         ),
       SignedMagnitudeLinear ->
-        comment(expr"(case when (${1}) = 1 then floor(${0}) else sign(${0}) * floor(abs(${0})/(${1}) + 1) end) :: numeric",
+        comment(expr"(case when (${1}) = 1 then floor(${0}) else sign(${0}) * floor(abs(${0})/(${1}) + 1) end) :: decimal(30, 7)",
           comment = "soql_signed_magnitude_linear"
         ),
 
