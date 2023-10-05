@@ -16,7 +16,7 @@ import org.joda.time.DateTime
 class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSecondaryUniverseTestBase {
 
   test("handle resync") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
       val pgs = new PGSecondary(config)
       val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, None)
       val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55, 55, new DateTime())
@@ -70,7 +70,7 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
   }
 
   test("handle drop copy") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
       val pgs = new PGSecondary(config)
       val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, None)
 

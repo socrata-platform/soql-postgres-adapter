@@ -19,13 +19,13 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
 
   override def beforeAll: Unit = {
     createDatabases()
-    withDb() { conn =>
+    withDb { conn =>
       importDataset(conn, "mutate-create-with-resource.json")
     }
   }
 
   test("rollup all columns except point") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
       val secondary = new PGSecondary(config)
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
@@ -45,7 +45,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
   }
 
   test("rollup geometric columns") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
       val secondary = new PGSecondary(config)
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
@@ -64,7 +64,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
   }
 
   test("rollup complex query") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
       val secondary = new PGSecondary(config)
       secondary.shutdown()
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
@@ -84,7 +84,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
   }
 
   test("invalid soql shouldn't throw exception") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
       val secondary = new PGSecondary(config)
       secondary.shutdown()
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
@@ -103,7 +103,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
   }
 
   test("rollup is copied from first to second copy") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
 
       val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, None)
       val dataVersion = 0L
@@ -170,7 +170,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
   }
 
   test("rollup survives resync") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
       val pgs = new PGSecondary(config)
       val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, None)
       val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55, 55, new DateTime())
@@ -239,7 +239,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
   }
 
   test("rollup of previous published copy is still good after a working copy is dropped") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
 
       val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, None)
       val dataVersion = 0L
@@ -300,7 +300,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
   }
 
   test("rollup window function") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
       val secondary = new PGSecondary(config)
       secondary.shutdown()
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get

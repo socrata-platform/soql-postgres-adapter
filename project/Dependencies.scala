@@ -21,7 +21,7 @@ object Dependencies {
     val socrataHttpCuratorBroker = "3.13.4"
     val soqlStdlib = "4.14.18"
     val typesafeConfig = "1.0.0"
-    val dataCoordinator = "4.2.14"
+    val dataCoordinator = "4.2.15"
     val typesafeScalaLogging = "3.9.2"
     val rojomaJson = "3.13.0"
     val metrics = "4.1.2"
@@ -29,6 +29,8 @@ object Dependencies {
     val clojure = "1.5.1"
     val rollupMetrics = "2.2"
   }
+
+  val awsRedshift =  "com.amazon.redshift" % "redshift-jdbc42" % "2.0.0.4"
 
   val c3p0 = "com.mchange" % "c3p0" % versions.c3p0
 

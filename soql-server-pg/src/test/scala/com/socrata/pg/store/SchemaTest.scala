@@ -14,10 +14,10 @@ class SchemaTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBase 
   override def beforeAll: Unit = createDatabases()
 
   test("schema json codec") {
-    val dsConfig = new DataSourceConfig(config, "database")
+    val dsConfig = config.database
     val ds = DataSourceFromConfig(dsConfig)
     ds.map { dsInfo =>
-      withPgu() { pgu =>
+      withPgu { pgu =>
       val f = columnsCreatedFixture
       f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, f.events.iterator, Nil)
       val qs = new QueryServerTest(dsInfo, pgu)

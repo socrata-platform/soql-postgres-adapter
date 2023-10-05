@@ -12,7 +12,7 @@ import com.socrata.soql.types.SoQLID
 class VersionColumnChangedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
   test("handle VersionColumnChanged") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
       val f = workingCopyCreatedFixture
       val events = f.events ++ Seq(
         ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":version"), Some(ColumnName(":version")), SoQLID, false, false, false, None)),
@@ -28,7 +28,7 @@ class VersionColumnChangedHandlerTest extends PGSecondaryTestBase with PGSeconda
   }
 
   test("VersionColumnChanged should refuse to run a second time") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
       val f = workingCopyCreatedFixture
       val events = f.events ++ Seq(
         ColumnCreated(ColumnInfo(new ColumnId(9124), new UserColumnId(":id"), Some(ColumnName(":version")), SoQLID, false, false, false, None)),

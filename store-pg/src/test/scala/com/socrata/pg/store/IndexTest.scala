@@ -11,18 +11,19 @@ import com.socrata.pg.store.events.{ColumnCreatedHandler, IndexCreatedOrUpdatedH
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.types._
 import org.joda.time.DateTime
+import com.socrata.datacoordinator.common.Postgres
 
 class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
   override def beforeAll: Unit = {
-    createDatabases()
-    withDb() { conn =>
+    withDb { conn =>
+      createDatabases()
       importDataset(conn)
     }
   }
 
   test("create index") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
       val secondary = new PGSecondary(config)
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
@@ -40,7 +41,7 @@ class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wit
   }
 
   test("create advanced index") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
       val secondary = new PGSecondary(config)
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
@@ -58,7 +59,7 @@ class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wit
   }
 
   test("invalid expression shouldn't throw exception") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
       val secondary = new PGSecondary(config)
       secondary.shutdown()
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
@@ -74,7 +75,7 @@ class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wit
   }
 
   test("index is copied from first to second copy") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
       val secondary = new PGSecondary(config)
       secondary.shutdown()
 
@@ -123,7 +124,7 @@ class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wit
   }
 
   test("index survives resync") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
       val pgs = new PGSecondary(config)
       val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, None)
       val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55, 55, new DateTime())
@@ -193,7 +194,7 @@ class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wit
   }
 
   test("index of previous published copy is still good after a working copy is dropped") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
       val secondary = new PGSecondary(config)
       secondary.shutdown()
 

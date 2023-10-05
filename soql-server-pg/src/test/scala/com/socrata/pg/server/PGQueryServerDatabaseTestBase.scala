@@ -24,7 +24,7 @@ import scala.language.existentials
 
 // scalastyle:off method.length
 trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUniverseTestBase {
-  private lazy val datasourceConfig = new DataSourceConfig(config, "database")
+  private lazy val datasourceConfig = config.database
 
   protected lazy val ds = DataSourceFromConfig(datasourceConfig)
 
@@ -40,7 +40,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
                         secDatasetId: DatasetId = secDatasetId)
                        (implicit materialized: Boolean): Unit = {
     val soqlh = if (materialized) soql.replace("/*hint*/", "HINT(materialized)") else soql
-    withDb() { conn =>
+    withDb { conn =>
       val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon)
       val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secDatasetId).get)
 

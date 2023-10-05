@@ -13,38 +13,56 @@ import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, Dataset
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.soql.environment.{ColumnName, TypeName}
 import com.socrata.soql.types._
+import com.socrata.datacoordinator.common.{Redshift, Postgres}
 import com.typesafe.config.Config
 import org.joda.time.{DateTime, LocalDate, LocalDateTime, LocalTime, Period}
 import org.scalatest.{BeforeAndAfterAll, FunSuiteLike, Matchers}
 
 import scala.annotation.tailrec
+import com.socrata.pg.config.StoreConfig
+import com.socrata.datacoordinator.common.DbType
+import com.socrata.datacoordinator.common.DataSourceConfig
 
 // scalastyle:off null cyclomatic.complexity
 trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with BeforeAndAfterAll {
-  type CT = SoQLType
-  type CV = SoQLValue
   val common = PostgresUniverseCommon
 
-  val config: Config
+  val config: StoreConfig
 
-  def withDb[T]()(f: (Connection) => T): T = {
-    def loglevel = 0; // 2 = debug, 0 = default
+  def withDb[T](f: (Connection) => T): T = {
+    val database = config.database.database
+    val user = config.database.username
+    val pass = config.database.password
+    val port = config.database.port
+    val host = config.database.host
 
-    val database = config.getString("database.database")
-    val user = config.getString("database.username")
-    val pass = config.getString("database.password")
-    using(DriverManager.getConnection(s"jdbc:postgresql://localhost:5432/$database?loglevel=$loglevel", user, pass)) { conn =>
-      conn.setAutoCommit(false)
-      f(conn)
+
+    config.database.dbType match {
+      case Postgres =>
+        val loglevel = 0; // 2 = debug, 0 = default
+
+        using(DriverManager.getConnection(s"jdbc:postgresql://$host:$port/$database?loglevel=$loglevel", user, pass)) { conn =>
+          conn.setAutoCommit(false)
+          f(conn)
+        }
+      case Redshift =>
+        using(DriverManager.getConnection(s"jdbc:redshift://$host:$port/$database", user, pass)) { conn =>
+          conn.setAutoCommit(false)
+          f(conn)
+        }
     }
   }
 
-  def withPgu[T]()(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
-    withDb() { conn =>
-      val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
-      f(pgu)
-    }
-  }
+  def withPgu[T](f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T =
+    withDb(
+      { conn =>
+        val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn, PostgresUniverseCommon)
+        f(pgu)
+      }
+    )
+
+  def onlyRunIf[T](dbType: DbType)(fn: => T): Option[T] =
+    if(config.database.dbType == dbType) Some(fn) else None
 
   def createTable(conn:Connection, datasetInfo:Option[DatasetInfo] = None): (PGSecondaryUniverse[SoQLType, SoQLValue], CopyInfo, SchemaLoader[SoQLType]) = {
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon, datasetInfo)

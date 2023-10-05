@@ -7,6 +7,7 @@ import com.socrata.thirdparty.typesafeconfig.Propertizer
 import com.socrata.datacoordinator.truth.migration.Migration.MigrationOperation
 
 import com.socrata.pg.store.SchemaMigrator
+import com.socrata.datacoordinator.common.DataSourceConfig
 
 /**
  * This object takes Liquibase operations and performs according migrations to the pg-secondary schemas.
@@ -38,7 +39,7 @@ object MigrateSchema extends App {
             s"Available operations are [${MigrationOperation.values.mkString(", ")}]")
     }
   }
-  val config = ConfigFactory.load
+  val config =  ConfigFactory.load
 
   val coreArgs = args.filter(!_.startsWith("--"))
   val configRoot = coreArgs.length match {
@@ -52,5 +53,5 @@ object MigrateSchema extends App {
 
   PropertyConfigurator.configure(Propertizer("log4j", config.getConfig(s"$configRoot.log4j")))
 
-  SchemaMigrator(dbConfigPath, operation, config, dryRun)
+  SchemaMigrator(operation, new DataSourceConfig(config, dbConfigPath), dryRun)
 }

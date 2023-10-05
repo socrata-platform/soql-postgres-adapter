@@ -24,7 +24,6 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
   val totalRows = 18
 
   override def beforeAll(): Unit = {
-    PropertyConfigurator.configure(Propertizer("log4j", config.getConfig("log4j")))
     createDatabases()
   }
 

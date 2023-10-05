@@ -17,6 +17,11 @@ createdb -O blist -E utf-8 secondary
 sbt test package assembly
 ```
 
+## Testing redshift functionality
+
+If the [reference.conf](https://github.com/socrata-platform/soql-postgres-adapter/blob/dalia%2Fredshift_SOQL/common-pg/src/test/resources/reference.conf#L1) specifies a redshift DB (via the db-type), then the Redshift tests will attempt to run the tests against redshift as well verify that SOQL produces the appropriate SQL.
+If the [reference.conf](https://github.com/socrata-platform/soql-postgres-adapter/blob/dalia%2Fredshift_SOQL/common-pg/src/test/resources/reference.conf#L1) does *not* specify a redshift DB, then the Redshift tests will *not* attempt to run the tests against redshift and will only verify that SOQL produces the appropriate SQL.
+
 ## Running the service
 
 ### soql-server-pg

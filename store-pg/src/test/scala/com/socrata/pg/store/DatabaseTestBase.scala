@@ -25,6 +25,7 @@ import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.Logger
 import org.scalatest.Matchers.fail
+import com.socrata.pg.config.StoreConfig
 
 /**
  * Recreate test databases of truth and secondary.
@@ -42,13 +43,15 @@ trait DatabaseTestBase {
 
   private lazy val projectConfig: Config = ConfigFactory.load().getConfig(s"com.socrata.pg.${projectDb}")
 
-  lazy val config: Config = projectConfig.getConfig("secondary")
+  lazy val secondaryConfig: Config = projectConfig.getConfig("secondary")
+
+  lazy val config = new StoreConfig(secondaryConfig, "")
 
   lazy val truthDataSourceConfig: DataSourceConfig = new DataSourceConfig(projectConfig, "truth.database" )
 
   lazy val truthDb: String = truthDataSourceConfig.database
 
-  lazy val secondaryDb: String = config.getString("database.database")
+  lazy val secondaryDb: String = secondaryConfig.getString("database.database")
 
   var truthDatasetId: DatasetId = _
 
@@ -205,7 +208,7 @@ object DatabaseTestBase {
 
   private var dbInitialized = false
 
-  def createDatabases(truthDb: String, secondaryDb: String, secondaryConfig: Config): Unit = {
+  def createDatabases(truthDb: String, secondaryDb: String, secondaryConfig: StoreConfig): Unit = {
     synchronized {
       if (!DatabaseTestBase.dbInitialized) {
         logger.info("*** Creating test databases *** ")
@@ -214,7 +217,7 @@ object DatabaseTestBase {
         // migrate truth db
         populateTruth(truthDb)
         // migrate secondary db
-        SchemaMigrator("database", MigrationOperation.Migrate, secondaryConfig, false)
+        SchemaMigrator(MigrationOperation.Migrate, secondaryConfig.database , false)
         DatabaseTestBase.dbInitialized = true
       }
     }

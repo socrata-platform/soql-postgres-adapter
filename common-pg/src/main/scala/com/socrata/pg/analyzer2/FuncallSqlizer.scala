@@ -1,10 +1,11 @@
 package com.socrata.pg.analyzer2
 
 import org.joda.time.DateTime
-
 import com.socrata.soql.collection.NonEmptySeq
 import com.socrata.soql.analyzer2._
 import com.socrata.prettyprint.prelude._
+import com.socrata.prettyprint
+import com.socrata.soql.functions.{MonomorphicFunction, SoQLFunctions}
 
 abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   // Convention: if an expr might need parentheses for precedence
@@ -21,6 +22,7 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
   type DynamicContext = Sqlizer.DynamicContext[MT]
 
   type OrdinaryFunctionSqlizer = (FunctionCall, Seq[ExprSql], DynamicContext) => ExprSql
+
   protected def ofs(f: OrdinaryFunctionSqlizer) = f
   def sqlizeOrdinaryFunction(
     e: FunctionCall,
@@ -86,6 +88,20 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     ExprSql(Doc(operator) ++ cmp.sql.parenthesized, e)
   }
 
+  def extractDatePart(datePart: String)= ofs { (e, args, ctx) =>
+    assert(args.length == 1)
+    val extractFunc = d"extract"
+    val preparedArgs = d"$datePart" +#+ d"from" +#+ args.head.compressed.sql
+    ExprSql(preparedArgs.funcall(extractFunc).group, e)
+  }
+
+  def dateDiffIn(datePart:String, timeZone:String) = ofs { (e, args, ctx) =>
+    assert(args.length == 2)
+    val extractFunc = d"datediff"
+    val preparedArgs = d"$datePart" +: args.take(2).map(_.compressed.sql +#+ d"at time zone (text '$timeZone')")
+    ExprSql(preparedArgs.funcall(extractFunc).group, e)
+  }
+
   protected def sqlizeBinaryOp(operator: String) = {
     val op = Doc(operator)
     ofs { (e, args, ctx) =>
@@ -147,13 +163,26 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
     }
   }
 
-  protected def sqlizeNormalOrdinaryFuncall(sqlFunctionName: String, prefixArgs: Seq[Doc] = Nil, suffixArgs: Seq[Doc] = Nil) = {
+  def sqlizeNormalOrdinaryFuncall(
+    sqlFunctionName: String,
+    prefixArgs: Seq[Doc] = Nil,
+    suffixArgs: Seq[Doc] = Nil,
+    castType: Int => Option[Doc] = _ => None
+  ) = {
     val funcName = Doc(sqlFunctionName)
     ofs { (e, args, ctx) =>
       assert(args.length >= e.function.minArity)
       assert(e.function.allParameters.startsWith(args.map(_.typ)))
 
-      val sql = (prefixArgs ++ args.map(_.compressed.sql) ++ suffixArgs).funcall(funcName)
+      val castArgs = args.map(_.compressed.sql).zipWithIndex.map { case (arg, idx) =>
+        castType(idx).map { cast =>
+          arg.parenthesized +#+ Doc("::") +#+ cast
+        }.getOrElse(arg)
+      }
+
+      val argsSql = (prefixArgs ++ castArgs ++ suffixArgs)
+
+      val sql = argsSql.funcall(funcName)
 
       ExprSql(sql.group, e)
     }

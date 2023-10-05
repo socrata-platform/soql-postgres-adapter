@@ -37,17 +37,20 @@ import com.socrata.datacoordinator.common.soql.SoQLRep
 import com.socrata.metrics.rollup.RollupMetrics
 import com.socrata.metrics.rollup.events.RollupHit
 
-import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, TransformManager, Stringifier, CostEstimator, SoQLSqlizer, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, SqlNamespaces}
+import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, TransformManager, Stringifier, CostEstimator, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, SqlNamespaces}
 import com.socrata.pg.analyzer2.metatypes.{CopyCache, InputMetaTypes, DatabaseMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName}
 import com.socrata.pg.analyzer2.rollup.{SoQLRollupExact, RollupInfo}
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils, RollupAnalyzer, RollupId}
 import com.socrata.pg.server.CJSONWriter
+import com.socrata.datacoordinator.common.DbType
+import com.socrata.pg.analyzer2.ActualSqlizer
+import com.socrata.datacoordinator.common.Postgres
 
 final abstract class ProcessQuery
 object ProcessQuery {
   val log = LoggerFactory.getLogger(classOf[ProcessQuery])
 
-  def apply(
+  def apply(sqlizerType: DbType)(
     request: Deserializer.Request,
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     precondition: Precondition,
@@ -136,7 +139,7 @@ object ProcessQuery {
 
     val onlyOne = nameAnalyses.lengthCompare(1) == 0
     val sqlized = nameAnalyses.map { nameAnalysis =>
-      val sqlizer = new SoQLSqlizer(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, RewriteSubcolumns[InputMetaTypes](request.locationSubcolumns, copyCache))
+      val sqlizer = ActualSqlizer.choose(sqlizerType)(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, RewriteSubcolumns[InputMetaTypes](request.locationSubcolumns, copyCache))
       val Sqlizer.Result(sql, extractor, nonliteralSystemContextLookupFound, now) = sqlizer(nameAnalysis._1)
       log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
 
@@ -266,9 +269,8 @@ object ProcessQuery {
   ): HttpResponse = {
     val locale = "en_US"
 
-    val laidOutSql = sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded))
+    val laidOutSql: SimpleDocStream[SqlizeAnnotation[DatabaseNamesMetaTypes]] = sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded))
     val renderedSql = laidOutSql.toString
-
     val debugFields =
       debug.map { debug =>
         Seq(

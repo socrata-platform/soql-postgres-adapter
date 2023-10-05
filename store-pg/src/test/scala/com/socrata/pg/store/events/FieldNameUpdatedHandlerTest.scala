@@ -9,7 +9,7 @@ import scala.language.reflectiveCalls
 class FieldNameUpdatedHandlerTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase with PGStoreTestBase {
 
   test("Handle FieldNameUpdated") {
-    withPgu() { pgu =>
+    withPgu { pgu =>
       val f = fieldNameUpdatedFixture
 
       f.pgs.doVersion(pgu, f.datasetInfo, f.dataVersion + 1, f.dataVersion + 1, None, f.events.iterator, Nil)

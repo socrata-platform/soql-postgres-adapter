@@ -24,7 +24,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
   }
 
   test("Universe can create a table") {
-    withDb() { conn =>
+    withDb { conn =>
       val (pgu, copyInfo, _) = createTable(conn:Connection)
       val blankTableSchema = getSchema(pgu, copyInfo)
       assert(blankTableSchema.size == 0, "We expect no columns")
@@ -34,7 +34,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
   test("Universe creates table with passed-in obfuscation key") {
     val expected = "super secret".getBytes()
     val dsInfo = new secondary.DatasetInfo("not-used", "not-used", expected, None)
-    withDb() { conn =>
+    withDb { conn =>
       val (pgu, copyInfo, _) = createTable(conn:Connection, Some(dsInfo))
       assert(copyInfo.datasetInfo.obfuscationKey == expected, "Expected that the dataset used our obfuscation key")
     }
@@ -43,14 +43,14 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
   test("Universe creates table with resource name") {
     val expected = Some("_reso-urce")
     val dsInfo = new secondary.DatasetInfo("not-used", "not-used", "super secret".getBytes(), expected)
-    withDb() { conn =>
+    withDb { conn =>
       val (pgu, copyInfo, _) = createTable(conn:Connection, Some(dsInfo))
       assert(copyInfo.datasetInfo.resourceName == expected, "Expected that the dataset used our resource name")
     }
   }
 
   test("Universe can add columns") {
-    withDb() { conn =>
+    withDb { conn =>
       val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
 
       val cols = SoQLType.typesByName filterKeys (!UnsupportedTypes.contains(_)) map {
@@ -65,7 +65,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
   }
 
   test("Universe can del columns") {
-    withDb() { conn =>
+    withDb { conn =>
       val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
       val types = SoQLType.typesByName filterKeys (!UnsupportedTypes.contains(_))
 
@@ -102,7 +102,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
   }
 
   test("Universe can insert rows") {
-    withDb() { conn =>
+    withDb { conn =>
       val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
       val schema = createTableWithSchema(pgu, copyInfo, sLoader)
 
@@ -124,7 +124,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
   }
 
   test("Universe can update rows") {
-    withDb() { conn =>
+    withDb { conn =>
       val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
       val schema = createTableWithSchema(pgu, copyInfo, sLoader)
 
@@ -172,7 +172,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
   }
 
   test("Universe can delete rows") {
-    withDb() { conn =>
+    withDb { conn =>
       val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
       val schema = createTableWithSchema(pgu, copyInfo, sLoader)
 
@@ -194,7 +194,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
   }
 
   test("Universe can read a row by id") {
-    withDb() { conn =>
+    withDb { conn =>
       val (pgu, copyInfo, sLoader) = createTable(conn:Connection)
       val schema = createTableWithSchema(pgu, copyInfo, sLoader)
 
@@ -216,7 +216,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
   // TODO Verify this statement: Can't delete the table if it's published
   // TODO Verify this statement: Maybe can delete the table if it's a snapshot?
   test("Universe can delete a table by adding row to pending_table_drops") {
-    withDb() { conn =>
+    withDb { conn =>
       val (_, copyInfo, sLoader) = createTable(conn)
       sLoader.drop(copyInfo)
       val dataTableName = copyInfo.dataTableName
@@ -231,7 +231,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
   }
 
   test("Universe can delete a table that is referenced by pending_table_drops") {
-    withDb() { conn =>
+    withDb { conn =>
       val (_, copyInfo, sLoader) = createTable(conn)
       sLoader.drop(copyInfo)
       val dataTableName = copyInfo.dataTableName
