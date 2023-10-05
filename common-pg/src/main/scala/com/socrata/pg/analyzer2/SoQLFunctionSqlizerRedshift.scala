@@ -454,7 +454,7 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
           comment = "soql_signed_magnitude_10"
         ),
       SignedMagnitudeLinear ->
-        comment(expr"(case when ${1} = 1 then floor(${0}) else sign(${0}) * floor(abs(${0})/${1} + 1) end) :: numeric",
+        comment(expr"(case when (${1}) = 1 then floor(${0}) else sign(${0}) * floor(abs(${0})/(${1}) + 1) end) :: numeric",
           comment = "soql_signed_magnitude_linear"
         ),
 

@@ -273,27 +273,27 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   }
 
   test("left_pad works") {
-    analyzeStatement("SELECT left_pad(text, 10, 'a'), num") should equal("""SELECT lpad(x1.text, 10 :: decimal(30, 7) :: int, text 'a') AS i1, x1.num AS i2 FROM table1 AS x1""")
+    analyzeStatement("SELECT left_pad(text, 10, 'a'), num") should equal("SELECT lpad(x1.text, (10 :: decimal(30, 7)) :: int, text 'a') AS i1, x1.num AS i2 FROM table1 AS x1")
   }
 
   test("right_pad works") {
-    analyzeStatement("SELECT right_pad(text, 10, 'a'), num") should equal("""SELECT rpad(x1.text, 10 :: decimal(30, 7) :: int, text 'a') AS i1, x1.num AS i2 FROM table1 AS x1""")
+    analyzeStatement("SELECT right_pad(text, 10, 'a'), num") should equal("SELECT rpad(x1.text, (10 :: decimal(30, 7)) :: int, text 'a') AS i1, x1.num AS i2 FROM table1 AS x1")
   }
 
   test("chr() works") {
-    analyzeStatement("SELECT chr(50.2)") should equal("""SELECT chr(50.2 :: decimal(30, 7) :: int) AS i1 FROM table1 AS x1""")
+    analyzeStatement("SELECT chr(50.2)") should equal("SELECT chr((50.2 :: decimal(30, 7)) :: int) AS i1 FROM table1 AS x1")
   }
 
   test("substring(characters, start_index base 1) works"){
-    analyzeStatement("SELECT substring('abcdefghijk', 3)") should equal("""SELECT substring(text 'abcdefghijk', 3 :: decimal(30, 7) :: int) AS i1 FROM table1 AS x1""")
+    analyzeStatement("SELECT substring('abcdefghijk', 3)") should equal("SELECT substring(text 'abcdefghijk', (3 :: decimal(30, 7)) :: int) AS i1 FROM table1 AS x1")
   }
 
   test("substring(characters, start_index base 1, length) works") {
-    analyzeStatement("SELECT substring('abcdefghijk', 3, 4)") should equal("""SELECT substring(text 'abcdefghijk', 3 :: decimal(30, 7) :: int, 4 :: decimal(30, 7) :: int) AS i1 FROM table1 AS x1""")
+    analyzeStatement("SELECT substring('abcdefghijk', 3, 4)") should equal("SELECT substring(text 'abcdefghijk', (3 :: decimal(30, 7)) :: int, (4 :: decimal(30, 7)) :: int) AS i1 FROM table1 AS x1")
   }
 
   test("split_part works") {
-    analyzeStatement("SELECT split_part(text, '.', 3)") should equal("""SELECT split_part(x1.text, text '.', 3 :: decimal(30, 7) :: int) AS i1 FROM table1 AS x1""")
+    analyzeStatement("SELECT split_part(text, '.', 3)") should equal("SELECT split_part(x1.text, text '.', (3 :: decimal(30, 7)) :: int) AS i1 FROM table1 AS x1")
   }
 
   test("uniary minus works") {
@@ -479,7 +479,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   }
 
   test("SignedMagnitudeLinear") {
-    analyzeStatement("select signed_magnitude_Linear(num, 8)") should equal("SELECT (/* soql_signed_magnitude_linear */ (case when 8 :: decimal(30, 7) = 1 then floor(x1.num) else sign(x1.num) * floor(abs(x1.num)/8 :: decimal(30, 7) + 1) end) :: numeric) AS i1 FROM table1 AS x1")
+    analyzeStatement("select signed_magnitude_Linear(num, 8)") should equal("SELECT (/* soql_signed_magnitude_linear */ (case when (8 :: decimal(30, 7)) = 1 then floor(x1.num) else sign(x1.num) * floor(abs(x1.num)/(8 :: decimal(30, 7)) + 1) end) :: numeric) AS i1 FROM table1 AS x1")
   }
 
   //TODO need to handle period -> interval

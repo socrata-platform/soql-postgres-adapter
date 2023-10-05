@@ -176,7 +176,7 @@ abstract class FuncallSqlizer[MT <: MetaTypes] extends SqlizerUniverse[MT] {
 
       val castArgs = args.map(_.compressed.sql).zipWithIndex.map { case (arg, idx) =>
         castType(idx).map { cast =>
-          arg +#+ Doc("::") +#+ cast
+          arg.parenthesized +#+ Doc("::") +#+ cast
         }.getOrElse(arg)
       }
 
