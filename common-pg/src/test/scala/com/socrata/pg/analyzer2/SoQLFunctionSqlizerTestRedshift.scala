@@ -368,6 +368,10 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     analyzeStatement("SELECT text, round(num, 2)") should equal("""SELECT x1.text AS i1, (/* soql_round */ round(x1.num, 2 :: decimal(30, 7) :: int) :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
   }
 
+  test("width_bucket works") {
+    analyzeStatement("SELECT text, num, width_bucket(num, 0, 2, 2)")
+  }
+
   test("ToFloatingTimestamp") {
     analyze("""to_floating_timestamp("2022-12-31T23:59:59Z", "America/New_York")""") should equal(
       """(timestamp with time zone '2022-12-31T23:59:59.000Z') at time zone (text 'America/New_York')"""
@@ -495,11 +499,11 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   }
 
   test("SignedMagnitude10") {
-    analyzeStatement("select signed_magnitude_10(num)") should equal("SELECT (/* soql_signed_magnitude_10 */ (sign(x1.num) * length(floor(abs(x1.num)) :: text)) :: decimal(30, 7)) AS i1 FROM table1 AS x1")
+    analyzeStatement("select signed_magnitude_10(num)") should equal("""SELECT ((/* soql_signed_magnitude_10 */ (sign(x1.num) * length(floor(abs(x1.num)) :: text)))) :: decimal(30, 7) AS i1 FROM table1 AS x1""")
   }
 
   test("SignedMagnitudeLinear") {
-    analyzeStatement("select signed_magnitude_Linear(num, 8)") should equal("SELECT (/* soql_signed_magnitude_linear */ (case when (8 :: decimal(30, 7)) = 1 then floor(x1.num) else sign(x1.num) * floor(abs(x1.num)/(8 :: decimal(30, 7)) + 1) end) :: decimal(30, 7)) AS i1 FROM table1 AS x1")
+    analyzeStatement("select signed_magnitude_Linear(num, 8)") should equal("""SELECT ((/* soql_signed_magnitude_linear */ (case when (8 :: decimal(30, 7)) = 1 then floor(x1.num) else sign(x1.num) * floor(abs(x1.num)/(8 :: decimal(30, 7)) + 1) end))) :: decimal(30, 7) AS i1 FROM table1 AS x1""")
   }
 
   test("TimeStampAdd") {
