@@ -384,7 +384,6 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       TrimLeading -> sqlizeNormalOrdinaryFuncall("ltrim"),
       TrimTrailing -> sqlizeNormalOrdinaryFuncall("rtrim"),
       StartsWith -> comment(expr"${1} = left(${0}, length(${1}))", comment = "start_with"),
-//      CaselessStartsWith -> uncased(sqlizeNormalOrdinaryFuncall("starts_with")),
       CaselessStartsWith -> uncased( comment(expr"${1} = left(${0}, length(${1}))", comment = "start_with")),
       Contains -> comment(expr"position(${1} in ${0}) <> 0", comment = "soql_contains"),
       CaselessContains -> uncased(comment(expr"position(${1} in ${0}) <> 0", comment = "soql_contains")),
