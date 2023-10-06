@@ -6,6 +6,7 @@ import scala.collection.compat._
 import org.slf4j.LoggerFactory
 
 import com.socrata.soql.analyzer2._
+import com.socrata.soql.util.LazyToString
 
 import com.socrata.pg.store.RollupId
 
@@ -16,7 +17,7 @@ object TransformManager {
 
   def apply[MT <: MetaTypes](
     analysis: SoQLAnalysis[MT],
-    rollups: Seq[rollup.RollupInfo[MT]],
+    rollups: Seq[rollup.RollupInfo[MT, RollupId]],
     passes: Seq[Seq[rewrite.Pass]],
     rewritePassHelpers: rewrite.RewritePassHelpers[MT],
     rollupExact: rollup.RollupExact[MT],
@@ -55,7 +56,7 @@ object TransformManager {
   private def doRollup[MT <: MetaTypes](
     analysis: SoQLAnalysis[MT],
     rollupExact: rollup.RollupExact[MT],
-    rollups: Seq[rollup.RollupInfo[MT]]
+    rollups: Seq[rollup.RollupInfo[MT, RollupId]]
   )(implicit ordering: Ordering[MT#DatabaseColumnNameImpl]): Seq[WrappedSoQLAnalysis[MT]] = {
     // ugh - modifySeq doesn't play nicely with returning additional
     // info in addition to the new analysis, so we need to pack that

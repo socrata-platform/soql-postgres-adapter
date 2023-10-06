@@ -25,21 +25,22 @@ import com.socrata.prettyprint.prelude._
 import com.socrata.prettyprint.{SimpleDocStream, SimpleDocTree, tree => doctree}
 
 import com.socrata.soql.analyzer2._
+import com.socrata.soql.analyzer2.rollup.RollupInfo
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, ResourceName, Provenance}
 import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLID, SoQLVersion, SoQLNull}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.sql.Debug
 import com.socrata.soql.stdlib.analyzer2.SoQLRewritePassHelpers
+import com.socrata.soql.stdlib.analyzer2.rollup.SoQLRollupExact
 import com.socrata.datacoordinator.id.RollupName
 import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
 import com.socrata.datacoordinator.common.soql.SoQLRep
 import com.socrata.metrics.rollup.RollupMetrics
 import com.socrata.metrics.rollup.events.RollupHit
 
-import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, TransformManager, Stringifier, CostEstimator, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, SqlNamespaces}
+import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, TransformManager, CostEstimator, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, SqlNamespaces}
 import com.socrata.pg.analyzer2.metatypes.{CopyCache, InputMetaTypes, DatabaseMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName}
-import com.socrata.pg.analyzer2.rollup.{SoQLRollupExact, RollupInfo}
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils, RollupAnalyzer, RollupId}
 import com.socrata.pg.server.CJSONWriter
 import com.socrata.datacoordinator.common.DbType
@@ -94,7 +95,7 @@ object ProcessQuery {
             // don't care about the other two things because:
             //   * we're not going to be sqlizing this rollup
             //   * any referenced datasets we already know about
-            new RollupInfo[DatabaseNamesMetaTypes] with QueryServerRollupInfo {
+            new RollupInfo[DatabaseNamesMetaTypes, RollupId] with QueryServerRollupInfo {
               override val id = rollup.systemId
               override val statement = analysis.statement
               override val resourceName = ScopedResourceName(-1, ResourceName(s"rollup:${rollup.copyInfo.datasetInfo.systemId}/${rollup.copyInfo.systemId}/${rollup.name.underlying}"))
