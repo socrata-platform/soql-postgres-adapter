@@ -383,10 +383,10 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       Trim -> sqlizeNormalOrdinaryFuncall("trim"),
       TrimLeading -> sqlizeNormalOrdinaryFuncall("ltrim"),
       TrimTrailing -> sqlizeNormalOrdinaryFuncall("rtrim"),
-      StartsWith -> sqlizeNormalOrdinaryFuncall("starts_with"),
-      CaselessStartsWith -> uncased(sqlizeNormalOrdinaryFuncall("starts_with")),
-      Contains -> sqlizeNormalOrdinaryFuncall("soql_contains"),
-      CaselessContains -> uncased(sqlizeNormalOrdinaryFuncall("soql_contains")),
+      StartsWith -> comment(expr"${1} = left(${0}, length(${1}))", comment = "start_with"),
+      CaselessStartsWith -> uncased( comment(expr"${1} = left(${0}, length(${1}))", comment = "start_with")),
+      Contains -> comment(expr"position(${1} in ${0}) <> 0", comment = "soql_contains"),
+      CaselessContains -> uncased(comment(expr"position(${1} in ${0}) <> 0", comment = "soql_contains")),
       LeftPad -> sqlizeNormalOrdinaryFuncall("lpad",
         castType = idx => idx match {
           case 1 => Some(Doc("int"))
@@ -447,16 +447,16 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with ({ type ColumnType = SoQL
       Absolute -> sqlizeNormalOrdinaryFuncall("abs"),
       Ceiling -> sqlizeNormalOrdinaryFuncall("ceil"),
       Floor -> sqlizeNormalOrdinaryFuncall("floor"),
-      Round -> sqlizeNormalOrdinaryFuncall("soql_round"),
+      Round -> comment(expr"round(${0}, ${1} :: int) :: decimal(30, 7)", comment = "soql_round"),
       WidthBucket -> numericize(sqlizeNormalOrdinaryFuncall("width_bucket")),
-      SignedMagnitude10 ->
-        comment(expr"(sign(${0}) * length(floor(abs(${0})) :: text)) :: numeric",
+      SignedMagnitude10 ->numericize(
+        comment(expr"(sign(${0}) * length(floor(abs(${0})) :: text))",
           comment = "soql_signed_magnitude_10"
-        ),
-      SignedMagnitudeLinear ->
-        comment(expr"(case when (${1}) = 1 then floor(${0}) else sign(${0}) * floor(abs(${0})/(${1}) + 1) end) :: numeric",
+        )),
+      SignedMagnitudeLinear -> numericize(
+        comment(expr"(case when (${1}) = 1 then floor(${0}) else sign(${0}) * floor(abs(${0})/(${1}) + 1) end)",
           comment = "soql_signed_magnitude_linear"
-        ),
+        )),
 
       // Timestamps
       ToFloatingTimestamp -> sqlizeBinaryOp("at time zone"),

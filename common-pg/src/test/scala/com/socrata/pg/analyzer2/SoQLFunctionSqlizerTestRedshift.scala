@@ -348,6 +348,26 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     analyzeStatement("SELECT floor(9.89)") should equal("""SELECT floor(9.89 :: decimal(30, 7)) AS i1 FROM table1 AS x1""")
   }
 
+  test("contains works") {
+    analyzeStatement("SELECT text where contains(text, 'a')") should equal("""SELECT x1.text AS i1 FROM table1 AS x1 WHERE (/* soql_contains */ position(text 'a' in x1.text) <> 0)""")
+  }
+
+  test("caseless contains works") {
+    analyzeStatement("SELECT text where caseless_contains(text, 'o')") should equal("""SELECT x1.text AS i1 FROM table1 AS x1 WHERE (/* soql_contains */ position(upper(text 'o') in upper(x1.text)) <> 0)""")
+  }
+
+  test("starts_with works") {
+    analyzeStatement("SELECT text where starts_with(text, 'o')") should equal("""SELECT x1.text AS i1 FROM table1 AS x1 WHERE (/* start_with */ text 'o' = left(x1.text, length(text 'o')))""")
+  }
+
+  test("caseless starts_with works") {
+    analyzeStatement("SELECT text where caseless_starts_with(text, 'o')") should equal("""SELECT x1.text AS i1 FROM table1 AS x1 WHERE (/* start_with */ upper(text 'o') = left(upper(x1.text), length(upper(text 'o'))))""")
+  }
+
+  test("round works") {
+    analyzeStatement("SELECT text, round(num, 2)") should equal("""SELECT x1.text AS i1, (/* soql_round */ round(x1.num, 2 :: decimal(30, 7) :: int) :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
+  }
+
   test("ToFloatingTimestamp") {
     analyze("""to_floating_timestamp("2022-12-31T23:59:59Z", "America/New_York")""") should equal(
       """(timestamp with time zone '2022-12-31T23:59:59.000Z') at time zone (text 'America/New_York')"""
@@ -475,11 +495,11 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   }
 
   test("SignedMagnitude10") {
-    analyzeStatement("select signed_magnitude_10(num)") should equal("SELECT (/* soql_signed_magnitude_10 */ (sign(x1.num) * length(floor(abs(x1.num)) :: text)) :: numeric) AS i1 FROM table1 AS x1")
+    analyzeStatement("select signed_magnitude_10(num)") should equal("""SELECT ((/* soql_signed_magnitude_10 */ (sign(x1.num) * length(floor(abs(x1.num)) :: text)))) :: decimal(30, 7) AS i1 FROM table1 AS x1""")
   }
 
   test("SignedMagnitudeLinear") {
-    analyzeStatement("select signed_magnitude_Linear(num, 8)") should equal("SELECT (/* soql_signed_magnitude_linear */ (case when (8 :: decimal(30, 7)) = 1 then floor(x1.num) else sign(x1.num) * floor(abs(x1.num)/(8 :: decimal(30, 7)) + 1) end) :: numeric) AS i1 FROM table1 AS x1")
+    analyzeStatement("select signed_magnitude_Linear(num, 8)") should equal("""SELECT ((/* soql_signed_magnitude_linear */ (case when (8 :: decimal(30, 7)) = 1 then floor(x1.num) else sign(x1.num) * floor(abs(x1.num)/(8 :: decimal(30, 7)) + 1) end))) :: decimal(30, 7) AS i1 FROM table1 AS x1""")
   }
 
   test("TimeStampAdd") {
