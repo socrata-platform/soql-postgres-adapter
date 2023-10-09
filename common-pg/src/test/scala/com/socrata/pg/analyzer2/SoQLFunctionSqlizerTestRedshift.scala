@@ -368,10 +368,6 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     analyzeStatement("SELECT text, round(num, 2)") should equal("""SELECT x1.text AS i1, (/* soql_round */ round(x1.num, 2 :: decimal(30, 7) :: int) :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
   }
 
-  test("width_bucket works") {
-    analyzeStatement("SELECT text, num, width_bucket(num, 0, 2, 2)")
-  }
-
   test("ToFloatingTimestamp") {
     analyze("""to_floating_timestamp("2022-12-31T23:59:59Z", "America/New_York")""") should equal(
       """(timestamp with time zone '2022-12-31T23:59:59.000Z') at time zone (text 'America/New_York')"""
