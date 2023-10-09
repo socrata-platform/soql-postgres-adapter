@@ -7,6 +7,7 @@ import com.rojoma.json.v3.ast.JString
 import com.socrata.prettyprint.prelude._
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.Provenance
+import com.socrata.soql.sqlizer._
 
 class TestRepProvider(
   override val namespace: SqlNamespaces[TestHelper.TestMT],
@@ -15,8 +16,16 @@ class TestRepProvider(
 ) extends Rep.Provider[TestHelper.TestMT] {
   type TestMT = TestHelper.TestMT
 
+  override val exprSqlFactory = TestHelper.TestExprSqlFactory
+
   override def mkStringLiteral(s: String) =
     Doc(JString(s).toString)
+
+  override def mkTextLiteral(s: String) =
+    d"text" +#+ mkStringLiteral(s)
+
+  override def mkByteaLiteral(bytes: Array[Byte]): Doc =
+    d"bytea" +#+ mkStringLiteral(bytes.iterator.map { b => "%02x".format(b & 0xff) }.mkString("\\x", "", ""))
 
   def apply(typ: TestType): Rep = reps(typ)
 
@@ -36,7 +45,7 @@ class TestRepProvider(
         }
         val numLit = Doc(rawId.value) +#+ d":: bigint"
 
-        ExprSql.Expanded[TestMT](Seq(provLit, numLit), e)
+        exprSqlFactory(Seq(provLit, numLit), e)
       }
 
       override def compressedSubColumns(table: String, column: ColumnLabel) = {
@@ -63,7 +72,7 @@ class TestRepProvider(
     TestText -> new SingleColumnRep(TestText, d"text") {
       override def literal(e: LiteralValue) = {
         val TestText(s) = e.value
-        ExprSql(mkTextLiteral(s), e)
+        exprSqlFactory(mkTextLiteral(s), e)
       }
 
       override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
@@ -77,7 +86,7 @@ class TestRepProvider(
     TestNumber -> new SingleColumnRep(TestNumber, d"numeric") {
       override def literal(e: LiteralValue) = {
         val TestNumber(n) = e.value
-        ExprSql(Doc(n.toString) +#+ d"::" +#+ sqlType, e)
+        exprSqlFactory(Doc(n.toString) +#+ d"::" +#+ sqlType, e)
       }
 
       override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
@@ -91,7 +100,7 @@ class TestRepProvider(
     TestBoolean -> new SingleColumnRep(TestBoolean, d"boolean") {
       override def literal(e: LiteralValue) = {
         val TestBoolean(b) = e.value
-        ExprSql(if(b) d"true" else d"false", e)
+        exprSqlFactory(if(b) d"true" else d"false", e)
       }
 
       override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
@@ -105,7 +114,7 @@ class TestRepProvider(
 
     TestCompound -> new CompoundColumnRep(TestCompound) {
       override def nullLiteral(e: NullLiteral) =
-        ExprSql.Expanded[TestMT](Seq(d"null :: text", d"null :: numeric"), e)
+        exprSqlFactory(Seq(d"null :: text", d"null :: numeric"), e)
 
       override def expandedColumnCount = 2
 
@@ -133,7 +142,7 @@ class TestRepProvider(
 
         cmp match {
           case TestCompound(None, None) =>
-            ExprSql.Expanded[TestMT](Seq(d"null :: text", d"null :: numeric"), e)
+            exprSqlFactory(Seq(d"null :: text", d"null :: numeric"), e)
           case TestCompound(a, b) =>
             val aLit = a match {
               case Some(n) => mkTextLiteral(n)
@@ -144,7 +153,7 @@ class TestRepProvider(
               case None => d"null :: numeric"
             }
 
-            ExprSql.Expanded[TestMT](Seq(aLit, bLit), e)
+            exprSqlFactory(Seq(aLit, bLit), e)
         }
       }
 

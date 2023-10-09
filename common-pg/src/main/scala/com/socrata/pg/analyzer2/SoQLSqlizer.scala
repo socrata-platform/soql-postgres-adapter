@@ -3,34 +3,27 @@ package com.socrata.pg.analyzer2
 import com.socrata.prettyprint.prelude._
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.types.obfuscation.CryptProvider
+import com.socrata.soql.sqlizer._
 import com.socrata.datacoordinator.common
-
 
 import com.socrata.pg.analyzer2.metatypes.DatabaseNamesMetaTypes
 
 object ActualSqlizer {
     def choose(sqlizer: common.DbType) = sqlizer match {
-    case common.Redshift => (Redshift.apply _)
-    case common.Postgres => (Postgres.apply _)
+    case common.Redshift => (RedshiftSqlizer.apply _)
+    case common.Postgres => (PostgresSqlizer.apply _)
   }
 }
 
-case class Postgres(
+case class PostgresSqlizer(
   escapeString: String => String,
   cryptProviderProvider: CryptProviderProvider,
   override val systemContext: Map[String, String],
-  locationSubcolumns: Postgres.LocationSubcolumns
+  locationSubcolumns: PostgresSqlizer.LocationSubcolumns
 ) extends Sqlizer[DatabaseNamesMetaTypes] {
-  override val namespace = new SqlNamespaces {
-    def databaseTableName(dtn: DatabaseTableName) = {
-      val DatabaseTableName(dataTableName) = dtn
-      Doc(dataTableName.name)
-    }
-    def databaseColumnBase(dcn: DatabaseColumnName) = {
-      val DatabaseColumnName(physicalColumnBase) = dcn
-      Doc(physicalColumnBase)
-    }
-  }
+  override val exprSqlFactory = new PostgresExprSqlFactory[DatabaseNamesMetaTypes]
+
+  override val namespace = new PostgresNamespaces
 
   override val toProvenance = DatabaseNamesMetaTypes.provenanceMapper
   override def isRollup(dtn: DatabaseTableName) = dtn.name.isRollup
@@ -38,6 +31,7 @@ case class Postgres(
   override def mkRepProvider(physicalTableFor: Map[AutoTableLabel, DatabaseTableName]): Rep.Provider[DatabaseNamesMetaTypes] =
     new SoQLRepProviderPostgres[DatabaseNamesMetaTypes](
       cryptProviderProvider,
+      exprSqlFactory,
       namespace,
       toProvenance,
       isRollup,
@@ -63,27 +57,20 @@ case class Postgres(
       }
     }
 
-  override val funcallSqlizer = Postgres.funcallSqlizer
+  override val funcallSqlizer = PostgresSqlizer.funcallSqlizer
 
-  override val rewriteSearch = Postgres.rewriteSearch
+  override val rewriteSearch = PostgresSqlizer.rewriteSearch
 }
 
-case class Redshift(
+case class RedshiftSqlizer(
   escapeString: String => String,
   cryptProviderProvider: CryptProviderProvider,
   override val systemContext: Map[String, String],
-  locationSubcolumns: Redshift.LocationSubcolumns
+  locationSubcolumns: RedshiftSqlizer.LocationSubcolumns
 ) extends Sqlizer[DatabaseNamesMetaTypes] {
-  override val namespace = new SqlNamespaces {
-    def databaseTableName(dtn: DatabaseTableName) = {
-      val DatabaseTableName(dataTableName) = dtn
-      Doc(dataTableName.name)
-    }
-    def databaseColumnBase(dcn: DatabaseColumnName) = {
-      val DatabaseColumnName(physicalColumnBase) = dcn
-      Doc(physicalColumnBase)
-    }
-  }
+  override val exprSqlFactory = new RedshiftExprSqlFactory[DatabaseNamesMetaTypes]
+
+  override val namespace = new RedshiftNamespaces
 
   override val toProvenance = DatabaseNamesMetaTypes.provenanceMapper
   override def isRollup(dtn: DatabaseTableName) = dtn.name.isRollup
@@ -91,6 +78,7 @@ case class Redshift(
   override def mkRepProvider(physicalTableFor: Map[AutoTableLabel, DatabaseTableName]): Rep.Provider[DatabaseNamesMetaTypes] =
     new SoQLRepProviderRedshift[DatabaseNamesMetaTypes](
       cryptProviderProvider,
+      exprSqlFactory,
       namespace,
       toProvenance,
       isRollup,
@@ -116,18 +104,18 @@ case class Redshift(
       }
     }
 
-  override val funcallSqlizer = Redshift.funcallSqlizer
+  override val funcallSqlizer = RedshiftSqlizer.funcallSqlizer
 
-  override val rewriteSearch = Redshift.rewriteSearch
+  override val rewriteSearch = RedshiftSqlizer.rewriteSearch
 }
 
-object Postgres extends SqlizerUniverse[DatabaseNamesMetaTypes] {
+object PostgresSqlizer extends SqlizerUniverse[DatabaseNamesMetaTypes] {
   type LocationSubcolumns = Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]]
   private val funcallSqlizer = new SoQLFunctionSqlizerPostgres[DatabaseNamesMetaTypes]
   private val rewriteSearch = new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true)
 }
 
-object Redshift extends SqlizerUniverse[DatabaseNamesMetaTypes] {
+object RedshiftSqlizer extends SqlizerUniverse[DatabaseNamesMetaTypes] {
   type LocationSubcolumns = Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]]
   private val funcallSqlizer = new SoQLFunctionSqlizerRedshift[DatabaseNamesMetaTypes]
   private val rewriteSearch = new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true)

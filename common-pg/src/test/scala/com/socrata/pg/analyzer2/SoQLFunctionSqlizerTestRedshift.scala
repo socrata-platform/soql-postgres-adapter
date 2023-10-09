@@ -8,8 +8,10 @@ import com.socrata.soql.types._
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.analyzer2.mocktablefinder._
 import com.socrata.soql.environment.ResourceName
+import com.socrata.soql.sqlizer.SqlizerUniverse
 import com.socrata.pg.store.PGSecondaryUniverseTestBase
 import com.socrata.soql.functions._
+import com.socrata.soql.sqlizer._
 
 import com.typesafe.config.ConfigFactory
 import com.socrata.pg.config.StoreConfig
@@ -18,7 +20,7 @@ import com.socrata.datacoordinator.secondary.DatasetInfo
 import com.socrata.soql.environment.Provenance
 
 object SoQLFunctionSqlizerTestRedshift {
-  final abstract class TestMT extends MetaTypes {
+  final abstract class TestMT extends MetaTypes with metatypes.SoQLMetaTypesExt {
     type ColumnType = SoQLType
     type ColumnValue = SoQLValue
     type ResourceNameScope = Int
@@ -37,6 +39,23 @@ object SoQLFunctionSqlizerTestRedshift {
       DatabaseTableName(name)
     }
   }
+
+  object TestNamespaces extends SqlNamespaces[TestMT] {
+    override def databaseTableName(dtn: DatabaseTableName) = {
+      val DatabaseTableName(name) = dtn
+      Doc(name)
+    }
+
+    override def databaseColumnBase(dcn: DatabaseColumnName) = {
+      val DatabaseColumnName(name) = dcn
+      Doc(name)
+    }
+
+    protected override def gensymPrefix: String = "g"
+    protected override def idxPrefix: String ="idx"
+    protected override def autoTablePrefix: String = "x"
+    protected override def autoColumnPrefix: String = "i"
+  }
 }
 
 class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with SqlizerUniverse[SoQLFunctionSqlizerTestRedshift.TestMT] with PGSecondaryUniverseTestBase {
@@ -49,16 +68,8 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   type TestMT = SoQLFunctionSqlizerTestRedshift.TestMT
 
   val sqlizer = new Sqlizer {
-    override val namespace = new SqlNamespaces {
-      def databaseColumnBase(dcn: DatabaseColumnName) = {
-        val DatabaseColumnName(n) = dcn
-        Doc(n)
-      }
-      def databaseTableName(dcn: DatabaseTableName) = {
-        val DatabaseTableName(n) = dcn
-        Doc(n)
-      }
-    }
+    override val exprSqlFactory = new RedshiftExprSqlFactory[TestMT]
+    override val namespace = SoQLFunctionSqlizerTestRedshift.TestNamespaces
 
     override val toProvenance = SoQLFunctionSqlizerTestRedshift.ProvenanceMapper
     def isRollup(dtn: DatabaseTableName) = false
@@ -66,14 +77,14 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     val cryptProvider = obfuscation.CryptProvider.zeros
 
     override def mkRepProvider(physicalTableFor: Map[AutoTableLabel, DatabaseTableName]) =
-      new SoQLRepProviderRedshift[TestMT](_ => Some(cryptProvider), namespace, toProvenance, isRollup, Map.empty, physicalTableFor) {
+      new SoQLRepProviderRedshift[TestMT](_ => Some(cryptProvider), new RedshiftExprSqlFactory[TestMT], namespace, toProvenance, isRollup, Map.empty, physicalTableFor) {
         override def mkStringLiteral(s: String) = Doc(s"'$s'")
       }
 
 
-    override val funcallSqlizer = new SoQLFunctionSqlizerRedshift
+    override val funcallSqlizer = new SoQLFunctionSqlizerRedshift[TestMT]
 
-    override val rewriteSearch = new SoQLRewriteSearch(searchBeforeQuery = true)
+    override val rewriteSearch = new SoQLRewriteSearch[TestMT](searchBeforeQuery = true)
 
     override val systemContext = Map("hello" -> "world")
   }
@@ -118,7 +129,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
     if(useSelectListReferences) analysis = analysis.useSelectListReferences
 
-    val sql = sqlizer(analysis).sql.layoutSingleLine.toString
+    val sql = sqlizer(analysis, new SoQLExtraContext).sql.layoutSingleLine.toString
 
     println(sql)
     sql

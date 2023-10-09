@@ -15,9 +15,11 @@ import com.socrata.prettyprint.prelude._
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.Provenance
 import com.socrata.soql.types._
+import com.socrata.soql.sqlizer._
 
-abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = SoQLType; type ColumnValue = SoQLValue; type DatabaseColumnNameImpl = String})](
+abstract class SoQLRepProviderRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({type ColumnType = SoQLType; type ColumnValue = SoQLValue; type DatabaseColumnNameImpl = String})](
   cryptProviders: CryptProviderProvider,
+  override val exprSqlFactory: ExprSqlFactory[MT],
   override val namespace: SqlNamespaces[MT],
   override val toProvenance: types.ToProvenance[MT],
   override val isRollup: types.DatabaseTableName[MT] => Boolean,
@@ -25,6 +27,11 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
   physicalTableFor: Map[AutoTableLabel, types.DatabaseTableName[MT]]
 ) extends Rep.Provider[MT] {
   def apply(typ: SoQLType) = reps(typ)
+
+  override def mkTextLiteral(s: String): Doc =
+    d"text" +#+ mkStringLiteral(s)
+  override def mkByteaLiteral(bytes: Array[Byte]): Doc =
+    d"bytea" +#+ mkStringLiteral(bytes.iterator.map { b => "%02x".format(b & 0xff) }.mkString("\\x", "", ""))
 
   private def createTextlikeIndices(idxBaseName: DocNothing, tableName: DatabaseTableName, colName: DocNothing) = {
     val databaseName = namespace.databaseTableName(tableName)
@@ -47,7 +54,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
 
     override def literal(e: LiteralValue) = {
       val geo = downcast(e.value)
-      ExprSql(Seq(mkByteaLiteral(t.WkbRep(geo)), Geo.defaultSRIDLiteral).funcall(open), e)
+      exprSqlFactory(Seq(mkByteaLiteral(t.WkbRep(geo)), Geo.defaultSRIDLiteral).funcall(open), e)
     }
 
     protected def downcast(v: SoQLValue): T
@@ -55,7 +62,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
     override def hasTopLevelWrapper = true
     override def wrapTopLevel(raw: ExprSql) = {
       assert(raw.typ == typ)
-      ExprSql(raw.compressed.sql.funcall(d"st_asbinary"), raw.expr)
+      exprSqlFactory(raw.compressed.sql.funcall(d"st_asbinary"), raw.expr)
     }
 
     override def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
@@ -108,7 +115,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
               Doc(num.toString) +#+ d":: bigint"
           }
 
-        ExprSql.Expanded[MT](Seq(provenanceLit, numLit), e)
+        exprSqlFactory(Seq(provenanceLit, numLit), e)
       }
 
       override protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {
@@ -190,7 +197,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
               Doc(num.toString) +#+ d":: bigint"
           }
 
-        ExprSql.Expanded[MT](Seq(provenanceLit, numLit), e)
+        exprSqlFactory(Seq(provenanceLit, numLit), e)
       }
 
       override protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {
@@ -241,7 +248,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
     SoQLText -> new SingleColumnRep(SoQLText, d"text") {
       override def literal(e: LiteralValue) = {
         val SoQLText(s) = e.value
-        ExprSql(mkTextLiteral(s), e)
+        exprSqlFactory(mkTextLiteral(s), e)
       }
       override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getString(dbCol)) match {
@@ -255,7 +262,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
     SoQLNumber -> new SingleColumnRep(SoQLNumber, Doc(SoQLFunctionSqlizerRedshift.numericType)) {
       override def literal(e: LiteralValue) = {
         val SoQLNumber(n) = e.value
-        ExprSql(Doc(n.toString) +#+ d"::" +#+ sqlType, e)
+        exprSqlFactory(Doc(n.toString) +#+ d"::" +#+ sqlType, e)
       }
       override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getBigDecimal(dbCol)) match {
@@ -269,7 +276,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
     SoQLBoolean -> new SingleColumnRep(SoQLBoolean, d"boolean") {
       def literal(e: LiteralValue) = {
         val SoQLBoolean(b) = e.value
-        ExprSql(if(b) d"true" else d"false", e)
+        exprSqlFactory(if(b) d"true" else d"false", e)
       }
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         val v = rs.getBoolean(dbCol)
@@ -285,7 +292,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
     SoQLFixedTimestamp -> new SingleColumnRep(SoQLFixedTimestamp, d"timestamp with time zone") {
       def literal(e: LiteralValue) = {
         val SoQLFixedTimestamp(s) = e.value
-        ExprSql(sqlType +#+ mkStringLiteral(SoQLFixedTimestamp.StringRep(s)), e)
+        exprSqlFactory(sqlType +#+ mkStringLiteral(SoQLFixedTimestamp.StringRep(s)), e)
       }
       private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.FixedTimestampRep("")
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
@@ -297,7 +304,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
     SoQLFloatingTimestamp -> new SingleColumnRep(SoQLFloatingTimestamp, d"timestamp without time zone") {
       def literal(e: LiteralValue) = {
         val SoQLFloatingTimestamp(s) = e.value
-        ExprSql(sqlType +#+ mkStringLiteral(SoQLFloatingTimestamp.StringRep(s)), e)
+        exprSqlFactory(sqlType +#+ mkStringLiteral(SoQLFloatingTimestamp.StringRep(s)), e)
       }
       private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.FloatingTimestampRep("")
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
@@ -309,7 +316,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
     SoQLDate -> new SingleColumnRep(SoQLDate, d"date") {
       def literal(e: LiteralValue) = {
         val SoQLDate(s) = e.value
-        ExprSql(sqlType +#+ mkStringLiteral(SoQLDate.StringRep(s)), e)
+        exprSqlFactory(sqlType +#+ mkStringLiteral(SoQLDate.StringRep(s)), e)
       }
       private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.DateRep("")
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
@@ -321,7 +328,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
     SoQLTime -> new SingleColumnRep(SoQLTime, d"time without time zone") {
       def literal(e: LiteralValue) = {
         val SoQLTime(s) = e.value
-        ExprSql(sqlType +#+ mkStringLiteral(SoQLTime.StringRep(s)), e)
+        exprSqlFactory(sqlType +#+ mkStringLiteral(SoQLTime.StringRep(s)), e)
       }
       private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.TimeRep("")
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
@@ -333,7 +340,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
     SoQLJson -> new SingleColumnRep(SoQLJson, d"jsonb") {
       def literal(e: LiteralValue) = {
         val SoQLJson(j) = e.value
-        ExprSql(sqlType +#+ mkStringLiteral(CompactJsonWriter.toString(j)), e)
+        exprSqlFactory(sqlType +#+ mkStringLiteral(CompactJsonWriter.toString(j)), e)
       }
       private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.JsonRep("")
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
@@ -364,7 +371,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
     SoQLInterval -> new SingleColumnRep(SoQLInterval, d"interval") {
       override def literal(e: LiteralValue) = {
         val SoQLInterval(p) = e.value
-        ExprSql(d"interval" +#+ mkStringLiteral(periodToRedshiftInterval(p)), e)
+        exprSqlFactory(d"interval" +#+ mkStringLiteral(periodToRedshiftInterval(p)), e)
       }
 
       def periodToRedshiftInterval(period: Period): String = {
@@ -453,7 +460,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
 
     SoQLPhone -> new CompoundColumnRep(SoQLPhone) {
       override def nullLiteral(e: NullLiteral) =
-        ExprSql.Expanded[MT](Seq(d"null :: text", d"null :: text"), e)
+        exprSqlFactory(Seq(d"null :: text", d"null :: text"), e)
 
       override def expandedColumnCount = 2
 
@@ -481,7 +488,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
 
         ph match {
           case SoQLPhone(None, None) =>
-            ExprSql(d"null :: jsonb", e)
+            exprSqlFactory(d"null :: jsonb", e)
           case SoQLPhone(phNum, phTyp) =>
             val numberLit = phNum match {
               case Some(n) => mkTextLiteral(n)
@@ -492,7 +499,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
               case None => d"null :: text"
             }
 
-            ExprSql(d"jsonb_build_array(" ++ numberLit ++ d"," ++ typLit ++ d")", e)
+            exprSqlFactory(d"jsonb_build_array(" ++ numberLit ++ d"," ++ typLit ++ d")", e)
         }
       }
 
@@ -536,7 +543,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
       override def physicalColumnRef(col: PhysicalColumn) = {
         val colInfo: Seq[Option[DatabaseColumnName]] = locationSubcolumns(physicalTableFor(col.table))(col.column)
 
-        ExprSql(
+        exprSqlFactory(
           (namespace.tableLabel(col.table) ++ d"." ++ compressedDatabaseColumn(col.column)) +:
             colInfo.map {
               case Some(DatabaseColumnName(dcn)) =>
@@ -548,7 +555,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
       }
 
       override def nullLiteral(e: NullLiteral) =
-        ExprSql.Expanded[MT](Seq(d"null :: geometry", d"null :: text", d"null :: text", d"null :: text", d"null :: text"), e)
+        exprSqlFactory(Seq(d"null :: geometry", d"null :: text", d"null :: text", d"null :: text", d"null :: text"), e)
 
       override def expandedColumnCount = 5
 
@@ -611,7 +618,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
           case expanded: ExprSql.Expanded[MT] =>
             val sqls = expanded.sqls
             assert(sqls.length == expandedColumnCount)
-            ExprSql.Expanded(Seq(sqls.head).funcall(d"st_asbinary") +: sqls.tail, expanded.expr)
+            exprSqlFactory(Seq(sqls.head).funcall(d"st_asbinary") +: sqls.tail, expanded.expr)
         }
       }
 
@@ -671,7 +678,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
 
     SoQLUrl -> new CompoundColumnRep(SoQLUrl) {
       override def nullLiteral(e: NullLiteral) =
-        ExprSql.Expanded[MT](Seq(d"null :: text", d"null :: text"), e)
+        exprSqlFactory(Seq(d"null :: text", d"null :: text"), e)
 
       override def expandedColumnCount = 2
 
@@ -699,7 +706,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
 
         url match {
           case SoQLUrl(None, None) =>
-            ExprSql.Expanded[MT](Seq(d"null :: text", d"null :: text"), e)
+            exprSqlFactory(Seq(d"null :: text", d"null :: text"), e)
           case SoQLUrl(urlUrl, urlDesc) =>
             val urlLit = urlUrl match {
               case Some(n) => mkTextLiteral(n)
@@ -710,7 +717,7 @@ abstract class SoQLRepProviderRedshift[MT <: MetaTypes with ({type ColumnType = 
               case None => d"null :: text"
             }
 
-            ExprSql.Expanded[MT](Seq(urlLit, descLit), e)
+            exprSqlFactory(Seq(urlLit, descLit), e)
         }
       }
 

@@ -9,14 +9,32 @@ import com.socrata.soql.analyzer2._
 import com.socrata.soql.analyzer2.mocktablefinder._
 import com.socrata.soql.environment.{ResourceName, Provenance}
 import com.socrata.soql.functions._
+import com.socrata.soql.sqlizer._
 
 object SoQLFunctionSqlizerTestPostgres {
-  final abstract class TestMT extends MetaTypes {
+  final abstract class TestMT extends MetaTypes with metatypes.SoQLMetaTypesExt {
     type ColumnType = SoQLType
     type ColumnValue = SoQLValue
     type ResourceNameScope = Int
     type DatabaseTableNameImpl = String
     type DatabaseColumnNameImpl = String
+  }
+
+  object TestNamespaces extends SqlNamespaces[TestMT] {
+    override def databaseTableName(dtn: DatabaseTableName) = {
+      val DatabaseTableName(name) = dtn
+      Doc(name)
+    }
+
+    override def databaseColumnBase(dcn: DatabaseColumnName) = {
+      val DatabaseColumnName(name) = dcn
+      Doc(name)
+    }
+
+    protected override def gensymPrefix: String = "g"
+    protected override def idxPrefix: String ="idx"
+    protected override def autoTablePrefix: String = "x"
+    protected override def autoColumnPrefix: String = "i"
   }
 
   object ProvenanceMapper extends types.ProvenanceMapper[TestMT] {
@@ -36,16 +54,9 @@ class SoQLFunctionSqlizerTestPostgres extends FunSuite with MustMatchers with Sq
   type TestMT = SoQLFunctionSqlizerTestPostgres.TestMT
 
   val sqlizer = new Sqlizer {
-    override val namespace = new SqlNamespaces {
-      def databaseColumnBase(dcn: DatabaseColumnName) = {
-        val DatabaseColumnName(n) = dcn
-        Doc(n)
-      }
-      def databaseTableName(dcn: DatabaseTableName) = {
-        val DatabaseTableName(n) = dcn
-        Doc(n)
-      }
-    }
+    override val exprSqlFactory = new PostgresExprSqlFactory[TestMT]
+
+    override val namespace = SoQLFunctionSqlizerTestPostgres.TestNamespaces
 
     override val toProvenance = SoQLFunctionSqlizerTestPostgres.ProvenanceMapper
     def isRollup(dtn: DatabaseTableName) = false
@@ -53,7 +64,7 @@ class SoQLFunctionSqlizerTestPostgres extends FunSuite with MustMatchers with Sq
     val cryptProvider = obfuscation.CryptProvider.zeros
 
     override def mkRepProvider(physicalTableFor: Map[AutoTableLabel, DatabaseTableName]) =
-      new SoQLRepProviderPostgres[TestMT](_ => Some(cryptProvider), namespace, toProvenance, isRollup, Map.empty, physicalTableFor) {
+      new SoQLRepProviderPostgres[TestMT](_ => Some(cryptProvider), exprSqlFactory, namespace, toProvenance, isRollup, Map.empty, physicalTableFor) {
         override def mkStringLiteral(s: String) = Doc(JString(s).toString)
       }
 
@@ -104,7 +115,7 @@ class SoQLFunctionSqlizerTestPostgres extends FunSuite with MustMatchers with Sq
 
     if(useSelectListReferences) analysis = analysis.useSelectListReferences
 
-    sqlizer(analysis).sql.layoutSingleLine.toString
+    sqlizer(analysis, new SoQLExtraContext).sql.layoutSingleLine.toString
   }
 
   test("basic search") {

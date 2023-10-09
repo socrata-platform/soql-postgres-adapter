@@ -14,7 +14,7 @@ import com.socrata.pg.analyzer2.SoQLValueDebugHelper
 
 case class AugmentedTableName(name: String, isRollup: Boolean)
 
-final abstract class DatabaseNamesMetaTypes extends MetaTypes {
+final abstract class DatabaseNamesMetaTypes extends MetaTypes with SoQLMetaTypesExt {
   override type ResourceNameScope = DatabaseMetaTypes#ResourceNameScope
   override type ColumnType = DatabaseMetaTypes#ColumnType
   override type ColumnValue = DatabaseMetaTypes#ColumnValue
