@@ -535,5 +535,11 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     analyzeStatement("SELECT coalesce(text, 'zero'), coalesce(num, '0')") should equal("""SELECT coalesce(x1.text, text 'zero') AS i1, coalesce(x1.num, 0 :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
   }
 
+  test("case works") {
+    analyzeStatement("SELECT num, case(num > 1, 'large num', num <= 1, 'small num')") should equal("""SELECT x1.num AS i1, CASE WHEN (x1.num) > (1 :: decimal(30, 7)) THEN text 'large num' WHEN (x1.num) <= (1 :: decimal(30, 7)) THEN text 'small num' END AS i2 FROM table1 AS x1""")
+  }
 
+  test("iif works") {
+    analyzeStatement("SELECT num, iif(num > 1, 'large num', 'small num')") should equal("""SELECT x1.num AS i1, CASE WHEN (x1.num) > (1 :: decimal(30, 7)) THEN text 'large num' ELSE text 'small num' END AS i2 FROM table1 AS x1""")
+  }
 }
