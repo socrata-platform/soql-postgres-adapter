@@ -16,12 +16,11 @@ import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.sql.Debug
 
-import com.socrata.pg.analyzer2.SqlizerUniverse
 import com.socrata.pg.analyzer2.metatypes.InputMetaTypes
 
 final abstract class ETagify
 
-object ETagify extends SqlizerUniverse[InputMetaTypes] {
+object ETagify extends StatementUniverse[InputMetaTypes] {
   private val log = LoggerFactory.getLogger(classOf[ETagify])
 
   private implicit object datasetInternalNameOrdering extends Ordering[DatasetInternalName] {

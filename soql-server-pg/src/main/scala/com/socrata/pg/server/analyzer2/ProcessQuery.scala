@@ -31,6 +31,7 @@ import com.socrata.soql.environment.{ColumnName, ResourceName, Provenance}
 import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLID, SoQLVersion, SoQLNull}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.sql.Debug
+import com.socrata.soql.sqlizer.{Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, SqlNamespaces}
 import com.socrata.soql.stdlib.analyzer2.SoQLRewritePassHelpers
 import com.socrata.soql.stdlib.analyzer2.rollup.SoQLRollupExact
 import com.socrata.datacoordinator.id.RollupName
@@ -39,8 +40,8 @@ import com.socrata.datacoordinator.common.soql.SoQLRep
 import com.socrata.metrics.rollup.RollupMetrics
 import com.socrata.metrics.rollup.events.RollupHit
 
-import com.socrata.pg.analyzer2.{CryptProviderProvider, Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, TransformManager, CostEstimator, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, SqlNamespaces}
-import com.socrata.pg.analyzer2.metatypes.{CopyCache, InputMetaTypes, DatabaseMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName}
+import com.socrata.pg.analyzer2.{CryptProviderProvider, TransformManager, CostEstimator, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, PostgresNamespaces, SoQLExtraContext}
+import com.socrata.pg.analyzer2.metatypes.{CopyCache, InputMetaTypes, DatabaseMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName, SoQLMetaTypesExt}
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils, RollupAnalyzer, RollupId}
 import com.socrata.pg.server.CJSONWriter
 import com.socrata.datacoordinator.common.DbType
@@ -107,7 +108,7 @@ object ProcessQuery {
 
               private val columns = statement.schema.keysIterator.toArray
               override def databaseColumnNameOfIndex(idx: Int) =
-                DatabaseColumnName(SqlNamespaces.columnBase(columns(idx)))
+                DatabaseColumnName(new PostgresNamespaces().rawAutoColumnBase(columns(idx)))
             }
           }
       }
@@ -141,7 +142,7 @@ object ProcessQuery {
     val onlyOne = nameAnalyses.lengthCompare(1) == 0
     val sqlized = nameAnalyses.map { nameAnalysis =>
       val sqlizer = ActualSqlizer.choose(sqlizerType)(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, RewriteSubcolumns[InputMetaTypes](request.locationSubcolumns, copyCache))
-      val Sqlizer.Result(sql, extractor, nonliteralSystemContextLookupFound, now) = sqlizer(nameAnalysis._1)
+      val Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(nonliteralSystemContextLookupFound, now)) = sqlizer(nameAnalysis._1, new SoQLExtraContext)
       log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
 
       Sqlized(
@@ -309,7 +310,7 @@ object ProcessQuery {
             log.error("Exception running query", e)
             // Sadness: PG _doesn't_ report position info for runtime errors
             // so this position info isn't actually useful :(
-            val posInfo = com.socrata.pg.analyzer2.Sqlizer.positionInfo(laidOutSql)
+            val posInfo = Sqlizer.positionInfo(laidOutSql)
             return InternalServerError
         }
       }
@@ -478,7 +479,7 @@ object ProcessQuery {
     }
   }
 
-  def prettierSql[MT <: MetaTypes](analysis: SoQLAnalysis[MT], doc: Doc[SqlizeAnnotation[MT]]): String = {
+  def prettierSql[MT <: MetaTypes with SoQLMetaTypesExt](analysis: SoQLAnalysis[MT], doc: Doc[SqlizeAnnotation[MT]]): String = {
     val sb = new StringBuilder
 
     val map = new LabelMap(analysis)
@@ -551,7 +552,7 @@ object ProcessQuery {
     sb.toString
   }
 
-  class LabelMap[MT <: MetaTypes](analysis: SoQLAnalysis[MT]) extends SqlizerUniverse[MT] {
+  class LabelMap[MT <: MetaTypes](analysis: SoQLAnalysis[MT]) extends StatementUniverse[MT] {
     val tableNames = new scm.HashMap[AutoTableLabel, Option[ResourceName]]
     val virtualColumnNames = new scm.HashMap[(AutoTableLabel, ColumnLabel), (Option[ResourceName], ColumnName)]
     val physicalColumnNames = new scm.HashMap[(AutoTableLabel, DatabaseColumnName), (Option[ResourceName], ColumnName)]

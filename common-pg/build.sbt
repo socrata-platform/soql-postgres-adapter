@@ -17,6 +17,7 @@ libraryDependencies ++= Seq(
   socrataCuratorUtils,
   socrataThirdPartyUtils,
   soqlStdlib,
+  soqlSqlizer,
   secondarylib,
   coordinatorlib,
   typesafeConfig,

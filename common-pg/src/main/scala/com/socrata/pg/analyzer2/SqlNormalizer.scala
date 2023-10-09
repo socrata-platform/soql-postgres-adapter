@@ -4,6 +4,7 @@ import com.socrata.prettyprint.prelude._
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.collection.OrderedMap
+import com.socrata.soql.sqlizer._
 
 import com.socrata.pg.analyzer2.metatypes.DatabaseNamesMetaTypes
 

@@ -6,8 +6,9 @@ import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.FunctionName
 import com.socrata.soql.functions.{Function, MonomorphicFunction, SoQLFunctions, SoQLTypeInfo}
 import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLText, SoQLBoolean, SoQLUrl}
+import com.socrata.soql.sqlizer._
 
-class SoQLRewriteSearch[MT <: MetaTypes with ({type ColumnType = SoQLType; type ColumnValue = SoQLValue})](override val searchBeforeQuery: Boolean) extends RewriteSearch[MT] {
+class SoQLRewriteSearch[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({ type ColumnType = SoQLType; type ColumnValue = SoQLValue })](override val searchBeforeQuery: Boolean) extends RewriteSearch[MT] {
   import SoQLTypeInfo.hasType
 
   override def litText(s: String): Expr = LiteralValue[MT](SoQLText(s))(AtomicPositionInfo.None)

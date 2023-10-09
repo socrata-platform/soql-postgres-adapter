@@ -9,23 +9,14 @@ import com.rojoma.json.v3.ast.JString
 import com.socrata.prettyprint.prelude._
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.analyzer2.mocktablefinder._
+import com.socrata.soql.sqlizer._
 import com.socrata.soql.types._
 import com.socrata.soql.functions.{SoQLTypeInfo, SoQLFunctionInfo}
 
 class SqlizerTest extends FunSuite with MustMatchers with TestHelper with SqlizerUniverse[TestHelper.TestMT] {
   def sqlizer = new Sqlizer {
-    override val namespace = new SqlNamespaces {
-      def databaseTableName(dtn: DatabaseTableName) = {
-        val DatabaseTableName(s) = dtn
-        Doc(s)
-      }
-
-      def databaseColumnBase(dcn: DatabaseColumnName) = {
-        val DatabaseColumnName(s) = dcn
-        Doc(s)
-      }
-    }
-
+    override val exprSqlFactory = TestExprSqlFactory
+    override val namespace = new TestSqlNamespaces
     override val toProvenance = TestProvenanceMapper
     override def isRollup(dtn: DatabaseTableName) = false
 
@@ -52,7 +43,7 @@ class SqlizerTest extends FunSuite with MustMatchers with TestHelper with Sqlize
         case Left(err) => fail("Bad query: " + err)
       }
 
-    sqlizer(analysis).sql
+    sqlizer(analysis, new SoQLExtraContext).sql
   }
 
   test("simple") {

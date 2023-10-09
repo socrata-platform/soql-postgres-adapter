@@ -17,7 +17,7 @@ import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, Lifecyc
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.analyzer2.metatypes.{RollupMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName}
-import com.socrata.pg.analyzer2.{SqlNormalizer, SoQLRewriteSearch, ActualSqlizer}
+import com.socrata.pg.analyzer2.{SqlNormalizer, SoQLRewriteSearch, ActualSqlizer, SoQLExtraContext}
 import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
 import com.socrata.pg.soql._
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
@@ -187,7 +187,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
             // Rollups are disabled in redshift
             val sqlizer = ActualSqlizer.choose(Postgres)(SqlUtils.escapeString(pgu.conn, _), cryptProviders, Map.empty, locationSubcolumns)
 
-            val (denormSql, augSchema, _) = sqlizer.sqlize(analysis, rewriteOutputColumns = false)
+            val (denormSql, augSchema, _) = sqlizer.sqlize(analysis, rewriteOutputColumns = false, new SoQLExtraContext)
             val (sql, schema) = SqlNormalizer(denormSql, augSchema)
 
             logger.debug("Converted to sql: {}", sql)
