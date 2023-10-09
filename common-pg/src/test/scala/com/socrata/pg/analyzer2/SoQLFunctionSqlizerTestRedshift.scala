@@ -525,4 +525,15 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
       """current_date at time zone 'UTC'"""
     )
   }
+
+//  tests for conditional functions
+  test("nullif works") {
+    analyzeStatement("SELECT text, nullif(num, 1)") should equal("""SELECT x1.text AS i1, nullif(x1.num, 1 :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
+  }
+
+  test("coalesce works") {
+    analyzeStatement("SELECT coalesce(text, 'zero'), coalesce(num, '0')") should equal("""SELECT coalesce(x1.text, text 'zero') AS i1, coalesce(x1.num, 0 :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
+  }
+
+
 }
