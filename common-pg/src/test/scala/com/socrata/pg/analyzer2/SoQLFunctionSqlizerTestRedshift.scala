@@ -561,4 +561,24 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   test("count_distinct works") {
     analyzeStatement("SELECT count_distinct(text)") should equal("""SELECT (count(DISTINCT x1.text)) :: decimal(30, 7) AS i1 FROM table1 AS x1""")
   }
+
+  test("sum works") {
+    analyzeStatement("SELECT sum(num)") should equal("""SELECT sum(x1.num) AS i1 FROM table1 AS x1""")
+  }
+
+  test("avg works") {
+    analyzeStatement("SELECT avg(num)") should equal("""SELECT avg(x1.num) AS i1 FROM table1 AS x1""")
+  }
+
+  test("median works") {
+    analyzeStatement("SELECT median(num)") should equal("""SELECT percentile_cont(.50) within group (order by x1.num) AS i1 FROM table1 AS x1""")
+  }
+
+//  test("discrete median works") {
+//    analyzeStatement("SELECT median_disc(num)")
+//  }
+
+  test("regressional intercept works") {
+    analyzeStatement("SELECT regr_intercept(num, num)")
+  }
 }
