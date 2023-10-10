@@ -11,12 +11,21 @@ import com.socrata.soql.sqlizer._
 import mocktablefinder._
 
 object TestHelper {
-  final class TestMT extends MetaTypes with metatypes.SoQLMetaTypesExt {
+  object TestExtraContext extends ExtraContext[Unit] {
+    def finish(): Unit = {}
+  }
+
+  final class TestMT extends MetaTypes with MetaTypesExt {
     type ResourceNameScope = Int
     type ColumnType = TestType
     type ColumnValue = TestValue
     type DatabaseTableNameImpl = String
     type DatabaseColumnNameImpl = String
+
+    type ExtraContext = TestExtraContext.type
+    type ExtraContextResult = Unit
+    type CustomSqlizeAnnotation = Nothing
+
   }
 
   object TestProvenanceMapper extends types.ProvenanceMapper[TestMT] {
@@ -33,6 +42,33 @@ object TestHelper {
           rawSqls.funcall(d"soql_compress_compound")
       }
   }
+
+  object TestSqlNamespaces extends SqlNamespaces[TestMT] {
+    override def rawDatabaseTableName(dtn: DatabaseTableName) = {
+      val DatabaseTableName(name) = dtn
+      name
+    }
+
+    override def rawDatabaseColumnBase(dcn: DatabaseColumnName) = {
+      val DatabaseColumnName(name) = dcn
+      name
+    }
+
+    override def gensymPrefix: String = "g"
+    protected override def idxPrefix: String ="idx"
+    protected override def autoTablePrefix: String = "x"
+    protected override def autoColumnPrefix: String = "i"
+  }
+
+  val TestSqlizer = new Sqlizer[TestMT](
+    TestFunctionSqlizer,
+    TestExprSqlFactory,
+    TestSqlNamespaces,
+    TestRewriteSearch,
+    TestProvenanceMapper,
+    _ => false,
+    (sqlizer, physicalTableFor, extraContext) => new TestRepProvider(sqlizer.namespace, sqlizer.toProvenance, sqlizer.isRollup)
+  )
 }
 
 trait TestHelper { this: Assertions =>
@@ -45,24 +81,9 @@ trait TestHelper { this: Assertions =>
 
   val TestProvenanceMapper = TestHelper.TestProvenanceMapper
   val TestExprSqlFactory = TestHelper.TestExprSqlFactory
+  val TestExtraContext = TestHelper.TestExtraContext
 
-  class TestSqlNamespaces extends SqlNamespaces[TestMT] {
-    override def databaseTableName(dtn: DatabaseTableName) = {
-      val DatabaseTableName(name) = dtn
-      Doc(name)
-    }
-
-    override def databaseColumnBase(dcn: DatabaseColumnName) = {
-      val DatabaseColumnName(name) = dcn
-      Doc(name)
-    }
-
-    protected override def gensymPrefix: String = "g"
-    protected override def idxPrefix: String ="idx"
-    protected override def autoTablePrefix: String = "x"
-    protected override def autoColumnPrefix: String = "i"
-  }
-
+  val sqlizer = TestHelper.TestSqlizer
   val analyzer = new SoQLAnalyzer[TestMT](TestTypeInfo, TestFunctionInfo, TestProvenanceMapper)
 
   val testTypeInfoProjection = TestTypeInfo.metaProject[TestMT]

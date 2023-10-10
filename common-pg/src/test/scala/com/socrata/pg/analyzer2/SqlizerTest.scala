@@ -14,22 +14,6 @@ import com.socrata.soql.types._
 import com.socrata.soql.functions.{SoQLTypeInfo, SoQLFunctionInfo}
 
 class SqlizerTest extends FunSuite with MustMatchers with TestHelper with SqlizerUniverse[TestHelper.TestMT] {
-  def sqlizer = new Sqlizer {
-    override val exprSqlFactory = TestExprSqlFactory
-    override val namespace = new TestSqlNamespaces
-    override val toProvenance = TestProvenanceMapper
-    override def isRollup(dtn: DatabaseTableName) = false
-
-    override def mkRepProvider(physicalTableFor: Map[AutoTableLabel, DatabaseTableName]) =
-      new TestRepProvider(namespace, toProvenance, isRollup)
-
-    override val funcallSqlizer: FuncallSqlizer = TestFunctionSqlizer
-
-    override val rewriteSearch: RewriteSearch = TestRewriteSearch
-
-    override val systemContext = Map.empty
-  }
-
   def analyze(tf: TableFinder[TestMT], soql: String): Doc = {
     val ft =
       tf.findTables(0, soql, Map.empty) match {
@@ -43,7 +27,7 @@ class SqlizerTest extends FunSuite with MustMatchers with TestHelper with Sqlize
         case Left(err) => fail("Bad query: " + err)
       }
 
-    sqlizer(analysis, new SoQLExtraContext).sql
+    sqlizer(analysis, TestExtraContext).sql
   }
 
   test("simple") {

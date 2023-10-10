@@ -197,7 +197,7 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
 
     f.args(0) match {
       case lit@LiteralValue(SoQLText(key)) =>
-        ctx.systemContext.get(key) match {
+        ctx.extraContext.systemContext.get(key) match {
           case Some(value) =>
             ctx.repFor(SoQLText).literal(LiteralValue[MT](SoQLText(value))(f.position.asAtomic))
               .withExpr(f)

@@ -185,9 +185,9 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
         RollupAnalyzer(pgu, copyInfo, rollupInfo) match {
           case Some((foundTables, analysis, locationSubcolumns, cryptProviders)) =>
             // Rollups are disabled in redshift
-            val sqlizer = ActualSqlizer.choose(Postgres)(SqlUtils.escapeString(pgu.conn, _), cryptProviders, Map.empty, locationSubcolumns)
+            val sqlizer = ActualSqlizer.choose(Postgres)
 
-            val (denormSql, augSchema, _) = sqlizer.sqlize(analysis, rewriteOutputColumns = false, new SoQLExtraContext)
+            val (denormSql, augSchema, _) = sqlizer.sqlize(analysis, rewriteOutputColumns = false, new SoQLExtraContext(Map.empty, cryptProviders, locationSubcolumns, SqlUtils.escapeString(pgu.conn, _)))
             val (sql, schema) = SqlNormalizer(denormSql, augSchema)
 
             logger.debug("Converted to sql: {}", sql)
