@@ -108,7 +108,7 @@ object ProcessQuery {
 
               private val columns = statement.schema.keysIterator.toArray
               override def databaseColumnNameOfIndex(idx: Int) =
-                DatabaseColumnName(new PostgresNamespaces().rawAutoColumnBase(columns(idx)))
+                DatabaseColumnName(PostgresNamespaces.rawAutoColumnBase(columns(idx)))
             }
           }
       }
@@ -141,8 +141,8 @@ object ProcessQuery {
 
     val onlyOne = nameAnalyses.lengthCompare(1) == 0
     val sqlized = nameAnalyses.map { nameAnalysis =>
-      val sqlizer = ActualSqlizer.choose(sqlizerType)(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, RewriteSubcolumns[InputMetaTypes](request.locationSubcolumns, copyCache))
-      val Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(nonliteralSystemContextLookupFound, now)) = sqlizer(nameAnalysis._1, new SoQLExtraContext)
+      val sqlizer = ActualSqlizer.choose(sqlizerType)
+      val Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(nonliteralSystemContextLookupFound, now)) = sqlizer(nameAnalysis._1, new SoQLExtraContext(systemContext, cryptProviders, RewriteSubcolumns[InputMetaTypes](request.locationSubcolumns, copyCache), SqlUtils.escapeString(pgu.conn, _)))
       log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
 
       Sqlized(

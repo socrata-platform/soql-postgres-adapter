@@ -21,17 +21,17 @@ object SoQLFunctionSqlizerTestPostgres {
   }
 
   object TestNamespaces extends SqlNamespaces[TestMT] {
-    override def databaseTableName(dtn: DatabaseTableName) = {
+    override def rawDatabaseTableName(dtn: DatabaseTableName) = {
       val DatabaseTableName(name) = dtn
-      Doc(name)
+      name
     }
 
-    override def databaseColumnBase(dcn: DatabaseColumnName) = {
+    override def rawDatabaseColumnBase(dcn: DatabaseColumnName) = {
       val DatabaseColumnName(name) = dcn
-      Doc(name)
+      name
     }
 
-    protected override def gensymPrefix: String = "g"
+    override def gensymPrefix: String = "g"
     protected override def idxPrefix: String ="idx"
     protected override def autoTablePrefix: String = "x"
     protected override def autoColumnPrefix: String = "i"
@@ -48,32 +48,43 @@ object SoQLFunctionSqlizerTestPostgres {
       DatabaseTableName(name)
     }
   }
+
+  val TestFuncallSqlizer = new SoQLFunctionSqlizerPostgres[TestMT]
+
+  val TestSqlizer = new Sqlizer[TestMT](
+    TestFuncallSqlizer,
+    new PostgresExprSqlFactory,
+    TestNamespaces,
+    new SoQLRewriteSearch(searchBeforeQuery = true),
+    ProvenanceMapper,
+    _ => false,
+    (sqlizer, physicalTableFor, extraContext) =>
+      new SoQLRepProviderPostgres[TestMT](
+        extraContext.cryptProviderProvider,
+        sqlizer.exprSqlFactory,
+        sqlizer.namespace,
+        sqlizer.toProvenance,
+        sqlizer.isRollup,
+        Map.empty,
+        physicalTableFor
+      ) {
+        override def mkStringLiteral(s: String) = Doc(extraContext.escapeString(s))
+      }
+  )
 }
 
 class SoQLFunctionSqlizerTestPostgres extends FunSuite with MustMatchers with SqlizerUniverse[SoQLFunctionSqlizerTestPostgres.TestMT] {
   type TestMT = SoQLFunctionSqlizerTestPostgres.TestMT
 
-  val sqlizer = new Sqlizer {
-    override val exprSqlFactory = new PostgresExprSqlFactory[TestMT]
+  val sqlizer = SoQLFunctionSqlizerTestPostgres.TestSqlizer
+  val funcallSqlizer = SoQLFunctionSqlizerTestPostgres.TestFuncallSqlizer
 
-    override val namespace = SoQLFunctionSqlizerTestPostgres.TestNamespaces
-
-    override val toProvenance = SoQLFunctionSqlizerTestPostgres.ProvenanceMapper
-    def isRollup(dtn: DatabaseTableName) = false
-
-    val cryptProvider = obfuscation.CryptProvider.zeros
-
-    override def mkRepProvider(physicalTableFor: Map[AutoTableLabel, DatabaseTableName]) =
-      new SoQLRepProviderPostgres[TestMT](_ => Some(cryptProvider), exprSqlFactory, namespace, toProvenance, isRollup, Map.empty, physicalTableFor) {
-        override def mkStringLiteral(s: String) = Doc(JString(s).toString)
-      }
-
-    override val funcallSqlizer = new SoQLFunctionSqlizerPostgres
-
-    override val rewriteSearch = new SoQLRewriteSearch(searchBeforeQuery = true)
-
-    override val systemContext = Map("hello" -> "world")
-  }
+  def extraContext = new SoQLExtraContext(
+    Map("hello" -> "world"),
+    _ => Some(obfuscation.CryptProvider.zeros),
+    Map.empty,
+    JString(_).toString
+  )
 
   // The easiest way to make an Expr for sqlization is just to analyze
   // it out...
@@ -115,7 +126,7 @@ class SoQLFunctionSqlizerTestPostgres extends FunSuite with MustMatchers with Sq
 
     if(useSelectListReferences) analysis = analysis.useSelectListReferences
 
-    sqlizer(analysis, new SoQLExtraContext).sql.layoutSingleLine.toString
+    sqlizer(analysis, extraContext).sql.layoutSingleLine.toString
   }
 
   test("basic search") {
@@ -136,7 +147,7 @@ class SoQLFunctionSqlizerTestPostgres extends FunSuite with MustMatchers with Sq
   }
 
   test("all window functions are covered") {
-    sqlizer.funcallSqlizer.windowedFunctionMap.keySet == SoQLFunctions.windowFunctions.toSet
+    funcallSqlizer.windowedFunctionMap.keySet == SoQLFunctions.windowFunctions.toSet
   }
 
   test("lead/lag gets its int cast") {
@@ -232,17 +243,17 @@ class SoQLFunctionSqlizerTestPostgres extends FunSuite with MustMatchers with Sq
   test("Functions are correctly classified") {
     // The "contains" check is because of the TsVector fake functions
     // that search gets rewritten into
-    for(f <- sqlizer.funcallSqlizer.ordinaryFunctionMap.keysIterator.filter(SoQLFunctions.functionsByIdentity.contains)) {
+    for(f <- funcallSqlizer.ordinaryFunctionMap.keysIterator.filter(SoQLFunctions.functionsByIdentity.contains)) {
       SoQLFunctions.functionsByIdentity(f).isAggregate must be (false)
       SoQLFunctions.functionsByIdentity(f).needsWindow must be (false)
     }
 
-    for(f <- sqlizer.funcallSqlizer.aggregateFunctionMap.keysIterator) {
+    for(f <- funcallSqlizer.aggregateFunctionMap.keysIterator) {
       SoQLFunctions.functionsByIdentity(f).isAggregate must be (true)
       SoQLFunctions.functionsByIdentity(f).needsWindow must be (false)
     }
 
-    for(f <- sqlizer.funcallSqlizer.windowedFunctionMap.keysIterator) {
+    for(f <- funcallSqlizer.windowedFunctionMap.keysIterator) {
       val function = SoQLFunctions.functionsByIdentity(f)
       (function.isAggregate || function.needsWindow) must be (true)
     }
@@ -250,7 +261,7 @@ class SoQLFunctionSqlizerTestPostgres extends FunSuite with MustMatchers with Sq
 
   test("All functions are implemented") {
     for(f <- SoQLFunctions.allFunctions) {
-      if(!(sqlizer.funcallSqlizer.ordinaryFunctionMap.contains(f.identity) || sqlizer.funcallSqlizer.aggregateFunctionMap.contains(f.identity) || sqlizer.funcallSqlizer.windowedFunctionMap.contains(f.identity))) {
+      if(!(funcallSqlizer.ordinaryFunctionMap.contains(f.identity) || funcallSqlizer.aggregateFunctionMap.contains(f.identity) || funcallSqlizer.windowedFunctionMap.contains(f.identity))) {
         println("Not implemented: " + f.identity)
       }
     }
@@ -258,7 +269,7 @@ class SoQLFunctionSqlizerTestPostgres extends FunSuite with MustMatchers with Sq
 
   test("All aggregate functions are also window functions") {
     for(f <- SoQLFunctions.allFunctions if f.isAggregate) {
-      if(!sqlizer.funcallSqlizer.windowedFunctionMap.contains(f.identity)) {
+      if(!funcallSqlizer.windowedFunctionMap.contains(f.identity)) {
         println("Not implemented in windowed form: " + f.identity)
       }
     }

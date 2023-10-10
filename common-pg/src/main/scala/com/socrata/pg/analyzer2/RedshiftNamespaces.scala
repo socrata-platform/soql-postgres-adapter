@@ -6,18 +6,18 @@ import com.socrata.soql.sqlizer._
 
 import com.socrata.pg.analyzer2.metatypes.DatabaseNamesMetaTypes
 
-class RedshiftNamespaces extends SqlNamespaces[DatabaseNamesMetaTypes] {
-  override def databaseTableName(dtn: DatabaseTableName) = {
+object RedshiftNamespaces extends SqlNamespaces[DatabaseNamesMetaTypes] {
+  override def rawDatabaseTableName(dtn: DatabaseTableName) = {
     val DatabaseTableName(dataTableName) = dtn
-    Doc(dataTableName.name)
+    dataTableName.name
   }
 
-  override def databaseColumnBase(dcn: DatabaseColumnName) = {
+  override def rawDatabaseColumnBase(dcn: DatabaseColumnName) = {
     val DatabaseColumnName(physicalColumnBase) = dcn
-    Doc(physicalColumnBase)
+    physicalColumnBase
   }
 
-  protected override def gensymPrefix: String = "g"
+  override def gensymPrefix: String = "g"
 
   protected override def idxPrefix: String ="idx"
 
