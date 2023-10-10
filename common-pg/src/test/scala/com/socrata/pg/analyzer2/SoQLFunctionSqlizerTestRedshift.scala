@@ -549,4 +549,16 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   test("count(*) works") {
     analyzeStatement("SELECT count(*)") should equal("""SELECT (count(*)) :: decimal(30, 7) AS i1 FROM table1 AS x1""")
   }
+
+  test("count() works") {
+    analyzeStatement("SELECT count(text)") should equal("""SELECT (count(x1.text)) :: decimal(30, 7) AS i1 FROM table1 AS x1""")
+  }
+
+  test("count(iif ... ) works") {
+    analyzeStatement("SELECT count(IIF(text='one', 1, NULL))") should equal("""SELECT (count(CASE WHEN (x1.text) = (text 'one') THEN 1 :: decimal(30, 7) ELSE null :: decimal(30, 7) END)) :: decimal(30, 7) AS i1 FROM table1 AS x1""")
+  }
+
+  test("count_distinct works") {
+    analyzeStatement("SELECT count_distinct(text)") should equal("""SELECT (count(DISTINCT x1.text)) :: decimal(30, 7) AS i1 FROM table1 AS x1""")
+  }
 }
