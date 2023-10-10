@@ -536,4 +536,17 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
       """current_date at time zone 'UTC'"""
     )
   }
+
+//  tests for aggregate functions
+  test("max works") {
+    analyzeStatement("SELECT max(num)") should equal("""SELECT max(x1.num) AS i1 FROM table1 AS x1""")
+  }
+
+  test("min works") {
+    analyzeStatement("SELECT min(num)") should equal("""SELECT min(x1.num) AS i1 FROM table1 AS x1""")
+  }
+
+  test("count(*) works") {
+    analyzeStatement("SELECT count(*)") should equal("""SELECT (count(*)) :: decimal(30, 7) AS i1 FROM table1 AS x1""")
+  }
 }
