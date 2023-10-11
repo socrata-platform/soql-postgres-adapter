@@ -82,6 +82,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     Trim -> nary("trim") _,
     LeftPad -> formatCall("lpad(%s, %s::int, %s)") _,
     RightPad -> formatCall("rpad(%s, %s::int, %s)") _,
+    Unaccent -> nary("unaccent") _,
 
     GetContext -> contextCall _,
 
