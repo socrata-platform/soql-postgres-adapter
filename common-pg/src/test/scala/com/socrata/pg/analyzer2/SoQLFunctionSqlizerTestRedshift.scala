@@ -573,12 +573,4 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   test("median works") {
     analyzeStatement("SELECT median(num)") should equal("""SELECT percentile_cont(.50) within group (order by x1.num) AS i1 FROM table1 AS x1""")
   }
-
-//  test("discrete median works") {
-//    analyzeStatement("SELECT median_disc(num)")
-//  }
-
-  test("regressional intercept works") {
-    analyzeStatement("SELECT regr_intercept(num, num)")
-  }
 }

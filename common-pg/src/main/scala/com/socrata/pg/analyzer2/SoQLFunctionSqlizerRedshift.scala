@@ -25,7 +25,20 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
         val sql = (Doc(sc.parts.head) +: (renderedArgs, sc.parts.tail).zipped.map { (arg, part) => arg ++ Doc(part) }).hcat
         exprSqlFactory(sql, f)
       }
-    }
+
+//    def expr(args: Int*): WindowedFunctionSqlizer =
+//      ofs { (f, runtimeArgs, ctx) =>
+//        assert(args.length >= f.function.minArity)
+//        assert(f.function.allParameters.startsWith(runtimeArgs.map(_.typ)))
+//
+//        val renderedArgs = args.map(runtimeArgs(_).compressed.sql)
+//
+//        val sql = (Doc(sc.parts.head) +: (renderedArgs, sc.parts.tail).zipped.map { (arg, part) => arg ++ Doc(part) }).hcat
+//        exprSqlFactory(sql, f)
+//      }
+  }
+
+
 
 
   def wrap(e: Expr, exprSql: ExprSql, wrapper: String, additionalWrapperArgs: Doc*) =
