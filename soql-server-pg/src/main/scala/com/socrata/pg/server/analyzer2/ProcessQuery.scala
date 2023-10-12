@@ -1,10 +1,11 @@
 package com.socrata.pg.server.analyzer2
 
 import scala.collection.{mutable => scm}
+import scala.concurrent.duration.FiniteDuration
 
 import java.io.{BufferedWriter, OutputStreamWriter}
 import java.nio.charset.StandardCharsets
-import java.sql.{Connection, PreparedStatement}
+import java.sql.{Connection, PreparedStatement, SQLException, ResultSet}
 import java.time.{Clock, LocalDateTime}
 import java.util.Base64
 import java.util.zip.GZIPOutputStream
@@ -43,6 +44,7 @@ import com.socrata.metrics.rollup.events.RollupHit
 import com.socrata.pg.analyzer2.{CryptProviderProvider, TransformManager, CostEstimator, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, PostgresNamespaces, SoQLExtraContext}
 import com.socrata.pg.analyzer2.metatypes.{CopyCache, InputMetaTypes, DatabaseMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName, SoQLMetaTypesExt}
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils, RollupAnalyzer, RollupId}
+import com.socrata.pg.query.QueryResult
 import com.socrata.pg.server.CJSONWriter
 import com.socrata.datacoordinator.common.DbType
 import com.socrata.pg.analyzer2.ActualSqlizer
@@ -108,7 +110,7 @@ object ProcessQuery {
 
               private val columns = statement.schema.keysIterator.toArray
               override def databaseColumnNameOfIndex(idx: Int) =
-                DatabaseColumnName(new PostgresNamespaces().rawAutoColumnBase(columns(idx)))
+                DatabaseColumnName(PostgresNamespaces.rawAutoColumnBase(columns(idx)))
             }
           }
       }
@@ -141,8 +143,8 @@ object ProcessQuery {
 
     val onlyOne = nameAnalyses.lengthCompare(1) == 0
     val sqlized = nameAnalyses.map { nameAnalysis =>
-      val sqlizer = ActualSqlizer.choose(sqlizerType)(SqlUtils.escapeString(pgu.conn, _), cryptProviders, systemContext, RewriteSubcolumns[InputMetaTypes](request.locationSubcolumns, copyCache))
-      val Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(nonliteralSystemContextLookupFound, now)) = sqlizer(nameAnalysis._1, new SoQLExtraContext)
+      val sqlizer = ActualSqlizer.choose(sqlizerType)
+      val Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(nonliteralSystemContextLookupFound, now)) = sqlizer(nameAnalysis._1, new SoQLExtraContext(systemContext, cryptProviders, RewriteSubcolumns[InputMetaTypes](request.locationSubcolumns, copyCache), SqlUtils.escapeString(pgu.conn, _)))
       log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
 
       Sqlized(
@@ -188,6 +190,7 @@ object ProcessQuery {
           sqlized.extractor,
           lastModified,
           request.debug,
+          None,
           rs
         )
       case Precondition.FailedBecauseMatch(_) =>
@@ -217,41 +220,99 @@ object ProcessQuery {
     }
   }
 
+  def setTimeout(conn: Connection, timeout: FiniteDuration): Unit = {
+    val timeoutMs = timeout.toMillis.min(Int.MaxValue).max(1).toInt
+    using(conn.createStatement()) { stmt =>
+      stmt.execute("SET LOCAL statement_timeout TO $timeoutMs")
+    }
+  }
+
+  def resetTimeout(conn: Connection): Unit = {
+    using(conn.createStatement()) { stmt =>
+      stmt.execute("SET LOCAL statement_timeout TO DEFAULT")
+    }
+  }
+
+  // note this _doesn't_ reset the timeout if it throws
+  def withTimeout[T](conn: Connection, timeout: Option[FiniteDuration], cond: Boolean = true)(f: => T): T = {
+    timeout match {
+      case Some(finite) if cond =>
+        setTimeout(conn, finite)
+        val result = f
+        resetTimeout(conn)
+        result
+      case _ =>
+        f
+    }
+  }
+
   def explainText(
-    pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+    conn: Connection,
     query: String,
-    analyze: Boolean
-  ): String = {
-    for {
-      stmt <- managed(pgu.conn.createStatement())
-      rs <- managed(stmt.executeQuery(s"EXPLAIN (analyze $analyze, format text) $query"))
-    } {
-      val sb = new StringBuilder
-      var didOne = false
-      while(rs.next()) {
-        if(didOne) sb.append('\n')
-        else didOne = true
-        sb.append(rs.getString(1))
+    analyze: Boolean,
+    timeout: Option[FiniteDuration]
+  ): Either[HttpResponse, String] = {
+    handlingSqlErrors(timeout) {
+      withTimeout(conn, timeout, cond = analyze) {
+        for {
+          stmt <- managed(conn.createStatement())
+          rs <- managed(stmt.executeQuery(s"EXPLAIN (analyze $analyze, format text) $query"))
+        } {
+          val sb = new StringBuilder
+          var didOne = false
+          while(rs.next()) {
+            if(didOne) sb.append('\n')
+            else didOne = true
+            sb.append(rs.getString(1))
+          }
+          sb.toString
+        }
       }
-      sb.toString
     }
   }
 
   def explainJson(
-    pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
+    conn: Connection,
     query: String,
-    analyze: Boolean
-  ): JValue = {
-    for {
-      stmt <- managed(pgu.conn.createStatement())
-      rs <- managed(stmt.executeQuery(s"EXPLAIN (analyse $analyze, format json) $query"))
-    } {
-      val sb = new StringBuilder
-      var didOne = false
-      if(!rs.next()) {
-        throw new Exception("Should've gotten a row for the explanation")
+    analyze: Boolean,
+    timeout: Option[FiniteDuration]
+  ): Either[HttpResponse, JValue] = {
+    handlingSqlErrors(timeout) {
+      withTimeout(conn, timeout, cond = analyze) {
+        for {
+          stmt <- managed(conn.createStatement())
+          rs <- managed(stmt.executeQuery(s"EXPLAIN (analyse $analyze, format json) $query"))
+        } {
+          val sb = new StringBuilder
+          var didOne = false
+          if(!rs.next()) {
+            throw new Exception("Should've gotten a row for the explanation")
+          }
+          JsonReader.fromString(rs.getString(1))
+        }
       }
-      JsonReader.fromString(rs.getString(1))
+    }
+  }
+
+  def handlingSqlErrors[T](timeout: Option[FiniteDuration])(f: => T): Either[HttpResponse, T] = {
+    try {
+      Right(f)
+    } catch {
+      case e: SQLException =>
+        QueryResult.QueryRuntimeError(e, timeout) match {
+          case Some(QueryResult.RequestTimedOut(timeout)) =>
+            Left(RequestTimeout ~> Json(json"{ timeout: ${timeout.toString} }"))
+          case Some(QueryResult.QueryError(description)) =>
+            // Sadness: PG _doesn't_ report position info for runtime
+            // errors so this position info isn't actually useful,
+            // even if the sql were available here...
+            // val posInfo = Sqlizer.positionInfo(laidOutSql)
+
+            Left(BadRequest ~> Json(json"{ message: $description }"))
+          case None =>
+            log.error("Exception running query", e)
+            Left(InternalServerError)
+        }
     }
   }
 
@@ -267,6 +328,7 @@ object ProcessQuery {
     extractor: ResultExtractor[DatabaseNamesMetaTypes],
     lastModified: DateTime,
     debug: Option[Debug],
+    timeout: Option[FiniteDuration],
     rs: ResourceScope
   ): HttpResponse = {
     val locale = "en_US"
@@ -287,11 +349,16 @@ object ProcessQuery {
             JString(s)
           }.map("sql" -> _),
           debug.explain.map { case Debug.Explain(analyze, format) =>
-            format match {
-              case Debug.Explain.Format.Text =>
-                JString(explainText(pgu, renderedSql, analyze))
-              case Debug.Explain.Format.Json =>
-                explainJson(pgu, renderedSql, analyze)
+            val explainResult =
+              format match {
+                case Debug.Explain.Format.Text =>
+                  explainText(pgu.conn, renderedSql, analyze, timeout).map(JString(_))
+                case Debug.Explain.Format.Json =>
+                  explainJson(pgu.conn, renderedSql, analyze, timeout)
+              }
+            explainResult match {
+              case Left(errorResponse) => return errorResponse
+              case Right(json) => json
             }
           }.map("explain" -> _)
         ).flatten.toMap
@@ -303,15 +370,12 @@ object ProcessQuery {
       if(preventRun) {
         Iterator.empty
       } else {
-        try {
+        timeout.foreach(setTimeout(pgu.conn, _))
+        handlingSqlErrors(timeout) {
           runQuery(pgu.conn, renderedSql, systemContext, cryptProviders, extractor, rs)
-        } catch {
-          case e: org.postgresql.util.PSQLException =>
-            log.error("Exception running query", e)
-            // Sadness: PG _doesn't_ report position info for runtime errors
-            // so this position info isn't actually useful :(
-            val posInfo = Sqlizer.positionInfo(laidOutSql)
-            return InternalServerError
+        } match {
+          case Left(resp) => return resp
+          case Right(rows) => rows
         }
       }
 

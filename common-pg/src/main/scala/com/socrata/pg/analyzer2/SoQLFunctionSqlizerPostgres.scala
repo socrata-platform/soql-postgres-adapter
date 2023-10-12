@@ -141,7 +141,7 @@ class SoQLFunctionSqlizerPostgres[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
 
     f.args(0) match {
       case lit@LiteralValue(SoQLText(key)) =>
-        ctx.systemContext.get(key) match {
+        ctx.extraContext.systemContext.get(key) match {
           case Some(value) =>
             ctx.repFor(SoQLText).literal(LiteralValue[MT](SoQLText(value))(f.position.asAtomic))
               .withExpr(f)
@@ -354,6 +354,7 @@ class SoQLFunctionSqlizerPostgres[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       Substr2 -> sqlizeNormalOrdinaryFuncall("soql_substring"),
       Substr3 -> sqlizeNormalOrdinaryFuncall("soql_substring"),
       SplitPart -> sqlizeNormalOrdinaryFuncall("soql_split_part"),
+      Unaccent -> sqlizeNormalOrdinaryFuncall("unaccent"),
 
       UnaryMinus -> sqlizeNegate,
       UnaryPlus -> sqlizeAntinegate,
