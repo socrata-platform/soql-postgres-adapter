@@ -28,8 +28,6 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
   }
 
 
-
-
   def wrap(e: Expr, exprSql: ExprSql, wrapper: String, additionalWrapperArgs: Doc*) =
     exprSqlFactory((exprSql.compressed.sql +: additionalWrapperArgs).funcall(Doc(wrapper)), e)
 
