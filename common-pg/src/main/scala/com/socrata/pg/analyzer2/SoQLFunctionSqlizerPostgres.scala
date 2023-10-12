@@ -354,6 +354,7 @@ class SoQLFunctionSqlizerPostgres[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       Substr2 -> sqlizeNormalOrdinaryFuncall("soql_substring"),
       Substr3 -> sqlizeNormalOrdinaryFuncall("soql_substring"),
       SplitPart -> sqlizeNormalOrdinaryFuncall("soql_split_part"),
+      Unaccent -> sqlizeNormalOrdinaryFuncall("unaccent"),
 
       UnaryMinus -> sqlizeNegate,
       UnaryPlus -> sqlizeAntinegate,
