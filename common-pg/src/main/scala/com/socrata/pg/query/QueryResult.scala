@@ -17,11 +17,12 @@ import scala.concurrent.duration.Duration
 sealed abstract class QueryResult
 
 object QueryResult {
+  sealed trait RuntimeErrorLike
 
   case class NotModified(etags: Seq[EntityTag]) extends QueryResult
   case object PreconditionFailed extends QueryResult
-  case class RequestTimedOut(timeout: Option[Duration]) extends QueryResult
-  case class QueryError(description: String) extends QueryResult
+  case class RequestTimedOut(timeout: Option[Duration]) extends QueryResult with RuntimeErrorLike
+  case class QueryError(description: String) extends QueryResult with RuntimeErrorLike
   class QueryRuntimeError(val error: SQLException) extends QueryError(error.getMessage)
   object QueryRuntimeError {
     val validErrorCodes = Set(
@@ -33,7 +34,7 @@ object QueryResult {
       "XX000"     // invalid geometry, POINT(1,2)::point -- no comma between lon lat, POLYGON((0 0,1 1,1 0))::polygon
     )
 
-    def apply(error: SQLException, timeout: Option[Duration] = None): Option[QueryResult] = {
+    def apply(error: SQLException, timeout: Option[Duration] = None): Option[QueryResult with RuntimeErrorLike] = {
       error.getSQLState match {
         // ick, but user-canceled requests also fall under this code and those are fine
         case "57014" if "ERROR: canceling statement due to statement timeout".equals(error.getMessage) =>
