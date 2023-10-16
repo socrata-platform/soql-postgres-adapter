@@ -582,8 +582,8 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   }
 
   test("median works") {
-
     analyzeStatement("SELECT median(num)") should equal("""SELECT median(x1.num) AS i1 FROM table1 AS x1""")
+  }
 
 //  tests for conditional functions
   test("nullif works") {
