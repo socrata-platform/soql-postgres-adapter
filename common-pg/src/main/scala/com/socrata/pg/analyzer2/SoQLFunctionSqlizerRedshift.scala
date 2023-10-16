@@ -647,7 +647,6 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       CountDistinct -> numericize(sqlizeCountDistinct _),
       Sum -> sqlizeNormalAggregateFuncall("sum"),
       Avg -> sqlizeNormalAggregateFuncall("avg"),
-//      Median -> sqlizeMedianAgg("median_ulib_agg", "percentile_cont"),
       Median -> sqlizeNormalAggregateFuncall("median"),
       MedianDisc -> sqlizeMedianAgg("median_disc_ulib_agg", "percentile_disc"),
       RegrIntercept -> sqlizeNormalAggregateFuncall("regr_intercept"),
