@@ -601,4 +601,13 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   test("iif works") {
     analyzeStatement("SELECT num, iif(num > 1, 'large num', 'small num')") should equal("""SELECT x1.num AS i1, CASE WHEN (x1.num) > (1 :: decimal(30, 7)) THEN text 'large num' ELSE text 'small num' END AS i2 FROM table1 AS x1""")
   }
+
+//  tests for geo functions
+  test("spacial union works") {
+    analyzeStatement("Select spatial_union(geom, geom)") should equal("""SELECT st_asbinary(st_multi(st_union(x1.geom, x1.geom))) AS i1 FROM table1 AS x1""")
+  }
+
+
 }
+
+
