@@ -1,0 +1,15 @@
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+    <changeSet author="setzer" id="20231011-create-extension-unaccent" runOnChange="true">
+        <sql splitStatements="false"><![CDATA[
+          CREATE EXTENSION IF NOT EXISTS unaccent;
+        ]]></sql>
+        <rollback>
+            <sql>
+              DROP EXTENSION IF EXISTS unaccent;
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

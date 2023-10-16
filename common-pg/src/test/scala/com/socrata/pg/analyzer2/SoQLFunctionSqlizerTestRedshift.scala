@@ -41,21 +41,44 @@ object SoQLFunctionSqlizerTestRedshift {
   }
 
   object TestNamespaces extends SqlNamespaces[TestMT] {
-    override def databaseTableName(dtn: DatabaseTableName) = {
+    override def rawDatabaseTableName(dtn: DatabaseTableName) = {
       val DatabaseTableName(name) = dtn
-      Doc(name)
+      name
     }
 
-    override def databaseColumnBase(dcn: DatabaseColumnName) = {
+    override def rawDatabaseColumnBase(dcn: DatabaseColumnName) = {
       val DatabaseColumnName(name) = dcn
-      Doc(name)
+      name
     }
 
-    protected override def gensymPrefix: String = "g"
+    override def gensymPrefix: String = "g"
     protected override def idxPrefix: String ="idx"
     protected override def autoTablePrefix: String = "x"
     protected override def autoColumnPrefix: String = "i"
   }
+
+  val TestFuncallSqlizer = new SoQLFunctionSqlizerRedshift[TestMT]
+
+  val TestSqlizer = new Sqlizer[TestMT](
+    TestFuncallSqlizer,
+    new RedshiftExprSqlFactory,
+    TestNamespaces,
+    new SoQLRewriteSearch(searchBeforeQuery = true),
+    ProvenanceMapper,
+    _ => false,
+    (sqlizer, physicalTableFor, extraContext) =>
+      new SoQLRepProviderRedshift[TestMT](
+        extraContext.cryptProviderProvider,
+        sqlizer.exprSqlFactory,
+        sqlizer.namespace,
+        sqlizer.toProvenance,
+        sqlizer.isRollup,
+        Map.empty,
+        physicalTableFor
+      ) {
+        override def mkStringLiteral(s: String) = Doc(extraContext.escapeString(s))
+      }
+  )
 }
 
 class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with SqlizerUniverse[SoQLFunctionSqlizerTestRedshift.TestMT] with PGSecondaryUniverseTestBase {
@@ -67,27 +90,15 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
   type TestMT = SoQLFunctionSqlizerTestRedshift.TestMT
 
-  val sqlizer = new Sqlizer {
-    override val exprSqlFactory = new RedshiftExprSqlFactory[TestMT]
-    override val namespace = SoQLFunctionSqlizerTestRedshift.TestNamespaces
+  val sqlizer = SoQLFunctionSqlizerTestRedshift.TestSqlizer
+  val funcallSqlizer = SoQLFunctionSqlizerTestRedshift.TestFuncallSqlizer
 
-    override val toProvenance = SoQLFunctionSqlizerTestRedshift.ProvenanceMapper
-    def isRollup(dtn: DatabaseTableName) = false
-
-    val cryptProvider = obfuscation.CryptProvider.zeros
-
-    override def mkRepProvider(physicalTableFor: Map[AutoTableLabel, DatabaseTableName]) =
-      new SoQLRepProviderRedshift[TestMT](_ => Some(cryptProvider), new RedshiftExprSqlFactory[TestMT], namespace, toProvenance, isRollup, Map.empty, physicalTableFor) {
-        override def mkStringLiteral(s: String) = Doc(s"'$s'")
-      }
-
-
-    override val funcallSqlizer = new SoQLFunctionSqlizerRedshift[TestMT]
-
-    override val rewriteSearch = new SoQLRewriteSearch[TestMT](searchBeforeQuery = true)
-
-    override val systemContext = Map("hello" -> "world")
-  }
+  def extraContext = new SoQLExtraContext(
+    Map.empty,
+    _ => Some(obfuscation.CryptProvider.zeros),
+    Map.empty,
+    s => s"'$s'"
+  )
 
   // The easiest way to make an Expr for sqlization is just to analyze
   // it out...
@@ -129,7 +140,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
     if(useSelectListReferences) analysis = analysis.useSelectListReferences
 
-    val sql = sqlizer(analysis, new SoQLExtraContext).sql.layoutSingleLine.toString
+    val sql = sqlizer(analysis, extraContext).sql.layoutSingleLine.toString
 
     println(sql)
     sql
@@ -571,6 +582,23 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   }
 
   test("median works") {
+
     analyzeStatement("SELECT median(num)") should equal("""SELECT median(x1.num) AS i1 FROM table1 AS x1""")
+
+//  tests for conditional functions
+  test("nullif works") {
+    analyzeStatement("SELECT text, nullif(num, 1)") should equal("""SELECT x1.text AS i1, nullif(x1.num, 1 :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
+  }
+
+  test("coalesce works") {
+    analyzeStatement("SELECT coalesce(text, 'zero'), coalesce(num, '0')") should equal("""SELECT coalesce(x1.text, text 'zero') AS i1, coalesce(x1.num, 0 :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
+  }
+
+  test("case works") {
+    analyzeStatement("SELECT num, case(num > 1, 'large num', num <= 1, 'small num')") should equal("""SELECT x1.num AS i1, CASE WHEN (x1.num) > (1 :: decimal(30, 7)) THEN text 'large num' WHEN (x1.num) <= (1 :: decimal(30, 7)) THEN text 'small num' END AS i2 FROM table1 AS x1""")
+  }
+
+  test("iif works") {
+    analyzeStatement("SELECT num, iif(num > 1, 'large num', 'small num')") should equal("""SELECT x1.num AS i1, CASE WHEN (x1.num) > (1 :: decimal(30, 7)) THEN text 'large num' ELSE text 'small num' END AS i2 FROM table1 AS x1""")
   }
 }
