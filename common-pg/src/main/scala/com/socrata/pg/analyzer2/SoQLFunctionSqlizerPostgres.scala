@@ -428,13 +428,12 @@ class SoQLFunctionSqlizerPostgres[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       GeoMultiPolygonFromPolygon -> sqlizeNormalOrdinaryFuncall("st_multi"),
       GeoMultiLineFromLine -> sqlizeNormalOrdinaryFuncall("st_multi"),
       GeoMultiPointFromPoint -> sqlizeNormalOrdinaryFuncall("st_multi"),
-      NumberOfPoints -> sqlizeNormalOrdinaryFuncall("st_npoints"),
       PointToLatitude -> numericize(sqlizeNormalOrdinaryFuncall("st_y")),
       PointToLongitude -> numericize(sqlizeNormalOrdinaryFuncall("st_x")),
       NumberOfPoints -> numericize(sqlizeNormalOrdinaryFuncall("st_npoints")),
       Crosses -> sqlizeNormalOrdinaryFuncall("st_crosses"),
       Overlaps -> sqlizeNormalOrdinaryFuncall("st_overlaps"),
-      Intersects -> sqlizeNormalOrdinaryFuncall("st_overlaps"),
+      Intersects -> sqlizeNormalOrdinaryFuncall("st_intersects"),
       ReducePrecision -> sqlizeNormalOrdinaryFuncall("st_reduceprecision"),
       // https://postgis.net/docs/ST_ReducePrecision.html - Polygons
       // can become multipolygons when reduced, so we force them to do
