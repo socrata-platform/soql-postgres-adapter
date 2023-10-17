@@ -623,6 +623,9 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     analyzeStatement("SELECT polygon_intersection(geom, geom)") should equal("""SELECT st_asbinary(st_multi(st_buffer(st_intersection(x1.geom, x1.geom), 0.0))) AS i1 FROM table1 AS x1""")
   }
 
+  test("intersects works") {
+    analyzeStatement("SELECT intersects(geom, geom)")
+  }
 }
 
 

@@ -523,11 +523,13 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       GeoMultiPointFromPoint -> sqlizeNormalOrdinaryFuncall("st_multi"),
 //      this is a duplicate of line 528. does anyone object to removing this line?
       NumberOfPoints -> sqlizeNormalOrdinaryFuncall("st_npoints"),
+//      TODO  next two functions aren't tested yet
       PointToLatitude -> numericize(sqlizeNormalOrdinaryFuncall("st_y")),
       PointToLongitude -> numericize(sqlizeNormalOrdinaryFuncall("st_x")),
       NumberOfPoints -> numericize(sqlizeNormalOrdinaryFuncall("st_npoints")),
       Crosses -> sqlizeNormalOrdinaryFuncall("st_crosses"),
       Overlaps -> sqlizeNormalOrdinaryFuncall("st_overlaps"),
+//      TODO: check if next function can be implemented using st_intersects in redshift
       Intersects -> sqlizeNormalOrdinaryFuncall("st_overlaps"),
       ReducePrecision -> sqlizeNormalOrdinaryFuncall("st_reduceprecision"),
       // https://postgis.net/docs/ST_ReducePrecision.html - Polygons
