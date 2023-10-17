@@ -548,6 +548,43 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
     )
   }
 
+//  tests for aggregate functions
+  test("max works") {
+    analyzeStatement("SELECT max(num)") should equal("""SELECT max(x1.num) AS i1 FROM table1 AS x1""")
+  }
+
+  test("min works") {
+    analyzeStatement("SELECT min(num)") should equal("""SELECT min(x1.num) AS i1 FROM table1 AS x1""")
+  }
+
+  test("count(*) works") {
+    analyzeStatement("SELECT count(*)") should equal("""SELECT (count(*)) :: decimal(30, 7) AS i1 FROM table1 AS x1""")
+  }
+
+  test("count() works") {
+    analyzeStatement("SELECT count(text)") should equal("""SELECT (count(x1.text)) :: decimal(30, 7) AS i1 FROM table1 AS x1""")
+  }
+
+  test("count(iif ... ) works") {
+    analyzeStatement("SELECT count(IIF(text='one', 1, NULL))") should equal("""SELECT (count(CASE WHEN (x1.text) = (text 'one') THEN 1 :: decimal(30, 7) ELSE null :: decimal(30, 7) END)) :: decimal(30, 7) AS i1 FROM table1 AS x1""")
+  }
+
+  test("count_distinct works") {
+    analyzeStatement("SELECT count_distinct(text)") should equal("""SELECT (count(DISTINCT x1.text)) :: decimal(30, 7) AS i1 FROM table1 AS x1""")
+  }
+
+  test("sum works") {
+    analyzeStatement("SELECT sum(num)") should equal("""SELECT sum(x1.num) AS i1 FROM table1 AS x1""")
+  }
+
+  test("avg works") {
+    analyzeStatement("SELECT avg(num)") should equal("""SELECT avg(x1.num) AS i1 FROM table1 AS x1""")
+  }
+
+  test("median works") {
+    analyzeStatement("SELECT median(num)") should equal("""SELECT median(x1.num) AS i1 FROM table1 AS x1""")
+  }
+
 //  tests for conditional functions
   test("nullif works") {
     analyzeStatement("SELECT text, nullif(num, 1)") should equal("""SELECT x1.text AS i1, nullif(x1.num, 1 :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
