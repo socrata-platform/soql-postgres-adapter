@@ -603,10 +603,25 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   }
 
 //  tests for geo functions
-  test("spacial union works") {
+  test("spacial union works for polygons and points") {
     analyzeStatement("Select spatial_union(geom, geom)") should equal("""SELECT st_asbinary(st_multi(st_union(x1.geom, x1.geom))) AS i1 FROM table1 AS x1""")
   }
 
+  test("from line to multiline, from polygon to multipolygon and from line to multiline work") {
+    analyzeStatement("SELECT geo_multi(geom)") should equal("""SELECT st_asbinary(st_multi(x1.geom)) AS i1 FROM table1 AS x1""")
+  }
+
+  test("num_points works") {
+    analyzeStatement("SELECT num_points(geom)") should equal("""SELECT (st_npoints(x1.geom)) :: decimal(30, 7) AS i1 FROM table1 AS x1""")
+  }
+
+  test("crosses works") {
+    analyzeStatement("SELECT crosses(geom, geom)") should equal("""SELECT st_crosses(x1.geom, x1.geom) AS i1 FROM table1 AS x1""")
+  }
+
+  test("intersection works") {
+    analyzeStatement("SELECT polygon_intersection(geom, geom)") should equal("""SELECT st_asbinary(st_multi(st_buffer(st_intersection(x1.geom, x1.geom), 0.0))) AS i1 FROM table1 AS x1""")
+  }
 
 }
 

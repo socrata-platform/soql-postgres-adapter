@@ -521,6 +521,7 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       GeoMultiPolygonFromPolygon -> sqlizeNormalOrdinaryFuncall("st_multi"),
       GeoMultiLineFromLine -> sqlizeNormalOrdinaryFuncall("st_multi"),
       GeoMultiPointFromPoint -> sqlizeNormalOrdinaryFuncall("st_multi"),
+//      this is a duplicate of line 528. does anyone object to removing this line?
       NumberOfPoints -> sqlizeNormalOrdinaryFuncall("st_npoints"),
       PointToLatitude -> numericize(sqlizeNormalOrdinaryFuncall("st_y")),
       PointToLongitude -> numericize(sqlizeNormalOrdinaryFuncall("st_x")),
