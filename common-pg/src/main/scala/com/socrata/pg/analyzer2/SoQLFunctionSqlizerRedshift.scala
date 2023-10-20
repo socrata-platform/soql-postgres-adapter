@@ -536,18 +536,31 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       Intersection -> sqlizeMultiBuffered("st_intersection"),
       WithinPolygon -> sqlizeNormalOrdinaryFuncall("st_within"),
       WithinCircle -> sqlizeNormalOrdinaryFuncall("soql_within_circle", suffixArgs = Seq(Geo.defaultSRIDLiteral)),
-      WithinBox -> sqlizeNormalOrdinaryFuncall("soql_within_box", suffixArgs = Seq(Geo.defaultSRIDLiteral)),
+      // is st_contains the right function here?
+      WithinBox -> comment(
+        expr"st_contains(st_makeenvelope(${2} :: DOUBLE PRECISION, ${3} :: DOUBLE PRECISION, ${4} :: DOUBLE PRECISION, ${1} :: DOUBLE PRECISION), ${0})",
+        comment="within_box"
+      ),
       IsEmpty -> sqlizeIsEmpty,
       Simplify -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplify")),
       SimplifyPreserveTopology -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplifypreservetopology")),
       SnapToGrid -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_snaptogrid")),
-      Area -> sqlizeNormalOrdinaryFuncall("soql_area"),
-      DistanceInMeters -> sqlizeNormalOrdinaryFuncall("soql_distance_in_meters"),
-      VisibleAt -> sqlizeNormalOrdinaryFuncall("soql_visible_at"),
+      Area -> comment(expr"st_area(${0} :: geography) :: decimal(30, 7)", comment="soql_area"),
+      // DinstanceInMeters only works for points; for other geography or geometry datatypes it would produce an error
+      DistanceInMeters -> comment(expr"st_distance(${0} :: geography, ${1} :: geography) :: decimal(30, 7)", comment="soql_distance_in_meters"),
+      VisibleAt -> comment(
+        expr"(not st_isempty(${0})) AND (st_geometrytype(${0}) = 'ST_Point' OR st_geometrytype(${0}) = 'ST_MultiPoint' OR (ST_XMax(${0}) - ST_XMin(${0})) >= ${1} OR (ST_YMax(${0}) - ST_YMin(${0})) >= ${1})",
+        comment="soql_visible_at"
+      ),
       GeoMakeValid -> sqlizeNormalOrdinaryFuncall("st_makevalid"),
       ConcaveHull -> sqlizeMultiBuffered("st_concavehull"),
       ConvexHull -> sqlizeMultiBuffered("st_convexhull"),
-      CuratedRegionTest -> sqlizeNormalOrdinaryFuncall("soql_curated_region_test"),
+      // this is implemented slightly different than that in soql-postgres-adapter:
+      // in case of not st_valid(geom) -> 'invalid geometry type' instead of st_isvalidreason(geom) as it's not supported in redshift
+      CuratedRegionTest -> comment(
+        expr"case when st_npoints(${0}) > ${1} then 'too complex' when st_xmin(${0}) < -180 or st_xmax(${0}) > 180 or st_ymin(${0}) < -90 or st_ymax(${0}) > 90 then 'out of bounds' when not st_isvalid(${0}) then 'invalid geography data' when ${0} is null then 'empty' end",
+        comment="soql_curated_region_test"
+      ),
 
       // ST_CollectionExtract takes a type as a second argument
       // See https://postgis.net/docs/ST_CollectionExtract.html for exact integer -> type mapping
