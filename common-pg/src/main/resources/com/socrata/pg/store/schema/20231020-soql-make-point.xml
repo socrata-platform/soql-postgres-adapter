@@ -1,0 +1,20 @@
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+    <changeSet author="robertm" id="20231020-soql-make-point.xml" runOnChange="true">
+        <sql splitStatements="false"><![CDATA[
+          CREATE OR REPLACE FUNCTION soql_make_point(lat numeric, lon numeric, srid integer) RETURNS geometry AS $$
+            select st_point(lon, lat, srid);
+          $$ LANGUAGE SQL
+          IMMUTABLE
+          PARALLEL SAFE
+          RETURNS NULL ON NULL INPUT;
+        ]]></sql>
+        <rollback>
+            <sql>
+              DROP FUNCTION soql_make_point(numeric, numeric, integer);
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -28,7 +28,7 @@ import com.socrata.prettyprint.{SimpleDocStream, SimpleDocTree, tree => doctree}
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.analyzer2.rollup.RollupInfo
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName, ResourceName, Provenance}
+import com.socrata.soql.environment.{ColumnName, ResourceName, Provenance, ScopedResourceName}
 import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLID, SoQLVersion, SoQLNull}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.sql.Debug

@@ -1,5 +1,7 @@
 package com.socrata.pg.analyzer2
 
+import scala.language.implicitConversions
+
 import com.socrata.prettyprint.prelude._
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.collection.NonEmptySeq
@@ -14,13 +16,24 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
 
   override val exprSqlFactory = new RedshiftExprSqlFactory[MT]
 
+  sealed trait ExprArg
+  object ExprArg {
+    implicit def int2arg(idx: Int) = IndexArg(idx)
+    implicit def sql2arg(sql: Doc) = SqlArg(sql)
+  }
+  case class IndexArg(idx: Int) extends ExprArg
+  case class SqlArg(sql: Doc) extends ExprArg
+
   implicit class ExprInterpolator(sc: StringContext) {
-    def expr(args: Int*): OrdinaryFunctionSqlizer =
+    def expr(args: ExprArg*): OrdinaryFunctionSqlizer =
       ofs { (f, runtimeArgs, ctx) =>
         assert(args.length >= f.function.minArity)
         assert(f.function.allParameters.startsWith(runtimeArgs.map(_.typ)))
 
-        val renderedArgs = args.map(runtimeArgs(_).compressed.sql)
+        val renderedArgs = args.map {
+          case IndexArg(idx) => runtimeArgs(idx).compressed.sql
+          case SqlArg(sql) => sql
+        }
 
         val sql = (Doc(sc.parts.head) +: (renderedArgs, sc.parts.tail).zipped.map { (arg, part) => arg ++ Doc(part) }).hcat
         exprSqlFactory(sql, f)
@@ -524,6 +537,7 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       NumberOfPoints -> sqlizeNormalOrdinaryFuncall("st_npoints"),
       PointToLatitude -> numericize(sqlizeNormalOrdinaryFuncall("st_y")),
       PointToLongitude -> numericize(sqlizeNormalOrdinaryFuncall("st_x")),
+      MakePoint -> expr"st_setsrid(st_point(${1}, ${0}), ${Geo.defaultSRIDLiteral})",
       NumberOfPoints -> numericize(sqlizeNormalOrdinaryFuncall("st_npoints")),
       Crosses -> sqlizeNormalOrdinaryFuncall("st_crosses"),
       Overlaps -> sqlizeNormalOrdinaryFuncall("st_overlaps"),

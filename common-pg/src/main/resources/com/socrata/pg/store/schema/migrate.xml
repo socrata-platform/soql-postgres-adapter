@@ -40,4 +40,5 @@
     <include file="com/socrata/pg/store/schema/20230630-make-human-address-like-old.xml"/>
     <include file="com/socrata/pg/store/schema/20230711-soql-text-to-location.xml"/>
     <include file="com/socrata/pg/store/schema/20230717-remove-soql-extract-timestamp-field.xml"/>
+    <include file="com/socrata/pg/store/schema/20231020-soql-make-point.xml"/>
 </databaseChangeLog>
