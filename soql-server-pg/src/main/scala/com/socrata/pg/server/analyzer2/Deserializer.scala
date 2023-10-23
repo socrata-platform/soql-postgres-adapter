@@ -1,5 +1,7 @@
 package com.socrata.pg.server.analyzer2
 
+import scala.concurrent.duration._
+
 import java.io.InputStream
 
 import com.socrata.datacoordinator.id.{DatasetInternalName, UserColumnId}
@@ -17,7 +19,8 @@ object Deserializer extends LabelUniverse[InputMetaTypes] {
     locationSubcolumns: Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]],
     context: Map[String, String],
     passes: Seq[Seq[Pass]],
-    debug: Option[Debug]
+    debug: Option[Debug],
+    queryTimeout: Option[FiniteDuration]
   )
   object Request {
     implicit def deserialize(
@@ -34,7 +37,8 @@ object Deserializer extends LabelUniverse[InputMetaTypes] {
               buffer.read[Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]]](),
               buffer.read[Map[String, String]](),
               buffer.read[Seq[Seq[Pass]]](),
-              buffer.read[Option[Debug]]()
+              buffer.read[Option[Debug]](),
+              buffer.read[Option[Long]]().map(_.milliseconds)
             )
           case other =>
             throw new Exception(s"Unknown request version $other")
