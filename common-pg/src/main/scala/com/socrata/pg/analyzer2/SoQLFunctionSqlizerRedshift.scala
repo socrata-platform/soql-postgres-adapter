@@ -528,7 +528,6 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       Intersects -> sqlizeNormalOrdinaryFuncall("st_intersects"),
       Intersection -> sqlizeMultiBuffered("st_intersection"),
       WithinPolygon -> sqlizeNormalOrdinaryFuncall("st_within"),
-      // is st_contains the right function here?
       WithinBox -> comment(
         expr"st_contains(st_makeenvelope(${2} :: DOUBLE PRECISION, ${3} :: DOUBLE PRECISION, ${4} :: DOUBLE PRECISION, ${1} :: DOUBLE PRECISION), ${0})",
         comment="within_box"
