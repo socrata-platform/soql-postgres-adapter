@@ -10,13 +10,13 @@ import org.postgresql.util.PSQLException
 
 object RowSizeBufferSqlErrorContinue extends SqlErrorHandler {
   def guard(conn: Connection)(f: => Unit): Unit = {
-    RowSizeBufferSqlErrorHandler.guard(conn, None)(f)
+    RowSizeBufferSqlErrorHandler.guard(conn, None, setSavepoint = true)(f)
   }
 }
 
 object RowSizeBufferSqlErrorResync extends SqlErrorHandler {
   def guard(conn: Connection)(f: => Unit): Unit = {
-    RowSizeBufferSqlErrorHandler.guard(conn, Some(classOf[ResyncSecondaryException]))(f)
+    RowSizeBufferSqlErrorHandler.guard(conn, Some(classOf[ResyncSecondaryException]), setSavepoint = false)(f)
   }
 }
 
@@ -28,8 +28,8 @@ object RowSizeBufferSqlErrorHandler {
   /**
    * Catch index row size buffer exception and optionally rethrow another exception or just ignore it.
    */
-  def guard[E <: Exception](conn: Connection, exceptionClass: Option[Class[E]])(f: => Unit): Unit = {
-    val savepoint = Option(conn.setSavepoint())
+  def guard[E <: Exception](conn: Connection, exceptionClass: Option[Class[E]], setSavepoint: Boolean)(f: => Unit): Unit = {
+    val savepoint = if(setSavepoint) Option(conn.setSavepoint()) else None
 
     def resyncIfIndexRowSizeError(ex: PSQLException): Unit = {
       isIndexRowSizeError(ex) match {
