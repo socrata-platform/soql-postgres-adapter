@@ -431,6 +431,7 @@ class SoQLFunctionSqlizerPostgres[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       GeoMultiPointFromPoint -> sqlizeNormalOrdinaryFuncall("st_multi"),
       PointToLatitude -> numericize(sqlizeNormalOrdinaryFuncall("st_y")),
       PointToLongitude -> numericize(sqlizeNormalOrdinaryFuncall("st_x")),
+      MakePoint -> sqlizeNormalOrdinaryFuncall("soql_make_point", suffixArgs = Seq(Geo.defaultSRIDLiteral)),
       NumberOfPoints -> numericize(sqlizeNormalOrdinaryFuncall("st_npoints")),
       Crosses -> sqlizeNormalOrdinaryFuncall("st_crosses"),
       Overlaps -> sqlizeNormalOrdinaryFuncall("st_overlaps"),
