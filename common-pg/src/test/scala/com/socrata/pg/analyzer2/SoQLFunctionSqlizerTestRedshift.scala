@@ -122,7 +122,8 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
         "text" -> SoQLText,
         "num" -> SoQLNumber,
         "url" -> SoQLUrl,
-        "geom" -> SoQLPolygon
+        "geom" -> SoQLPolygon,
+        "geometry_point" -> SoQLPoint
       )
     )
 
@@ -609,4 +610,75 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   test("iif works") {
     analyzeStatement("SELECT num, iif(num > 1, 'large num', 'small num')") should equal("""SELECT x1.num AS i1, CASE WHEN (x1.num) > (1 :: decimal(30, 7)) THEN text 'large num' ELSE text 'small num' END AS i2 FROM table1 AS x1""")
   }
+
+//  tests for geo functions
+  test("spacial union works for polygons and points") {
+    analyzeStatement("Select spatial_union(geom, geom)") should equal("""SELECT st_asbinary(st_multi(st_union(x1.geom, x1.geom))) AS i1 FROM table1 AS x1""")
+  }
+
+  test("from line to multiline, from polygon to multipolygon and from line to multiline work") {
+    analyzeStatement("SELECT geo_multi(geom)") should equal("""SELECT st_asbinary(st_multi(x1.geom)) AS i1 FROM table1 AS x1""")
+  }
+
+  test("num_points works") {
+    analyzeStatement("SELECT num_points(geom)") should equal("""SELECT (st_npoints(x1.geom)) :: decimal(30, 7) AS i1 FROM table1 AS x1""")
+  }
+
+  test("crosses works") {
+    analyzeStatement("SELECT crosses(geom, geom)") should equal("""SELECT st_crosses(x1.geom, x1.geom) AS i1 FROM table1 AS x1""")
+  }
+
+  test("intersection works") {
+    analyzeStatement("SELECT polygon_intersection(geom, geom)") should equal("""SELECT st_asbinary(st_multi(st_buffer(st_intersection(x1.geom, x1.geom), 0.0))) AS i1 FROM table1 AS x1""")
+  }
+
+  test("intersects works") {
+    analyzeStatement("SELECT intersects(geom, geom)") should equal("""SELECT st_intersects(x1.geom, x1.geom) AS i1 FROM table1 AS x1""")
+  }
+
+  test("within_polygon works") {
+    analyzeStatement("SELECT within_polygon(geom, geom)") should equal("""SELECT st_within(x1.geom, x1.geom) AS i1 FROM table1 AS x1""")
+  }
+
+  test("within_box works") {
+    analyzeStatement("SELECT text, within_box(geom, 23, 34, 10, 56)") should equal("""SELECT x1.text AS i1, (/* within_box */ st_contains(st_makeenvelope(34 :: decimal(30, 7) :: DOUBLE PRECISION, 10 :: decimal(30, 7) :: DOUBLE PRECISION, 56 :: decimal(30, 7) :: DOUBLE PRECISION, 23 :: decimal(30, 7) :: DOUBLE PRECISION), x1.geom)) AS i2 FROM table1 AS x1""")
+  }
+
+  test("is_empty works") {
+    analyzeStatement("SELECT text, is_empty(geom)") should equal("""SELECT x1.text AS i1, st_isempty(x1.geom) or (x1.geom) is null AS i2 FROM table1 AS x1""")
+  }
+
+  test("simplify works") {
+    analyzeStatement("SELECT text, simplify(geom, 1)") should equal("""SELECT x1.text AS i1, st_asbinary(st_simplify(x1.geom, 1 :: decimal(30, 7))) AS i2 FROM table1 AS x1""")
+  }
+
+  test("area works") {
+    analyzeStatement("SELECT text, area(geom)") should equal("""SELECT x1.text AS i1, (/* soql_area */ st_area(x1.geom :: geography) :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
+  }
+
+  test("distance_in_meters works for points only") {
+    analyzeStatement("SELECT text, distance_in_meters(geom, geom)") should equal("""SELECT x1.text AS i1, (/* soql_distance_in_meters */ st_distance(x1.geom :: geography, x1.geom :: geography) :: decimal(30, 7)) AS i2 FROM table1 AS x1""")
+  }
+
+  test("visible_at works") {
+    analyzeStatement("SELECT text, visible_at(geom, 3)") should equal("""SELECT x1.text AS i1, (/* soql_visible_at */ (not st_isempty(x1.geom)) AND (st_geometrytype(x1.geom) = 'ST_Point' OR st_geometrytype(x1.geom) = 'ST_MultiPoint' OR (ST_XMax(x1.geom) - ST_XMin(x1.geom)) >= 3 :: decimal(30, 7) OR (ST_YMax(x1.geom) - ST_YMin(x1.geom)) >= 3 :: decimal(30, 7))) AS i2 FROM table1 AS x1""")
+  }
+
+  test("convex_hull works") {
+    analyzeStatement("SELECT text, convex_hull(geom)") should equal("""SELECT x1.text AS i1, st_asbinary(st_multi(st_buffer(st_convexhull(x1.geom), 0.0))) AS i2 FROM table1 AS x1""")
+  }
+
+  test("curated_region_test works") {
+    analyzeStatement("Select text, curated_region_test(geom, 5)") should equal("""SELECT x1.text AS i1, (/* soql_curated_region_test */ case when st_npoints(x1.geom) > 5 :: decimal(30, 7) then 'too complex' when st_xmin(x1.geom) < -180 or st_xmax(x1.geom) > 180 or st_ymin(x1.geom) < -90 or st_ymax(x1.geom) > 90 then 'out of bounds' when not st_isvalid(x1.geom) then 'invalid geography data' when x1.geom is null then 'empty' end) AS i2 FROM table1 AS x1""")
+  }
+
+  test("test for PointToLatitude") {
+    analyzeStatement("SELECT text, point_latitude(geometry_point)") should equal("""SELECT x1.text AS i1, (st_y(x1.geometry_point)) :: decimal(30, 7) AS i2 FROM table1 AS x1""")
+  }
+
+  test("test for PointToLongitude") {
+    analyzeStatement("SELECT text, point_longitude(geometry_point)") should equal("""SELECT x1.text AS i1, (st_x(x1.geometry_point)) :: decimal(30, 7) AS i2 FROM table1 AS x1""")
+  }
 }
+
+

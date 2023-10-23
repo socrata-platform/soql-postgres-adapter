@@ -526,7 +526,6 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
 
       // Geo
       Union2Pt -> sqlizeNormalOrdinaryWithWrapper("st_union", "st_multi"),
-      Union2Line -> sqlizeNormalOrdinaryWithWrapper("st_union", "st_multi"),
       Union2Poly -> sqlizeNormalOrdinaryWithWrapper("st_union", "st_multi"),
       GeoMultiPolygonFromMultiPolygon -> sqlizeNormalOrdinaryFuncall("st_multi"),
       GeoMultiLineFromMultiLine -> sqlizeNormalOrdinaryFuncall("st_multi"),
@@ -534,41 +533,35 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       GeoMultiPolygonFromPolygon -> sqlizeNormalOrdinaryFuncall("st_multi"),
       GeoMultiLineFromLine -> sqlizeNormalOrdinaryFuncall("st_multi"),
       GeoMultiPointFromPoint -> sqlizeNormalOrdinaryFuncall("st_multi"),
-      NumberOfPoints -> sqlizeNormalOrdinaryFuncall("st_npoints"),
+//    the next 2 functions only work for geometry points, all other types produce an error
       PointToLatitude -> numericize(sqlizeNormalOrdinaryFuncall("st_y")),
       PointToLongitude -> numericize(sqlizeNormalOrdinaryFuncall("st_x")),
       MakePoint -> expr"st_setsrid(st_point(${1}, ${0}), ${Geo.defaultSRIDLiteral})",
       NumberOfPoints -> numericize(sqlizeNormalOrdinaryFuncall("st_npoints")),
       Crosses -> sqlizeNormalOrdinaryFuncall("st_crosses"),
-      Overlaps -> sqlizeNormalOrdinaryFuncall("st_overlaps"),
-      Intersects -> sqlizeNormalOrdinaryFuncall("st_overlaps"),
-      ReducePrecision -> sqlizeNormalOrdinaryFuncall("st_reduceprecision"),
-      // https://postgis.net/docs/ST_ReducePrecision.html - Polygons
-      // can become multipolygons when reduced, so we force them to do
-      // so.
-      ReducePolyPrecision -> sqlizeNormalOrdinaryWithWrapper("st_reduceprecision", "st_multi"),
+      Intersects -> sqlizeNormalOrdinaryFuncall("st_intersects"),
       Intersection -> sqlizeMultiBuffered("st_intersection"),
       WithinPolygon -> sqlizeNormalOrdinaryFuncall("st_within"),
-      WithinCircle -> sqlizeNormalOrdinaryFuncall("soql_within_circle", suffixArgs = Seq(Geo.defaultSRIDLiteral)),
-      WithinBox -> sqlizeNormalOrdinaryFuncall("soql_within_box", suffixArgs = Seq(Geo.defaultSRIDLiteral)),
+      WithinBox -> comment(
+        expr"st_contains(st_makeenvelope(${2} :: DOUBLE PRECISION, ${3} :: DOUBLE PRECISION, ${4} :: DOUBLE PRECISION, ${1} :: DOUBLE PRECISION), ${0})",
+        comment="within_box"
+      ),
       IsEmpty -> sqlizeIsEmpty,
       Simplify -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplify")),
-      SimplifyPreserveTopology -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_simplifypreservetopology")),
-      SnapToGrid -> preserveMulti(sqlizeNormalOrdinaryFuncall("st_snaptogrid")),
-      Area -> sqlizeNormalOrdinaryFuncall("soql_area"),
-      DistanceInMeters -> sqlizeNormalOrdinaryFuncall("soql_distance_in_meters"),
-      VisibleAt -> sqlizeNormalOrdinaryFuncall("soql_visible_at"),
-      GeoMakeValid -> sqlizeNormalOrdinaryFuncall("st_makevalid"),
-      ConcaveHull -> sqlizeMultiBuffered("st_concavehull"),
+      Area -> comment(expr"st_area(${0} :: geography) :: decimal(30, 7)", comment="soql_area"),
+      // DinstanceInMeters only works for points; for other geography or geometry datatypes it would produce an error
+      DistanceInMeters -> comment(expr"st_distance(${0} :: geography, ${1} :: geography) :: decimal(30, 7)", comment="soql_distance_in_meters"),
+      VisibleAt -> comment(
+        expr"(not st_isempty(${0})) AND (st_geometrytype(${0}) = 'ST_Point' OR st_geometrytype(${0}) = 'ST_MultiPoint' OR (ST_XMax(${0}) - ST_XMin(${0})) >= ${1} OR (ST_YMax(${0}) - ST_YMin(${0})) >= ${1})",
+        comment="soql_visible_at"
+      ),
       ConvexHull -> sqlizeMultiBuffered("st_convexhull"),
-      CuratedRegionTest -> sqlizeNormalOrdinaryFuncall("soql_curated_region_test"),
-
-      // ST_CollectionExtract takes a type as a second argument
-      // See https://postgis.net/docs/ST_CollectionExtract.html for exact integer -> type mapping
-      // (these are weird, you shouldn't ever have a "collection" value in soql...)
-      GeoCollectionExtractMultiPolygonFromPolygon -> sqlizeNormalOrdinaryFuncall("st_collectionextract", suffixArgs = Seq(d"3")),
-      GeoCollectionExtractMultiLineFromLine -> sqlizeNormalOrdinaryFuncall("st_collectionextract", suffixArgs = Seq(d"2")),
-      GeoCollectionExtractMultiPointFromPoint -> sqlizeNormalOrdinaryFuncall("st_collectionextract", suffixArgs = Seq(d"1")),
+      // CuratedRegionTest is implemented slightly different than that in soql-postgres-adapter:
+      // in case of not st_valid(geom) -> 'invalid geometry type' instead of st_isvalidreason(geom) as it's not supported in redshift
+      CuratedRegionTest -> comment(
+        expr"case when st_npoints(${0}) > ${1} then 'too complex' when st_xmin(${0}) < -180 or st_xmax(${0}) > 180 or st_ymin(${0}) < -90 or st_ymax(${0}) > 90 then 'out of bounds' when not st_isvalid(${0}) then 'invalid geography data' when ${0} is null then 'empty' end",
+        comment="soql_curated_region_test"
+      ),
 
       // Fake location
       LocationToLatitude -> numericize(sqlizeLocationPointOrdinaryFunction("st_y")),
