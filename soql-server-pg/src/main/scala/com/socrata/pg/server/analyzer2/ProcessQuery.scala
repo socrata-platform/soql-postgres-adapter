@@ -190,7 +190,7 @@ object ProcessQuery {
           sqlized.extractor,
           lastModified,
           request.debug,
-          None,
+          request.queryTimeout,
           rs
         )
       case Precondition.FailedBecauseMatch(_) =>
@@ -223,7 +223,7 @@ object ProcessQuery {
   def setTimeout(conn: Connection, timeout: FiniteDuration): Unit = {
     val timeoutMs = timeout.toMillis.min(Int.MaxValue).max(1).toInt
     using(conn.createStatement()) { stmt =>
-      stmt.execute("SET LOCAL statement_timeout TO $timeoutMs")
+      stmt.execute(s"SET LOCAL statement_timeout TO $timeoutMs")
     }
   }
 
