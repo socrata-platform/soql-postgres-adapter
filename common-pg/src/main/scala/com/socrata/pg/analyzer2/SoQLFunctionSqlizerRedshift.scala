@@ -521,7 +521,7 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       GeoMultiPolygonFromPolygon -> sqlizeNormalOrdinaryFuncall("st_multi"),
       GeoMultiLineFromLine -> sqlizeNormalOrdinaryFuncall("st_multi"),
       GeoMultiPointFromPoint -> sqlizeNormalOrdinaryFuncall("st_multi"),
-//      TODO  next two functions aren't tested yet
+//    the next 2 functions only work for geometry points, all other types produce an error
       PointToLatitude -> numericize(sqlizeNormalOrdinaryFuncall("st_y")),
       PointToLongitude -> numericize(sqlizeNormalOrdinaryFuncall("st_x")),
       NumberOfPoints -> numericize(sqlizeNormalOrdinaryFuncall("st_npoints")),
@@ -555,7 +555,7 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       GeoMakeValid -> sqlizeNormalOrdinaryFuncall("st_makevalid"),
       ConcaveHull -> sqlizeMultiBuffered("st_concavehull"),
       ConvexHull -> sqlizeMultiBuffered("st_convexhull"),
-      // this is implemented slightly different than that in soql-postgres-adapter:
+      // CuratedRegionTest is implemented slightly different than that in soql-postgres-adapter:
       // in case of not st_valid(geom) -> 'invalid geometry type' instead of st_isvalidreason(geom) as it's not supported in redshift
       CuratedRegionTest -> comment(
         expr"case when st_npoints(${0}) > ${1} then 'too complex' when st_xmin(${0}) < -180 or st_xmax(${0}) > 180 or st_ymin(${0}) < -90 or st_ymax(${0}) > 90 then 'out of bounds' when not st_isvalid(${0}) then 'invalid geography data' when ${0} is null then 'empty' end",

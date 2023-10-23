@@ -122,7 +122,8 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
         "text" -> SoQLText,
         "num" -> SoQLNumber,
         "url" -> SoQLUrl,
-        "geom" -> SoQLPolygon
+        "geom" -> SoQLPolygon,
+        "geometry_point" -> SoQLPoint
       )
     )
 
@@ -661,6 +662,14 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
   test("curated_region_test works") {
     analyzeStatement("Select text, curated_region_test(geom, 5)") should equal("""SELECT x1.text AS i1, (/* soql_curated_region_test */ case when st_npoints(x1.geom) > 5 :: decimal(30, 7) then 'too complex' when st_xmin(x1.geom) < -180 or st_xmax(x1.geom) > 180 or st_ymin(x1.geom) < -90 or st_ymax(x1.geom) > 90 then 'out of bounds' when not st_isvalid(x1.geom) then 'invalid geography data' when x1.geom is null then 'empty' end) AS i2 FROM table1 AS x1""")
+  }
+
+  test("test for PointToLatitude") {
+    analyzeStatement("SELECT text, point_latitude(geometry_point)") should equal("""SELECT x1.text AS i1, (st_y(x1.geometry_point)) :: decimal(30, 7) AS i2 FROM table1 AS x1""")
+  }
+
+  test("test for PointToLongitude") {
+    analyzeStatement("SELECT text, point_longitude(geometry_point)") should equal("""SELECT x1.text AS i1, (st_x(x1.geometry_point)) :: decimal(30, 7) AS i2 FROM table1 AS x1""")
   }
 }
 
