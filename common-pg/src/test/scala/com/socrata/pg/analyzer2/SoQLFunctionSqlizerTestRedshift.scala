@@ -679,6 +679,19 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   test("test for PointToLongitude") {
     analyzeStatement("SELECT text, point_longitude(geometry_point)") should equal("""SELECT x1.text AS i1, (st_x(x1.geometry_point)) :: decimal(30, 7) AS i2 FROM table1 AS x1""")
   }
+
+//  tests for window functions
+  test("row_number works") {
+    analyzeStatement("SELECT text, row_number() over(partition by text)") should equal("""SELECT x1.text AS i1, row_number() OVER (PARTITION BY x1.text) AS i2 FROM table1 AS x1""")
+  }
+
+  test("rank works") {
+    analyzeStatement("SELECT text, rank() over(order by text)") should equal("""SELECT x1.text AS i1, rank() OVER (ORDER BY x1.text ASC NULLS LAST) AS i2 FROM table1 AS x1""")
+  }
+
+  test("dense_rank works") {
+    analyzeStatement("SELECT text, num, dense_rank() over(partition by text order by num)") should equal("""SELECT x1.text AS i1, x1.num AS i2, dense_rank() OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST) AS i3 FROM table1 AS x1""")
+  }
 }
 
 
