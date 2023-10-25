@@ -591,6 +591,22 @@ class SoQLFunctionSqlizerPostgres[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
     }
   }
 
+  def sqlizeNtile(name: String) = {
+    val sqlizer = sqlizeNormalWindowedFuncall(name)
+
+    wfs { (e, args, filter, partitionBy, orderBy, ctx) =>
+      val mungedArgs = args.zipWithIndex.map { case (arg, i) =>
+        if (i == 0) {
+          assert(arg.typ == SoQLNumber)
+          exprSqlFactory(d"(" ++ arg.compressed.sql ++ d") :: int", arg.expr)
+        } else {
+          arg
+        }
+      }
+      sqlizer(e, mungedArgs, filter, partitionBy, orderBy, ctx)
+    }
+  }
+
   val windowedFunctionMap = (
     Seq[(Function[CT], WindowedFunctionSqlizer)](
       RowNumber -> sqlizeNormalWindowedFuncall("row_number"),
@@ -604,7 +620,7 @@ class SoQLFunctionSqlizerPostgres[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       Lag -> sqlizeLeadLag("lag"),
       LagOffset -> sqlizeLeadLag("lag"),
       LagOffsetDefault -> sqlizeLeadLag("lag"),
-      Ntile -> sqlizeLeadLag("ntile"),
+      Ntile -> sqlizeNtile("ntile"),
 
       // aggregate functions, used in a windowed way
       Max -> sqlizeNormalWindowedFuncall("max", jsonbWorkaround = true),
