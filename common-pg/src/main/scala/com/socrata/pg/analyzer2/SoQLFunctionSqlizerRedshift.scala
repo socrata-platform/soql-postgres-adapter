@@ -728,18 +728,18 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       // count distinct is not an aggregatable function
       Sum -> sqlizeNormalWindowedFuncall("sum"),
       Avg -> sqlizeNormalWindowedFuncall("avg"),
-      Median -> sqlizeNormalWindowedFuncall("median_ulib_agg"),          // have to use the custom aggregate function
-      MedianDisc -> sqlizeNormalWindowedFuncall("median_disc_ulib_agg"), // when in a windowed context
-      RegrIntercept -> sqlizeNormalWindowedFuncall("regr_intercept"),
-      RegrR2 -> sqlizeNormalWindowedFuncall("regr_r2"),
-      RegrSlope -> sqlizeNormalWindowedFuncall("regr_slope"),
+      Median -> sqlizeNormalWindowedFuncall("median"),
+//      MedianDisc -> sqlizeNormalWindowedFuncall("median_disc_ulib_agg"),
+//      RegrIntercept -> sqlizeNormalWindowedFuncall("regr_intercept"),
+//      RegrR2 -> sqlizeNormalWindowedFuncall("regr_r2"),
+//      RegrSlope -> sqlizeNormalWindowedFuncall("regr_slope"),
       StddevPop -> sqlizeNormalWindowedFuncall("stddev_pop"),
       StddevSamp -> sqlizeNormalWindowedFuncall("stddev_samp"),
 
-      UnionAggPt -> sqlizeNormalWindowedWithWrapper("st_union", "st_multi"),
-      UnionAggLine -> sqlizeNormalWindowedWithWrapper("st_union", "st_multi"),
-      UnionAggPoly -> sqlizeNormalWindowedWithWrapper("st_union", "st_multi"),
-      Extent -> sqlizeNormalWindowedWithWrapper("st_extent", "st_multi")
+//      UnionAggPt -> sqlizeNormalWindowedWithWrapper("st_union", "st_multi"),
+//      UnionAggLine -> sqlizeNormalWindowedWithWrapper("st_union", "st_multi"),
+//      UnionAggPoly -> sqlizeNormalWindowedWithWrapper("st_union", "st_multi"),
+//      Extent -> sqlizeNormalWindowedWithWrapper("st_extent", "st_multi")
     )
   ).map { case (f, sqlizer) =>
     f.identity -> sqlizer
