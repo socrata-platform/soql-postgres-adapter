@@ -711,13 +711,14 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       RowNumber -> sqlizeNormalWindowedFuncall("row_number"),
       Rank -> sqlizeNormalWindowedFuncall("rank"),
       DenseRank -> sqlizeNormalWindowedFuncall("dense_rank"),
-//      the following aggregate window functions with an ORDER BY clause require a frame clause: firse_value, last_value
       FirstValue -> sqlizeNormalWindowedFuncall("first_value"),
       LastValue -> sqlizeNormalWindowedFuncall("last_value"),
       Lead -> sqlizeLeadLag("lead"),
       LeadOffset -> sqlizeLeadLag("lead"),
+//      LeadOffsetDefault -> sqlizeLeadLag("lead"),
       Lag -> sqlizeLeadLag("lag"),
       LagOffset -> sqlizeLeadLag("lag"),
+//      LagOffsetDefault -> sqlizeLeadLag("lag"),
       Ntile -> sqlizeNtile("ntile"),
 
       // aggregate functions, used in a windowed way
