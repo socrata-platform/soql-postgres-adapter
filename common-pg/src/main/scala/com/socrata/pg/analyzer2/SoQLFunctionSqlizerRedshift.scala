@@ -690,21 +690,35 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
     }
   }
 
+  def sqlizeNtile(name:String) = {
+    val sqlizer = sqlizeNormalWindowedFuncall(name)
+
+    wfs {(e, args, filter, partitionBy, orderBy, ctx) =>
+      val mungedArgs = args.zipWithIndex.map { case (arg, i) =>
+        if(i == 0) {
+          assert(arg.typ == SoQLNumber)
+          exprSqlFactory(d"(" ++ arg.compressed.sql ++ d") :: int", arg.expr)
+        } else {
+          arg
+        }
+      }
+      sqlizer(e, mungedArgs, filter, partitionBy, orderBy, ctx)
+    }
+  }
+
   val windowedFunctionMap = (
     Seq[(Function[CT], WindowedFunctionSqlizer)](
       RowNumber -> sqlizeNormalWindowedFuncall("row_number"),
       Rank -> sqlizeNormalWindowedFuncall("rank"),
       DenseRank -> sqlizeNormalWindowedFuncall("dense_rank"),
-//      Aggregate window functions with an ORDER BY clause require a frame clause: firse_value, last_valuex
+//      the following aggregate window functions with an ORDER BY clause require a frame clause: firse_value, last_value
       FirstValue -> sqlizeNormalWindowedFuncall("first_value"),
       LastValue -> sqlizeNormalWindowedFuncall("last_value"),
       Lead -> sqlizeLeadLag("lead"),
       LeadOffset -> sqlizeLeadLag("lead"),
-      LeadOffsetDefault -> sqlizeLeadLag("lead"),
       Lag -> sqlizeLeadLag("lag"),
       LagOffset -> sqlizeLeadLag("lag"),
-      LagOffsetDefault -> sqlizeLeadLag("lag"),
-      Ntile -> sqlizeLeadLag("ntile"),
+      Ntile -> sqlizeNtile("ntile"),
 
       // aggregate functions, used in a windowed way
       Max -> sqlizeNormalWindowedFuncall("max", jsonbWorkaround = true),

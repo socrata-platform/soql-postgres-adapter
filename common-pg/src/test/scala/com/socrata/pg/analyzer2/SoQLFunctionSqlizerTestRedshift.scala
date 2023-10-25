@@ -682,11 +682,11 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
 //  tests for window functions
   test("row_number works") {
-    analyzeStatement("SELECT text, row_number() over(partition by text)") should equal("""SELECT x1.text AS i1, row_number() OVER (PARTITION BY x1.text) AS i2 FROM table1 AS x1""")
+    analyzeStatement("SELECT text,num, row_number() over(partition by text order by num)") should equal("""SELECT x1.text AS i1, x1.num AS i2, row_number() OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST) AS i3 FROM table1 AS x1""")
   }
 
   test("rank works") {
-    analyzeStatement("SELECT text, rank() over(order by text)") should equal("""SELECT x1.text AS i1, rank() OVER (ORDER BY x1.text ASC NULLS LAST) AS i2 FROM table1 AS x1""")
+    analyzeStatement("SELECT text, rank() over(partition by text order by num)") should equal("""SELECT x1.text AS i1, rank() OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST) AS i2 FROM table1 AS x1""")
   }
 
   test("dense_rank works") {
@@ -698,7 +698,27 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   }
 
   test("last_value works") {
-    analyzeStatement("SELECT text, num, last_value(num) over(partition by text order by num rows between unbounded preceding and current row)") should equal("""SELECT x1.text AS i1, x1.num AS i2, last_value(x1.num) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS i3 FROM table1 AS x1""")
+    analyzeStatement("SELECT text, num, last_value(num) over(partition by text order by num xc)") should equal("""SELECT x1.text AS i1, x1.num AS i2, last_value(x1.num) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS i3 FROM table1 AS x1""")
+  }
+
+  test("lead works") {
+    analyzeStatement("SELECT text, num, lead(num) over(partition by text order by num)") should equal("""SELECT x1.text AS i1, x1.num AS i2, lead(x1.num) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST) AS i3 FROM table1 AS x1""")
+  }
+
+  test("leadOffset works") {
+    analyzeStatement("SELECT text, num, lead(num, 2) over(partition by text order by num)") should equal("""SELECT x1.text AS i1, x1.num AS i2, lead(x1.num, (2 :: decimal(30, 7)) :: int) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST) AS i3 FROM table1 AS x1""")
+  }
+
+  test("lag works") {
+    analyzeStatement("SELECT text, num, lag(num) over(partition by text order by num desc)") should equal("""SELECT x1.text AS i1, x1.num AS i2, lag(x1.num) OVER (PARTITION BY x1.text ORDER BY x1.num DESC NULLS FIRST) AS i3 FROM table1 AS x1""")
+  }
+
+  test("lagOffset works") {
+    analyzeStatement("SELECT text, num, lag(num, 2) over(partition by text order by num desc)") should equal("""SELECT x1.text AS i1, x1.num AS i2, lag(x1.num, (2 :: decimal(30, 7)) :: int) OVER (PARTITION BY x1.text ORDER BY x1.num DESC NULLS FIRST) AS i3 FROM table1 AS x1""")
+  }
+
+  test("ntile works") {
+    analyzeStatement("SELECT text, num, ntile(4) over()")
   }
 }
 
