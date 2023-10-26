@@ -8,7 +8,7 @@ import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.Provenance
 import com.socrata.soql.types.SoQLValue
 import com.socrata.soql.types.obfuscation.CryptProvider
-import com.socrata.soql.functions.SoQLTypeInfo
+import com.socrata.soql.functions.SoQLTypeInfo2
 
 import com.socrata.pg.analyzer2.SoQLValueDebugHelper
 
@@ -23,7 +23,7 @@ final abstract class DatabaseNamesMetaTypes extends MetaTypes with SoQLMetaTypes
 }
 
 object DatabaseNamesMetaTypes extends MetaTypeHelper[DatabaseNamesMetaTypes] {
-  val typeInfo = SoQLTypeInfo.metaProject[DatabaseNamesMetaTypes]
+  val typeInfo = new SoQLTypeInfo2[DatabaseNamesMetaTypes]
 
   val provenanceMapper = new types.ProvenanceMapper[DatabaseNamesMetaTypes] {
     // These are database table names, so we can mark rollups by a

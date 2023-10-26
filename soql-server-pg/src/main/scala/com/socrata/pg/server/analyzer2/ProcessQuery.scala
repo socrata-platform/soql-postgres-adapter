@@ -144,7 +144,10 @@ object ProcessQuery {
     val onlyOne = nameAnalyses.lengthCompare(1) == 0
     val sqlized = nameAnalyses.map { nameAnalysis =>
       val sqlizer = ActualSqlizer.choose(sqlizerType)
-      val Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(nonliteralSystemContextLookupFound, now)) = sqlizer(nameAnalysis._1, new SoQLExtraContext(systemContext, cryptProviders, RewriteSubcolumns[InputMetaTypes](request.locationSubcolumns, copyCache), SqlUtils.escapeString(pgu.conn, _)))
+      val Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(nonliteralSystemContextLookupFound, now)) = sqlizer(nameAnalysis._1, new SoQLExtraContext(systemContext, cryptProviders, RewriteSubcolumns[InputMetaTypes](request.locationSubcolumns, copyCache), SqlUtils.escapeString(pgu.conn, _))) match {
+        case Right(result) => result
+        case Left(nothing) => nothing
+      }
       log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
 
       Sqlized(

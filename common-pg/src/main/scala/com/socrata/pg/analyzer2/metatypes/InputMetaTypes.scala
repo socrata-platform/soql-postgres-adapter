@@ -15,7 +15,7 @@ import com.socrata.soql.environment.Provenance
 import com.socrata.soql.serialize._
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.socrata.soql.types.obfuscation.CryptProvider
-import com.socrata.soql.functions.{MonomorphicFunction, SoQLFunctionInfo, SoQLTypeInfo}
+import com.socrata.soql.functions.{MonomorphicFunction, SoQLFunctionInfo, SoQLTypeInfo2}
 
 import com.socrata.pg.analyzer2.SoQLValueDebugHelper
 import com.socrata.pg.analyzer2.{metatypes => mt}
@@ -30,8 +30,6 @@ final class InputMetaTypes extends MetaTypes {
 }
 
 object InputMetaTypes {
-  val typeInfo = SoQLTypeInfo.metaProject[InputMetaTypes]
-
   val provenanceMapper = new types.ProvenanceMapper[InputMetaTypes] {
     def fromProvenance(prov: Provenance): types.DatabaseTableName[InputMetaTypes] = {
       JsonUtil.parseJson[types.DatabaseTableName[InputMetaTypes]](prov.value) match {

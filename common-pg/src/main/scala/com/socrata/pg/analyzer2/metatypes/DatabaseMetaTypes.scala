@@ -11,7 +11,7 @@ import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.Provenance
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.socrata.soql.types.obfuscation.CryptProvider
-import com.socrata.soql.functions.SoQLTypeInfo
+import com.socrata.soql.functions.SoQLTypeInfo2
 
 import com.socrata.pg.analyzer2.SoQLValueDebugHelper
 
@@ -22,7 +22,7 @@ final class DatabaseMetaTypes extends MetaTypes {
   override type DatabaseTableNameImpl = CopyInfo
   override type DatabaseColumnNameImpl = ColumnInfo[ColumnType]
 
-  val typeInfo = SoQLTypeInfo.metaProject[DatabaseMetaTypes]
+  val typeInfo = new SoQLTypeInfo2[DatabaseMetaTypes]
 
   // ugh.. but making this stateful was the only way I could find to
   // do this.

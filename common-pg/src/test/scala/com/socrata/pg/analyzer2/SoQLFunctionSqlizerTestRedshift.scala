@@ -105,7 +105,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
   def tableFinder(items: ((Int, String), Thing[Int, SoQLType])*) =
     new MockTableFinder[TestMT](items.toMap)
-  val analyzer = new SoQLAnalyzer[TestMT](SoQLTypeInfo, SoQLFunctionInfo, SoQLFunctionSqlizerTestRedshift.ProvenanceMapper)
+  val analyzer = new SoQLAnalyzer[TestMT](new SoQLTypeInfo2, SoQLFunctionInfo, SoQLFunctionSqlizerTestRedshift.ProvenanceMapper)
   def analyze(soqlexpr: String): String = {
     val s = analyzeStatement(s"SELECT ($soqlexpr)")
     val prefix = "SELECT "
@@ -141,7 +141,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
     if(useSelectListReferences) analysis = analysis.useSelectListReferences
 
-    val sql = sqlizer(analysis, extraContext).sql.layoutSingleLine.toString
+    val sql = sqlizer(analysis, extraContext).getOrElse { fail("analysis failed") }.sql.layoutSingleLine.toString
 
     println(sql)
     sql

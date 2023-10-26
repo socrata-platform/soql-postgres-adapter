@@ -15,7 +15,7 @@ import com.socrata.soql.environment.Provenance
 import com.socrata.soql.serialize._
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.socrata.soql.types.obfuscation.CryptProvider
-import com.socrata.soql.functions.{MonomorphicFunction, SoQLFunctionInfo, SoQLTypeInfo}
+import com.socrata.soql.functions.{MonomorphicFunction, SoQLFunctionInfo, SoQLTypeInfo2}
 
 import com.socrata.pg.analyzer2.SoQLValueDebugHelper
 import com.socrata.pg.analyzer2.{metatypes => mt}
@@ -30,8 +30,6 @@ final class RollupMetaTypes extends MetaTypes {
 }
 
 object RollupMetaTypes {
-  val typeInfo = SoQLTypeInfo.metaProject[RollupMetaTypes]
-
   val provenanceMapper = new types.ProvenanceMapper[RollupMetaTypes] {
     def fromProvenance(prov: Provenance): types.DatabaseTableName[RollupMetaTypes] = {
       JsonUtil.parseJson[types.DatabaseTableName[RollupMetaTypes]](prov.value) match {

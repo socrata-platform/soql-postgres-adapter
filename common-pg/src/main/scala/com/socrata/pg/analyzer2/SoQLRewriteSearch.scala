@@ -4,7 +4,7 @@ import com.socrata.prettyprint.prelude._
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.FunctionName
-import com.socrata.soql.functions.{Function, MonomorphicFunction, SoQLFunctions, SoQLTypeInfo}
+import com.socrata.soql.functions.{Function, MonomorphicFunction, FunctionType, SoQLFunctions, SoQLTypeInfo}
 import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLText, SoQLBoolean, SoQLUrl}
 import com.socrata.soql.sqlizer._
 
@@ -91,7 +91,7 @@ object SoQLRewriteSearch {
     varargs: Seq[SoQLType],
     result: SoQLType
   ) =
-    new MonomorphicFunction(identity, name, params, varargs, result, isAggregate = false, needsWindow = false)(Function.Doc.empty).function
+    new MonomorphicFunction(identity, name, params, varargs, result, FunctionType.Normal)(Function.Doc.empty).function
 
   // These result types are lies (they should be SoQLTSVector and
   // SoQLTSQuery respectively), but since users can't name these
