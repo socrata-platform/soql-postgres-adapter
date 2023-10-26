@@ -91,7 +91,7 @@ class SoQLFunctionSqlizerTestPostgres extends FunSuite with MustMatchers with Sq
 
   def tableFinder(items: ((Int, String), Thing[Int, SoQLType])*) =
     new MockTableFinder[TestMT](items.toMap)
-  val analyzer = new SoQLAnalyzer[TestMT](SoQLTypeInfo, SoQLFunctionInfo, SoQLFunctionSqlizerTestPostgres.ProvenanceMapper)
+  val analyzer = new SoQLAnalyzer[TestMT](new SoQLTypeInfo2, SoQLFunctionInfo, SoQLFunctionSqlizerTestPostgres.ProvenanceMapper)
   def analyze(soqlexpr: String): String = {
     val s = analyzeStatement(s"SELECT ($soqlexpr)")
     val prefix = "SELECT "
@@ -126,7 +126,7 @@ class SoQLFunctionSqlizerTestPostgres extends FunSuite with MustMatchers with Sq
 
     if(useSelectListReferences) analysis = analysis.useSelectListReferences
 
-    sqlizer(analysis, extraContext).sql.layoutSingleLine.toString
+    sqlizer(analysis, extraContext).getOrElse { fail("analysis failed") }.sql.layoutSingleLine.toString
   }
 
   test("basic search") {

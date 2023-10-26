@@ -27,7 +27,7 @@ class SqlizerTest extends FunSuite with MustMatchers with TestHelper with Sqlize
         case Left(err) => fail("Bad query: " + err)
       }
 
-    sqlizer(analysis, TestExtraContext).sql
+    sqlizer(analysis, TestExtraContext).getOrElse { fail("analysis failed") }.sql
   }
 
   test("simple") {

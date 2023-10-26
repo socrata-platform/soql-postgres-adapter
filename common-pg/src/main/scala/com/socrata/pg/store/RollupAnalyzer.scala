@@ -11,7 +11,7 @@ import com.typesafe.scalalogging.Logger
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.ColumnName
-import com.socrata.soql.functions.{MonomorphicFunction, SoQLFunctions, SoQLFunctionInfo, SoQLTypeInfo}
+import com.socrata.soql.functions.{MonomorphicFunction, SoQLFunctions, SoQLFunctionInfo, SoQLTypeInfo2}
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.socrata.soql.stdlib.analyzer2.{UserParameters, SoQLRewritePassHelpers}
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
@@ -44,7 +44,7 @@ object RollupAnalyzer {
   private val analyzer2 = locally {
     val standardSystemColumns = Set(":id", ":version", ":created_at", ":updated_at").map(ColumnName)
 
-    new SoQLAnalyzer[RollupMetaTypes](SoQLTypeInfo, SoQLFunctionInfo, RollupMetaTypes.provenanceMapper).
+    new SoQLAnalyzer[RollupMetaTypes](new SoQLTypeInfo2, SoQLFunctionInfo, RollupMetaTypes.provenanceMapper).
       preserveSystemColumns {
         case (cname, expr) if standardSystemColumns(cname) =>
           Some(

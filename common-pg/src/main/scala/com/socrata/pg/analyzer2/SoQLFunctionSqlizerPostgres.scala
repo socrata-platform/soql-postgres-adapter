@@ -255,7 +255,7 @@ class SoQLFunctionSqlizerPostgres[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       args(0).expr match {
         case LiteralValue(SoQLNumber(n)) =>
           // move the negation into the literal
-          ctx.repFor(SoQLNumber).literal(LiteralValue[MT](SoQLNumber(n.negate))(new AtomicPositionInfo(f.position.functionNamePosition))).withExpr(f)
+          ctx.repFor(SoQLNumber).literal(LiteralValue[MT](SoQLNumber(n.negate))(new AtomicPositionInfo(f.position.logicalSource, f.position.functionNamePosition))).withExpr(f)
         case _ =>
           base(f, args, ctx)
       }

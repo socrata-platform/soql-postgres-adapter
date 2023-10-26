@@ -25,7 +25,7 @@ object TestHelper {
     type ExtraContext = TestExtraContext.type
     type ExtraContextResult = Unit
     type CustomSqlizeAnnotation = Nothing
-
+    type SqlizerError = Nothing
   }
 
   object TestProvenanceMapper extends types.ProvenanceMapper[TestMT] {
@@ -85,8 +85,6 @@ trait TestHelper { this: Assertions =>
 
   val sqlizer = TestHelper.TestSqlizer
   val analyzer = new SoQLAnalyzer[TestMT](TestTypeInfo, TestFunctionInfo, TestProvenanceMapper)
-
-  val testTypeInfoProjection = TestTypeInfo.metaProject[TestMT]
 
   class IsomorphicToMatcher[MT <: MetaTypes](right: Statement[MT])(implicit ev: HasDoc[MT#ColumnValue], ev2: HasDoc[MT#DatabaseTableNameImpl], ev3: HasDoc[MT#DatabaseColumnNameImpl]) extends BeMatcher[Statement[MT]] {
     def apply(left: Statement[MT]) =
