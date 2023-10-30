@@ -756,6 +756,11 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   test("(window function) stddev_samp works") {
     analyzeStatement("SELECT text, num, stddev_samp(num) over(partition by text order by num rows between unbounded preceding and unbounded following)") should equal("""SELECT x1.text AS i1, x1.num AS i2, stddev_samp(x1.num) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS i3 FROM table1 AS x1""")
   }
+
+//  tests for geo-casts
+  test("geo casts are working") {
+    analyzeStatement("SELECT point(0 3) :: point")
+  }
 }
 
 
