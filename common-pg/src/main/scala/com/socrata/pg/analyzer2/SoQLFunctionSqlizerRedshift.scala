@@ -690,6 +690,22 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
     }
   }
 
+  def sqlizeNtile(name:String) = {
+    val sqlizer = sqlizeNormalWindowedFuncall(name)
+
+    wfs {(e, args, filter, partitionBy, orderBy, ctx) =>
+      val mungedArgs = args.zipWithIndex.map { case (arg, i) =>
+        if(i == 0) {
+          assert(arg.typ == SoQLNumber)
+          exprSqlFactory(d"(" ++ arg.compressed.sql ++ d") :: int", arg.expr)
+        } else {
+          arg
+        }
+      }
+      sqlizer(e, mungedArgs, filter, partitionBy, orderBy, ctx)
+    }
+  }
+
   val windowedFunctionMap = (
     Seq[(Function[CT], WindowedFunctionSqlizer)](
       RowNumber -> sqlizeNormalWindowedFuncall("row_number"),
@@ -699,11 +715,11 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       LastValue -> sqlizeNormalWindowedFuncall("last_value"),
       Lead -> sqlizeLeadLag("lead"),
       LeadOffset -> sqlizeLeadLag("lead"),
-      LeadOffsetDefault -> sqlizeLeadLag("lead"),
+//      LeadOffsetDefault -> sqlizeLeadLag("lead"),
       Lag -> sqlizeLeadLag("lag"),
       LagOffset -> sqlizeLeadLag("lag"),
-      LagOffsetDefault -> sqlizeLeadLag("lag"),
-      Ntile -> sqlizeLeadLag("ntile"),
+//      LagOffsetDefault -> sqlizeLeadLag("lag"),
+      Ntile -> sqlizeNtile("ntile"),
 
       // aggregate functions, used in a windowed way
       Max -> sqlizeNormalWindowedFuncall("max", jsonbWorkaround = true),
@@ -713,18 +729,18 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       // count distinct is not an aggregatable function
       Sum -> sqlizeNormalWindowedFuncall("sum"),
       Avg -> sqlizeNormalWindowedFuncall("avg"),
-      Median -> sqlizeNormalWindowedFuncall("median_ulib_agg"),          // have to use the custom aggregate function
-      MedianDisc -> sqlizeNormalWindowedFuncall("median_disc_ulib_agg"), // when in a windowed context
-      RegrIntercept -> sqlizeNormalWindowedFuncall("regr_intercept"),
-      RegrR2 -> sqlizeNormalWindowedFuncall("regr_r2"),
-      RegrSlope -> sqlizeNormalWindowedFuncall("regr_slope"),
+      Median -> sqlizeNormalWindowedFuncall("median"),
+//      MedianDisc -> sqlizeNormalWindowedFuncall("median_disc_ulib_agg"),
+//      RegrIntercept -> sqlizeNormalWindowedFuncall("regr_intercept"),
+//      RegrR2 -> sqlizeNormalWindowedFuncall("regr_r2"),
+//      RegrSlope -> sqlizeNormalWindowedFuncall("regr_slope"),
       StddevPop -> sqlizeNormalWindowedFuncall("stddev_pop"),
       StddevSamp -> sqlizeNormalWindowedFuncall("stddev_samp"),
 
-      UnionAggPt -> sqlizeNormalWindowedWithWrapper("st_union", "st_multi"),
-      UnionAggLine -> sqlizeNormalWindowedWithWrapper("st_union", "st_multi"),
-      UnionAggPoly -> sqlizeNormalWindowedWithWrapper("st_union", "st_multi"),
-      Extent -> sqlizeNormalWindowedWithWrapper("st_extent", "st_multi")
+//      UnionAggPt -> sqlizeNormalWindowedWithWrapper("st_union", "st_multi"),
+//      UnionAggLine -> sqlizeNormalWindowedWithWrapper("st_union", "st_multi"),
+//      UnionAggPoly -> sqlizeNormalWindowedWithWrapper("st_union", "st_multi"),
+//      Extent -> sqlizeNormalWindowedWithWrapper("st_extent", "st_multi")
     )
   ).map { case (f, sqlizer) =>
     f.identity -> sqlizer

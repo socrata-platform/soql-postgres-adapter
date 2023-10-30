@@ -679,6 +679,83 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   test("test for PointToLongitude") {
     analyzeStatement("SELECT text, point_longitude(geometry_point)") should equal("""SELECT x1.text AS i1, (st_x(x1.geometry_point)) :: decimal(30, 7) AS i2 FROM table1 AS x1""")
   }
+
+//  tests for window functions
+  test("row_number works") {
+    analyzeStatement("SELECT text,num, row_number() over(partition by text order by num)") should equal("""SELECT x1.text AS i1, x1.num AS i2, row_number() OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST) AS i3 FROM table1 AS x1""")
+  }
+
+  test("rank works") {
+    analyzeStatement("SELECT text, rank() over(partition by text order by num)") should equal("""SELECT x1.text AS i1, rank() OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST) AS i2 FROM table1 AS x1""")
+  }
+
+  test("dense_rank works") {
+    analyzeStatement("SELECT text, num, dense_rank() over(partition by text order by num)") should equal("""SELECT x1.text AS i1, x1.num AS i2, dense_rank() OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST) AS i3 FROM table1 AS x1""")
+  }
+
+  test("first_value works") {
+    analyzeStatement("SELECT text, num, first_value(num) over(partition by text order by num rows between unbounded preceding and current row)") should equal("""SELECT x1.text AS i1, x1.num AS i2, first_value(x1.num) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS i3 FROM table1 AS x1""")
+  }
+
+  test("last_value works") {
+    analyzeStatement("SELECT text, num, last_value(num) over(partition by text order by num rows between unbounded preceding and current row)") should equal("""SELECT x1.text AS i1, x1.num AS i2, last_value(x1.num) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS i3 FROM table1 AS x1""")
+  }
+
+  test("lead works") {
+    analyzeStatement("SELECT text, num, lead(num) over(partition by text order by num)") should equal("""SELECT x1.text AS i1, x1.num AS i2, lead(x1.num) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST) AS i3 FROM table1 AS x1""")
+  }
+
+  test("leadOffset works") {
+    analyzeStatement("SELECT text, num, lead(num, 2) over(partition by text order by num)") should equal("""SELECT x1.text AS i1, x1.num AS i2, lead(x1.num, (2 :: decimal(30, 7)) :: int) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST) AS i3 FROM table1 AS x1""")
+  }
+
+  test("lag works") {
+    analyzeStatement("SELECT text, num, lag(num) over(partition by text order by num desc)") should equal("""SELECT x1.text AS i1, x1.num AS i2, lag(x1.num) OVER (PARTITION BY x1.text ORDER BY x1.num DESC NULLS FIRST) AS i3 FROM table1 AS x1""")
+  }
+
+  test("lagOffset works") {
+    analyzeStatement("SELECT text, num, lag(num, 2) over(partition by text order by num desc)") should equal("""SELECT x1.text AS i1, x1.num AS i2, lag(x1.num, (2 :: decimal(30, 7)) :: int) OVER (PARTITION BY x1.text ORDER BY x1.num DESC NULLS FIRST) AS i3 FROM table1 AS x1""")
+  }
+
+  test("ntile works") {
+    analyzeStatement("SELECT text, num, ntile(4) over(partition by text order by num)") should equal("""SELECT x1.text AS i1, x1.num AS i2, ntile((4 :: decimal(30, 7)) :: int) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST) AS i3 FROM table1 AS x1""")
+  }
+
+  test("(window function) max works") {
+    analyzeStatement("SELECT text, num, max(num) over(partition by text order by num rows between unbounded preceding and unbounded following)") should equal("""SELECT x1.text AS i1, x1.num AS i2, max(x1.num) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS i3 FROM table1 AS x1""")
+  }
+
+  test("(window function) min works") {
+    analyzeStatement("SELECT text, num, min(num) over(partition by text order by num rows between unbounded preceding and unbounded following)") should equal("""SELECT x1.text AS i1, x1.num AS i2, min(x1.num) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS i3 FROM table1 AS x1""")
+  }
+
+  test("(window function) count(*) works") {
+    analyzeStatement("SELECT text, num, count(*) over(partition by text order by num rows between unbounded preceding and unbounded following)") should equal("""SELECT x1.text AS i1, x1.num AS i2, (count(*) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)) :: decimal(30, 7) AS i3 FROM table1 AS x1""")
+  }
+
+  test("(window function) count() works") {
+    analyzeStatement("SELECT text, num, count(text) over(partition by text order by num rows between unbounded preceding and unbounded following)") should equal("""SELECT x1.text AS i1, x1.num AS i2, (count(x1.text) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)) :: decimal(30, 7) AS i3 FROM table1 AS x1""")
+  }
+
+  test("(window function) sum works") {
+    analyzeStatement("SELECT text, num, sum(num) over(partition by text order by num rows between unbounded preceding and unbounded following)") should equal("""SELECT x1.text AS i1, x1.num AS i2, sum(x1.num) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS i3 FROM table1 AS x1""")
+  }
+
+  test("(window function) avg works") {
+    analyzeStatement("SELECT text, num, avg(num) over(partition by text order by num rows between unbounded preceding and unbounded following)") should equal("""SELECT x1.text AS i1, x1.num AS i2, avg(x1.num) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS i3 FROM table1 AS x1""")
+  }
+
+  test("(window function) median works") {
+    analyzeStatement("SELECT text, num, median(num) over(partition by text)") should equal("""SELECT x1.text AS i1, x1.num AS i2, median(x1.num) OVER (PARTITION BY x1.text) AS i3 FROM table1 AS x1""")
+  }
+
+  test("(window function) stddev_pop works") {
+    analyzeStatement("SELECT text, num, stddev_pop(num) over(partition by text order by num rows between unbounded preceding and unbounded following)") should equal("""SELECT x1.text AS i1, x1.num AS i2, stddev_pop(x1.num) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS i3 FROM table1 AS x1""")
+  }
+
+  test("(window function) stddev_samp works") {
+    analyzeStatement("SELECT text, num, stddev_samp(num) over(partition by text order by num rows between unbounded preceding and unbounded following)") should equal("""SELECT x1.text AS i1, x1.num AS i2, stddev_samp(x1.num) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS i3 FROM table1 AS x1""")
+  }
 }
 
 
