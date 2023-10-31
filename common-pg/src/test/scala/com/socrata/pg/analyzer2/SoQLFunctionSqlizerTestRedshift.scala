@@ -759,7 +759,7 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
 
 //  tests for geo-casts
   test("geo casts are working") {
-    analyzeStatement("SELECT point(0 3) :: point")
+    analyzeStatement("SELECT point(0 3) :: point") should equal("blaa")
   }
 }
 
