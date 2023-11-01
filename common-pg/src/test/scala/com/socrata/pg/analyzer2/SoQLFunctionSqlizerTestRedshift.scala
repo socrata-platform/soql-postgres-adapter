@@ -756,6 +756,33 @@ class SoQLFunctionSqlizerTestRedshift extends FunSuite with Matchers with Sqlize
   test("(window function) stddev_samp works") {
     analyzeStatement("SELECT text, num, stddev_samp(num) over(partition by text order by num rows between unbounded preceding and unbounded following)") should equal("""SELECT x1.text AS i1, x1.num AS i2, stddev_samp(x1.num) OVER (PARTITION BY x1.text ORDER BY x1.num ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS i3 FROM table1 AS x1""")
   }
+
+//  tests for geo-casts
+  test("geo cast text to point works") {
+    analyzeStatement("SELECT ('POINT' || '(0 9)') :: point") should equal("""SELECT st_asbinary(st_geomfromtext((text 'POINT') || (text '(0 9)'), 4326)) AS i1 FROM table1 AS x1""")
+  }
+
+  test("geo cast text to multipoint works") {
+    analyzeStatement("SELECT ('MULTIPOINT' || '((0 0), (1 1))') :: multipoint") should equal("""SELECT st_asbinary(st_geomfromtext((text 'MULTIPOINT') || (text '((0 0), (1 1))'), 4326)) AS i1 FROM table1 AS x1""")
+  }
+
+  test("geo cast text to line works") {
+    analyzeStatement("SELECT ('LINESTRING' || '(0 0, 0 1, 1 2)') :: line") should equal("""SELECT st_asbinary(st_geomfromtext((text 'LINESTRING') || (text '(0 0, 0 1, 1 2)'), 4326)) AS i1 FROM table1 AS x1""")
+  }
+
+  test("geo cast text to multiline works") {
+    analyzeStatement("SELECT ('MULTILINESTRING' || '((0 0, 1 1), (2 2, 3 3))') :: multiline") should equal("""SELECT st_asbinary(st_geomfromtext((text 'MULTILINESTRING') || (text '((0 0, 1 1), (2 2, 3 3))'), 4326)) AS i1 FROM table1 AS x1""")
+  }
+
+  test("geo cast text to polygon works") {
+    analyzeStatement("SELECT ('POLYGON' || '((0 0, 1 0, 1 1, 0 1, 0 0))') :: polygon") should equal("""SELECT st_asbinary(st_geomfromtext((text 'POLYGON') || (text '((0 0, 1 0, 1 1, 0 1, 0 0))'), 4326)) AS i1 FROM table1 AS x1""")
+  }
+
+  test("geo cast text to multipolygon works") {
+    analyzeStatement("SELECT ('MULTIPOLYGON' || '(((1 1, 1 3, 3 3, 3 1, 1 1)), ((4 3, 6 3, 6 1, 4 1, 4 3)))') :: multipolygon") should equal("""SELECT st_asbinary(st_geomfromtext((text 'MULTIPOLYGON') || (text '(((1 1, 1 3, 3 3, 3 1, 1 1)), ((4 3, 6 3, 6 1, 4 1, 4 3)))'), 4326)) AS i1 FROM table1 AS x1""")
+  }
+
+
 }
 
 
