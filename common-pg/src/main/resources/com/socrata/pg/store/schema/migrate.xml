@@ -41,4 +41,5 @@
     <include file="com/socrata/pg/store/schema/20230711-soql-text-to-location.xml"/>
     <include file="com/socrata/pg/store/schema/20230717-remove-soql-extract-timestamp-field.xml"/>
     <include file="com/socrata/pg/store/schema/20231020-soql-make-point.xml"/>
+    <include file="com/socrata/pg/store/schema/20231011-create-extension-unaccent.xml"/>
 </databaseChangeLog>
