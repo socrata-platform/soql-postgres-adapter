@@ -516,12 +516,14 @@ class SoQLFunctionSqlizerRedshift[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
       GetUtcDate -> expr"current_date at time zone 'UTC'",
 
       // Geo-casts
-      TextToPoint -> sqlizeGeomCast("st_pointfromtext"),
-      TextToMultiPoint -> sqlizeGeomCast("st_mpointfromtext"),
-      TextToLine -> sqlizeGeomCast("st_linefromtext"),
-      TextToMultiLine -> sqlizeGeomCast("st_mlinefromtext"),
-      TextToPolygon -> sqlizeGeomCast("st_polygonfromtext"),
-      TextToMultiPolygon -> sqlizeGeomCast("st_mpolyfromtext"),
+//      st_geomfromtext is the only function in redshift for text to geom conversion - geom subtypes are not verified through that function
+      TextToPoint -> sqlizeNormalOrdinaryFuncall("st_geomfromtext", suffixArgs = Seq(Geo.defaultSRIDLiteral)),
+      TextToMultiPoint -> sqlizeNormalOrdinaryFuncall("st_geomfromtext", suffixArgs = Seq(Geo.defaultSRIDLiteral)),
+      TextToLine -> sqlizeNormalOrdinaryFuncall("st_geomfromtext", suffixArgs = Seq(Geo.defaultSRIDLiteral)),
+      TextToMultiLine -> sqlizeNormalOrdinaryFuncall("st_geomfromtext", suffixArgs = Seq(Geo.defaultSRIDLiteral)),
+      TextToPolygon -> sqlizeNormalOrdinaryFuncall("st_geomfromtext", suffixArgs = Seq(Geo.defaultSRIDLiteral)),
+      TextToMultiPolygon -> sqlizeNormalOrdinaryFuncall("st_geomfromtext", suffixArgs = Seq(Geo.defaultSRIDLiteral)),
+//    TODO implement TextToLocation
       TextToLocation -> sqlizeNormalOrdinaryFuncall("soql_text_to_location", suffixArgs = Seq(Geo.defaultSRIDLiteral)),
 
       // Geo
