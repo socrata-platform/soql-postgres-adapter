@@ -1,6 +1,11 @@
 soql-postgres-adapter
 =====================
 
+This repository is the home to the following:
+- soql-postgres-adapter: adapter code for translating SoQL statements to Postgres-compliant SQL statements
+- secondary-watcher-pg: the secondary (ie. the write-side) of the Postgres dataset query backend
+- soql-server-pg: an HTTP server that takes SoQL queries from query-coordinator, rewrites them as SQL queries, and sends them to Postgres
+
 Postgres Adapter for SODAServer
 
 ## Build Requirements
