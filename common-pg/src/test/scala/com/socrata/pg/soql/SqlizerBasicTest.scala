@@ -498,7 +498,7 @@ class SqlizerBasicTest extends SqlizerTest {
     val ts2 = new Timestamp(dt2.getMillis)
     val ts3 = new Timestamp(dt3.getMillis)
     params should be (Seq(ts1, ts2, ts3))
-    sql should be ("SELECT (1::numeric) WHERE (((null = (?::timestamp)) or (null = (?::timestamp with time zone))) or (null = (?::timestamp with time zone)))")
+    sql should be ("SELECT (1::numeric) WHERE ((((null :: TIMESTAMP (3) WITHOUT TIME ZONE) = (?::timestamp)) or ((null :: TIMESTAMP (3) WITH TIME ZONE) = (?::timestamp with time zone))) or ((null :: TIMESTAMP (3) WITH TIME ZONE) = (?::timestamp with time zone)))")
   }
 
   test("timestamp literals use timestamp parameters in date_diff_d") {
