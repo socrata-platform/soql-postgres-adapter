@@ -150,9 +150,14 @@ object NullLiteralSqlizer extends Sqlizer[NullLiteral[SoQLType]] {
     val rep = typeRep(lit.typ)
 
     val sqlTypes = rep.sqlTypes
-    val subColumns = rep.physColumns.map(pc => pc.replace(rep.base, "")) // ew
+    val subColumns =
+      if(ExprSqlizerCommon.complexTypes.contains(lit.typ)) {
+        rep.physColumns.map(pc => Some(pc.replace(rep.base, ""))) // ew
+      } else {
+        Array.fill(sqlTypes.length)(None)
+      }
     val sqls = (sqlTypes, subColumns).zipped.map { (typ, subcol) =>
-      "(null :: " + typ + ")" + selectAlias(lit, Some(subcol))(ctx)
+      "(null :: " + typ + ")" + selectAlias(lit, subcol)(ctx)
     }.toVector
     ParametricSql(sqls, setParams)
   }
@@ -242,7 +247,7 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
 
     maybeRep match {
       case Some(rep) if !useTypeRep =>
-        if (complexTypes.contains(expr.typ) &&
+        if (ExprSqlizerCommon.complexTypes.contains(expr.typ) &&
           ctx.get(SoqlPart).exists(_ == SoqlSelect) &&
           ctx.get(RootExpr).exists(_ == expr)) {
           val qualifer = getQualifier()
@@ -290,7 +295,9 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
     : String = {
     if (sqlType == "TEXT" && useUpper(expr)(ctx)) s"upper($phyColumn)" else phyColumn
   }
+}
 
+object ExprSqlizerCommon {
   // SoQLTypes represented by more than one physical columns
-  private val complexTypes: Set[SoQLType] = Set(SoQLLocation, SoQLPhone, SoQLUrl)
+  private[soql] val complexTypes: Set[SoQLType] = Set(SoQLLocation, SoQLPhone, SoQLUrl)
 }
