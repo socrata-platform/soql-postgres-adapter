@@ -146,8 +146,16 @@ object NullLiteralSqlizer extends Sqlizer[NullLiteral[SoQLType]] {
           typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
           setParams: Seq[SetParam],
           ctx: Context,
-          escape: Escape): ParametricSql =
-    ParametricSql(Seq("null" + selectAlias(lit)(ctx)), setParams)
+          escape: Escape): ParametricSql = {
+    val rep = typeRep(lit.typ)
+
+    val sqlTypes = rep.sqlTypes
+    val subColumns = rep.physColumns.map(pc => pc.replace(rep.base, "")) // ew
+    val sqls = (sqlTypes, subColumns).zipped.map { (typ, subcol) =>
+      "(null :: " + typ + ")" + selectAlias(lit, Some(subcol))(ctx)
+    }.toVector
+    ParametricSql(sqls, setParams)
+  }
 }
 
 object FunctionCallSqlizer extends Sqlizer[FunctionCall[UserColumnId, SoQLType]] {
