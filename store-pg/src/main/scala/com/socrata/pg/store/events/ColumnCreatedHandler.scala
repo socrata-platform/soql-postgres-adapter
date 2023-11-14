@@ -21,7 +21,13 @@ case class ColumnCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     secColInfo.id, // user column id
     secColInfo.fieldName,
     secColInfo.typ,
-    physicalColumnBaseBase(secColInfo.id.underlying, isSystemColumnId(secColInfo.id)), // system column id
+    physicalColumnBaseBase(
+      // in practice, this will always choose to use the field name,
+      // but that _is_ still technically optional so fall back to the
+      // user column id for the name hint if it's not present somehow.
+      secColInfo.fieldName.map(_.name).getOrElse(secColInfo.id.underlying),
+      isSystemColumnId(secColInfo.id)
+    ), // system column id
     None // not going to store computation strategies
   )
 
