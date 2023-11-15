@@ -30,8 +30,6 @@ object Dependencies {
     val rollupMetrics = "2.2"
   }
 
-  val awsRedshift =  "com.amazon.redshift" % "redshift-jdbc42" % "2.0.0.4"
-
   val c3p0 = "com.mchange" % "c3p0" % versions.c3p0
 
   val commonsCli = "commons-cli" % "commons-cli" % versions.commonsCli
