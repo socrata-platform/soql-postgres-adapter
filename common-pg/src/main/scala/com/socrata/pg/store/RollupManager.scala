@@ -17,7 +17,7 @@ import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, Lifecyc
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.analyzer2.metatypes.{RollupMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName}
-import com.socrata.pg.analyzer2.{SqlNormalizer, SoQLRewriteSearch, ActualSqlizer, SoQLExtraContext}
+import com.socrata.pg.analyzer2.{SqlNormalizer, SoQLRewriteSearch, SoQLExtraContext}
 import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
 import com.socrata.pg.soql._
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
@@ -45,6 +45,7 @@ import com.socrata.util.Timing
 
 import java.time.{Clock, LocalDateTime, ZoneId}
 import com.socrata.datacoordinator.common.Postgres
+import com.socrata.pg.analyzer2.PostgresSqlizer
 
 object RollupManager {
   private val logger = Logger[RollupManager]
@@ -184,8 +185,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
         RollupAnalyzer(pgu, copyInfo, rollupInfo) match {
           case Some((foundTables, analysis, locationSubcolumns, cryptProviders)) =>
-            // Rollups are disabled in redshift
-            val sqlizer = ActualSqlizer.choose(Postgres)
+            val sqlizer = PostgresSqlizer
 
             val (denormSql, augSchema, _) = sqlizer.sqlize(analysis, rewriteOutputColumns = false, new SoQLExtraContext(Map.empty, cryptProviders, locationSubcolumns, SqlUtils.escapeString(pgu.conn, _))) match {
               case Right(result) => result

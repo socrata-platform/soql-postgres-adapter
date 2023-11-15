@@ -47,8 +47,8 @@ import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils, RollupAnalyzer, Roll
 import com.socrata.pg.query.QueryResult
 import com.socrata.pg.server.CJSONWriter
 import com.socrata.datacoordinator.common.DbType
-import com.socrata.pg.analyzer2.ActualSqlizer
 import com.socrata.datacoordinator.common.Postgres
+import com.socrata.pg.analyzer2.PostgresSqlizer
 
 final abstract class ProcessQuery
 object ProcessQuery {
@@ -143,7 +143,7 @@ object ProcessQuery {
 
     val onlyOne = nameAnalyses.lengthCompare(1) == 0
     val sqlized = nameAnalyses.map { nameAnalysis =>
-      val sqlizer = ActualSqlizer.choose(sqlizerType)
+      val sqlizer = PostgresSqlizer
       val Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(nonliteralSystemContextLookupFound, now)) = sqlizer(nameAnalysis._1, new SoQLExtraContext(systemContext, cryptProviders, RewriteSubcolumns[InputMetaTypes](request.locationSubcolumns, copyCache), SqlUtils.escapeString(pgu.conn, _))) match {
         case Right(result) => result
         case Left(nothing) => nothing
