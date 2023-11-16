@@ -116,14 +116,14 @@ class TestRepProvider(
       override def nullLiteral(e: NullLiteral) =
         exprSqlFactory(Seq(d"null :: text", d"null :: numeric"), e)
 
-      override def expandedColumnCount = 2
+      override def physicalColumnCount = 2
 
-      override def expandedDatabaseColumns(name: ColumnLabel) = {
+      override def physicalDatabaseColumns(name: ColumnLabel) = {
         val base = namespace.columnBase(name)
         Seq(base ++ d"_a", base ++ d"_b")
       }
 
-      override def expandedDatabaseTypes = Seq(d"text", d"numeric")
+      override def physicalDatabaseTypes = Seq(d"text", d"numeric")
 
       override def compressedSubColumns(table: String, column: ColumnLabel) = {
         val sourceName = compressedDatabaseColumn(column)
