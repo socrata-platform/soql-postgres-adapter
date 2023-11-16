@@ -416,14 +416,14 @@ abstract class SoQLRepProviderPostgres[MT <: MetaTypes with metatypes.SoQLMetaTy
       override def nullLiteral(e: NullLiteral) =
         exprSqlFactory(Seq(d"null :: text", d"null :: text"), e)
 
-      override def expandedColumnCount = 2
+      override def physicalColumnCount = 2
 
-      override def expandedDatabaseColumns(name: ColumnLabel) = {
+      override def physicalDatabaseColumns(name: ColumnLabel) = {
         val base = namespace.columnBase(name)
         Seq(base ++ d"_number", base ++ d"_type")
       }
 
-      override def expandedDatabaseTypes = Seq(d"text", d"text")
+      override def physicalDatabaseTypes = Seq(d"text", d"text")
 
       override def compressedSubColumns(table: String, column: ColumnLabel) = {
         val sourceName = compressedDatabaseColumn(column)
@@ -511,9 +511,9 @@ abstract class SoQLRepProviderPostgres[MT <: MetaTypes with metatypes.SoQLMetaTy
       override def nullLiteral(e: NullLiteral) =
         exprSqlFactory(Seq(d"null :: geometry", d"null :: text", d"null :: text", d"null :: text", d"null :: text"), e)
 
-      override def expandedColumnCount = 5
+      override def physicalColumnCount = 5
 
-      override def expandedDatabaseTypes = Seq(d"geometry", d"text", d"text", d"text", d"text")
+      override def physicalDatabaseTypes = Seq(d"geometry", d"text", d"text", d"text", d"text")
 
       override def compressedSubColumns(table: String, column: ColumnLabel) = {
         val sourceName = compressedDatabaseColumn(column)
@@ -527,7 +527,7 @@ abstract class SoQLRepProviderPostgres[MT <: MetaTypes with metatypes.SoQLMetaTy
         )
       }
 
-      override def expandedDatabaseColumns(name: ColumnLabel) = {
+      override def physicalDatabaseColumns(name: ColumnLabel) = {
         val base = namespace.columnBase(name)
         Seq(base, base ++ d"_address", base ++ d"_city", base ++ d"_state", base ++ d"_zip")
       }
@@ -634,14 +634,14 @@ abstract class SoQLRepProviderPostgres[MT <: MetaTypes with metatypes.SoQLMetaTy
       override def nullLiteral(e: NullLiteral) =
         exprSqlFactory(Seq(d"null :: text", d"null :: text"), e)
 
-      override def expandedColumnCount = 2
+      override def physicalColumnCount = 2
 
-      override def expandedDatabaseColumns(name: ColumnLabel) = {
+      override def physicalDatabaseColumns(name: ColumnLabel) = {
         val base = namespace.columnBase(name)
         Seq(base ++ d"_url", base ++ d"_description")
       }
 
-      override def expandedDatabaseTypes = Seq(d"text", d"text")
+      override def physicalDatabaseTypes = Seq(d"text", d"text")
 
       override def compressedSubColumns(table: String, column: ColumnLabel) = {
         val sourceName = compressedDatabaseColumn(column)
