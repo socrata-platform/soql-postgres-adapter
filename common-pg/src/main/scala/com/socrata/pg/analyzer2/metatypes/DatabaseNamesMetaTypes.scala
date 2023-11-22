@@ -35,7 +35,7 @@ object DatabaseNamesMetaTypes extends MetaTypeHelper[DatabaseNamesMetaTypes] {
       if(rawProv.startsWith(rollupTag)) {
         DatabaseTableName(AugmentedTableName(rawProv.substring(rollupTag.length), true))
       } else {
-        DatabaseTableName(AugmentedTableName(rawProv.substring(rollupTag.length), false))
+        DatabaseTableName(AugmentedTableName(rawProv, false))
       }
     }
 
