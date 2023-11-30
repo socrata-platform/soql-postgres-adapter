@@ -93,6 +93,8 @@ abstract class SoQLRepProviderPostgres[MT <: MetaTypes with metatypes.SoQLMetaTy
         )
       }
 
+      override def compressedDatabaseType = d"jsonb"
+
       override def literal(e: LiteralValue) = {
         val rawId = e.value.asInstanceOf[SoQLID]
         val rawFormatted = SoQLID.FormattedButUnobfuscatedStringRep(rawId)
@@ -174,6 +176,8 @@ abstract class SoQLRepProviderPostgres[MT <: MetaTypes with metatypes.SoQLMetaTy
           d"((" ++ Doc(table) ++ d"." ++ sourceName ++ d") ->> 1) :: bigint AS" +#+ dataName,
         )
       }
+
+      override def compressedDatabaseType = d"jsonb"
 
       override def literal(e: LiteralValue) = {
         val rawId = e.value.asInstanceOf[SoQLVersion]
@@ -437,6 +441,8 @@ abstract class SoQLRepProviderPostgres[MT <: MetaTypes with metatypes.SoQLMetaTy
       override def compressedDatabaseColumn(name: ColumnLabel) =
         namespace.columnBase(name)
 
+      override def compressedDatabaseType = d"jsonb"
+
       override def literal(e: LiteralValue) = {
         val ph@SoQLPhone(_, _) = e.value
 
@@ -534,6 +540,8 @@ abstract class SoQLRepProviderPostgres[MT <: MetaTypes with metatypes.SoQLMetaTy
 
       override def compressedDatabaseColumn(name: ColumnLabel) =
         namespace.columnBase(name)
+
+      override def compressedDatabaseType = d"jsonb"
 
       override def literal(e: LiteralValue) = {
         val loc@SoQLLocation(_, _, _) = e.value
@@ -654,6 +662,8 @@ abstract class SoQLRepProviderPostgres[MT <: MetaTypes with metatypes.SoQLMetaTy
 
       override def compressedDatabaseColumn(name: ColumnLabel) =
         namespace.columnBase(name)
+
+      override def compressedDatabaseType = d"jsonb"
 
       override def literal(e: LiteralValue) = {
         val url@SoQLUrl(_, _) = e.value
