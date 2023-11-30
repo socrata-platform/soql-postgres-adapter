@@ -446,8 +446,8 @@ object ProcessQuery {
       private var done = false
       private var ready = false
 
-      private var idReps = new scm.HashMap[Option[Provenance], JsonColumnWriteRep[SoQLType, SoQLValue]]
-      private var versionReps = new scm.HashMap[Option[Provenance], JsonColumnWriteRep[SoQLType, SoQLValue]]
+      private val idReps = new scm.HashMap[Option[Provenance], JsonColumnWriteRep[SoQLType, SoQLValue]]
+      private val versionReps = new scm.HashMap[Option[Provenance], JsonColumnWriteRep[SoQLType, SoQLValue]]
 
       private val types = extractor.schema.values.toArray
       private val width = types.length
