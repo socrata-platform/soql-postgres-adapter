@@ -41,14 +41,14 @@ import com.socrata.datacoordinator.common.soql.SoQLRep
 import com.socrata.metrics.rollup.RollupMetrics
 import com.socrata.metrics.rollup.events.RollupHit
 
-import com.socrata.pg.analyzer2.{CryptProviderProvider, TransformManager, CostEstimator, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, PostgresNamespaces, SoQLExtraContext}
+import com.socrata.pg.analyzer2.{CryptProviderProvider, TransformManager, CostEstimator, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, Namespaces, SoQLExtraContext}
 import com.socrata.pg.analyzer2.metatypes.{CopyCache, InputMetaTypes, DatabaseMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName, SoQLMetaTypesExt}
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils, RollupAnalyzer, RollupId}
 import com.socrata.pg.query.QueryResult
 import com.socrata.pg.server.CJSONWriter
 import com.socrata.datacoordinator.common.DbType
 import com.socrata.datacoordinator.common.Postgres
-import com.socrata.pg.analyzer2.PostgresSqlizer
+import com.socrata.pg.analyzer2.SoQLSqlizer
 
 final abstract class ProcessQuery
 object ProcessQuery {
@@ -110,7 +110,7 @@ object ProcessQuery {
 
               private val columns = statement.schema.keysIterator.toArray
               override def databaseColumnNameOfIndex(idx: Int) =
-                DatabaseColumnName(PostgresNamespaces.rawAutoColumnBase(columns(idx)))
+                DatabaseColumnName(Namespaces.rawAutoColumnBase(columns(idx)))
             }
           }
       }
@@ -143,7 +143,7 @@ object ProcessQuery {
 
     val onlyOne = nameAnalyses.lengthCompare(1) == 0
     val sqlized = nameAnalyses.map { nameAnalysis =>
-      val sqlizer = PostgresSqlizer
+      val sqlizer = SoQLSqlizer
       val Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(nonliteralSystemContextLookupFound, now)) = sqlizer(nameAnalysis._1, new SoQLExtraContext(systemContext, cryptProviders, RewriteSubcolumns[InputMetaTypes](request.locationSubcolumns, copyCache), SqlUtils.escapeString(pgu.conn, _))) match {
         case Right(result) => result
         case Left(nothing) => nothing

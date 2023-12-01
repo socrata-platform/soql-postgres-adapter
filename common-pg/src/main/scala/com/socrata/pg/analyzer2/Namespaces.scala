@@ -6,7 +6,7 @@ import com.socrata.soql.sqlizer._
 
 import com.socrata.pg.analyzer2.metatypes.DatabaseNamesMetaTypes
 
-object PostgresNamespaces extends SqlNamespaces[DatabaseNamesMetaTypes] {
+object Namespaces extends SqlNamespaces[DatabaseNamesMetaTypes] {
   override def rawDatabaseTableName(dtn: DatabaseTableName) = {
     val DatabaseTableName(dataTableName) = dtn
     dataTableName.name

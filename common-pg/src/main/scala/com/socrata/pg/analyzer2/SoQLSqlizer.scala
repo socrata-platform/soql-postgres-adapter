@@ -8,14 +8,14 @@ import com.socrata.datacoordinator.common
 
 import com.socrata.pg.analyzer2.metatypes.DatabaseNamesMetaTypes
 
-object PostgresSqlizer extends Sqlizer[DatabaseNamesMetaTypes](
-  new SoQLFunctionSqlizerPostgres[DatabaseNamesMetaTypes],
-  new PostgresExprSqlFactory[DatabaseNamesMetaTypes],
-  PostgresNamespaces,
+object SoQLSqlizer extends Sqlizer[DatabaseNamesMetaTypes](
+  new SoQLFunctionSqlizer[DatabaseNamesMetaTypes],
+  new SoQLExprSqlFactory[DatabaseNamesMetaTypes],
+  Namespaces,
   new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true),
   DatabaseNamesMetaTypes.provenanceMapper,
   _.name.isRollup,
-  (sqlizer, physicalTableFor, extraContext) => new SoQLRepProviderPostgres[DatabaseNamesMetaTypes](
+  (sqlizer, physicalTableFor, extraContext) => new SoQLRepProvider[DatabaseNamesMetaTypes](
     extraContext.cryptProviderProvider,
     sqlizer.exprSqlFactory,
     sqlizer.namespace,

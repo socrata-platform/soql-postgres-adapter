@@ -17,7 +17,7 @@ import com.socrata.soql.environment.Provenance
 import com.socrata.soql.types._
 import com.socrata.soql.sqlizer._
 
-abstract class SoQLRepProviderPostgres[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({type ColumnType = SoQLType; type ColumnValue = SoQLValue; type DatabaseColumnNameImpl = String})](
+abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({type ColumnType = SoQLType; type ColumnValue = SoQLValue; type DatabaseColumnNameImpl = String})](
   cryptProviders: CryptProviderProvider,
   override val exprSqlFactory: ExprSqlFactory[MT],
   override val namespace: SqlNamespaces[MT],
