@@ -150,6 +150,10 @@ class SoQLFunctionSqlizerTestPostgres extends FunSuite with MustMatchers with Sq
     funcallSqlizer.windowedFunctionMap.keySet == SoQLFunctions.windowFunctions.toSet
   }
 
+  test("Non-distinct percentile_cont gets annotated") {
+    analyze("median(num)") must equal ("(percentile_cont(.50) within group (order by x1.num)) :: numeric")
+  }
+
   test("lead/lag gets its int cast") {
     analyze("lead(text, 5) OVER ()") must equal ("lead(x1.text, (5 :: numeric) :: int) OVER ()")
   }

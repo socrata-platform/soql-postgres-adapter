@@ -540,7 +540,7 @@ class SoQLFunctionSqlizerPostgres[MT <: MetaTypes with metatypes.SoQLMetaTypesEx
         aggFuncSqlizer(f, args, filter, ctx)
       } else { // this is faster but there's no way to specify "distinct" with it
         val baseSql =
-          (percentileFuncName ++ d"(.50) within group (" ++ Doc.lineCat ++ d"order by" +#+ args(0).compressed.sql).nest(2) ++ Doc.lineCat ++ d")"
+          ((percentileFuncName ++ d"(.50) within group (" ++ Doc.lineCat ++ d"order by" +#+ args(0).compressed.sql).nest(2) ++ Doc.lineCat ++ d")").parenthesized +#+ d"::" +#+ ctx.repFor(args(0).typ).compressedDatabaseType
         exprSqlFactory(baseSql ++ sqlizeFilter(filter), f)
       }
     }

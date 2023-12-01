@@ -539,7 +539,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
       // but for now avoiding that effort and testing.
       nary("median_ulib_agg")(fn, rep, typeRep, setParams, ctx, escape)
     } else {
-      formatCall("percentile_cont(.50) within group (order by %s)")(fn, rep, typeRep, setParams, ctx, escape)
+      formatCall("(percentile_cont(.50) within group (order by %s)) :: " + typeRep(fn.typ).sqlTypes(0))(fn, rep, typeRep, setParams, ctx, escape)
     }
   }
 

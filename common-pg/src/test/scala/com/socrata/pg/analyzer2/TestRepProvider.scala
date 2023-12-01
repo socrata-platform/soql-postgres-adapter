@@ -57,6 +57,8 @@ class TestRepProvider(
         )
       }
 
+      override def compressedDatabaseType = d"jsonb"
+
       override protected def doExtractExpanded(rs: ResultSet, dbCol: Int): CV = {
         ???
       }
@@ -133,6 +135,8 @@ class TestRepProvider(
           d"((" ++ Doc(table) ++ d"." ++ sourceName ++ d") ->> 1) :: numeric AS" +#+ bName,
         )
       }
+
+      override def compressedDatabaseType = d"jsonb"
 
       override def compressedDatabaseColumn(name: ColumnLabel) =
         namespace.columnBase(name)
