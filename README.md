@@ -1,7 +1,10 @@
 soql-postgres-adapter
 =====================
 
-Postgres Adapter for SODAServer
+This repository is home to 3 subprojects:
+- store-pg: code for our Postgres secondary-watcher application; the secondary-watcher is the write-side of the Postgres dataset query backend
+- soql-server-pg: an HTTP server application that accepts requests as SoQL queries and rewrites them as SQL queries, and sends them to Postgres
+- common-pg: common code shared between the above two applications
 
 ## Build Requirements
 sbt
