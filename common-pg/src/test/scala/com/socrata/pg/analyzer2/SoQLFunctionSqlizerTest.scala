@@ -53,7 +53,7 @@ object SoQLFunctionSqlizerTest {
 
   val TestSqlizer = new Sqlizer[TestMT](
     TestFuncallSqlizer,
-    new PostgresExprSqlFactory,
+    new SoQLExprSqlFactory,
     TestNamespaces,
     new SoQLRewriteSearch(searchBeforeQuery = true),
     ProvenanceMapper,

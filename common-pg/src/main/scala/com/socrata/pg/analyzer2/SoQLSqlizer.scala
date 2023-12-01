@@ -10,8 +10,8 @@ import com.socrata.pg.analyzer2.metatypes.DatabaseNamesMetaTypes
 
 object SoQLSqlizer extends Sqlizer[DatabaseNamesMetaTypes](
   new SoQLFunctionSqlizer[DatabaseNamesMetaTypes],
-  new PostgresExprSqlFactory[DatabaseNamesMetaTypes],
-  PostgresNamespaces,
+  new SoQLExprSqlFactory[DatabaseNamesMetaTypes],
+  Namespaces,
   new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true),
   DatabaseNamesMetaTypes.provenanceMapper,
   _.name.isRollup,
