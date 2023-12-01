@@ -11,7 +11,7 @@ import com.socrata.soql.environment.{ResourceName, Provenance}
 import com.socrata.soql.functions._
 import com.socrata.soql.sqlizer._
 
-object SoQLFunctionSqlizerTestPostgres {
+object SoQLFunctionSqlizerTest {
   final abstract class TestMT extends MetaTypes with metatypes.SoQLMetaTypesExt {
     type ColumnType = SoQLType
     type ColumnValue = SoQLValue
@@ -49,7 +49,7 @@ object SoQLFunctionSqlizerTestPostgres {
     }
   }
 
-  val TestFuncallSqlizer = new SoQLFunctionSqlizerPostgres[TestMT]
+  val TestFuncallSqlizer = new SoQLFunctionSqlizer[TestMT]
 
   val TestSqlizer = new Sqlizer[TestMT](
     TestFuncallSqlizer,
@@ -59,7 +59,7 @@ object SoQLFunctionSqlizerTestPostgres {
     ProvenanceMapper,
     _ => false,
     (sqlizer, physicalTableFor, extraContext) =>
-      new SoQLRepProviderPostgres[TestMT](
+      new SoQLRepProvider[TestMT](
         extraContext.cryptProviderProvider,
         sqlizer.exprSqlFactory,
         sqlizer.namespace,
@@ -73,11 +73,11 @@ object SoQLFunctionSqlizerTestPostgres {
   )
 }
 
-class SoQLFunctionSqlizerTestPostgres extends FunSuite with MustMatchers with SqlizerUniverse[SoQLFunctionSqlizerTestPostgres.TestMT] {
-  type TestMT = SoQLFunctionSqlizerTestPostgres.TestMT
+class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUniverse[SoQLFunctionSqlizerTest.TestMT] {
+  type TestMT = SoQLFunctionSqlizerTest.TestMT
 
-  val sqlizer = SoQLFunctionSqlizerTestPostgres.TestSqlizer
-  val funcallSqlizer = SoQLFunctionSqlizerTestPostgres.TestFuncallSqlizer
+  val sqlizer = SoQLFunctionSqlizerTest.TestSqlizer
+  val funcallSqlizer = SoQLFunctionSqlizerTest.TestFuncallSqlizer
 
   def extraContext = new SoQLExtraContext(
     Map("hello" -> "world"),
@@ -91,7 +91,7 @@ class SoQLFunctionSqlizerTestPostgres extends FunSuite with MustMatchers with Sq
 
   def tableFinder(items: ((Int, String), Thing[Int, SoQLType])*) =
     new MockTableFinder[TestMT](items.toMap)
-  val analyzer = new SoQLAnalyzer[TestMT](new SoQLTypeInfo2, SoQLFunctionInfo, SoQLFunctionSqlizerTestPostgres.ProvenanceMapper)
+  val analyzer = new SoQLAnalyzer[TestMT](new SoQLTypeInfo2, SoQLFunctionInfo, SoQLFunctionSqlizerTest.ProvenanceMapper)
   def analyze(soqlexpr: String): String = {
     val s = analyzeStatement(s"SELECT ($soqlexpr)")
     val prefix = "SELECT "

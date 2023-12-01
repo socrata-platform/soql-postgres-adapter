@@ -45,7 +45,7 @@ import com.socrata.util.Timing
 
 import java.time.{Clock, LocalDateTime, ZoneId}
 import com.socrata.datacoordinator.common.Postgres
-import com.socrata.pg.analyzer2.PostgresSqlizer
+import com.socrata.pg.analyzer2.SoQLSqlizer
 
 object RollupManager {
   private val logger = Logger[RollupManager]
@@ -185,7 +185,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
         RollupAnalyzer(pgu, copyInfo, rollupInfo) match {
           case Some((foundTables, analysis, locationSubcolumns, cryptProviders)) =>
-            val sqlizer = PostgresSqlizer
+            val sqlizer = SoQLSqlizer
 
             val (denormSql, augSchema, _) = sqlizer.sqlize(analysis, rewriteOutputColumns = false, new SoQLExtraContext(Map.empty, cryptProviders, locationSubcolumns, SqlUtils.escapeString(pgu.conn, _))) match {
               case Right(result) => result
