@@ -1,5 +1,8 @@
 // Set up the libraries
-@Library('socrata-pipeline-library')
+@Library('socrata-pipeline-library@sarahs/EN-62410/rework-parameters-for-rms-integration') // branch for testing
+
+import com.socrata.ReleaseMetadataService
+def rmsSupportedEnvironment = com.socrata.ReleaseMetadataService.SupportedEnvironment
 
 // set up service and project variables
 def service_server = 'soql-server-pg'
@@ -47,7 +50,7 @@ pipeline {
             echo 'DRY RUN: Skipping release tag creation'
           }
           else {
-            releaseTag.create(params.RELEASE_NAME)
+            env.GIT_TAG = releaseTag.create(params.RELEASE_NAME)
           }
         }
       }
@@ -88,7 +91,16 @@ pipeline {
         success {
           script {
             if (params.RELEASE_BUILD && !params.RELEASE_DRY_RUN) {
-              echo env.DOCKER_TAG // For now, just print the deploy tag in the console output -- later, communicate to release metadata service
+              Map buildInfoServer = [
+                "project_id": "${service_server}",
+                "build_id": "${env.DOCKER_TAG}",
+                "release_id": "${params.RELEASE_NAME}",
+                "git_tag": "${env.GIT_TAG}"
+              ]
+              createBuild(
+                buildInfoServer,
+                rmsSupportedEnvironment.staging
+              )
             }
           }
         }
@@ -118,7 +130,16 @@ pipeline {
         success {
           script {
             if (params.RELEASE_BUILD && !params.RELEASE_DRY_RUN) {
-              echo env.SECONDARY_DOCKER_TAG // For now, just print the deploy tag in the console output -- later, communicate to release metadata service
+              Map buildInfoSecondary = [
+                "project_id": "${service_secondary}",
+                "build_id": "${env.SECONDARY_DOCKER_TAG}",
+                "release_id": "${params.RELEASE_NAME}",
+                "git_tag": "${env.GIT_TAG}"
+              ]
+              createBuild(
+                buildInfoSecondary,
+                rmsSupportedEnvironment.staging
+              )
             }
           }
         }
@@ -156,7 +177,7 @@ pipeline {
   post {
     failure {
       script {
-        if (!isPr) {
+        if (env.JOB_NAME.contains("${service_server}/main")) {
           teamsMessage(message: "Build [${currentBuild.fullDisplayName}](${env.BUILD_URL}) has failed in stage ${lastStage}", webhookCredentialID: WEBHOOK_ID)
         }
       }
