@@ -61,9 +61,11 @@ class RowsChangedPreviewHandler(config: RowsChangedPreviewConfig) {
 
       if(!truncated) {
         val copier = pgu.datasetContentsCopier(logger)
-        val schema = pgu.datasetMapReader.schema(newTruthCopyInfo)
-        val copyCtx = new DatasetCopyContext[SoQLType](newTruthCopyInfo, schema)
-        copier.copy(truthCopyInfo, copyCtx)
+        val oldSchema = pgu.datasetMapReader.schema(truthCopyInfo)
+        val oldCopyCtx = new DatasetCopyContext[SoQLType](truthCopyInfo, oldSchema)
+        val newSchema = pgu.datasetMapReader.schema(newTruthCopyInfo)
+        val newCopyCtx = new DatasetCopyContext[SoQLType](newTruthCopyInfo, newSchema)
+        copier.copy(oldCopyCtx, newCopyCtx)
       }
 
       schema.values.find(_.isSystemPrimaryKey).foreach(schemaLoader.makeSystemPrimaryKey)
