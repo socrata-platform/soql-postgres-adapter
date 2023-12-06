@@ -41,9 +41,11 @@ case class DataCopiedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
   pgu.datasetMapReader.published(truthDatasetInfo) match {
     case Some(publishedCopy) =>
       val copier = pgu.datasetContentsCopier(pgu.logger(truthDatasetInfo, "_no_user")) // TODO: fill in proper user
-      val schema = pgu.datasetMapReader.schema(truthCopyInfo)
-      val copyCtx = new DatasetCopyContext[SoQLType](truthCopyInfo, schema)
-      copier.copy(publishedCopy, copyCtx)
+      val publishedSchema = pgu.datasetMapReader.schema(publishedCopy)
+      val publishedCtx = new DatasetCopyContext[SoQLType](publishedCopy, publishedSchema)
+      val newSchema = pgu.datasetMapReader.schema(truthCopyInfo)
+      val newCopyCtx = new DatasetCopyContext[SoQLType](truthCopyInfo, newSchema)
+      copier.copy(publishedCtx, newCopyCtx)
     case None => throw new ResyncSecondaryException("DataCopy triggers resync datas %s copy-%s data-ver-%s".format(
         truthDatasetInfo.systemId, truthCopyInfo.copyNumber, truthCopyInfo.dataVersion
       ))
