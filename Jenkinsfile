@@ -6,8 +6,8 @@ def service_server = 'soql-server-pg'
 def project_wd_server = 'soql-server-pg'
 def service_secondary = 'secondary-watcher-pg'
 def project_wd_secondary = 'store-pg'
-
-def isPr = env.CHANGE_ID != null;
+def isPr = env.CHANGE_ID != null
+def lastStage
 
 // instanciate libraries
 def sbtbuild = new com.socrata.SBTBuild(steps, service_server, '.', [project_wd_server, project_wd_secondary])
@@ -33,6 +33,7 @@ pipeline {
     SERVICE = "${service_server}"
     DEPLOY_PATTERN = "${service_server}*"
     SECONDARY_DEPLOY_PATTERN = "${service_secondary}*"
+    WEBHOOK_ID = 'WEBHOOK_IQ'
   }
   stages {
     stage('Release Tag') {
@@ -41,6 +42,7 @@ pipeline {
       }
       steps {
         script {
+          lastStage = env.STAGE_NAME
           if (params.RELEASE_DRY_RUN) {
             echo 'DRY RUN: Skipping release tag creation'
           }
@@ -53,6 +55,7 @@ pipeline {
     stage('Build SoQL Server PG') {
       steps {
         script {
+          lastStage = env.STAGE_NAME
           echo "Building sbt project..."
           sbtbuild.setScalaVersion("2.12")
           // This build is a little unusual; it actually has _two_ artifacts, this one
@@ -71,6 +74,7 @@ pipeline {
       }
       steps {
         script {
+          lastStage = env.STAGE_NAME
           if (params.RELEASE_BUILD) {
             env.REGISTRY_PUSH = (params.RELEASE_DRY_RUN) ? 'none' : 'all'
             env.DOCKER_TAG = dockerize_server.docker_build_specify_tag_and_push(params.RELEASE_NAME, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server), env.REGISTRY_PUSH)
@@ -96,6 +100,7 @@ pipeline {
       }
       steps {
         script {
+          lastStage = env.STAGE_NAME
           // Here's where we're getting the secondary artifact (named
           // via env.STORE_PG_ARTIFACT) out for dockerizing, per the
           // comment above.
@@ -130,6 +135,7 @@ pipeline {
         stage('Deploy SoQL Server PG') {
           steps {
             script {
+              lastStage = env.STAGE_NAME
               // uses env.DOCKER_TAG and deploys to staging by default
               marathonDeploy(serviceName: env.DEPLOY_PATTERN, waitTime: '60')
             }
@@ -138,10 +144,20 @@ pipeline {
         stage('Deploy Secondary') {
           steps {
             script {
+              lastStage = env.STAGE_NAME
               // deploys to staging by default
               marathonDeploy(serviceName: env.SECONDARY_DEPLOY_PATTERN, tag: env.SECONDARY_DOCKER_TAG)
             }
           }
+        }
+      }
+    }
+  }
+  post {
+    failure {
+      script {
+        if (!isPr) {
+          teamsMessage(message: "Build [${currentBuild.fullDisplayName}](${env.BUILD_URL}) has failed in stage ${lastStage}", webhookCredentialID: WEBHOOK_ID)
         }
       }
     }
