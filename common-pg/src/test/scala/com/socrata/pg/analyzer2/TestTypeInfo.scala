@@ -4,7 +4,7 @@ import scala.util.parsing.input.Position
 
 import com.socrata.soql.ast
 import com.socrata.soql.collection.OrderedSet
-import com.socrata.soql.environment.{TypeName, Provenance}
+import com.socrata.soql.environment.{Source, TypeName, Provenance}
 import com.socrata.soql.typechecker.TypeInfo2
 import com.socrata.soql.types.SoQLID
 import com.socrata.soql.analyzer2._
@@ -18,8 +18,8 @@ object TestTypeInfo extends TypeInfo2[TestHelper.TestMT] {
 
   def boolType = TestBoolean
 
-  def literalBoolean(b: Boolean, source: Option[ScopedResourceName], position: Position): Expr =
-    LiteralValue[MT](TestBoolean(b))(new AtomicPositionInfo(source, position))
+  def literalBoolean(b: Boolean, source: Source): Expr =
+    LiteralValue[MT](TestBoolean(b))(new AtomicPositionInfo(source))
 
   def potentialExprs(l: ast.Literal, source: Option[ScopedResourceName], currentPrimaryTable: Option[Provenance]): Seq[Expr] =
     l match {
@@ -32,10 +32,10 @@ object TestTypeInfo extends TypeInfo2[TestHelper.TestMT] {
           }
         val asCompound = tryAsCompound(s)
         val asID = tryAsID(s, currentPrimaryTable)
-        Seq[Option[CV]](Some(TestText(s)), asInt, asCompound, asID).flatten.map(LiteralValue[MT](_)(new AtomicPositionInfo(source, l.position)))
-      case ast.NumberLiteral(n) => Seq(LiteralValue[MT](TestNumber(n.toInt))(new AtomicPositionInfo(source, l.position)))
-      case ast.BooleanLiteral(b) => Seq(LiteralValue[MT](TestBoolean(b))(new AtomicPositionInfo(source, l.position)))
-      case ast.NullLiteral() => typeParameterUniverse.iterator.map(NullLiteral[MT](_)(new AtomicPositionInfo(source, l.position))).toVector
+        Seq[Option[CV]](Some(TestText(s)), asInt, asCompound, asID).flatten.map(LiteralValue[MT](_)(new AtomicPositionInfo(Source.nonSynthetic(source, l.position))))
+      case ast.NumberLiteral(n) => Seq(LiteralValue[MT](TestNumber(n.toInt))(new AtomicPositionInfo(Source.nonSynthetic(source, l.position))))
+      case ast.BooleanLiteral(b) => Seq(LiteralValue[MT](TestBoolean(b))(new AtomicPositionInfo(Source.nonSynthetic(source, l.position))))
+      case ast.NullLiteral() => typeParameterUniverse.iterator.map(NullLiteral[MT](_)(new AtomicPositionInfo(Source.nonSynthetic(source, l.position)))).toVector
     }
 
   private def tryAsID(s: String, currentPrimaryTable: Option[Provenance]): Option[CV] = {

@@ -221,7 +221,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
 
     ctx.extraContext.nowUsed = true
     ctx.repFor(f.typ).
-      literal(LiteralValue[MT](SoQLFixedTimestamp(ctx.extraContext.now))(AtomicPositionInfo.None)).
+      literal(LiteralValue[MT](SoQLFixedTimestamp(ctx.extraContext.now))(AtomicPositionInfo.Synthetic)).
       withExpr(f)
   }
 
@@ -253,9 +253,9 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
       assert(args.length == 1)
 
       args(0).expr match {
-        case LiteralValue(SoQLNumber(n)) =>
+        case lit@LiteralValue(SoQLNumber(n)) =>
           // move the negation into the literal
-          ctx.repFor(SoQLNumber).literal(LiteralValue[MT](SoQLNumber(n.negate))(new AtomicPositionInfo(f.position.logicalSource, f.position.functionNamePosition))).withExpr(f)
+          ctx.repFor(SoQLNumber).literal(LiteralValue[MT](SoQLNumber(n.negate))(lit.position)).withExpr(f)
         case _ =>
           base(f, args, ctx)
       }
