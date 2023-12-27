@@ -53,7 +53,7 @@ object RollupAnalyzer {
               Seq(expr),
               false,
               None
-            )(FuncallPositionInfo.None)
+            )(FuncallPositionInfo.Synthetic)
           )
         case _ =>
           None

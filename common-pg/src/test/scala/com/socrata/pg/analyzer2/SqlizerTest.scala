@@ -66,10 +66,10 @@ class SqlizerTest extends FunSuite with MustMatchers with TestHelper with Sqlize
 
     poses.length must equal (sqlish.length)
     poses.zip(positions).foreach {
-      case (NoPosition, '_') => // ok
-      case (p, 'A') => (p.line, p.column) must equal ((1, 8))
-      case (p, 'B') => (p.line, p.column) must equal ((1, 14))
-      case (other, c) => fail(s"Found specifier $c, but got position $other")
+      case (p, '_') if p.position == NoPosition => // ok
+      case (p, 'A') => (p.position.line, p.position.column) must equal ((1, 8))
+      case (p, 'B') => (p.position.line, p.position.column) must equal ((1, 14))
+      case (other, c) => fail(s"Found specifier $c, but got position ${other.position}")
     }
   }
 

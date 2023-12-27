@@ -11,8 +11,8 @@ import com.socrata.soql.sqlizer._
 class SoQLRewriteSearch[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({ type ColumnType = SoQLType; type ColumnValue = SoQLValue })](override val searchBeforeQuery: Boolean) extends RewriteSearch[MT] {
   import SoQLTypeInfo.hasType
 
-  override def litText(s: String): Expr = LiteralValue[MT](SoQLText(s))(AtomicPositionInfo.None)
-  override def litBool(b: Boolean): Expr = LiteralValue[MT](SoQLBoolean(false))(AtomicPositionInfo.None)
+  override def litText(s: String): Expr = LiteralValue[MT](SoQLText(s))(AtomicPositionInfo.Synthetic)
+  override def litBool(b: Boolean): Expr = LiteralValue[MT](SoQLBoolean(false))(AtomicPositionInfo.Synthetic)
 
   protected def isBoolean(t: SoQLType): Boolean = t == SoQLBoolean
   protected def isText(t: SoQLType): Boolean = t == SoQLText
@@ -23,8 +23,8 @@ class SoQLRewriteSearch[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({ 
         Seq(expr)
       case SoQLUrl =>
         Seq(
-          FunctionCall[MT](urlUrlExtractor, Seq(expr))(FuncallPositionInfo.None),
-          FunctionCall[MT](urlDescriptionExtractor, Seq(expr))(FuncallPositionInfo.None)
+          FunctionCall[MT](urlUrlExtractor, Seq(expr))(FuncallPositionInfo.Synthetic),
+          FunctionCall[MT](urlDescriptionExtractor, Seq(expr))(FuncallPositionInfo.Synthetic)
         )
       case _ =>
         Nil
@@ -34,13 +34,13 @@ class SoQLRewriteSearch[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({ 
   override def mkAnd(left: Expr, right: Expr): Expr = {
     assert(left.typ == SoQLBoolean)
     assert(right.typ == SoQLBoolean)
-    FunctionCall[MT](and, Seq(left, right))(FuncallPositionInfo.None)
+    FunctionCall[MT](and, Seq(left, right))(FuncallPositionInfo.Synthetic)
   }
 
   override def mkOr(left: Expr, right: Expr): Expr = {
     assert(left.typ == SoQLBoolean)
     assert(right.typ == SoQLBoolean)
-    FunctionCall[MT](or, Seq(left, right))(FuncallPositionInfo.None)
+    FunctionCall[MT](or, Seq(left, right))(FuncallPositionInfo.Synthetic)
   }
 
   override def denull(string: Expr): Expr = {
@@ -48,7 +48,7 @@ class SoQLRewriteSearch[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({ 
     FunctionCall[MT](
       coalesce,
       Seq(string, litText(""))
-    )(FuncallPositionInfo.None)
+    )(FuncallPositionInfo.Synthetic)
   }
 
   override def searchTerm(schema: Iterable[(ColumnLabel, Rep[MT])]): Option[Doc[Nothing]] = {

@@ -35,7 +35,7 @@ object TestRewriteSearch extends RewriteSearch[TestHelper.TestMT] {
   override def concat = TestFunctions.Concat.monomorphic.get
 
   override def denull(string: Expr) =
-    FunctionCall[TestMT](coalesce, Seq(string, litText("")))(FuncallPositionInfo.None)
+    FunctionCall[TestMT](coalesce, Seq(string, litText("")))(FuncallPositionInfo.Synthetic)
 
   override def fieldsOf(expr: Expr): Seq[Expr] =
     expr.typ match {
@@ -43,8 +43,8 @@ object TestRewriteSearch extends RewriteSearch[TestHelper.TestMT] {
       case _ => Nil
     }
 
-  override def litBool(b: Boolean): Expr = LiteralValue[TestMT](TestBoolean(b))(AtomicPositionInfo.None)
-  override def litText(s: String): Expr = LiteralValue[TestMT](TestText(s))(AtomicPositionInfo.None)
+  override def litBool(b: Boolean): Expr = LiteralValue[TestMT](TestBoolean(b))(AtomicPositionInfo.Synthetic)
+  override def litText(s: String): Expr = LiteralValue[TestMT](TestText(s))(AtomicPositionInfo.Synthetic)
 
   override def isText(t: TestType) = t == TestText
   override def isBoolean(t: TestType) = t == TestBoolean
@@ -53,13 +53,13 @@ object TestRewriteSearch extends RewriteSearch[TestHelper.TestMT] {
     FunctionCall[TestMT](
       TestFunctions.And.monomorphic.get,
       Seq(left, right)
-    )(FuncallPositionInfo.None)
+    )(FuncallPositionInfo.Synthetic)
 
   override def mkOr(left: Expr,right: Expr): Expr =
     FunctionCall[TestMT](
       TestFunctions.Or.monomorphic.get,
       Seq(left, right)
-    )(FuncallPositionInfo.None)
+    )(FuncallPositionInfo.Synthetic)
 
   override def plainToTsQuery: MonomorphicFunction = ???
   override def toTsVector: MonomorphicFunction = ???
