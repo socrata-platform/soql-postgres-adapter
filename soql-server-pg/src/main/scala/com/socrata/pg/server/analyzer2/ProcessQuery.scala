@@ -115,6 +115,13 @@ object ProcessQuery {
           }
       }
 
+    // Before doing rollups, extract our final hints (rollups can
+    // destroy hints).
+    val hintsByName = metadataAnalysis.statement.schema.valuesIterator.flatMap { schemaEnt =>
+      schemaEnt.hint.map(schemaEnt.name -> _)
+    }.toMap
+    log.debug("Result column hints: {}", Lazy(JsonUtil.renderJson(hintsByName, pretty = true)))
+
     // Intermixed rewrites and rollups: rollups are attemted before
     // each group of rewrite passes and after all rewrite passes have
     // happened.
@@ -164,6 +171,7 @@ object ProcessQuery {
     // Our etag will be the hash of the inputs that affect the result of the query
     val etag = ETagify(
       analysis.statement.schema.valuesIterator.map(_.name).toSeq,
+      hintsByName,
       stringifiedAnalysis,
       copyCache.orderedVersions,
       systemContext,
@@ -182,6 +190,7 @@ object ProcessQuery {
     precondition.check(Some(etag), sideEffectFree = true) match {
       case Precondition.Passed =>
         fulfillRequest(
+          hintsByName,
           if(sqlized.nonliteralSystemContextLookupFound) Some(systemContext) else None,
           copyCache,
           etag,
@@ -320,6 +329,7 @@ object ProcessQuery {
   }
 
   def fulfillRequest(
+    hintsByName: Map[ColumnName, JValue],
     systemContext: Option[Map[String, String]],
     copyCache: CopyCache[InputMetaTypes],
     etag: EntityTag,
@@ -410,10 +420,13 @@ object ProcessQuery {
         writer.write("\"schema\":")
 
         @AutomaticJsonEncode
-        case class Field(c: ColumnName, t: SoQLType)
+        case class Field(c: ColumnName, t: SoQLType, h: Option[JValue])
 
-        val reformattedSchema = nameAnalysis.statement.schema.values.map { case Statement.SchemaEntry(cn, typ, _isSynthetic) =>
-          Field(cn, typ)
+        val reformattedSchema = nameAnalysis.statement.schema.values.map { case Statement.SchemaEntry(cn, typ, _hint, _isSynthetic) =>
+          // not using the analysis's schema's hints because it's
+          // post-rollup, so any hints inherited from parts of the
+          // query served by a rollup will have been destroyed.
+          Field(cn, typ, hintsByName.get(cn))
         }.toArray
 
         JsonUtil.writeJson(writer, reformattedSchema)

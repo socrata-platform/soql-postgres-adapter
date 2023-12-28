@@ -1,5 +1,10 @@
 package com.socrata.pg.server.analyzer2
 
+import scala.{collection => sc}
+import scala.language.higherKinds
+
+import com.rojoma.json.v3.ast._
+
 import com.socrata.datacoordinator.id.{DatasetInternalName, UserColumnId}
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.ColumnName
@@ -46,6 +51,11 @@ object Hashable {
     override def isString = true
   }
 
+  implicit object bigDecimal extends Hashable[BigDecimal] {
+    override def hash(hasher: Hasher, value: BigDecimal) = hasher.hashString(value.toString)
+    override def isString = true
+  }
+
   implicit def pair[A: Hashable, B: Hashable]: Hashable[(A, B)] =
     new Hashable[(A, B)] {
       override def hash(hasher: Hasher, xs: (A, B)) = {
@@ -64,9 +74,10 @@ object Hashable {
       }
     }
 
-  implicit def map[K: Hashable: Ordering, V: Hashable]: Hashable[Map[K, V]] =
-    new Hashable[Map[K, V]] {
-      override def hash(hasher: Hasher, xs: Map[K, V]) = {
+  implicit def map[M[A,B] <: sc.Map[A,B], K: Hashable: Ordering, V: Hashable]: Hashable[M[K, V]] =
+    new Hashable[M[K, V]] {
+      override def hash(hasher: Hasher, xs: M[K, V]) = {
+        hasher.hashInt(xs.size)
         hasher.hash(xs.toSeq.sortBy(_._1))
       }
     }
@@ -173,5 +184,30 @@ object Hashable {
   implicit object stage extends Hashable[Stage] {
     override def hash(hasher: Hasher, value: Stage) = hasher.hashString(value.underlying)
     override def isString = true
+  }
+
+  implicit object jvalue extends Hashable[JValue] {
+    override def hash(hasher: Hasher, value: JValue) =
+      value match {
+        case JNull =>
+          hasher.hash(0)
+        case JString(s) =>
+          hasher.hash(1)
+          hasher.hash(s)
+        case n: JNumber =>
+          hasher.hash(2)
+          hasher.hash(n.toBigDecimal)
+        case JBoolean(false) =>
+          hasher.hash(3)
+        case JBoolean(true) =>
+          hasher.hash(4)
+        case JArray(elems) =>
+          hasher.hash(5)
+          hasher.hash(elems)
+        case JObject(fields) =>
+          hasher.hash(6)
+          hasher.hash(fields)
+      }
+    override def isString = false
   }
 }

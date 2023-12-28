@@ -148,7 +148,8 @@ object RollupAnalyzer {
               dcn -> DatasetColumnInfo(
                 newFieldName,
                 ci.typ,
-                newHidden
+                newHidden,
+                None // we don't care about hints in rollup tables
               )
             }
 
