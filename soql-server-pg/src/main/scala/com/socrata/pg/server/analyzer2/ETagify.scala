@@ -4,7 +4,7 @@ import java.security.MessageDigest
 import java.nio.charset.StandardCharsets
 import java.nio.ByteBuffer
 
-import com.rojoma.json.v3.ast.JString
+import com.rojoma.json.v3.ast.{JString, JValue}
 import com.rojoma.json.v3.util.JsonUtil
 import com.rojoma.json.v3.util.OrJNull.implicits._
 import org.joda.time.DateTime
@@ -50,6 +50,7 @@ object ETagify extends StatementUniverse[InputMetaTypes] {
 
   def apply(
     outputColumns: Seq[ColumnName],
+    hintsByName: Map[ColumnName, JValue],
     query: String,
     dataVersions: Seq[Long],
     systemContext: Map[String, String],
@@ -62,6 +63,9 @@ object ETagify extends StatementUniverse[InputMetaTypes] {
 
     log.debug("Mixing in output column names: {}", Lazy(JsonUtil.renderJson(outputColumns, pretty = false)))
     hasher.hash(outputColumns)
+
+    log.debug("Mixing in output column hints: {}", Lazy(JsonUtil.renderJson(hintsByName, pretty = true)))
+    hasher.hash(hintsByName.map { case (k, v) => k.name -> v }.toMap)
 
     log.debug("Mixing in query: {}", JString(query))
     hasher.hash(query)
