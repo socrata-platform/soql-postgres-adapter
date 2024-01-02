@@ -1,6 +1,7 @@
 package com.socrata.pg.analyzer2
 
-import java.sql.ResultSet
+import java.io.Writer
+import java.sql.{ResultSet, PreparedStatement, Types}
 
 import com.rojoma.json.v3.ast.{JNull, JValue, JString}
 import com.rojoma.json.v3.io.CompactJsonWriter
@@ -71,10 +72,50 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       }.map(ctor).getOrElse(SoQLNull)
     }
 
-    override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
-      Seq(
-        d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, label) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"USING GIST (" ++ compressedDatabaseColumn(label) ++ d")"
-      )
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            cv match {
+              case SoQLNull =>
+                stmt.setNull(start, Types.VARCHAR)
+              case other =>
+                val geo = downcast(other)
+                stmt.setString(start, t.EWktRep(geo, Geo.defaultSRID))
+            }
+            start + 1
+          }
+          override def csvify(out: Writer, cv: CV): Unit = {
+            cv match {
+              case SoQLNull =>
+                writeCSV(out, None)
+              case other =>
+                val geo = downcast(other)
+                writeCSV(out, Some(t.EWktRep(geo, Geo.defaultSRID)))
+            }
+          }
+          override def placeholders: Seq[Doc] = Seq(d"ST_GeomFromEWKT(?)")
+          override def indices =
+            Seq(
+              d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, columnName) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"USING GIST (" ++ compressedDatabaseColumn(columnName) ++ d")"
+            )
+        }
+  }
+
+  private def badType(expected: String, value: CV): Nothing =
+    throw new Exception(s"Bad type; expected $expected, got $value")
+
+  private def writeCSV(out: Writer, firstValue: Option[String], moreValues: Option[String]*): Unit = {
+    def writeCell(cell: Option[String]): Unit =
+      for(v <- cell) {
+        out.write('"')
+        out.write(v.replaceAll("\"","\"\""))
+        out.write('"')
+      }
+    writeCell(firstValue)
+    for(value <- moreValues) {
+      out.write(',')
+      writeCell(value)
+    }
   }
 
   val reps = Map[SoQLType, Rep](
@@ -151,15 +192,72 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         }
       }
 
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
-        if(isRollup(tableName)) {
-          Seq(
-            d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, label) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"(" ++ expandedDatabaseColumns(label).commaSep ++ d")"
-          )
-        } else {
-          Seq(
-            d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, label) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"(" ++ compressedDatabaseColumn(label) ++ d")"
-          )
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          val needProv = isRollup(tableName)
+
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            if(needProv) {
+              cv match {
+                case SoQLNull =>
+                  stmt.setNull(start, Types.VARCHAR)
+                  stmt.setNull(start + 1, Types.BIGINT)
+                case id@SoQLID(value) =>
+                  id.provenance match {
+                    case Some(Provenance(prov)) => stmt.setString(start, prov)
+                    case None => stmt.setNull(start, Types.VARCHAR)
+                  }
+                  stmt.setLong(start + 1, value)
+                case other =>
+                  badType("id", other)
+              }
+              start + 2
+            } else {
+              cv match {
+                case SoQLNull => stmt.setNull(start, Types.BIGINT)
+                case id@SoQLID(value) => stmt.setLong(start, value)
+                case other => badType("id", other)
+              }
+              start + 1
+            }
+          }
+
+          override def csvify(out: Writer, cv: CV): Unit = {
+            if(needProv) {
+              cv match {
+                case SoQLNull =>
+                  writeCSV(out, None, None)
+                case id@SoQLID(value) =>
+                  writeCSV(out, id.provenance.map(_.value), Some(value.toString))
+                case other =>
+                  badType("id", other)
+              }
+            } else {
+              cv match {
+                case SoQLNull =>
+                  writeCSV(out, None)
+                case id@SoQLID(value) =>
+                  writeCSV(out, Some(value.toString))
+                case other =>
+                  badType("id", other)
+              }
+            }
+          }
+
+          override def placeholders =
+            if(needProv) Seq(d"?", d"?")
+            else Seq(d"?")
+
+          override def indices =
+            if(needProv) {
+              Seq(
+                d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, columnName) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"(" ++ expandedDatabaseColumns(columnName).commaSep ++ d")"
+              )
+            } else {
+              Seq(
+                d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, columnName) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"(" ++ compressedDatabaseColumn(columnName) ++ d")"
+              )
+            }
         }
     },
     SoQLVersion -> new ProvenancedRep(SoQLVersion, d"bigint") {
@@ -235,15 +333,72 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         }
       }
 
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
-        if(isRollup(tableName)) {
-          Seq(
-            d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, label) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"(" ++ expandedDatabaseColumns(label).commaSep ++ d")"
-          )
-        } else {
-          Seq(
-            d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, label) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"(" ++ compressedDatabaseColumn(label) ++ d")"
-          )
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          val needProv = isRollup(tableName)
+
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            if(needProv) {
+              cv match {
+                case SoQLNull =>
+                  stmt.setNull(start, Types.VARCHAR)
+                  stmt.setNull(start + 1, Types.BIGINT)
+                case id@SoQLVersion(value) =>
+                  id.provenance match {
+                    case Some(Provenance(prov)) => stmt.setString(start, prov)
+                    case None => stmt.setNull(start, Types.VARCHAR)
+                  }
+                  stmt.setLong(start + 1, value)
+                case other =>
+                  badType("version", other)
+              }
+              start + 2
+            } else {
+              cv match {
+                case SoQLNull => stmt.setNull(start, Types.BIGINT)
+                case id@SoQLVersion(value) => stmt.setLong(start, value)
+                case other => badType("version", other)
+              }
+              start + 1
+            }
+          }
+
+          override def csvify(out: Writer, cv: CV): Unit = {
+            if(needProv) {
+              cv match {
+                case SoQLNull =>
+                  writeCSV(out, None, None)
+                case id@SoQLVersion(value) =>
+                  writeCSV(out, id.provenance.map(_.value), Some(value.toString))
+                case other =>
+                  badType("version", other)
+              }
+            } else {
+              cv match {
+                case SoQLNull =>
+                  writeCSV(out, None)
+                case id@SoQLVersion(value) =>
+                  writeCSV(out, Some(value.toString))
+                case other =>
+                  badType("version", other)
+              }
+            }
+          }
+
+          override def placeholders =
+            if(needProv) Seq(d"?", d"?")
+            else Seq(d"?")
+
+          override def indices =
+            if(needProv) {
+              Seq(
+                d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, columnName) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"(" ++ expandedDatabaseColumns(columnName).commaSep ++ d")"
+              )
+            } else {
+              Seq(
+                d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, columnName) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"(" ++ compressedDatabaseColumn(columnName) ++ d")"
+              )
+            }
         }
     },
 
@@ -260,8 +415,28 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
           case Some(t) => SoQLText(t)
         }
       }
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
-        createTextlikeIndices(namespace.indexName(tableName, label), tableName, compressedDatabaseColumn(label))
+
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            cv match {
+              case SoQLNull => stmt.setNull(start, Types.VARCHAR)
+              case SoQLText(t) => stmt.setString(start, t)
+              case other => badType("text", other)
+            }
+            start + 1
+          }
+          override def csvify(out: Writer, cv: CV): Unit = {
+            cv match {
+              case SoQLNull => writeCSV(out, None)
+              case SoQLText(t) => writeCSV(out, Some(t))
+              case other => badType("text", other)
+            }
+          }
+          override def placeholders = Seq(d"?")
+          override def indices =
+            createTextlikeIndices(namespace.indexName(tableName, columnName), tableName, compressedDatabaseColumn(columnName))
+        }
     },
     SoQLNumber -> new SingleColumnRep(SoQLNumber, d"numeric") {
       override def literal(e: LiteralValue) = {
@@ -274,8 +449,28 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
           case Some(t) => SoQLNumber(t)
         }
       }
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
-        createSimpleIndices(namespace.indexName(tableName, label), tableName, compressedDatabaseColumn(label))
+
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            cv match {
+              case SoQLNull => stmt.setNull(start, Types.NUMERIC)
+              case SoQLNumber(n) => stmt.setBigDecimal(start, n)
+              case other => badType("number", other)
+            }
+            start + 1
+          }
+          override def csvify(out: Writer, cv: CV): Unit = {
+            cv match {
+              case SoQLNull => writeCSV(out, None)
+              case SoQLNumber(n) => writeCSV(out, Some(n.toString))
+              case other => badType("number", other)
+            }
+          }
+          override def placeholders = Seq(d"?")
+          override def indices =
+            createSimpleIndices(namespace.indexName(tableName, columnName), tableName, compressedDatabaseColumn(columnName))
+        }
     },
     SoQLBoolean -> new SingleColumnRep(SoQLBoolean, d"boolean") {
       def literal(e: LiteralValue) = {
@@ -290,8 +485,27 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
           SoQLBoolean(v)
         }
       }
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
-        createSimpleIndices(namespace.indexName(tableName, label), tableName, compressedDatabaseColumn(label))
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            cv match {
+              case SoQLNull => stmt.setNull(start, Types.BOOLEAN)
+              case SoQLBoolean(b) => stmt.setBoolean(start, b)
+              case other => badType("boolean", other)
+            }
+            start + 1
+          }
+          override def csvify(out: Writer, cv: CV): Unit = {
+            cv match {
+              case SoQLNull => writeCSV(out, None)
+              case SoQLBoolean(b) => writeCSV(out, Some(if(b) "true" else "false"))
+              case other => badType("boolean", other)
+            }
+          }
+          override def placeholders = Seq(d"?")
+          override def indices =
+            createSimpleIndices(namespace.indexName(tableName, columnName), tableName, compressedDatabaseColumn(columnName))
+        }
     },
     SoQLFixedTimestamp -> new SingleColumnRep(SoQLFixedTimestamp, d"timestamp with time zone") {
       def literal(e: LiteralValue) = {
@@ -302,8 +516,20 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
       }
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
-        createSimpleIndices(namespace.indexName(tableName, label), tableName, compressedDatabaseColumn(label))
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            ugh.prepareInsert(stmt, cv, start)
+          }
+          override def csvify(out: Writer, cv: CV): Unit = {
+            val sb = new java.lang.StringBuilder
+            ugh.csvifyForInsert(sb, cv)
+            out.write(sb.toString)
+          }
+          override def placeholders = Seq(d"? ::" +#+ sqlType)
+          override def indices =
+            createSimpleIndices(namespace.indexName(tableName, columnName), tableName, compressedDatabaseColumn(columnName))
+        }
     },
     SoQLFloatingTimestamp -> new SingleColumnRep(SoQLFloatingTimestamp, d"timestamp without time zone") {
       def literal(e: LiteralValue) = {
@@ -314,8 +540,20 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
       }
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
-        createSimpleIndices(namespace.indexName(tableName, label), tableName, compressedDatabaseColumn(label))
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            ugh.prepareInsert(stmt, cv, start)
+          }
+          override def csvify(out: Writer, cv: CV): Unit = {
+            val sb = new java.lang.StringBuilder
+            ugh.csvifyForInsert(sb, cv)
+            out.write(sb.toString)
+          }
+          override def placeholders = Seq(d"? ::" +#+ sqlType)
+          override def indices =
+            createSimpleIndices(namespace.indexName(tableName, columnName), tableName, compressedDatabaseColumn(columnName))
+        }
     },
     SoQLDate -> new SingleColumnRep(SoQLDate, d"date") {
       def literal(e: LiteralValue) = {
@@ -326,8 +564,20 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
       }
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
-        createSimpleIndices(namespace.indexName(tableName, label), tableName, compressedDatabaseColumn(label))
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            ugh.prepareInsert(stmt, cv, start)
+          }
+          override def csvify(out: Writer, cv: CV): Unit = {
+            val sb = new java.lang.StringBuilder
+            ugh.csvifyForInsert(sb, cv)
+            out.write(sb.toString)
+          }
+          override def placeholders = Seq(d"? ::" +#+ sqlType)
+          override def indices =
+            createSimpleIndices(namespace.indexName(tableName, columnName), tableName, compressedDatabaseColumn(columnName))
+        }
     },
     SoQLTime -> new SingleColumnRep(SoQLTime, d"time without time zone") {
       def literal(e: LiteralValue) = {
@@ -338,8 +588,20 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
       }
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
-        createSimpleIndices(namespace.indexName(tableName, label), tableName, compressedDatabaseColumn(label))
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            ugh.prepareInsert(stmt, cv, start)
+          }
+          override def csvify(out: Writer, cv: CV): Unit = {
+            val sb = new java.lang.StringBuilder
+            ugh.csvifyForInsert(sb, cv)
+            out.write(sb.toString)
+          }
+          override def placeholders = Seq(d"? ::" +#+ sqlType)
+          override def indices =
+            createSimpleIndices(namespace.indexName(tableName, columnName), tableName, compressedDatabaseColumn(columnName))
+        }
     },
     SoQLJson -> new SingleColumnRep(SoQLJson, d"jsonb") {
       def literal(e: LiteralValue) = {
@@ -350,10 +612,22 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
       }
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
-        Seq(
-          d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, label) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"USING GIN (" ++ compressedDatabaseColumn(label) ++ d")"
-        )
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            ugh.prepareInsert(stmt, cv, start)
+          }
+          override def csvify(out: Writer, cv: CV): Unit = {
+            val sb = new java.lang.StringBuilder
+            ugh.csvifyForInsert(sb, cv)
+            out.write(sb.toString)
+          }
+          override def placeholders = Seq(d"? ::" +#+ sqlType)
+          override def indices =
+            Seq(
+              d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, columnName) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"USING GIN (" ++ compressedDatabaseColumn(columnName) ++ d")"
+            )
+        }
     },
 
     SoQLDocument -> new SingleColumnRep(SoQLDocument, d"jsonb") {
@@ -369,7 +643,26 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
             SoQLNull
         }
       }
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) = Nil
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            cv match {
+              case SoQLNull => stmt.setNull(start, Types.VARCHAR)
+              case SoQLJson(j) => stmt.setString(start, CompactJsonWriter.toString(j))
+              case other => badType("json", other)
+            }
+            start + 1
+          }
+          override def csvify(out: Writer, cv: CV): Unit = {
+            cv match {
+              case SoQLNull => writeCSV(out, None)
+              case SoQLJson(j) => writeCSV(out, Some(CompactJsonWriter.toString(j)))
+              case other => badType("json", other)
+            }
+          }
+          override def placeholders = Seq(d"? ::" +#+ sqlType)
+          override def indices = Nil
+        }
     },
 
     SoQLInterval -> new SingleColumnRep(SoQLInterval, d"interval") {
@@ -386,8 +679,28 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
             SoQLNull
         }
       }
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) =
-        createSimpleIndices(namespace.indexName(tableName, label), tableName, compressedDatabaseColumn(label))
+
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            cv match {
+              case SoQLNull => stmt.setObject(start, new PGInterval())
+              case SoQLInterval(i) => stmt.setObject(start, new PGInterval(i.getYears, i.getMonths, i.getDays, i.getHours, i.getMinutes, i.getSeconds * 1000.0 + i.getMillis))
+              case other => badType("interval", other)
+            }
+            start + 1
+          }
+          override def csvify(out: Writer, cv: CV): Unit = {
+            cv match {
+              case SoQLNull => writeCSV(out, None)
+              case SoQLInterval(i) => writeCSV(out, Some(SoQLInterval.StringRep(i)))
+              case other => badType("interval", other)
+            }
+          }
+          override def placeholders = Seq(d"?")
+          override def indices =
+            createSimpleIndices(namespace.indexName(tableName, columnName), tableName, compressedDatabaseColumn(columnName))
+        }
     },
 
     SoQLPoint -> new GeometryRep(SoQLPoint, SoQLPoint(_), "point") {
@@ -492,11 +805,24 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
             }
         }
       }
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) = {
-        val Seq(numberCol, typeCol) = expandedDatabaseColumns(label)
-        createTextlikeIndices(namespace.indexName(tableName, label, "number"), tableName, numberCol) ++
-          createTextlikeIndices(namespace.indexName(tableName, label, "type"), tableName, typeCol)
-      }
+
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            ugh.prepareInsert(stmt, cv, start)
+          }
+          override def csvify(out: Writer, cv: CV): Unit = {
+            val sb = new java.lang.StringBuilder
+            ugh.csvifyForInsert(sb, cv)
+            out.write(sb.toString)
+          }
+          override def placeholders = Seq(d"?", d"?")
+          override def indices = {
+            val Seq(numberCol, typeCol) = expandedDatabaseColumns(columnName)
+            createTextlikeIndices(namespace.indexName(tableName, columnName, "number"), tableName, numberCol) ++
+              createTextlikeIndices(namespace.indexName(tableName, columnName, "type"), tableName, typeCol)
+          }
+        }
     },
 
     SoQLLocation -> new CompoundColumnRep(SoQLLocation) {
@@ -557,18 +883,31 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
           case "zip" => SubcolInfo[MT](SoQLLocation, 4, "text", SoQLText, _.parenthesized +#+ d"->> 4")
         }
 
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) = {
-        val Seq(pointCol, addressCol, cityCol, stateCol, zipCol) = expandedDatabaseColumns(label)
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            ??? // can't ingress location
+          }
+          override def csvify(out: Writer, cv: CV): Unit = {
+            ??? // can't ingress location
+          }
+          override def placeholders =
+            ??? // can't ingress location
 
-        val textIndices =
-          createTextlikeIndices(namespace.indexName(tableName, label, "address"), tableName, addressCol) ++
-          createTextlikeIndices(namespace.indexName(tableName, label, "city"), tableName, cityCol) ++
-          createTextlikeIndices(namespace.indexName(tableName, label, "state"), tableName, stateCol) ++
-          createTextlikeIndices(namespace.indexName(tableName, label, "zip"), tableName, zipCol)
+          override def indices = {
+            // you _can_ have location indexes, if the location is part of a rollup
+            val Seq(pointCol, addressCol, cityCol, stateCol, zipCol) = expandedDatabaseColumns(columnName)
 
-        textIndices ++ Seq(
-          d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, label, "point") +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"USING GIST (" ++ pointCol ++ d")"
-        )
+            val textIndices =
+              createTextlikeIndices(namespace.indexName(tableName, columnName, "address"), tableName, addressCol) ++
+                createTextlikeIndices(namespace.indexName(tableName, columnName, "city"), tableName, cityCol) ++
+                createTextlikeIndices(namespace.indexName(tableName, columnName, "state"), tableName, stateCol) ++
+                createTextlikeIndices(namespace.indexName(tableName, columnName, "zip"), tableName, zipCol)
+
+            textIndices ++ Seq(
+              d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, columnName, "point") +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"USING GIST (" ++ pointCol ++ d")"
+            )
+          }
       }
 
       override def hasTopLevelWrapper = true
@@ -714,11 +1053,24 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
             }
         }
       }
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) = {
-        val Seq(urlCol, descCol) = expandedDatabaseColumns(label)
-        createTextlikeIndices(namespace.indexName(tableName, label, "url"), tableName, urlCol) ++
-          createTextlikeIndices(namespace.indexName(tableName, label, "desc"), tableName, descCol)
-      }
+
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            ugh.prepareInsert(stmt, cv, start)
+          }
+          override def csvify(out: Writer, cv: CV): Unit = {
+            val sb = new java.lang.StringBuilder
+            ugh.csvifyForInsert(sb, cv)
+            out.write(sb.toString)
+          }
+          override def placeholders = Seq(d"?", d"?")
+          override def indices = {
+            val Seq(urlCol, descCol) = expandedDatabaseColumns(columnName)
+            createTextlikeIndices(namespace.indexName(tableName, columnName, "url"), tableName, urlCol) ++
+              createTextlikeIndices(namespace.indexName(tableName, columnName, "desc"), tableName, descCol)
+          }
+        }
     }
   )
 }

@@ -67,7 +67,7 @@ class TestRepProvider(
         ???
       }
 
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) = {
+      override def ingressRep(tableName: DatabaseTableName, label: ColumnLabel) = {
         ???
       }
     },
@@ -81,7 +81,7 @@ class TestRepProvider(
         ???
       }
 
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) = {
+      override def ingressRep(tableName: DatabaseTableName, label: ColumnLabel) = {
         ???
       }
     },
@@ -95,7 +95,7 @@ class TestRepProvider(
         ???
       }
 
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) = {
+      override def ingressRep(tableName: DatabaseTableName, label: ColumnLabel) = {
         ???
       }
     },
@@ -109,7 +109,7 @@ class TestRepProvider(
         ???
       }
 
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) = {
+      override def ingressRep(tableName: DatabaseTableName, label: ColumnLabel) = {
         ???
       }
     },
@@ -175,7 +175,7 @@ class TestRepProvider(
         ???
       }
 
-      override def indices(tableName: DatabaseTableName, label: ColumnLabel) = {
+      override def ingressRep(tableName: DatabaseTableName, label: ColumnLabel) = {
         ???
       }
     }
