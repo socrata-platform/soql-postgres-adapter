@@ -1,6 +1,5 @@
 package com.socrata.pg.analyzer2
 
-import java.io.Writer
 import java.sql.{ResultSet, PreparedStatement, Types}
 
 import com.rojoma.json.v3.ast.{JNull, JValue, JString}
@@ -84,13 +83,13 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
             }
             start + 1
           }
-          override def csvify(out: Writer, cv: CV): Unit = {
+          override def csvify(cv: CV): Seq[Option[String]] = {
             cv match {
               case SoQLNull =>
-                writeCSV(out, None)
+                Seq(None)
               case other =>
                 val geo = downcast(other)
-                writeCSV(out, Some(t.EWktRep(geo, Geo.defaultSRID)))
+                Seq(Some(t.EWktRep(geo, Geo.defaultSRID)))
             }
           }
           override def placeholders: Seq[Doc] = Seq(d"ST_GeomFromEWKT(?)")
@@ -103,20 +102,6 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
 
   private def badType(expected: String, value: CV): Nothing =
     throw new Exception(s"Bad type; expected $expected, got $value")
-
-  private def writeCSV(out: Writer, firstValue: Option[String], moreValues: Option[String]*): Unit = {
-    def writeCell(cell: Option[String]): Unit =
-      for(v <- cell) {
-        out.write('"')
-        out.write(v.replaceAll("\"","\"\""))
-        out.write('"')
-      }
-    writeCell(firstValue)
-    for(value <- moreValues) {
-      out.write(',')
-      writeCell(value)
-    }
-  }
 
   val reps = Map[SoQLType, Rep](
     SoQLID -> new ProvenancedRep(SoQLID, d"bigint") {
@@ -222,22 +207,22 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
             }
           }
 
-          override def csvify(out: Writer, cv: CV): Unit = {
+          override def csvify(cv: CV): Seq[Option[String]] = {
             if(needProv) {
               cv match {
                 case SoQLNull =>
-                  writeCSV(out, None, None)
+                  Seq(None, None)
                 case id@SoQLID(value) =>
-                  writeCSV(out, id.provenance.map(_.value), Some(value.toString))
+                  Seq(id.provenance.map(_.value), Some(value.toString))
                 case other =>
                   badType("id", other)
               }
             } else {
               cv match {
                 case SoQLNull =>
-                  writeCSV(out, None)
+                  Seq(None)
                 case id@SoQLID(value) =>
-                  writeCSV(out, Some(value.toString))
+                  Seq(Some(value.toString))
                 case other =>
                   badType("id", other)
               }
@@ -363,22 +348,22 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
             }
           }
 
-          override def csvify(out: Writer, cv: CV): Unit = {
+          override def csvify(cv: CV): Seq[Option[String]] = {
             if(needProv) {
               cv match {
                 case SoQLNull =>
-                  writeCSV(out, None, None)
+                  Seq(None, None)
                 case id@SoQLVersion(value) =>
-                  writeCSV(out, id.provenance.map(_.value), Some(value.toString))
+                  Seq(id.provenance.map(_.value), Some(value.toString))
                 case other =>
                   badType("version", other)
               }
             } else {
               cv match {
                 case SoQLNull =>
-                  writeCSV(out, None)
+                  Seq(None)
                 case id@SoQLVersion(value) =>
-                  writeCSV(out, Some(value.toString))
+                  Seq(Some(value.toString))
                 case other =>
                   badType("version", other)
               }
@@ -426,10 +411,10 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
             }
             start + 1
           }
-          override def csvify(out: Writer, cv: CV): Unit = {
+          override def csvify(cv: CV): Seq[Option[String]] = {
             cv match {
-              case SoQLNull => writeCSV(out, None)
-              case SoQLText(t) => writeCSV(out, Some(t))
+              case SoQLNull => Seq(None)
+              case SoQLText(t) => Seq(Some(t))
               case other => badType("text", other)
             }
           }
@@ -460,10 +445,10 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
             }
             start + 1
           }
-          override def csvify(out: Writer, cv: CV): Unit = {
+          override def csvify(cv: CV): Seq[Option[String]] = {
             cv match {
-              case SoQLNull => writeCSV(out, None)
-              case SoQLNumber(n) => writeCSV(out, Some(n.toString))
+              case SoQLNull => Seq(None)
+              case SoQLNumber(n) => Seq(Some(n.toString))
               case other => badType("number", other)
             }
           }
@@ -495,10 +480,10 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
             }
             start + 1
           }
-          override def csvify(out: Writer, cv: CV): Unit = {
+          override def csvify(cv: CV): Seq[Option[String]] = {
             cv match {
-              case SoQLNull => writeCSV(out, None)
-              case SoQLBoolean(b) => writeCSV(out, Some(if(b) "true" else "false"))
+              case SoQLNull => Seq(None)
+              case SoQLBoolean(b) => Seq(Some(if(b) "true" else "false"))
               case other => badType("boolean", other)
             }
           }
@@ -521,10 +506,8 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
           override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
             ugh.prepareInsert(stmt, cv, start)
           }
-          override def csvify(out: Writer, cv: CV): Unit = {
-            val sb = new java.lang.StringBuilder
-            ugh.csvifyForInsert(sb, cv)
-            out.write(sb.toString)
+          override def csvify(cv: CV): Seq[Option[String]] = {
+            ugh.csvifyForInsert(cv)
           }
           override def placeholders = Seq(d"? ::" +#+ sqlType)
           override def indices =
@@ -545,10 +528,8 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
           override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
             ugh.prepareInsert(stmt, cv, start)
           }
-          override def csvify(out: Writer, cv: CV): Unit = {
-            val sb = new java.lang.StringBuilder
-            ugh.csvifyForInsert(sb, cv)
-            out.write(sb.toString)
+          override def csvify(cv: CV): Seq[Option[String]] = {
+            ugh.csvifyForInsert(cv)
           }
           override def placeholders = Seq(d"? ::" +#+ sqlType)
           override def indices =
@@ -569,10 +550,8 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
           override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
             ugh.prepareInsert(stmt, cv, start)
           }
-          override def csvify(out: Writer, cv: CV): Unit = {
-            val sb = new java.lang.StringBuilder
-            ugh.csvifyForInsert(sb, cv)
-            out.write(sb.toString)
+          override def csvify(cv: CV) = {
+            ugh.csvifyForInsert(cv)
           }
           override def placeholders = Seq(d"? ::" +#+ sqlType)
           override def indices =
@@ -593,10 +572,8 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
           override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
             ugh.prepareInsert(stmt, cv, start)
           }
-          override def csvify(out: Writer, cv: CV): Unit = {
-            val sb = new java.lang.StringBuilder
-            ugh.csvifyForInsert(sb, cv)
-            out.write(sb.toString)
+          override def csvify(cv: CV) = {
+            ugh.csvifyForInsert(cv)
           }
           override def placeholders = Seq(d"? ::" +#+ sqlType)
           override def indices =
@@ -617,10 +594,8 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
           override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
             ugh.prepareInsert(stmt, cv, start)
           }
-          override def csvify(out: Writer, cv: CV): Unit = {
-            val sb = new java.lang.StringBuilder
-            ugh.csvifyForInsert(sb, cv)
-            out.write(sb.toString)
+          override def csvify(cv: CV) = {
+            ugh.csvifyForInsert(cv)
           }
           override def placeholders = Seq(d"? ::" +#+ sqlType)
           override def indices =
@@ -653,10 +628,10 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
             }
             start + 1
           }
-          override def csvify(out: Writer, cv: CV): Unit = {
+          override def csvify(cv: CV) = {
             cv match {
-              case SoQLNull => writeCSV(out, None)
-              case SoQLJson(j) => writeCSV(out, Some(CompactJsonWriter.toString(j)))
+              case SoQLNull => Seq(None)
+              case SoQLJson(j) => Seq(Some(CompactJsonWriter.toString(j)))
               case other => badType("json", other)
             }
           }
@@ -690,10 +665,10 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
             }
             start + 1
           }
-          override def csvify(out: Writer, cv: CV): Unit = {
+          override def csvify(cv: CV) = {
             cv match {
-              case SoQLNull => writeCSV(out, None)
-              case SoQLInterval(i) => writeCSV(out, Some(SoQLInterval.StringRep(i)))
+              case SoQLNull => Seq(None)
+              case SoQLInterval(i) => Seq(Some(SoQLInterval.StringRep(i)))
               case other => badType("interval", other)
             }
           }
@@ -811,10 +786,8 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
           override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
             ugh.prepareInsert(stmt, cv, start)
           }
-          override def csvify(out: Writer, cv: CV): Unit = {
-            val sb = new java.lang.StringBuilder
-            ugh.csvifyForInsert(sb, cv)
-            out.write(sb.toString)
+          override def csvify(cv: CV) = {
+            ugh.csvifyForInsert(cv)
           }
           override def placeholders = Seq(d"?", d"?")
           override def indices = {
@@ -888,7 +861,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
           override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
             ??? // can't ingress location
           }
-          override def csvify(out: Writer, cv: CV): Unit = {
+          override def csvify(cv: CV) = {
             ??? // can't ingress location
           }
           override def placeholders =
@@ -1059,10 +1032,8 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
           override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
             ugh.prepareInsert(stmt, cv, start)
           }
-          override def csvify(out: Writer, cv: CV): Unit = {
-            val sb = new java.lang.StringBuilder
-            ugh.csvifyForInsert(sb, cv)
-            out.write(sb.toString)
+          override def csvify(cv: CV) = {
+            ugh.csvifyForInsert(cv)
           }
           override def placeholders = Seq(d"?", d"?")
           override def indices = {
