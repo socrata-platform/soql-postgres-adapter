@@ -8,6 +8,7 @@ def service_secondary = 'secondary-watcher-pg'
 def project_wd_secondary = 'store-pg'
 def isPr = env.CHANGE_ID != null
 def lastStage
+def gitTag
 
 // instanciate libraries
 def sbtbuild = new com.socrata.SBTBuild(steps, service_server, '.', [project_wd_server, project_wd_secondary])
@@ -47,7 +48,7 @@ pipeline {
             echo 'DRY RUN: Skipping release tag creation'
           }
           else {
-            def gitTag = releaseTag.create(params.RELEASE_NAME)
+            gitTag = releaseTag.create(params.RELEASE_NAME)
             echo gitTag
           }
         }
