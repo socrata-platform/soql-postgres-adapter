@@ -54,6 +54,9 @@ final abstract class ProcessQuery
 object ProcessQuery {
   val log = LoggerFactory.getLogger(classOf[ProcessQuery])
 
+  @AutomaticJsonEncode
+  case class SerializationColumnInfo(hint: Option[JValue], isSynthetic: Boolean)
+
   def apply(
     request: Deserializer.Request,
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
@@ -115,12 +118,12 @@ object ProcessQuery {
           }
       }
 
-    // Before doing rollups, extract our final hints (rollups can
-    // destroy hints).
-    val hintsByName = metadataAnalysis.statement.schema.valuesIterator.flatMap { schemaEnt =>
-      schemaEnt.hint.map(schemaEnt.name -> _)
+    // Before doing rollups, extract our final hints and synthetic
+    // info (rollups can/will destroy this).
+    val columnsByName = metadataAnalysis.statement.schema.valuesIterator.map { schemaEnt =>
+      schemaEnt.name -> SerializationColumnInfo(schemaEnt.hint, schemaEnt.isSynthetic)
     }.toMap
-    log.debug("Result column hints: {}", Lazy(JsonUtil.renderJson(hintsByName, pretty = true)))
+    log.debug("Result column hints: {}", Lazy(JsonUtil.renderJson(columnsByName, pretty = true)))
 
     // Intermixed rewrites and rollups: rollups are attemted before
     // each group of rewrite passes and after all rewrite passes have
@@ -171,7 +174,7 @@ object ProcessQuery {
     // Our etag will be the hash of the inputs that affect the result of the query
     val etag = ETagify(
       analysis.statement.schema.valuesIterator.map(_.name).toSeq,
-      hintsByName,
+      columnsByName,
       stringifiedAnalysis,
       copyCache.orderedVersions,
       systemContext,
@@ -190,7 +193,7 @@ object ProcessQuery {
     precondition.check(Some(etag), sideEffectFree = true) match {
       case Precondition.Passed =>
         fulfillRequest(
-          hintsByName,
+          columnsByName,
           if(sqlized.nonliteralSystemContextLookupFound) Some(systemContext) else None,
           copyCache,
           etag,
@@ -329,7 +332,7 @@ object ProcessQuery {
   }
 
   def fulfillRequest(
-    hintsByName: Map[ColumnName, JValue],
+    columnsByName: Map[ColumnName, SerializationColumnInfo],
     systemContext: Option[Map[String, String]],
     copyCache: CopyCache[InputMetaTypes],
     etag: EntityTag,
@@ -420,13 +423,13 @@ object ProcessQuery {
         writer.write("\"schema\":")
 
         @AutomaticJsonEncode
-        case class Field(c: ColumnName, t: SoQLType, h: Option[JValue])
+        case class Field(c: ColumnName, t: SoQLType, h: Option[JValue], s: Boolean)
 
-        val reformattedSchema = nameAnalysis.statement.schema.values.map { case Statement.SchemaEntry(cn, typ, _hint, _isSynthetic) =>
+        val reformattedSchema = nameAnalysis.statement.schema.values.map { case Statement.SchemaEntry(cn, typ, _hint, isSynthetic) =>
           // not using the analysis's schema's hints because it's
           // post-rollup, so any hints inherited from parts of the
           // query served by a rollup will have been destroyed.
-          Field(cn, typ, hintsByName.get(cn))
+          Field(cn, typ, columnsByName.get(cn).flatMap(_.hint), columnsByName.get(cn).map(_.isSynthetic).getOrElse(false))
         }.toArray
 
         JsonUtil.writeJson(writer, reformattedSchema)
