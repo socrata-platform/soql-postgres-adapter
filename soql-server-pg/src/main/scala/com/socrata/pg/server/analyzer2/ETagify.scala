@@ -50,7 +50,7 @@ object ETagify extends StatementUniverse[InputMetaTypes] {
 
   def apply(
     outputColumns: Seq[ColumnName],
-    hintsByName: Map[ColumnName, JValue],
+    columnsByName: Map[ColumnName, ProcessQuery.SerializationColumnInfo],
     query: String,
     dataVersions: Seq[Long],
     systemContext: Map[String, String],
@@ -64,8 +64,12 @@ object ETagify extends StatementUniverse[InputMetaTypes] {
     log.debug("Mixing in output column names: {}", Lazy(JsonUtil.renderJson(outputColumns, pretty = false)))
     hasher.hash(outputColumns)
 
-    log.debug("Mixing in output column hints: {}", Lazy(JsonUtil.renderJson(hintsByName, pretty = true)))
-    hasher.hash(hintsByName.map { case (k, v) => k.name -> v }.toMap)
+    log.debug("Mixing in output column hints: {}", Lazy(JsonUtil.renderJson(columnsByName, pretty = true)))
+    hasher.hash(
+      columnsByName.map { case (k, ProcessQuery.SerializationColumnInfo(hint, isSynthetic)) =>
+        k.name -> (hint, isSynthetic)
+      }.toMap
+    )
 
     log.debug("Mixing in query: {}", JString(query))
     hasher.hash(query)
