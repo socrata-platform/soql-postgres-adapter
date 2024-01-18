@@ -7,6 +7,7 @@ import com.rojoma.json.v3.ast._
 
 import com.socrata.datacoordinator.id.{DatasetInternalName, UserColumnId}
 import com.socrata.soql.analyzer2._
+import com.socrata.soql.analyzer2.rewrite.NonNegativeBigInt
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.sql.Debug
 
@@ -49,6 +50,11 @@ object Hashable {
   implicit object bigInt extends Hashable[BigInt] {
     override def hash(hasher: Hasher, value: BigInt) = hasher.hashString(value.toString)
     override def isString = true
+  }
+
+  implicit object nonNegativeBigInt extends Hashable[NonNegativeBigInt] {
+    override def hash(hasher: Hasher, value: NonNegativeBigInt) = bigInt.hash(hasher, value.underlying)
+    override def isString = bigInt.isString
   }
 
   implicit object bigDecimal extends Hashable[BigDecimal] {
@@ -138,6 +144,9 @@ object Hashable {
           hasher.hash(lim)
           hasher.hash(off)
         case rewrite.Pass.RemoveOrderBy => hasher.hashByte(10)
+        case rewrite.Pass.LimitIfUnlimited(lim) =>
+          hasher.hashByte(11)
+          hasher.hash(lim)
       }
   }
 
