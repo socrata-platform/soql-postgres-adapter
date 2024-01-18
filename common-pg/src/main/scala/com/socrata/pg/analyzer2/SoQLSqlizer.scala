@@ -17,6 +17,7 @@ object SoQLSqlizer extends Sqlizer[DatabaseNamesMetaTypes](
   _.name.isRollup,
   (sqlizer, physicalTableFor, extraContext) => new SoQLRepProvider[DatabaseNamesMetaTypes](
     extraContext.cryptProviderProvider,
+    extraContext.noObfuscateRowIds,
     sqlizer.exprSqlFactory,
     sqlizer.namespace,
     sqlizer.toProvenance,

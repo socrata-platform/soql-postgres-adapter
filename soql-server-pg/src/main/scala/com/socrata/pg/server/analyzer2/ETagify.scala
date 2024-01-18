@@ -57,7 +57,8 @@ object ETagify extends StatementUniverse[InputMetaTypes] {
     fakeCompoundMap: Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]],
     passes: Seq[Seq[rewrite.Pass]],
     debug: Option[Debug],
-    now: Option[DateTime]
+    now: Option[DateTime],
+    noObfuscateRowIds: Boolean
   ): EntityTag = {
     val hasher = Hasher.newSha256()
 
@@ -91,6 +92,9 @@ object ETagify extends StatementUniverse[InputMetaTypes] {
 
     log.debug("Mixing in now: {}", now)
     hasher.hash(now.map(_.getMillis))
+
+    log.debug("Mixing in noObfuscateRowIds: {}", noObfuscateRowIds)
+    hasher.hash(noObfuscateRowIds)
 
     // Should this be strong or weak?  I'm choosing weak here because
     // I don't think we actually guarantee two calls will be

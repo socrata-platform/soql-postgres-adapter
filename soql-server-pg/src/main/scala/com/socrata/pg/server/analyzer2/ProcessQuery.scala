@@ -154,7 +154,7 @@ object ProcessQuery {
     val onlyOne = nameAnalyses.lengthCompare(1) == 0
     val sqlized = nameAnalyses.map { nameAnalysis =>
       val sqlizer = SoQLSqlizer
-      val Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(nonliteralSystemContextLookupFound, now)) = sqlizer(nameAnalysis._1, new SoQLExtraContext(systemContext, cryptProviders, RewriteSubcolumns[InputMetaTypes](request.locationSubcolumns, copyCache), SqlUtils.escapeString(pgu.conn, _))) match {
+      val Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(nonliteralSystemContextLookupFound, now)) = sqlizer(nameAnalysis._1, new SoQLExtraContext(systemContext, cryptProviders, request.noObfuscateRowIds, RewriteSubcolumns[InputMetaTypes](request.locationSubcolumns, copyCache), SqlUtils.escapeString(pgu.conn, _))) match {
         case Right(result) => result
         case Left(nothing) => nothing
       }
@@ -181,7 +181,8 @@ object ProcessQuery {
       request.locationSubcolumns,
       passes,
       request.debug,
-      sqlized.now
+      sqlized.now,
+      request.noObfuscateRowIds
     )
 
     // "last modified" is problematic because it doesn't include
@@ -206,6 +207,7 @@ object ProcessQuery {
           lastModified,
           request.debug,
           request.queryTimeout,
+          request.noObfuscateRowIds,
           rs
         )
       case Precondition.FailedBecauseMatch(_) =>
@@ -345,6 +347,7 @@ object ProcessQuery {
     lastModified: DateTime,
     debug: Option[Debug],
     timeout: Option[FiniteDuration],
+    noObfuscateRowIds: Boolean,
     rs: ResourceScope
   ): HttpResponse = {
     val locale = "en_US"
@@ -388,7 +391,7 @@ object ProcessQuery {
       } else {
         timeout.foreach(setTimeout(pgu.conn, _))
         handlingSqlErrors(timeout) {
-          runQuery(pgu.conn, renderedSql, systemContext, cryptProviders, extractor, rs)
+          runQuery(pgu.conn, renderedSql, systemContext, cryptProviders, noObfuscateRowIds, extractor, rs)
         } match {
           case Left(resp) => return resp
           case Right(rows) => rows
@@ -450,6 +453,7 @@ object ProcessQuery {
     sql: String,
     systemContext: Option[Map[String, String]],
     cryptProviders: CryptProviderProvider,
+    noObfuscateRowIds: Boolean,
     extractor: ResultExtractor[DatabaseNamesMetaTypes],
     rs: ResourceScope
   ): Iterator[Array[JValue]] = {
@@ -490,7 +494,13 @@ object ProcessQuery {
                   idReps.get(id.provenance) match {
                     case Some(rep) => rep
                     case None =>
-                      val rep = new com.socrata.datacoordinator.common.soql.jsonreps.IDRep(new SoQLID.StringRep(id.provenance.flatMap(cryptProviders.forProvenance).getOrElse(CryptProvider.zeros)))
+                      val r0 =
+                        if(noObfuscateRowIds) {
+                          new SoQLID.ClearNumberRep(CryptProvider.zeros)
+                        } else {
+                          new SoQLID.StringRep(id.provenance.flatMap(cryptProviders.forProvenance).getOrElse(CryptProvider.zeros))
+                        }
+                      val rep = new com.socrata.datacoordinator.common.soql.jsonreps.IDRep(r0)
                       idReps += id.provenance -> rep
                       rep
                   }

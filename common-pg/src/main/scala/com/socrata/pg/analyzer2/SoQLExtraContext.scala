@@ -10,6 +10,7 @@ import com.socrata.pg.analyzer2.metatypes.DatabaseNamesMetaTypes
 class SoQLExtraContext(
   val systemContext: Map[String, String],
   val cryptProviderProvider: CryptProviderProvider,
+  val noObfuscateRowIds: Boolean,
   val locationSubcolumns: SoQLExtraContext.LocationSubcolumns,
   val escapeString: String => String
 ) extends ExtraContext[SoQLExtraContext.Result] {

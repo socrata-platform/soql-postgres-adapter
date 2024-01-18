@@ -23,7 +23,7 @@ final abstract class DatabaseNamesMetaTypes extends MetaTypes with SoQLMetaTypes
 }
 
 object DatabaseNamesMetaTypes extends MetaTypeHelper[DatabaseNamesMetaTypes] {
-  val typeInfo = new SoQLTypeInfo2[DatabaseNamesMetaTypes]
+  val updateProvenance = new SoQLTypeInfo2[DatabaseMetaTypes](numericRowIdLiterals = false).updateProvenance _
 
   val provenanceMapper = new types.ProvenanceMapper[DatabaseNamesMetaTypes] {
     // These are database table names, so we can mark rollups by a
@@ -58,7 +58,7 @@ object DatabaseNamesMetaTypes extends MetaTypeHelper[DatabaseNamesMetaTypes] {
       { case (dtn, DatabaseColumnName(columnInfo)) => DatabaseColumnName(columnInfo.physicalColumnBase) },
       dmtState.provenanceMapper,
       provenanceMapper,
-      typeInfo.updateProvenance
+      updateProvenance
     )
   }
 

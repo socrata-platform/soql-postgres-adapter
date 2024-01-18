@@ -44,7 +44,11 @@ object RollupAnalyzer {
   private val analyzer2 = locally {
     val standardSystemColumns = Set(":id", ":version", ":created_at", ":updated_at").map(ColumnName)
 
-    new SoQLAnalyzer[RollupMetaTypes](new SoQLTypeInfo2, SoQLFunctionInfo, RollupMetaTypes.provenanceMapper).
+    new SoQLAnalyzer[RollupMetaTypes](
+      new SoQLTypeInfo2(numericRowIdLiterals = false), // No numeric row ids in rollups
+      SoQLFunctionInfo,
+      RollupMetaTypes.provenanceMapper
+    ).
       preserveSystemColumns {
         case (cname, expr) if standardSystemColumns(cname) =>
           Some(

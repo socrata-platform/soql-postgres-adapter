@@ -15,10 +15,12 @@ import com.socrata.prettyprint.prelude._
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.Provenance
 import com.socrata.soql.types._
+import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.sqlizer._
 
 abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({type ColumnType = SoQLType; type ColumnValue = SoQLValue; type DatabaseColumnNameImpl = String})](
   cryptProviders: CryptProviderProvider,
+  noObfuscateRowIds: Boolean,
   override val exprSqlFactory: ExprSqlFactory[MT],
   override val namespace: SqlNamespaces[MT],
   override val toProvenance: types.ToProvenance[MT],
@@ -123,23 +125,26 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
 
       override def literal(e: LiteralValue) = {
         val rawId = e.value.asInstanceOf[SoQLID]
-        val rawFormatted = SoQLID.FormattedButUnobfuscatedStringRep(rawId)
-        // ok, "rawFormatted" is the string as the user entered it.
-        // Now we want to examine with the appropriate
-        // CryptProvider...
 
         val provenanceLit =
           rawId.provenance match {
             case None => d"null :: text"
             case Some(Provenance(s)) => mkTextLiteral(s)
           }
+
         val numLit =
           rawId.provenance.flatMap(cryptProviders.forProvenance) match {
             case None =>
               Doc(rawId.value.toString) +#+ d":: bigint"
             case Some(cryptProvider) =>
-              val idStringRep = new SoQLID.StringRep(cryptProvider)
-              val SoQLID(num) = idStringRep.unapply(rawFormatted).get
+              val SoQLID(num) =
+                if(noObfuscateRowIds) {
+                  rawId
+                } else {
+                  val rawFormatted = SoQLID.FormattedButUnobfuscatedStringRep(rawId)
+                  // ok, "rawFormatted" is the string as the user entered it.
+                  new SoQLID.StringRep(cryptProvider).unapply(rawFormatted).get
+                }
               Doc(num.toString) +#+ d":: bigint"
           }
 

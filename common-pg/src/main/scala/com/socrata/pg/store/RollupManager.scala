@@ -187,7 +187,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
           case Some((foundTables, analysis, locationSubcolumns, cryptProviders)) =>
             val sqlizer = SoQLSqlizer
 
-            val (denormSql, augSchema, _) = sqlizer.sqlize(analysis, rewriteOutputColumns = false, new SoQLExtraContext(Map.empty, cryptProviders, locationSubcolumns, SqlUtils.escapeString(pgu.conn, _))) match {
+            val (denormSql, augSchema, _) = sqlizer.sqlize(analysis, rewriteOutputColumns = false, new SoQLExtraContext(Map.empty, cryptProviders, false, locationSubcolumns, SqlUtils.escapeString(pgu.conn, _))) match {
               case Right(result) => result
               case Left(nothing) => nothing
             }

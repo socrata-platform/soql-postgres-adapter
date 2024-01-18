@@ -20,7 +20,8 @@ object Deserializer extends LabelUniverse[InputMetaTypes] {
     context: Map[String, String],
     passes: Seq[Seq[Pass]],
     debug: Option[Debug],
-    queryTimeout: Option[FiniteDuration]
+    queryTimeout: Option[FiniteDuration],
+    noObfuscateRowIds: Boolean
   )
   object Request {
     implicit def deserialize(
@@ -38,7 +39,18 @@ object Deserializer extends LabelUniverse[InputMetaTypes] {
               buffer.read[Map[String, String]](),
               buffer.read[Seq[Seq[Pass]]](),
               buffer.read[Option[Debug]](),
-              buffer.read[Option[Long]]().map(_.milliseconds)
+              buffer.read[Option[Long]]().map(_.milliseconds),
+              false
+            )
+          case 1 =>
+            Request(
+              buffer.read[SoQLAnalysis[InputMetaTypes]](),
+              buffer.read[Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]]](),
+              buffer.read[Map[String, String]](),
+              buffer.read[Seq[Seq[Pass]]](),
+              buffer.read[Option[Debug]](),
+              buffer.read[Option[Long]]().map(_.milliseconds),
+              buffer.read[Boolean]()
             )
           case other =>
             throw new Exception(s"Unknown request version $other")

@@ -61,6 +61,7 @@ object SoQLFunctionSqlizerTest {
     (sqlizer, physicalTableFor, extraContext) =>
       new SoQLRepProvider[TestMT](
         extraContext.cryptProviderProvider,
+        extraContext.noObfuscateRowIds,
         sqlizer.exprSqlFactory,
         sqlizer.namespace,
         sqlizer.toProvenance,
@@ -82,6 +83,7 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
   def extraContext = new SoQLExtraContext(
     Map("hello" -> "world"),
     _ => Some(obfuscation.CryptProvider.zeros),
+    false,
     Map.empty,
     JString(_).toString
   )
@@ -91,7 +93,7 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
 
   def tableFinder(items: ((Int, String), Thing[Int, SoQLType])*) =
     new MockTableFinder[TestMT](items.toMap)
-  val analyzer = new SoQLAnalyzer[TestMT](new SoQLTypeInfo2, SoQLFunctionInfo, SoQLFunctionSqlizerTest.ProvenanceMapper)
+  val analyzer = new SoQLAnalyzer[TestMT](new SoQLTypeInfo2(numericRowIdLiterals = false), SoQLFunctionInfo, SoQLFunctionSqlizerTest.ProvenanceMapper)
   def analyze(soqlexpr: String): String = {
     val s = analyzeStatement(s"SELECT ($soqlexpr)")
     val prefix = "SELECT "

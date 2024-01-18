@@ -22,7 +22,8 @@ final class DatabaseMetaTypes extends MetaTypes {
   override type DatabaseTableNameImpl = CopyInfo
   override type DatabaseColumnNameImpl = ColumnInfo[ColumnType]
 
-  val typeInfo = new SoQLTypeInfo2[DatabaseMetaTypes]
+  // don't care about literals here
+  val updateProvenance = new SoQLTypeInfo2[DatabaseMetaTypes](false).updateProvenance _
 
   // ugh.. but making this stateful was the only way I could find to
   // do this.
@@ -62,7 +63,7 @@ final class DatabaseMetaTypes extends MetaTypes {
       },
       fromProv,
       provenanceMapper,
-      typeInfo.updateProvenance
+      updateProvenance
     )
   }
 }
