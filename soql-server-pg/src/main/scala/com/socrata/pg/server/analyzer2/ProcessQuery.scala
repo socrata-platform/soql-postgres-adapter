@@ -477,27 +477,52 @@ object ProcessQuery {
           }
         }
 
-      private def rep(typ: SoQLType, value: SoQLValue): JsonColumnWriteRep[SoQLType, SoQLValue] = {
-        assert(value == SoQLNull || value.typ == typ)
-        value match {
-          case id: SoQLID =>
-            idReps.get(id.provenance) match {
-              case Some(rep) => rep
-              case None =>
-                val rep = new com.socrata.datacoordinator.common.soql.jsonreps.IDRep(new SoQLID.StringRep(id.provenance.flatMap(cryptProviders.forProvenance).getOrElse(CryptProvider.zeros)))
-                idReps += id.provenance -> rep
-                rep
+      val columnEncoders: Array[SoQLValue => JValue] = {
+        def enc(f: SoQLValue => JValue) = f // type inference helper
+        val idNullRep = justNullRep(SoQLID)
+        val verNullRep = justNullRep(SoQLVersion)
+
+        types.map {
+          case SoQLID =>
+            enc { v =>
+              val realRep = v match {
+                case id: SoQLID =>
+                  idReps.get(id.provenance) match {
+                    case Some(rep) => rep
+                    case None =>
+                      val rep = new com.socrata.datacoordinator.common.soql.jsonreps.IDRep(new SoQLID.StringRep(id.provenance.flatMap(cryptProviders.forProvenance).getOrElse(CryptProvider.zeros)))
+                      idReps += id.provenance -> rep
+                      rep
+                  }
+                case SoQLNull =>
+                  idNullRep
+                case other =>
+                  throw new Exception("Expected SoQLID or null, got " + other)
+              }
+              realRep.toJValue(v)
             }
-          case ver: SoQLVersion =>
-            versionReps.get(ver.provenance) match {
-              case Some(rep) => rep
-              case None =>
-                val rep = new com.socrata.datacoordinator.common.soql.jsonreps.VersionRep(new SoQLVersion.StringRep(ver.provenance.flatMap(cryptProviders.forProvenance).getOrElse(CryptProvider.zeros)))
-                versionReps += ver.provenance -> rep
-                rep
+
+          case SoQLVersion =>
+            enc { v =>
+              val realRep = v match {
+                case ver: SoQLVersion =>
+                  versionReps.get(ver.provenance) match {
+                    case Some(rep) => rep
+                    case None =>
+                      val rep = new com.socrata.datacoordinator.common.soql.jsonreps.VersionRep(new SoQLVersion.StringRep(ver.provenance.flatMap(cryptProviders.forProvenance).getOrElse(CryptProvider.zeros)))
+                      versionReps += ver.provenance -> rep
+                      rep
+                  }
+                case SoQLNull =>
+                  verNullRep
+                case other =>
+                  throw new Exception("Expected SoQLVersion or null, got " + other)
+              }
+              realRep.toJValue(v)
             }
-          case SoQLNull if SoQLID == typ || SoQLVersion == typ => justNullRep(typ)
-          case _notIdOrVersion => SoQLRep.jsonRepsMinusIdAndVersion(typ)
+
+          case typ =>
+            SoQLRep.jsonRepsMinusIdAndVersion(typ).toJValue _
         }
       }
 
@@ -519,7 +544,7 @@ object ProcessQuery {
 
         var i = 0
         while(i != width) {
-          result(i) = rep(types(i), row(i)).toJValue(row(i))
+          result(i) = columnEncoders(i)(row(i))
           i += 1
         }
 
