@@ -9,8 +9,10 @@ import com.socrata.datacoordinator.common
 import com.socrata.pg.analyzer2.metatypes.DatabaseNamesMetaTypes
 
 object SoQLSqlizer extends Sqlizer[DatabaseNamesMetaTypes](
-  new SoQLFunctionSqlizer[DatabaseNamesMetaTypes],
-  new SoQLExprSqlFactory[DatabaseNamesMetaTypes],
+  new ExprSqlizer(
+    new SoQLFunctionSqlizer[DatabaseNamesMetaTypes],
+    new SoQLExprSqlFactory[DatabaseNamesMetaTypes]
+  ),
   Namespaces,
   new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true),
   DatabaseNamesMetaTypes.provenanceMapper,
