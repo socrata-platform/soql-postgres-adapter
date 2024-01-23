@@ -13,6 +13,7 @@ import com.socrata.pg.query.QueryServerHelper
 
 trait CopyCache[MT <: MetaTypes] extends LabelUniverse[MT] {
   def apply(dtn: DatabaseTableName): Option[(CopyInfo, OrderedMap[UserColumnId, ColumnInfo[CT]])]
+  def asMap: Map[DatabaseTableName, (CopyInfo, OrderedMap[UserColumnId, ColumnInfo[CT]])]
 
   def allCopies: Seq[CopyInfo]
 }
