@@ -17,36 +17,12 @@ import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.sql.Debug
 
 import com.socrata.pg.analyzer2.metatypes.InputMetaTypes
+import com.socrata.pg.analyzer2.ordering._
 
 final abstract class ETagify
 
 object ETagify extends StatementUniverse[InputMetaTypes] {
   private val log = LoggerFactory.getLogger(classOf[ETagify])
-
-  private implicit object datasetInternalNameOrdering extends Ordering[DatasetInternalName] {
-    def compare(a: DatasetInternalName, b: DatasetInternalName) =
-      a.instance.compare(b.instance) match {
-        case 0 => a.datasetId.underlying.compare(b.datasetId.underlying)
-        case n => n
-      }
-  }
-  private implicit object userColumnIdOrdering extends Ordering[UserColumnId] {
-    def compare(a: UserColumnId, b: UserColumnId) = {
-      a.underlying.compare(b.underlying)
-    }
-  }
-  private implicit object dtnOrdering extends Ordering[DatabaseTableName] {
-    private val ord = Ordering[InputMetaTypes#DatabaseTableNameImpl]
-    def compare(a: DatabaseTableName, b: DatabaseTableName) = {
-      ord.compare(a.name, b.name)
-    }
-  }
-  private implicit object dcnOrdering extends Ordering[DatabaseColumnName] {
-    private val ord = Ordering[InputMetaTypes#DatabaseColumnNameImpl]
-    def compare(a: DatabaseColumnName, b: DatabaseColumnName) = {
-      ord.compare(a.name, b.name)
-    }
-  }
 
   def apply(
     outputColumns: Seq[ColumnName],

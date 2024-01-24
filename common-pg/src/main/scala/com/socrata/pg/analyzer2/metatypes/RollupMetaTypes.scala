@@ -75,6 +75,7 @@ object RollupMetaTypes {
     private val map = new scm.HashMap[DatabaseTableName, (CopyInfo, OrderedMap[UserColumnId, ColumnInfo[CT]])]
 
     override def allCopies = map.valuesIterator.map(_._1).toVector
+    override def asMap = map.toMap
 
     // returns None if the database table name is unknown to this secondary
     def apply(dtn: DatabaseTableName): Option[(CopyInfo, OrderedMap[UserColumnId, ColumnInfo[CT]])] =
