@@ -92,31 +92,35 @@ object ProcessQuery {
       analysis.statement.debugDoc.layoutPretty(LayoutOptions(PageWidth.Unbounded)).toString
     }
 
-    val relevantRollups = copyCache.allCopies.
-      flatMap { copy =>
-        pgu.datasetMapReader.rollups(copy).
-          iterator.
-          filter { rollup => rollup.isNewAnalyzer && tableExists(pgu, rollup.tableName) }.
-          flatMap { rollup => RollupAnalyzer(pgu, copy, rollup).map((rollup, _)) }.
-          map { case (rollup, (_foundTables, analysis, _locationSubcolumnsMap, _cryptProvider)) =>
-            // don't care about the other two things because:
-            //   * we're not going to be sqlizing this rollup
-            //   * any referenced datasets we already know about
-            new RollupInfo[DatabaseNamesMetaTypes, RollupId] with QueryServerRollupInfo {
-              override val id = rollup.systemId
-              override val statement = analysis.statement
-              override val resourceName = ScopedResourceName(-1, ResourceName(s"rollup:${rollup.copyInfo.datasetInfo.systemId}/${rollup.copyInfo.systemId}/${rollup.name.underlying}"))
-              override val databaseName = DatabaseTableName(AugmentedTableName(rollup.tableName, isRollup = true))
+    val relevantRollups =
+      if(request.allowRollups) {
+        copyCache.allCopies.flatMap { copy =>
+          pgu.datasetMapReader.rollups(copy).
+            iterator.
+            filter { rollup => rollup.isNewAnalyzer && tableExists(pgu, rollup.tableName) }.
+            flatMap { rollup => RollupAnalyzer(pgu, copy, rollup).map((rollup, _)) }.
+            map { case (rollup, (_foundTables, analysis, _locationSubcolumnsMap, _cryptProvider)) =>
+              // don't care about the other things because:
+              //   * we're not going to be sqlizing this rollup
+              //   * any referenced datasets we already know about
+              new RollupInfo[DatabaseNamesMetaTypes, RollupId] with QueryServerRollupInfo {
+                override val id = rollup.systemId
+                override val statement = analysis.statement
+                override val resourceName = ScopedResourceName(-1, ResourceName(s"rollup:${rollup.copyInfo.datasetInfo.systemId}/${rollup.copyInfo.systemId}/${rollup.name.underlying}"))
+                override val databaseName = DatabaseTableName(AugmentedTableName(rollup.tableName, isRollup = true))
 
-              // Needed for metrics
-              override val rollupDatasetName = rollup.copyInfo.datasetInfo.resourceName
-              override val rollupName = rollup.name
+                // Needed for metrics
+                override val rollupDatasetName = rollup.copyInfo.datasetInfo.resourceName
+                override val rollupName = rollup.name
 
-              private val columns = statement.schema.keysIterator.toArray
-              override def databaseColumnNameOfIndex(idx: Int) =
-                DatabaseColumnName(Namespaces.rawAutoColumnBase(columns(idx)))
+                private val columns = statement.schema.keysIterator.toArray
+                override def databaseColumnNameOfIndex(idx: Int) =
+                  DatabaseColumnName(Namespaces.rawAutoColumnBase(columns(idx)))
+              }
             }
-          }
+        }
+      } else {
+        Nil
       }
 
     // Before doing rollups, extract our final hints and synthetic
@@ -181,6 +185,7 @@ object ProcessQuery {
       systemContext,
       request.locationSubcolumns,
       passes,
+      request.allowRollups,
       request.debug,
       sqlized.now
     )

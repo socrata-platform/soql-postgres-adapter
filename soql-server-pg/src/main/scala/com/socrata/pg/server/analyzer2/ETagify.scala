@@ -32,6 +32,7 @@ object ETagify extends StatementUniverse[InputMetaTypes] {
     systemContext: Map[String, String],
     fakeCompoundMap: Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]],
     passes: Seq[Seq[rewrite.Pass]],
+    allowRollups: Boolean,
     debug: Option[Debug],
     now: Option[DateTime]
   ): EntityTag = {
@@ -61,6 +62,9 @@ object ETagify extends StatementUniverse[InputMetaTypes] {
 
     log.debug("Mixing in rewrite passes: {}", Lazy(JsonUtil.renderJson(passes, pretty = true)))
     hasher.hash(passes)
+
+    log.debug("Mixing in allow-rollups: {}", allowRollups)
+    hasher.hash(allowRollups)
 
     log.debug("Mixing in debug: {}", debug)
     hasher.hash(debug)

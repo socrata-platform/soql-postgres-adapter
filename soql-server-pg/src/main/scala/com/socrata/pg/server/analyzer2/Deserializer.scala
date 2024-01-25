@@ -19,6 +19,7 @@ object Deserializer extends LabelUniverse[InputMetaTypes] {
     locationSubcolumns: Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]],
     context: Map[String, String],
     passes: Seq[Seq[Pass]],
+    allowRollups: Boolean,
     debug: Option[Debug],
     queryTimeout: Option[FiniteDuration]
   )
@@ -37,6 +38,17 @@ object Deserializer extends LabelUniverse[InputMetaTypes] {
               buffer.read[Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]]](),
               buffer.read[Map[String, String]](),
               buffer.read[Seq[Seq[Pass]]](),
+              true,
+              buffer.read[Option[Debug]](),
+              buffer.read[Option[Long]]().map(_.milliseconds)
+            )
+          case 1 =>
+            Request(
+              buffer.read[SoQLAnalysis[InputMetaTypes]](),
+              buffer.read[Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]]](),
+              buffer.read[Map[String, String]](),
+              buffer.read[Seq[Seq[Pass]]](),
+              buffer.read[Boolean](),
               buffer.read[Option[Debug]](),
               buffer.read[Option[Long]]().map(_.milliseconds)
             )
