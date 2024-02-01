@@ -51,12 +51,15 @@ import com.socrata.datacoordinator.common.DbType
 import com.socrata.datacoordinator.common.Postgres
 import com.socrata.pg.analyzer2.SoQLSqlizer
 
-final abstract class ProcessQuery
 object ProcessQuery {
   val log = LoggerFactory.getLogger(classOf[ProcessQuery])
 
   @AutomaticJsonEncode
   case class SerializationColumnInfo(hint: Option[JValue], isSynthetic: Boolean)
+}
+
+class ProcessQuery(instance: String) {
+  import ProcessQuery._
 
   def apply(
     request: Deserializer.Request,
@@ -416,6 +419,7 @@ object ProcessQuery {
     ETag(etag) ~>
       LastModified(lastModified) ~>
       ContentType("application/x-socrata-gzipped-cjson") ~>
+      Header("x-soda2-secondary", instance) ~>
       Stream { rawOutputStream =>
         for {
           gzos <- managed(new GZIPOutputStream(rawOutputStream))

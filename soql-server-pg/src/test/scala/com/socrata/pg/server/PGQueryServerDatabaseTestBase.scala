@@ -26,6 +26,8 @@ import scala.language.existentials
 trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUniverseTestBase {
   private lazy val datasourceConfig = config.database
 
+  protected lazy val processQuery = new analyzer2.ProcessQuery("test")
+
   protected lazy val ds = DataSourceFromConfig(datasourceConfig)
 
   implicit val materialized: Boolean = false
@@ -76,7 +78,7 @@ trait PGQueryServerDatabaseTestBase extends DatabaseTestBase with PGSecondaryUni
 
         val (qrySchema, dataVersion, mresult) =
           ds.run { dsInfo =>
-            val qs = new QueryServer(dsInfo, caseSensitivity, leadingSearch, Duration.Zero)
+            val qs = new QueryServer(dsInfo, caseSensitivity, processQuery, leadingSearch, Duration.Zero)
             qs.execQuery(pgu, context, "someDatasetInternalName", copyInfo.datasetInfo, analyses, expectedRowCount.isDefined, None, None, true,
               NoPrecondition, None, None, None, None, false, false, false) match {
               case QueryResult.Success(schema, _, version, results, etag, lastModified, _rollups) =>
