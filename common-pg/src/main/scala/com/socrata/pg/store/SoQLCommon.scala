@@ -7,7 +7,6 @@ import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import com.socrata.datacoordinator.common.soql.{SoQLRep, SoQLRowLogCodec, SoQLTypeContext}
 import com.socrata.datacoordinator.id.{DatasetId, RowId, RowVersion, UserColumnId}
 import com.socrata.datacoordinator.truth.SimpleRowLogCodec
-import com.socrata.datacoordinator.truth.json.JsonColumnRep
 import com.socrata.datacoordinator.truth.loader.RowPreparer
 import com.socrata.datacoordinator.truth.metadata.{AbstractColumnInfoLike, ColumnInfo, DatasetCopyContext, DatasetInfo}
 import com.socrata.datacoordinator.truth.sql.DatasetMapLimits
@@ -98,9 +97,9 @@ class PostgresUniverseCommon(val tablespace: String => Option[String],
   def versionObfuscationContextFor(cryptProvider: CryptProvider): SoQLVersion.StringRep =
     new SoQLVersion.StringRep(cryptProvider)
 
-  def jsonReps(datasetInfo: DatasetInfo, obfuscateId: Boolean): SoQLType => JsonColumnRep[SoQLType,SoQLValue] = {
+  def jsonReps(datasetInfo: DatasetInfo, obfuscateId: Boolean): SoQLType => ErasedCJsonWriteRep[SoQLValue] = {
     val cp = new CryptProvider(datasetInfo.obfuscationKey)
-    SoQLRep.jsonRep(idObfuscationContextFor(cp, obfuscateId), versionObfuscationContextFor(cp))
+    SoQLRep.jsonRep(cp, obfuscateId)
   }
 
   def rowPreparer(transactionStart: DateTime, // scalastyle:ignore method.length
