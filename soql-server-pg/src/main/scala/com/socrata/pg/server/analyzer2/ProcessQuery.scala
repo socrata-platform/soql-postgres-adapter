@@ -29,15 +29,13 @@ import com.socrata.soql.analyzer2._
 import com.socrata.soql.analyzer2.rollup.RollupInfo
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, ResourceName, Provenance, ScopedResourceName}
-import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLID, SoQLVersion, SoQLNull}
+import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLID, SoQLVersion, SoQLNull, CJsonWriteRep, NonObfuscatedType}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.sql.Debug
 import com.socrata.soql.sqlizer.{Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, SqlNamespaces}
 import com.socrata.soql.stdlib.analyzer2.SoQLRewritePassHelpers
 import com.socrata.soql.stdlib.analyzer2.rollup.SoQLRollupExact
 import com.socrata.datacoordinator.id.RollupName
-import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
-import com.socrata.datacoordinator.common.soql.SoQLRep
 import com.socrata.metrics.rollup.RollupMetrics
 import com.socrata.metrics.rollup.events.RollupHit
 
@@ -472,67 +470,55 @@ object ProcessQuery {
       private var done = false
       private var ready = false
 
-      private val idReps = new scm.HashMap[Option[Provenance], JsonColumnWriteRep[SoQLType, SoQLValue]]
-      private val versionReps = new scm.HashMap[Option[Provenance], JsonColumnWriteRep[SoQLType, SoQLValue]]
+      private val idReps = new scm.HashMap[Option[Provenance], CJsonWriteRep[SoQLID]]
+      private val versionReps = new scm.HashMap[Option[Provenance], CJsonWriteRep[SoQLVersion]]
 
       private val types = extractor.schema.values.toArray
       private val width = types.length
 
-      private def justNullRep(typ: SoQLType) =
-        new JsonColumnWriteRep[SoQLType, SoQLValue] {
-          override val representedType = typ
-          override def toJValue(value: SoQLValue) = {
-            assert(value == SoQLNull)
-            JNull
-          }
-        }
-
       val columnEncoders: Array[SoQLValue => JValue] = {
         def enc(f: SoQLValue => JValue) = f // type inference helper
-        val idNullRep = justNullRep(SoQLID)
-        val verNullRep = justNullRep(SoQLVersion)
 
         types.map {
           case SoQLID =>
-            enc { v =>
-              val realRep = v match {
-                case id: SoQLID =>
+            enc {
+              case id: SoQLID =>
+                val rep =
                   idReps.get(id.provenance) match {
                     case Some(rep) => rep
                     case None =>
-                      val rep = new com.socrata.datacoordinator.common.soql.jsonreps.IDRep(new SoQLID.StringRep(id.provenance.flatMap(cryptProviders.forProvenance).getOrElse(CryptProvider.zeros)))
+                      val rep = SoQLID.cjsonRep(id.provenance.flatMap(cryptProviders.forProvenance).getOrElse(CryptProvider.zeros), true)
                       idReps += id.provenance -> rep
                       rep
                   }
-                case SoQLNull =>
-                  idNullRep
-                case other =>
-                  throw new Exception("Expected SoQLID or null, got " + other)
-              }
-              realRep.toJValue(v)
+                rep.toJValue(id)
+              case SoQLNull =>
+                JNull
+              case other =>
+                throw new Exception("Expected SoQLID or null, got " + other)
             }
 
           case SoQLVersion =>
-            enc { v =>
-              val realRep = v match {
-                case ver: SoQLVersion =>
+            enc {
+              case ver: SoQLVersion =>
+                val rep =
                   versionReps.get(ver.provenance) match {
-                    case Some(rep) => rep
+                    case Some(rep) =>
+                      rep
                     case None =>
-                      val rep = new com.socrata.datacoordinator.common.soql.jsonreps.VersionRep(new SoQLVersion.StringRep(ver.provenance.flatMap(cryptProviders.forProvenance).getOrElse(CryptProvider.zeros)))
+                      val rep = SoQLVersion.cjsonRep(ver.provenance.flatMap(cryptProviders.forProvenance).getOrElse(CryptProvider.zeros))
                       versionReps += ver.provenance -> rep
                       rep
                   }
-                case SoQLNull =>
-                  verNullRep
-                case other =>
-                  throw new Exception("Expected SoQLVersion or null, got " + other)
-              }
-              realRep.toJValue(v)
+                rep.toJValue(ver)
+              case SoQLNull =>
+                JNull
+              case other =>
+                throw new Exception("Expected SoQLVersion or null, got " + other)
             }
 
-          case typ =>
-            SoQLRep.jsonRepsMinusIdAndVersion(typ).toJValue _
+          case typ: NonObfuscatedType =>
+            typ.cjsonRep.asErasedCJsonWriteRep.toJValue _
         }
       }
 
