@@ -25,12 +25,19 @@ object TransformManager {
   )(implicit ordering: Ordering[MT#DatabaseColumnNameImpl]): Vector[(SoQLAnalysis[MT], Set[RollupId])] = {
     log.debug("Rewriting query:\n  {}", stringifier.statement(analysis.statement).indent(2))
 
-    val initialRollups = doRollup(analysis, rollupExact, rollups)
+    val preRollupPasses = passes.reverse.dropWhile(_.forall(_.category == rewrite.Pass.Category.Shallow)).reverse
+    val postRollupPasses = passes.drop(preRollupPasses.length)
+
+    val analysisAfterInitialPasses = preRollupPasses.foldLeft(analysis) { (analysis, passes) =>
+      analysis.applyPasses(passes, rewritePassHelpers)
+    }
+
+    val initialRollups = doRollup(analysisAfterInitialPasses, rollupExact, rollups)
     log.debug("Candidate rollups:\n  {}", LazyToString(printRollups(initialRollups, stringifier)).indent(2))
 
     val (resultAnalysis, rolledUp) =
-      passes.foldLeft(
-        (analysis, initialRollups)
+      postRollupPasses.foldLeft(
+        (analysisAfterInitialPasses, initialRollups)
       ) { case ((analysis, rolledUp), passes) =>
           val newAnalysis =
             analysis.applyPasses(passes, rewritePassHelpers)
