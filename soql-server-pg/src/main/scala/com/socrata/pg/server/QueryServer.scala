@@ -22,7 +22,6 @@ import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfi
 import com.socrata.datacoordinator.id._
 import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
 import com.socrata.datacoordinator.truth.metadata._
-import com.socrata.datacoordinator.truth.json.JsonColumnWriteRep
 import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.http.common.AuxiliaryData
