@@ -1,5 +1,7 @@
 package com.socrata.pg.analyzer2.metatypes
 
+import java.util.Base64
+
 import com.rojoma.json.v3.ast.JString
 
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo, ColumnInfo}
@@ -68,14 +70,30 @@ object DatabaseNamesMetaTypes extends MetaTypeHelper[DatabaseNamesMetaTypes] {
 
   def rewriteDTN(dtn: types.DatabaseTableName[DatabaseMetaTypes]): types.DatabaseTableName[DatabaseNamesMetaTypes] = {
     val DatabaseTableName(copyInfo) = dtn
+
+    // This value needs to be the same value _across secondaries_ and
+    // _across dataset-truth-movements_.  The closest thing we have to
+    // such a value right now is actually the dataset's obfuscation
+    // key, and we don't want to use that directly!  BUT: if we use it
+    // to encrypt two Longs, that'll give us effectively 128 bits of
+    // randomness - equivalent to a UUID - without putting thet
+    // obfuscation key anywhere visible.  The longs we'll use will be
+    // values that _won't_ be used unless a dataset somehow goes
+    // through all 18446744073709551616 possible row IDs and versions;
+    // if that ever actually happens, we have bigger problems.
+
+    val obfuscator = new CryptProvider(copyInfo.datasetInfo.obfuscationKey).encryptor
+    val buf = Array[Byte](
+      -1, -1, -1, -1, -1, -1, -1, -1, // -1, little-endian
+      -2, -1, -1, -1, -1, -1, -1, -1  // -2, little-endian
+    )
+    obfuscator.processBlock(buf, 0, buf, 0)
+    obfuscator.processBlock(buf, 8, buf, 8)
+    val stableId = Base64.getUrlEncoder.withoutPadding.encodeToString(buf)
+
     DatabaseTableName(
       AugmentedTableName.TTable(
-        // TODO: this is not an appropriately stable "stable id".  It
-        // needs to be the same value _across secondaries_ and _across
-        // dataset-truth-movements_.  The closest thing we have to
-        // such a value right now is actually the dataset's
-        // obfuscation key, and using that is clearly the wrong thing!
-        stableId = copyInfo.datasetInfo.systemId.underlying.toString,
+        stableId = stableId,
         name = copyInfo.dataTableName
       )
     )
