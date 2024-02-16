@@ -18,7 +18,7 @@ object SoQLSqlizer extends Sqlizer[DatabaseNamesMetaTypes](
   DatabaseNamesMetaTypes.provenanceMapper,
   {
     case DatabaseTableName(AugmentedTableName.RollupTable(_)) => true
-    case DatabaseTableName(AugmentedTableName.TTable(_)) => false
+    case DatabaseTableName(AugmentedTableName.TTable(_, _)) => false
   },
   (sqlizer, physicalTableFor, extraContext) => new SoQLRepProvider[DatabaseNamesMetaTypes](
     extraContext.cryptProviderProvider,
