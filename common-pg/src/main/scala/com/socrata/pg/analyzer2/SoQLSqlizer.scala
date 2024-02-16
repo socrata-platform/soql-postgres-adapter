@@ -6,7 +6,7 @@ import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.sqlizer._
 import com.socrata.datacoordinator.common
 
-import com.socrata.pg.analyzer2.metatypes.DatabaseNamesMetaTypes
+import com.socrata.pg.analyzer2.metatypes.{DatabaseNamesMetaTypes, AugmentedTableName}
 
 object SoQLSqlizer extends Sqlizer[DatabaseNamesMetaTypes](
   new ExprSqlizer(
@@ -16,7 +16,10 @@ object SoQLSqlizer extends Sqlizer[DatabaseNamesMetaTypes](
   Namespaces,
   new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true),
   DatabaseNamesMetaTypes.provenanceMapper,
-  _.name.isRollup,
+  {
+    case DatabaseTableName(AugmentedTableName.RollupTable(_)) => true
+    case DatabaseTableName(AugmentedTableName.TTable(_, _)) => false
+  },
   (sqlizer, physicalTableFor, extraContext) => new SoQLRepProvider[DatabaseNamesMetaTypes](
     extraContext.cryptProviderProvider,
     sqlizer.exprSqlFactory,

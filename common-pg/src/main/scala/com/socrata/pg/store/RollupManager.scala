@@ -243,7 +243,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
                 for {
                   (colLabel, rep) <- schema
-                  indexSql <- rep.ingressRep(DatabaseTableName(AugmentedTableName(rollupInfo.tableName, isRollup = true)), colLabel).indices
+                  indexSql <- rep.ingressRep(DatabaseTableName(AugmentedTableName.RollupTable(rollupInfo.tableName)), colLabel).indices
                 } {
                   execute(indexSql ++ Doc(tablespaceSql))
                 }
