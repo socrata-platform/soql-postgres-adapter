@@ -458,7 +458,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                  queryTimeout: Option[Duration],
                  explain: Boolean,
                  analyze: Boolean): QueryResultBall = {
-      val cryptProvider = new CryptProvider(latestCopy.datasetInfo.obfuscationKey)
+      val cryptProvider = latestCopy.datasetInfo.cryptProvider
 
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.IdRep -> (if (obfuscateId) { new SoQLID.StringRep(cryptProvider) }

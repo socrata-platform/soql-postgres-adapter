@@ -98,7 +98,7 @@ class PostgresUniverseCommon(val tablespace: String => Option[String],
     new SoQLVersion.StringRep(cryptProvider)
 
   def jsonReps(datasetInfo: DatasetInfo, obfuscateId: Boolean): SoQLType => ErasedCJsonWriteRep[SoQLValue] = {
-    val cp = new CryptProvider(datasetInfo.obfuscationKey)
+    val cp = datasetInfo.cryptProvider
     SoQLRep.jsonRep(cp, obfuscateId)
   }
 
