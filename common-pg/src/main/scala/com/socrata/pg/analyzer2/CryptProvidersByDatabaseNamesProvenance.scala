@@ -12,7 +12,7 @@ object CryptProvidersByDatabaseNamesProvenance extends StatementUniverse[Databas
   def apply(stmt: Statement): CryptProviderProvider = {
     new CryptProviderProvider {
       val map = findCryptProvidersS(stmt, Map.empty).iterator.map { case (provenance, dsInfo) =>
-        provenance -> new CryptProvider(dsInfo.obfuscationKey)
+        provenance -> dsInfo.cryptProvider
       }.toMap
 
       def forProvenance(prov: Provenance) =

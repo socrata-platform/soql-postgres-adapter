@@ -82,7 +82,7 @@ object DatabaseNamesMetaTypes extends MetaTypeHelper[DatabaseNamesMetaTypes] {
     // through all 18446744073709551616 possible row IDs and versions;
     // if that ever actually happens, we have bigger problems.
 
-    val obfuscator = new CryptProvider(copyInfo.datasetInfo.obfuscationKey).encryptor
+    val obfuscator = copyInfo.datasetInfo.cryptProvider.encryptor
     val buf = Array[Byte](
       -1, -1, -1, -1, -1, -1, -1, -1, // -1, little-endian
       -2, -1, -1, -1, -1, -1, -1, -1  // -2, little-endian

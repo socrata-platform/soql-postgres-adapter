@@ -37,7 +37,7 @@ object QueryServerHelper {
              caseSensitivity: CaseSensitivity,
              leadingSearch: Boolean = true): ParametricSql = {
     val copy = getCopy(pgu, datasetInfo, reqCopy)
-    val cryptProvider = new CryptProvider(datasetInfo.obfuscationKey)
+    val cryptProvider = datasetInfo.cryptProvider
 
     val sqlCtx = Map[SqlizerContext, Any](
       SqlizerContext.IdRep -> (if (obfuscateId) { new SoQLID.StringRep(cryptProvider) }
