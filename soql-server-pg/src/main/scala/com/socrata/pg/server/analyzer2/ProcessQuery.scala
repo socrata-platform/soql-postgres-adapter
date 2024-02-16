@@ -105,9 +105,9 @@ object ProcessQuery {
                 override val id = rollup.systemId
                 override val statement = analysis.statement
                 override val resourceName = ScopedResourceName(-1, ResourceName(s"rollup:${rollup.copyInfo.datasetInfo.systemId}/${rollup.copyInfo.systemId}/${rollup.name.underlying}"))
-                override val databaseName = DatabaseTableName(AugmentedTableName(rollup.tableName, isRollup = true))
+                override val databaseName = DatabaseTableName(AugmentedTableName.RollupTable(rollup.tableName))
 
-                // Needed for metrics
+                // Needed for metrics + response
                 override val rollupDatasetName = rollup.copyInfo.datasetInfo.resourceName
                 override val rollupName = rollup.name
 
@@ -400,12 +400,13 @@ object ProcessQuery {
       }
 
     if(!preventRun) {
+      val now = LocalDateTime.now(Clock.systemUTC())
       for(ri <- rollups) {
         RollupMetrics.digest(
           RollupHit(
             ri.rollupDatasetName.getOrElse("unknown"),
             ri.rollupName.underlying,
-            LocalDateTime.now(Clock.systemUTC())
+            now
           )
         )
       }

@@ -12,7 +12,13 @@ import com.socrata.soql.functions.SoQLTypeInfo2
 
 import com.socrata.pg.analyzer2.SoQLValueDebugHelper
 
-case class AugmentedTableName(name: String, isRollup: Boolean)
+sealed abstract class AugmentedTableName {
+  val name: String // This is the actual name of the physical database table
+}
+object AugmentedTableName {
+  case class TTable(name: String) extends AugmentedTableName
+  case class RollupTable(name: String) extends AugmentedTableName
+}
 
 final abstract class DatabaseNamesMetaTypes extends MetaTypes with SoQLMetaTypesExt {
   override type ResourceNameScope = DatabaseMetaTypes#ResourceNameScope
@@ -33,23 +39,23 @@ object DatabaseNamesMetaTypes extends MetaTypeHelper[DatabaseNamesMetaTypes] {
     def fromProvenance(prov: Provenance): types.DatabaseTableName[DatabaseNamesMetaTypes] = {
       val rawProv = prov.value
       if(rawProv.startsWith(rollupTag)) {
-        DatabaseTableName(AugmentedTableName(rawProv.substring(rollupTag.length), true))
+        DatabaseTableName(AugmentedTableName.RollupTable(rawProv.substring(rollupTag.length)))
       } else {
-        DatabaseTableName(AugmentedTableName(rawProv, false))
+        DatabaseTableName(AugmentedTableName.TTable(rawProv))
       }
     }
 
     def toProvenance(dtn: types.DatabaseTableName[DatabaseNamesMetaTypes]): Provenance = {
       dtn match {
-        case DatabaseTableName(AugmentedTableName(name, false)) => Provenance(name)
-        case DatabaseTableName(AugmentedTableName(name, true)) => Provenance(rollupTag + name)
+        case DatabaseTableName(AugmentedTableName.TTable(name)) => Provenance(name)
+        case DatabaseTableName(AugmentedTableName.RollupTable(name)) => Provenance(rollupTag + name)
       }
     }
   }
 
   def rewriteDTN(dtn: types.DatabaseTableName[DatabaseMetaTypes]): types.DatabaseTableName[DatabaseNamesMetaTypes] = {
     val DatabaseTableName(copyInfo) = dtn
-    DatabaseTableName(AugmentedTableName(copyInfo.dataTableName, isRollup = false))
+    DatabaseTableName(AugmentedTableName.TTable(copyInfo.dataTableName))
   }
 
   def rewriteFrom(dmtState: DatabaseMetaTypes, analysis: SoQLAnalysis[DatabaseMetaTypes]): SoQLAnalysis[DatabaseNamesMetaTypes] = {
