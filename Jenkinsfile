@@ -1,5 +1,5 @@
 // Set up the libraries
-@Library('socrata-pipeline-library')
+@Library('socrata-pipeline-library@sarahs/EN-62919/return-tag-from-release-tag-create')
 
 // set up service and project variables
 def service_server = 'soql-server-pg'
@@ -8,6 +8,7 @@ def service_secondary = 'secondary-watcher-pg'
 def project_wd_secondary = 'store-pg'
 def isPr = env.CHANGE_ID != null
 def lastStage
+def gitTag
 
 // instanciate libraries
 def sbtbuild = new com.socrata.SBTBuild(steps, service_server, '.', [project_wd_server, project_wd_secondary])
@@ -47,7 +48,8 @@ pipeline {
             echo 'DRY RUN: Skipping release tag creation'
           }
           else {
-            releaseTag.create(params.RELEASE_NAME)
+            gitTag = releaseTag.create(params.RELEASE_NAME)
+            echo gitTag
           }
         }
       }
