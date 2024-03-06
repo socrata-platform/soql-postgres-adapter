@@ -5,12 +5,12 @@ import com.socrata.ReleaseMetadataService
 def rmsSupportedEnvironment = com.socrata.ReleaseMetadataService.SupportedEnvironment
 
 // set up service and project variables
-def service_server = 'soql-server-pg'
-def project_wd_server = 'soql-server-pg'
-def service_secondary = 'secondary-watcher-pg'
-def project_wd_secondary = 'store-pg'
-def isPr = env.CHANGE_ID != null
-def lastStage
+String service_server = 'soql-server-pg'
+String project_wd_server = 'soql-server-pg'
+String service_secondary = 'secondary-watcher-pg'
+String project_wd_secondary = 'store-pg'
+boolean isPr = env.CHANGE_ID != null
+String lastStage
 
 // instanciate libraries
 def sbtbuild = new com.socrata.SBTBuild(steps, service_server, '.', [project_wd_server, project_wd_secondary])
@@ -33,7 +33,6 @@ pipeline {
     label params.AGENT
   }
   environment {
-    SERVICE = "${service_server}"
     DEPLOY_PATTERN = "${service_server}*"
     SECONDARY_DEPLOY_PATTERN = "${service_secondary}*"
     WEBHOOK_ID = 'WEBHOOK_IQ'
@@ -92,10 +91,10 @@ pipeline {
           script {
             if (params.RELEASE_BUILD && !params.RELEASE_DRY_RUN) {
               Map buildInfoServer = [
-                "project_id": "${service_server}",
-                "build_id": "${env.DOCKER_TAG}",
-                "release_id": "${params.RELEASE_NAME}",
-                "git_tag": "${env.GIT_TAG}"
+                "project_id": service_server,
+                "build_id": env.DOCKER_TAG,
+                "release_id": params.RELEASE_NAME,
+                "git_tag": env.GIT_TAG
               ]
               createBuild(
                 buildInfoServer,
@@ -131,10 +130,10 @@ pipeline {
           script {
             if (params.RELEASE_BUILD && !params.RELEASE_DRY_RUN) {
               Map buildInfoSecondary = [
-                "project_id": "${service_secondary}",
-                "build_id": "${env.SECONDARY_DOCKER_TAG}",
-                "release_id": "${params.RELEASE_NAME}",
-                "git_tag": "${env.GIT_TAG}"
+                "project_id": service_secondary,
+                "build_id": env.SECONDARY_DOCKER_TAG,
+                "release_id": params.RELEASE_NAME,
+                "git_tag": env.GIT_TAG
               ]
               createBuild(
                 buildInfoSecondary,
