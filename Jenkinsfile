@@ -1,5 +1,5 @@
 // Set up the libraries
-@Library('socrata-pipeline-library@sarahs/EN-62410/rework-parameters-for-rms-integration') // branch for testing
+@Library('socrata-pipeline-library')
 
 import com.socrata.ReleaseMetadataService
 def rmsSupportedEnvironment = com.socrata.ReleaseMetadataService.SupportedEnvironment
@@ -98,7 +98,7 @@ pipeline {
               ]
               createBuild(
                 buildInfoServer,
-                rmsSupportedEnvironment.staging
+                rmsSupportedEnvironment.production
               )
             }
           }
@@ -137,7 +137,7 @@ pipeline {
               ]
               createBuild(
                 buildInfoSecondary,
-                rmsSupportedEnvironment.staging
+                rmsSupportedEnvironment.production
               )
             }
           }
