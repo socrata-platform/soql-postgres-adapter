@@ -3,6 +3,7 @@ import Dependencies._
 name := "soql-server-pg"
 
 libraryDependencies ++= Seq(
+  commonsCollections,
   secondarylib,
   socrataHttpCuratorBroker,
   soqlUtils
