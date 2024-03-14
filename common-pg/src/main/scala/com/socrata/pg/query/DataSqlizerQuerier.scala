@@ -1,5 +1,7 @@
 package com.socrata.pg.query
 
+import scala.annotation.tailrec
+
 import com.rojoma.json.v3.ast.JString
 import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.{MutableRow, Row}
@@ -10,7 +12,7 @@ import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.pg.query.QueryResult.QueryRuntimeError
 import com.socrata.pg.soql.ParametricSql
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.{BinaryTree, SoQLAnalysis}
+import com.socrata.soql.{BinaryTree, Leaf, Compound, PipeQuery, UnionQuery, UnionAllQuery, IntersectQuery, IntersectAllQuery, MinusQuery, MinusAllQuery, SoQLAnalysis}
 import com.socrata.soql.stdlib.{UserContext, Context => SoQLContext}
 import com.socrata.soql.types.{SoQLFixedTimestamp, SoQLFloatingTimestamp}
 
@@ -38,6 +40,34 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
     * for possible off by one errors or attempts to see if there is another page of results.
     */
   private val sqlFetchSize = 1025
+
+  private def maxEffectiveLimit(a: Compound[SoQLAnalysis[UserColumnId, CT]]): Option[BigInt] =
+    for {
+      leftLimit <- effectiveLimit(a.left)
+      rightLimit <- effectiveLimit(a.right)
+    } yield {
+      leftLimit + rightLimit
+    }
+
+  private def minEffectiveLimit(a: Compound[SoQLAnalysis[UserColumnId, CT]]): Option[BigInt] =
+    effectiveLimit(a.left) match {
+      case None => effectiveLimit(a.right)
+      case Some(leftLimit) => Some(leftLimit min (effectiveLimit(a.right).getOrElse(leftLimit)))
+    }
+
+  @tailrec
+  private def effectiveLimit(analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]]): Option[BigInt] = {
+    analyses match {
+      case Leaf(stmt) => stmt.limit
+      case PipeQuery(_, right) => effectiveLimit(right)
+      case union@UnionQuery(_, _) => maxEffectiveLimit(union)
+      case unionAll@UnionAllQuery(_, _) => maxEffectiveLimit(unionAll)
+      case intersect@IntersectQuery(_, _) => minEffectiveLimit(intersect)
+      case intersectAll@IntersectAllQuery(_, _) => minEffectiveLimit(intersectAll)
+      case MinusQuery(left, _) => effectiveLimit(left)
+      case MinusAllQuery(left, _) => effectiveLimit(left)
+    }
+  }
 
   def query(conn: Connection, context: SoQLContext, analyses: BinaryTree[SoQLAnalysis[UserColumnId, CT]],
             toSql: (BinaryTree[SoQLAnalysis[UserColumnId, CT]]) => ParametricSql,
@@ -80,7 +110,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
      * if we can tell from the query that it can't return more than sqlFetchSize rows, we can safely set the fetchsize
      * to 0 and get the benefits of parallel queries.
      */
-    val fetchSize = analyses.last.limit match {
+    val fetchSize = effectiveLimit(analyses) match {
       case Some(n) if (n <= sqlFetchSize) => 0
       case _ => sqlFetchSize
     }
