@@ -5,6 +5,7 @@ object Dependencies {
     val c3p0 = "0.9.5-pre9"
     val commonsCli = "1.2"
     val commonsCodec = "1.5"
+    val commonsCollections = "4.4"
     val commonsIo = "1.4"
     val commonsLang = "2.6"
     val jodaConvert = "1.2"
@@ -35,6 +36,8 @@ object Dependencies {
   val commonsCli = "commons-cli" % "commons-cli" % versions.commonsCli
 
   val commonsCodec = "commons-codec" % "commons-codec" % versions.commonsCodec
+
+  val commonsCollections = "org.apache.commons" % "commons-collections4" % versions.commonsCollections
 
   val commonsIo = "commons-io" % "commons-io" % versions.commonsIo
 

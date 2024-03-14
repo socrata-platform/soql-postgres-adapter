@@ -3,7 +3,7 @@ package com.socrata.pg.server.analyzer2
 import scala.collection.{mutable => scm}
 import scala.concurrent.duration.FiniteDuration
 
-import java.io.{BufferedWriter, OutputStreamWriter}
+import java.io.{BufferedWriter, OutputStreamWriter, OutputStream, ByteArrayOutputStream}
 import java.nio.charset.StandardCharsets
 import java.sql.{Connection, PreparedStatement, SQLException, ResultSet}
 import java.time.{Clock, LocalDateTime}
@@ -342,7 +342,7 @@ object ProcessQuery {
     etag: EntityTag,
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]],
-    nameAnalysis: com.socrata.soql.analyzer2.SoQLAnalysis[DatabaseNamesMetaTypes],
+    nameAnalysis: SoQLAnalysis[DatabaseNamesMetaTypes],
     rollups: Seq[QueryServerRollupInfo],
     cryptProviders: CryptProviderProvider,
     extractor: ResultExtractor[DatabaseNamesMetaTypes],
@@ -352,6 +352,15 @@ object ProcessQuery {
     rs: ResourceScope
   ): HttpResponse = {
     val locale = "en_US"
+
+    val cacheable = ResultCache.isCacheable(nameAnalysis)
+
+    if(cacheable) {
+      for(result <- ResultCache(etag)) {
+        log.info("Serving result from cache")
+        return buildResponse(result.etag, result.lastModified, result.contentType, os => os.write(result.body))
+      }
+    }
 
     val laidOutSql: SimpleDocStream[SqlizeAnnotation[DatabaseNamesMetaTypes]] = sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded))
     val renderedSql = laidOutSql.toString
@@ -412,10 +421,10 @@ object ProcessQuery {
       }
     }
 
-    ETag(etag) ~>
-      LastModified(lastModified) ~>
-      ContentType("application/x-socrata-gzipped-cjson") ~>
-      Stream { rawOutputStream =>
+    val contentType = "application/x-socrata-gzipped-cjson"
+
+    val resultStream: OutputStream => Unit = {
+      def computeResult(rawOutputStream: OutputStream): Unit = {
         for {
           gzos <- managed(new GZIPOutputStream(rawOutputStream))
           osw <- managed(new OutputStreamWriter(gzos, StandardCharsets.UTF_8))
@@ -452,6 +461,29 @@ object ProcessQuery {
           writer.write("\n]\n")
         }
       }
+
+      if(cacheable) {
+        log.info("Caching result")
+
+        val bodyStream = new ByteArrayOutputStream
+        computeResult(bodyStream)
+        val body = bodyStream.toByteArray
+        ResultCache.save(etag, lastModified, contentType, body)
+
+        os => os.write(body)
+      } else {
+        computeResult _
+      }
+    }
+
+    buildResponse(etag, lastModified, contentType, resultStream)
+  }
+
+  def buildResponse(etag: EntityTag, lastModified: DateTime, contentType: String, body: OutputStream => Unit): HttpResponse = {
+    ETag(etag) ~>
+      LastModified(lastModified) ~>
+      ContentType(contentType) ~>
+      Stream(body)
   }
 
   def runQuery(
