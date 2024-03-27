@@ -128,7 +128,7 @@ pipeline {
             if (requiresBuild && !buildBypassed) {
               env.PURPOSE = (isHotfix) ? 'hotfix' : 'initial'
               env.RELEASE_ID = (isHotfix) ? env.CURRENT_RELEASE_NAME : params.RELEASE_NAME
-              Map buildInfoServer = [
+              Map buildInfo = [
                 "project_id": service_server,
                 "build_id": env.DOCKER_TAG,
                 "release_id": env.RELEASE_ID,
@@ -136,7 +136,7 @@ pipeline {
                 "purpose": env.PURPOSE,
               ]
               createBuild(
-                buildInfoServer,
+                buildInfo,
                 rmsSupportedEnvironment.staging // production - for testing
               )
             }
@@ -168,8 +168,10 @@ pipeline {
       post {
         success {
           script {
-            if (params.RELEASE_BUILD && !params.RELEASE_DRY_RUN) {
-              Map buildInfoSecondary = [
+            boolean requiresBuild = isHotfix || params.RELEASE_BUILD
+            boolean buildBypassed = isReleaseRebuild || params.RELEASE_DRY_RUN
+            if (requiresBuild && !buildBypassed) {
+              Map buildInfo = [
                 "project_id": service_secondary,
                 "build_id": env.SECONDARY_DOCKER_TAG,
                 "release_id": params.RELEASE_NAME,
@@ -177,7 +179,7 @@ pipeline {
                 "purpose": env.PURPOSE,
               ]
               createBuild(
-                buildInfoSecondary,
+                buildInfo,
                 rmsSupportedEnvironment.staging // production - for testing
               )
             }
