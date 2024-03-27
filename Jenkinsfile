@@ -137,7 +137,7 @@ pipeline {
               ]
               createBuild(
                 buildInfoServer,
-                rmsSupportedEnvironment.production
+                rmsSupportedEnvironment.staging // production - for testing
               )
             }
           }
@@ -178,14 +178,14 @@ pipeline {
               ]
               createBuild(
                 buildInfoSecondary,
-                rmsSupportedEnvironment.production
+                rmsSupportedEnvironment.staging // production - for testing
               )
             }
           }
         }
       }
     }
-    stage('Deploys') {
+    stage('Deploys:') {
       when {
         allOf {
           not { expression { isPr } }
@@ -212,7 +212,7 @@ pipeline {
                   ]
                   createDeployment(
                     deployInfo,
-                    rmsSupportedEnvironment.production
+                    rmsSupportedEnvironment.staging // production - for testing
                   )
                 }
               }
@@ -236,7 +236,7 @@ pipeline {
                   ]
                   createDeployment(
                     deployInfo,
-                    rmsSupportedEnvironment.production
+                    rmsSupportedEnvironment.staging // production - for testing
                   )
                 }
               }
