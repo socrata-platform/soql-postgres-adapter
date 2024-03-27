@@ -10,6 +10,9 @@ String project_wd_server = 'soql-server-pg'
 String service_secondary = 'secondary-watcher-pg'
 String project_wd_secondary = 'store-pg'
 boolean isPr = env.CHANGE_ID != null
+boolean isHotfix = isHotfixBranch(env.BRANCH_NAME)
+boolean isReleaseRebuild = false
+boolean skip = false
 String lastStage
 
 // instanciate libraries
@@ -23,11 +26,11 @@ pipeline {
     ansiColor('xterm')
   }
   parameters {
-    booleanParam(name: 'RELEASE_BUILD', defaultValue: false, description: 'Are we building a release candidate?')
-    booleanParam(name: 'RELEASE_DRY_RUN', defaultValue: false, description: 'To test out the release build without creating a new tag.')
-    string(name: 'RELEASE_NAME', defaultValue: '', description: 'For release builds, the release name which is used for the git tag and the deploy tag.')
     string(name: 'AGENT', defaultValue: 'build-worker', description: 'Which build agent to use?')
     string(name: 'BRANCH_SPECIFIER', defaultValue: 'origin/main', description: 'Use this branch for building the artifact.')
+    string(name: 'RELEASE_NAME', defaultValue: '', description: 'For release builds, the release name which is used for the git tag and the deploy tag.')
+    booleanParam(name: 'RELEASE_BUILD', defaultValue: false, description: 'Are we building a release candidate?')
+    booleanParam(name: 'RELEASE_DRY_RUN', defaultValue: false, description: 'To test out the release build without creating a new tag.')
   }
   agent {
     label params.AGENT
@@ -45,16 +48,43 @@ pipeline {
       steps {
         script {
           lastStage = env.STAGE_NAME
+          env.GIT_TAG = releaseTag.getFormattedTag(params.RELEASE_NAME)
+          if (releaseTag.doesReleaseTagExist(params.RELEASE_NAME)) {
+            isReleaseRebuild = true
+            echo "REBUILD: Tag ${env.GIT_TAG} already exists -- checking out the tag"
+            releaseTag.checkoutTag(params.RELEASE_NAME)
+            return
+          }
           if (params.RELEASE_DRY_RUN) {
-            echo 'DRY RUN: Skipping release tag creation'
+            echo "DRY RUN: Would have created ${env.GIT_TAG} and pushed it to the repo"
+            return
           }
-          else {
-            env.GIT_TAG = releaseTag.create(params.RELEASE_NAME)
+          releaseTag.create(params.RELEASE_NAME)
+        }
+      }
+    }
+    stage('Hotfix Tag') {
+      when {
+        expression { isHotfix }
+      }
+      steps {
+        script {
+          lastStage = env.STAGE_NAME
+          if (releaseTag.noCommitsOnHotfixBranch(env.BRANCH_NAME)) {
+            skip = true
+            echo "SKIP: Skipping the rest of the build because there are no commits on the hotfix branch yet"
+            return
           }
+          env.CURRENT_RELEASE_NAME = releaseTag.getReleaseName(env.BRANCH_NAME)
+          env.HOTFIX_NAME = releaseTag.getHotfixName(env.CURRENT_RELEASE_NAME)
+          env.GIT_TAG = releaseTag.create(env.HOTFIX_NAME)
         }
       }
     }
     stage('Build SoQL Server PG') {
+      when {
+        not { expression { skip } }
+      }
       steps {
         script {
           lastStage = env.STAGE_NAME
@@ -72,14 +102,18 @@ pipeline {
     }
     stage('Dockerize SoQL Server PG') {
       when {
-        not { expression { isPr } }
+        allOf {
+          not { expression { isPr } }
+          not { expression { skip } }
+        }
       }
       steps {
         script {
           lastStage = env.STAGE_NAME
-          if (params.RELEASE_BUILD) {
+          if (params.RELEASE_BUILD || isHotfix) {
             env.REGISTRY_PUSH = (params.RELEASE_DRY_RUN) ? 'none' : 'all'
-            env.DOCKER_TAG = dockerize_server.docker_build_specify_tag_and_push(params.RELEASE_NAME, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server), env.REGISTRY_PUSH)
+            env.VERSION = (isHotfix) ? env.HOTFIX_NAME : params.RELEASE_NAME
+            env.DOCKER_TAG = dockerize_server.docker_build_specify_tag_and_push(env.VERSION, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server), env.REGISTRY_PUSH)
           } else {
             env.REGISTRY_PUSH = 'internal'
             env.DOCKER_TAG = dockerize_server.docker_build('STAGING', env.GIT_COMMIT, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server), env.REGISTRY_PUSH)
@@ -89,12 +123,17 @@ pipeline {
       post {
         success {
           script {
-            if (params.RELEASE_BUILD && !params.RELEASE_DRY_RUN) {
+            boolean requiresBuild = isHotfix || params.RELEASE_BUILD
+            boolean buildBypassed = isReleaseRebuild || params.RELEASE_DRY_RUN
+            if (requiresBuild && !buildBypassed) {
+              env.PURPOSE = (isHotfix) ? 'hotfix' : 'initial'
+              env.RELEASE_ID = (isHotfix) ? env.CURRENT_RELEASE_NAME : params.RELEASE_NAME
               Map buildInfoServer = [
                 "project_id": service_server,
                 "build_id": env.DOCKER_TAG,
-                "release_id": params.RELEASE_NAME,
-                "git_tag": env.GIT_TAG
+                "release_id": env.RELEASE_ID,
+                "git_tag": env.GIT_TAG,
+                "purpose": env.PURPOSE,
               ]
               createBuild(
                 buildInfoServer,
@@ -107,7 +146,10 @@ pipeline {
     }
     stage('Dockerize Secondary') {
       when {
-        not { expression { isPr } }
+        allOf {
+          not { expression { isPr } }
+          not { expression { skip } }
+        }
       }
       steps {
         script {
@@ -115,14 +157,12 @@ pipeline {
           // Here's where we're getting the secondary artifact (named
           // via env.STORE_PG_ARTIFACT) out for dockerizing, per the
           // comment above.
-          if (params.RELEASE_BUILD) {
-            env.REGISTRY_PUSH = (params.RELEASE_DRY_RUN) ? 'none' : 'all'
-            env.SECONDARY_DOCKER_TAG = dockerize_secondary.docker_build_specify_tag_and_push(params.RELEASE_NAME, sbtbuild.getDockerPath(project_wd_secondary), env.STORE_PG_ARTIFACT, env.REGISTRY_PUSH)
+          if (params.RELEASE_BUILD || isHotfix) {
+            env.SECONDARY_DOCKER_TAG = dockerize_secondary.docker_build_specify_tag_and_push(env.VERSION, sbtbuild.getDockerPath(project_wd_secondary), env.STORE_PG_ARTIFACT, env.REGISTRY_PUSH)
           } else {
-            env.REGISTRY_PUSH = 'internal'
             env.SECONDARY_DOCKER_TAG = dockerize_secondary.docker_build('STAGING', env.GIT_COMMIT, sbtbuild.getDockerPath(project_wd_secondary), env.STORE_PG_ARTIFACT, env.REGISTRY_PUSH)
           }
-          currentBuild.description = "${env.DOCKER_TAG} & ${env.SECONDARY_DOCKER_TAG}"
+          currentBuild.description = (params.RELEASE_DRY_RUN) ? "${env.DOCKER_TAG} & ${env.SECONDARY_DOCKER_TAG} - DRY RUN" : "${env.DOCKER_TAG} & ${env.SECONDARY_DOCKER_TAG}"
         }
       }
       post {
@@ -133,7 +173,8 @@ pipeline {
                 "project_id": service_secondary,
                 "build_id": env.SECONDARY_DOCKER_TAG,
                 "release_id": params.RELEASE_NAME,
-                "git_tag": env.GIT_TAG
+                "git_tag": env.GIT_TAG,
+                "purpose": env.PURPOSE,
               ]
               createBuild(
                 buildInfoSecondary,
@@ -144,10 +185,11 @@ pipeline {
         }
       }
     }
-    stage('Deploys:') {
+    stage('Deploys') {
       when {
         allOf {
           not { expression { isPr } }
+          not { expression { skip } }
           not { expression { return params.RELEASE_BUILD} }
         }
       }
@@ -156,8 +198,24 @@ pipeline {
           steps {
             script {
               lastStage = env.STAGE_NAME
-              // uses env.DOCKER_TAG and deploys to staging by default
-              marathonDeploy(serviceName: env.DEPLOY_PATTERN, waitTime: '60')
+              env.ENVIRONMENT = (isHotfix) ? 'rc' : 'staging'
+              marathonDeploy(serviceName: env.DEPLOY_PATTERN, tag: env.DOCKER_TAG, environment: env.ENVIRONMENT, waitTime: '60')
+            }
+          }
+          post {
+            success {
+              script {
+                if (isHotfix) {
+                  Map deployInfo = [
+                    "build_id": env.DOCKER_TAG,
+                    "environment": env.ENVIRONMENT,
+                  ]
+                  createDeployment(
+                    deployInfo,
+                    rmsSupportedEnvironment.production
+                  )
+                }
+              }
             }
           }
         }
@@ -165,8 +223,23 @@ pipeline {
           steps {
             script {
               lastStage = env.STAGE_NAME
-              // deploys to staging by default
-              marathonDeploy(serviceName: env.SECONDARY_DEPLOY_PATTERN, tag: env.SECONDARY_DOCKER_TAG)
+              marathonDeploy(serviceName: env.SECONDARY_DEPLOY_PATTERN, tag: env.SECONDARY_DOCKER_TAG, environment: env.ENVIRONMENT)
+            }
+          }
+          post {
+            success {
+              script {
+                if (isHotfix) {
+                  Map deployInfo = [
+                    "build_id": env.SECONDARY_DOCKER_TAG,
+                    "environment": env.ENVIRONMENT,
+                  ]
+                  createDeployment(
+                    deployInfo,
+                    rmsSupportedEnvironment.production
+                  )
+                }
+              }
             }
           }
         }
