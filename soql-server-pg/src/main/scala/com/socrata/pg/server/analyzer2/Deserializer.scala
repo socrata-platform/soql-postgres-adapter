@@ -4,6 +4,8 @@ import scala.concurrent.duration._
 
 import java.io.InputStream
 
+import com.rojoma.json.v3.util.WrapperJsonCodec
+
 import com.socrata.datacoordinator.id.{DatasetInternalName, UserColumnId}
 
 import com.socrata.soql.analyzer2.{SoQLAnalysis, LabelUniverse}
@@ -13,10 +15,26 @@ import com.socrata.soql.sql.Debug
 
 import com.socrata.pg.analyzer2.metatypes.{InputMetaTypes, Stage}
 
+case class SFResourceName(underlying: String) {
+  override def toString = underlying
+}
+object SFResourceName {
+  implicit val jCodec = WrapperJsonCodec[SFResourceName](apply _, _.underlying)
+  implicit val deserialize = new Readable[SFResourceName] {
+    def readFrom(buffer: ReadBuffer): SFResourceName = {
+      SFResourceName(buffer.read[String]())
+    }
+  }
+  implicit val ordering = new Ordering[SFResourceName] {
+    override def compare(a: SFResourceName, b: SFResourceName) =
+      a.underlying.compareTo(b.underlying)
+  }
+}
+
 object Deserializer extends LabelUniverse[InputMetaTypes] {
   case class AuxTableData(
     locationSubcolumns: Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]],
-    sfResourceName: String,
+    sfResourceName: SFResourceName,
     truthDataVersion: Long
   )
   object AuxTableData {
@@ -30,7 +48,7 @@ object Deserializer extends LabelUniverse[InputMetaTypes] {
           case 0 =>
             AuxTableData(
               buffer.read[Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]](),
-              buffer.read[String](),
+              buffer.read[SFResourceName](),
               buffer.read[Long]()
             )
           case other =>
@@ -62,7 +80,7 @@ object Deserializer extends LabelUniverse[InputMetaTypes] {
             Request(
               buffer.read[SoQLAnalysis[InputMetaTypes]](),
               buffer.read[Map[DatabaseTableName, Map[DatabaseColumnName, Seq[Option[DatabaseColumnName]]]]]().mapValues { locs =>
-                AuxTableData(locs, "", -1)
+                AuxTableData(locs, SFResourceName(""), -1)
               },
               buffer.read[Map[String, String]](),
               buffer.read[Seq[Seq[Pass]]](),

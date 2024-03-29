@@ -77,15 +77,20 @@ object ProcessQuery {
     // and column ids, and we want to turn that into having them in
     // terms of copies and columns
     val copyCache = new InputMetaTypes.CopyCache(pgu)
-
     val dmtState = new DatabaseMetaTypes
-    val metadataAnalysis = dmtState.rewriteFrom(analysis, copyCache, InputMetaTypes.provenanceMapper)
+    val metadataAnalysis = dmtState.rewriteFrom(analysis, copyCache, InputMetaTypes.provenanceMapper) // this populates the copy cache
 
-    val outOfDate = request.auxTableData.exists { case (dtn, auxTableData) =>
-      copyCache(dtn).fold(false) { case (cc, _) =>
-        cc.dataVersion < auxTableData.truthDataVersion
+    val outOfDate = copyCache.asMap.iterator.flatMap { case (dtn@DatabaseTableName((_, stage)), (copyInfo, _)) =>
+      request.auxTableData.get(dtn).flatMap { auxTableData =>
+        val isOutOfDate = copyInfo.dataVersion < auxTableData.truthDataVersion
+        if(isOutOfDate) {
+          Some((auxTableData.sfResourceName, stage))
+        } else {
+          log.warn("No aux data found for table {}?!?!?", dtn)
+          None
+        }
       }
-    }
+    }.toSet
 
     // Then we'll rewrite that analysis in terms of actual physical
     // database names, after building our crypt providers.
@@ -211,18 +216,15 @@ object ProcessQuery {
 
     precondition.check(Some(etag), sideEffectFree = true) match {
       case Precondition.Passed =>
-        val dataVersionsBySFName: Seq[((String, Stage), Long)] =
-          copyCache.asMap.iterator.map { case (dtn@DatabaseTableName((internalName, stage)), (copyInfo, _)) =>
-            val visibleTableName =
-              request.auxTableData.get(dtn) match {
-                case Some(atd) =>
-                  atd.sfResourceName
-                case None =>
-                  log.warn("No aux data found for table {}?!?!?", dtn)
-                  internalName.underlying
-              }
-
-            (visibleTableName, stage) -> copyInfo.dataVersion
+        val dataVersionsBySFName: Seq[((SFResourceName, Stage), Long)] =
+          copyCache.asMap.iterator.flatMap { case (dtn@DatabaseTableName((internalName, stage)), (copyInfo, _)) =>
+            request.auxTableData.get(dtn) match {
+              case Some(atd) =>
+                Some((atd.sfResourceName, stage) -> copyInfo.dataVersion)
+              case None =>
+                log.warn("No aux data found for table {}?!?!?", dtn)
+                None
+            }
           }.toVector.sortBy(_._1)
 
         fulfillRequest(
@@ -252,8 +254,8 @@ object ProcessQuery {
     }
   }
 
-  def outOfDateHeader(outOfDate: Boolean): HttpServletResponse => Unit =
-    Header("X-SODA2-Data-Out-Of-Date", if(outOfDate) "true" else "false")
+  def outOfDateHeader(outOfDate: Set[(SFResourceName, Stage)]): HttpServletResponse => Unit =
+    Header("X-SODA2-Data-Out-Of-Date", JsonUtil.renderJson(outOfDate.iterator.toSeq.sorted, pretty=false))
 
   trait QueryServerRollupInfo {
     val rollupDatasetName: Option[String]
@@ -373,9 +375,9 @@ object ProcessQuery {
     columnsByName: Map[ColumnName, SerializationColumnInfo],
     systemContext: Option[Map[String, String]],
     copyCache: CopyCache[InputMetaTypes],
-    dataVersionsBySFName: Seq[((String, Stage), Long)],
+    dataVersionsBySFName: Seq[((SFResourceName, Stage), Long)],
     etag: EntityTag,
-    outOfDate: Boolean,
+    outOfDate: Set[(SFResourceName, Stage)],
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]],
     nameAnalysis: SoQLAnalysis[DatabaseNamesMetaTypes],
@@ -515,7 +517,7 @@ object ProcessQuery {
     buildResponse(etag, lastModified, contentType, outOfDate, resultStream)
   }
 
-  def buildResponse(etag: EntityTag, lastModified: DateTime, contentType: String, outOfDate: Boolean, body: OutputStream => Unit): HttpResponse = {
+  def buildResponse(etag: EntityTag, lastModified: DateTime, contentType: String, outOfDate: Set[(SFResourceName, Stage)], body: OutputStream => Unit): HttpResponse = {
     ETag(etag) ~>
       LastModified(lastModified) ~>
       ContentType(contentType) ~>
