@@ -9,6 +9,7 @@ import java.sql.{Connection, PreparedStatement, SQLException, ResultSet}
 import java.time.{Clock, LocalDateTime}
 import java.util.Base64
 import java.util.zip.GZIPOutputStream
+import javax.servlet.http.HttpServletResponse
 
 import com.rojoma.json.v3.ast.{JArray, JString, JValue, JNull}
 import com.rojoma.json.v3.interpolation._
@@ -40,7 +41,7 @@ import com.socrata.metrics.rollup.RollupMetrics
 import com.socrata.metrics.rollup.events.RollupHit
 
 import com.socrata.pg.analyzer2.{CryptProviderProvider, TransformManager, CostEstimator, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, Namespaces, SoQLExtraContext}
-import com.socrata.pg.analyzer2.metatypes.{CopyCache, InputMetaTypes, DatabaseMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName, SoQLMetaTypesExt}
+import com.socrata.pg.analyzer2.metatypes.{CopyCache, InputMetaTypes, DatabaseMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName, SoQLMetaTypesExt, Stage}
 import com.socrata.pg.analyzer2.ordering._
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils, RollupAnalyzer, RollupId}
 import com.socrata.pg.query.QueryResult
@@ -76,9 +77,20 @@ object ProcessQuery {
     // and column ids, and we want to turn that into having them in
     // terms of copies and columns
     val copyCache = new InputMetaTypes.CopyCache(pgu)
-
     val dmtState = new DatabaseMetaTypes
-    val metadataAnalysis = dmtState.rewriteFrom(analysis, copyCache, InputMetaTypes.provenanceMapper)
+    val metadataAnalysis = dmtState.rewriteFrom(analysis, copyCache, InputMetaTypes.provenanceMapper) // this populates the copy cache
+
+    val outOfDate = copyCache.asMap.iterator.flatMap { case (dtn@DatabaseTableName((_, stage)), (copyInfo, _)) =>
+      request.auxTableData.get(dtn).flatMap { auxTableData =>
+        val isOutOfDate = copyInfo.dataVersion < auxTableData.truthDataVersion
+        if(isOutOfDate) {
+          Some((auxTableData.sfResourceName, stage))
+        } else {
+          log.warn("No aux data found for table {}?!?!?", dtn)
+          None
+        }
+      }
+    }.toSet
 
     // Then we'll rewrite that analysis in terms of actual physical
     // database names, after building our crypt providers.
@@ -157,7 +169,7 @@ object ProcessQuery {
     val onlyOne = nameAnalyses.lengthCompare(1) == 0
     val sqlized = nameAnalyses.map { nameAnalysis =>
       val sqlizer = SoQLSqlizer
-      val Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(nonliteralSystemContextLookupFound, now)) = sqlizer(nameAnalysis._1, new SoQLExtraContext(systemContext, cryptProviders, RewriteSubcolumns[InputMetaTypes](request.locationSubcolumns, copyCache), SqlUtils.escapeString(pgu.conn, _))) match {
+      val Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(nonliteralSystemContextLookupFound, now)) = sqlizer(nameAnalysis._1, new SoQLExtraContext(systemContext, cryptProviders, RewriteSubcolumns[InputMetaTypes](request.auxTableData.mapValues(_.locationSubcolumns), copyCache), SqlUtils.escapeString(pgu.conn, _))) match {
         case Right(result) => result
         case Left(nothing) => nothing
       }
@@ -181,7 +193,7 @@ object ProcessQuery {
       stringifiedAnalysis,
       copyCache.orderedVersions,
       systemContext,
-      request.locationSubcolumns,
+      request.auxTableData.mapValues(_.locationSubcolumns),
       passes,
       request.allowRollups,
       request.debug,
@@ -192,15 +204,36 @@ object ProcessQuery {
     // modification times of saved views.  At least, at higher levels
     // that actually know about saved views as things that exist and
     // can change over time.
-    val lastModified = copyCache.mostRecentlyModifiedAt.getOrElse(new DateTime(0L))
+    val lastModified = locally {
+      val tablesLastModified = copyCache.mostRecentlyModifiedAt.getOrElse(new DateTime(0L))
+      val nowLastModified = sqlized.now.getOrElse(new DateTime(0L))
+      if(tablesLastModified.getMillis > nowLastModified.getMillis) {
+        tablesLastModified
+      } else {
+        nowLastModified
+      }
+    }
 
     precondition.check(Some(etag), sideEffectFree = true) match {
       case Precondition.Passed =>
+        val dataVersionsBySFName: Seq[((SFResourceName, Stage), Long)] =
+          copyCache.asMap.iterator.flatMap { case (dtn@DatabaseTableName((internalName, stage)), (copyInfo, _)) =>
+            request.auxTableData.get(dtn) match {
+              case Some(atd) =>
+                Some((atd.sfResourceName, stage) -> copyInfo.dataVersion)
+              case None =>
+                log.warn("No aux data found for table {}?!?!?", dtn)
+                None
+            }
+          }.toVector.sortBy(_._1)
+
         fulfillRequest(
           columnsByName,
           if(sqlized.nonliteralSystemContextLookupFound) Some(systemContext) else None,
           copyCache,
+          dataVersionsBySFName,
           etag,
+          outOfDate,
           pgu,
           sqlized.sql,
           sqlized.analysis,
@@ -214,12 +247,15 @@ object ProcessQuery {
         )
       case Precondition.FailedBecauseMatch(_) =>
         log.debug("if-none-match resulted in a cache hit")
-        NotModified ~> ETag(etag) ~> LastModified(lastModified)
+        NotModified ~> ETag(etag) ~> LastModified(lastModified) ~> outOfDateHeader(outOfDate)
       case Precondition.FailedBecauseNoMatch =>
         log.debug("if-match resulted in a miss")
         PreconditionFailed ~> ETag(etag)
     }
   }
+
+  def outOfDateHeader(outOfDate: Set[(SFResourceName, Stage)]): HttpServletResponse => Unit =
+    Header("X-SODA2-Data-Out-Of-Date", JsonUtil.renderJson(outOfDate.iterator.toSeq.sorted, pretty=false))
 
   trait QueryServerRollupInfo {
     val rollupDatasetName: Option[String]
@@ -339,7 +375,9 @@ object ProcessQuery {
     columnsByName: Map[ColumnName, SerializationColumnInfo],
     systemContext: Option[Map[String, String]],
     copyCache: CopyCache[InputMetaTypes],
+    dataVersionsBySFName: Seq[((SFResourceName, Stage), Long)],
     etag: EntityTag,
+    outOfDate: Set[(SFResourceName, Stage)],
     pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
     sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]],
     nameAnalysis: SoQLAnalysis[DatabaseNamesMetaTypes],
@@ -358,7 +396,7 @@ object ProcessQuery {
     if(cacheable) {
       for(result <- ResultCache(etag)) {
         log.info("Serving result from cache")
-        return buildResponse(result.etag, result.lastModified, result.contentType, os => os.write(result.body))
+        return buildResponse(result.etag, result.lastModified, result.contentType, outOfDate, os => os.write(result.body))
       }
     }
 
@@ -431,7 +469,7 @@ object ProcessQuery {
           writer <- managed(new BufferedWriter(osw))
         } {
           writer.write("[{")
-          writer.write("\"dataVersions\":%s\n ,".format(JsonUtil.renderJson(copyCache.asMap.mapValues(_._1.dataVersion).toSeq.sortBy(_._1), pretty = false)))
+          writer.write("\"dataVersions\":%s\n ,".format(JsonUtil.renderJson(dataVersionsBySFName, pretty = false)))
           for(debugFields <- debugFields) {
             writer.write("\"debug\":%s\n ,".format(JsonUtil.renderJson(debugFields, pretty = false)))
           }
@@ -476,13 +514,14 @@ object ProcessQuery {
       }
     }
 
-    buildResponse(etag, lastModified, contentType, resultStream)
+    buildResponse(etag, lastModified, contentType, outOfDate, resultStream)
   }
 
-  def buildResponse(etag: EntityTag, lastModified: DateTime, contentType: String, body: OutputStream => Unit): HttpResponse = {
+  def buildResponse(etag: EntityTag, lastModified: DateTime, contentType: String, outOfDate: Set[(SFResourceName, Stage)], body: OutputStream => Unit): HttpResponse = {
     ETag(etag) ~>
       LastModified(lastModified) ~>
       ContentType(contentType) ~>
+      outOfDateHeader(outOfDate) ~>
       Stream(body)
   }
 
