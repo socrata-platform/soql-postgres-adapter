@@ -147,6 +147,7 @@ object Hashable {
         case rewrite.Pass.LimitIfUnlimited(lim) =>
           hasher.hashByte(11)
           hasher.hash(lim)
+        case rewrite.Pass.RemoveTrivialJoins => hasher.hashByte(12)
       }
   }
 

@@ -39,9 +39,7 @@ object Deserializer extends LabelUniverse[InputMetaTypes] {
   )
   object AuxTableData {
     implicit def deserialize(
-      implicit ev1: Readable[DatasetInternalName],
-      ev2: Readable[UserColumnId],
-      ev3: Readable[Stage]
+      implicit ev: Readable[UserColumnId]
     ) = new Readable[AuxTableData] {
       def readFrom(buffer: ReadBuffer): AuxTableData = {
         buffer.read[Int]() match {
