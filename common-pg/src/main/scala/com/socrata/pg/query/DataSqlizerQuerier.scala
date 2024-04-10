@@ -1,7 +1,6 @@
 package com.socrata.pg.query
 
 import scala.annotation.tailrec
-
 import com.rojoma.json.v3.ast.JString
 import com.rojoma.simplearm.v2._
 import com.socrata.datacoordinator.{MutableRow, Row}
@@ -12,7 +11,7 @@ import com.socrata.datacoordinator.util.CloseableIterator
 import com.socrata.pg.query.QueryResult.QueryRuntimeError
 import com.socrata.pg.soql.ParametricSql
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.{BinaryTree, Leaf, Compound, PipeQuery, UnionQuery, UnionAllQuery, IntersectQuery, IntersectAllQuery, MinusQuery, MinusAllQuery, SoQLAnalysis}
+import com.socrata.soql.{BinaryTree, Compound, IntersectAllQuery, IntersectQuery, Leaf, MinusAllQuery, MinusQuery, PipeQuery, PivotQuery, SoQLAnalysis, UnionAllQuery, UnionQuery}
 import com.socrata.soql.stdlib.{UserContext, Context => SoQLContext}
 import com.socrata.soql.types.{SoQLFixedTimestamp, SoQLFloatingTimestamp}
 
@@ -66,6 +65,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
       case intersectAll@IntersectAllQuery(_, _) => minEffectiveLimit(intersectAll)
       case MinusQuery(left, _) => effectiveLimit(left)
       case MinusAllQuery(left, _) => effectiveLimit(left)
+      case pq@PivotQuery(_, _) => maxEffectiveLimit(pq) // CMU TODO: i have no idea which side limit should come from actually
     }
   }
 

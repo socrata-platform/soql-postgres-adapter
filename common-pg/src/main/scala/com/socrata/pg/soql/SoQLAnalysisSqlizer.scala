@@ -183,7 +183,7 @@ object BinarySoQLAnalysisSqlizer extends Sqlizer[(BinaryTree[SoQLAnalysis[UserCo
     println(p1)
     println(p1b)
     val cols = analysis.selection.values.toList.map {
-      case FunctionCall(function, Seq(StringLiteral(name, _)), _) =>
+      case FunctionCall(function, Seq(StringLiteral(name, _)), _, _) =>
         val st = function.result
         s"${name} ${toDbType(st)}"
       case ColumnRef(_, column, st) =>
