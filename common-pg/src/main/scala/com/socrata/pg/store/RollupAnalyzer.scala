@@ -32,7 +32,7 @@ object RollupAnalyzer {
       Map[types.DatabaseColumnName[RollupMetaTypes], Seq[Either[JNull, types.DatabaseColumnName[RollupMetaTypes]]]]
     ],
     @AllowMissing("Nil")
-    rewritePasses: Seq[Seq[rewrite.Pass]],
+    rewritePasses: Seq[Seq[rewrite.AnyPass]],
     @AllowMissing("UserParameters.empty")
     userParameters: UserParameters
   )
