@@ -2,56 +2,30 @@
 //  https://github.com/RustCrypto/block-ciphers/blob/master/blowfish/src/lib.rs
 // which is Apache/MIT dual-licensed.
 
+use std::mem::size_of;
+
 pub struct Blowfish {
     s: [[u32; 256]; 4],
     p: [u32; 18]
 }
 
-fn next_u32_wrap(buf: &[u8], offset: &mut usize) -> u32 {
-    let mut v = 0;
-    for _ in 0..4 {
-        if *offset >= buf.len() {
-            *offset = 0;
-        }
-        v = (v << 8) | buf[*offset] as u32;
-        *offset += 1;
-    }
-    v
-}
+const SSIZE: usize = size_of::<u32>()*256;
+const SSIZES: usize = SSIZE*4;
+const PSIZE: usize = size_of::<u32>()*18;
+const BYTESIZE: usize = SSIZES + PSIZE;
 
 impl Blowfish {
-    const BYTESIZE: usize = 4*256*4 + 4*18;
-
-    fn init_state() -> Self {
-        Self { s: S, p: P }
-    }
-
-    pub fn from_bytes(bs: &[u8]) -> Self {
-        if bs.len() != Self::BYTESIZE {
-            panic!("Not a serialized blowfish");
+    pub fn new(key: &[u8]) -> Self {
+        if key.len() != 56 {
+            panic!("Invalid key");
         }
-        let mut bf = Self {
-            s: [[0; 256]; 4],
-            p: [0; 18]
-        };
-
-        let mut bs_ptr = 0;
-        for s in 0..4 {
-            for i in 0..256 {
-                bf.s[s][i] = u32::from_ne_bytes(*<&[u8;4]>::try_from(&bs[bs_ptr..bs_ptr+4]).unwrap());
-                bs_ptr += 4;
-            }
-        }
-        for p in 0..18 {
-            bf.p[p] = u32::from_ne_bytes(*<&[u8;4]>::try_from(&bs[bs_ptr..bs_ptr+4]).unwrap());
-            bs_ptr += 4;
-        }
-
-        bf
+        let mut blowfish = Self { s: S, p: P };
+        blowfish.expand_key(key);
+        blowfish
     }
 
     pub fn into_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::with_capacity(Self::BYTESIZE);
+        let mut result = Vec::with_capacity(BYTESIZE);
 
         for s in &self.s {
             for i in s {
@@ -68,7 +42,7 @@ impl Blowfish {
     fn expand_key(&mut self, key: &[u8]) {
         let mut key_pos = 0;
         for i in 0..18 {
-            self.p[i] ^= next_u32_wrap(key, &mut key_pos);
+            self.p[i] ^= Self::next_u32_wrap(key, &mut key_pos);
         }
         let mut lr = [0u32; 2];
         for i in 0..9 {
@@ -85,57 +59,111 @@ impl Blowfish {
         }
     }
 
-    fn round_function(&self, x: u32) -> u32 {
-        let a = self.s[0][(x >> 24) as usize];
-        let b = self.s[1][((x >> 16) & 0xff) as usize];
-        let c = self.s[2][((x >> 8) & 0xff) as usize];
-        let d = self.s[3][(x & 0xff) as usize];
-        (a.wrapping_add(b) ^ c).wrapping_add(d)
-    }
-
-    fn encrypt_lowlevel(&self, [mut l, mut r]: [u32; 2]) -> [u32; 2] {
-        for i in 0..8 {
-            l ^= self.p[2 * i];
-            r ^= self.round_function(l);
-            r ^= self.p[2 * i + 1];
-            l ^= self.round_function(r);
+    fn next_u32_wrap(buf: &[u8], offset: &mut usize) -> u32 {
+        let mut v = 0;
+        for _ in 0..4 {
+            if *offset >= buf.len() {
+                *offset = 0;
+            }
+            v = (v << 8) | buf[*offset] as u32;
+            *offset += 1;
         }
-        l ^= self.p[16];
-        r ^= self.p[17];
-        [r, l]
+        v
     }
+}
 
-    fn decrypt_lowlevel(&self, [mut l, mut r]: [u32; 2]) -> [u32; 2] {
-        for i in (1..9).rev() {
-            l ^= self.p[2 * i + 1];
-            r ^= self.round_function(l);
-            r ^= self.p[2 * i];
-            l ^= self.round_function(r);
-        }
-        l ^= self.p[1];
-        r ^= self.p[0];
-        [r, l]
+// This doesn't need to copy the data in order to operate on it
+pub struct FrozenBlowfish<'a> {
+    bs: &'a [u8; BYTESIZE]
+}
+
+impl <'a> FrozenBlowfish<'a> {
+    pub fn from_bytes(bs: &'a [u8]) -> Self {
+        let Ok(bs) = bs.try_into() else {
+            panic!("Not a serialized blowfish");
+        };
+        Self { bs }
     }
+}
 
-    pub fn new(key: &[u8]) -> Self {
-        if key.len() != 56 {
-            panic!("Invalid key");
-        }
-        let mut blowfish = Blowfish::init_state();
-        blowfish.expand_key(key);
-        blowfish
-    }
+// The public interface shared by both Blowfish and FrozenBlowfish
+pub trait Blowfishish {
+    fn encrypt(&self, n: u64) -> u64;
+    fn decrypt(&self, n: u64) -> u64;
+}
 
-    pub fn encrypt(&self, n: u64) -> u64 {
+// ..implemented with a blanket impl for both.
+impl <T> Blowfishish for T where T: BlowfishImpl {
+    fn encrypt(&self, n: u64) -> u64 {
         let n = n.to_be();
         let [hi, lo] = self.encrypt_lowlevel([(n >> 32) as u32, n as u32]);
         u64::from_be((hi as u64) << 32 | (lo as u64))
     }
 
-    pub fn decrypt(&self, n: u64) -> u64 {
+    fn decrypt(&self, n: u64) -> u64 {
         let n = n.to_be();
         let [hi, lo] = self.decrypt_lowlevel([(n >> 32) as u32, n as u32]);
         u64::from_be((hi as u64) << 32 | (lo as u64))
+    }
+}
+
+// The non-public interface shared by them
+trait BlowfishImpl {
+    fn s(&self, i: usize, s: usize) -> u32;
+    fn p(&self, p: usize) -> u32;
+
+    fn round_function(&self, x: u32) -> u32 {
+        let a = self.s(0, (x >> 24) as usize);
+        let b = self.s(1, ((x >> 16) & 0xff) as usize);
+        let c = self.s(2, ((x >> 8) & 0xff) as usize);
+        let d = self.s(3, (x & 0xff) as usize);
+        (a.wrapping_add(b) ^ c).wrapping_add(d)
+    }
+
+    fn encrypt_lowlevel(&self, [mut l, mut r]: [u32; 2]) -> [u32; 2] {
+        for i in 0..8 {
+            l ^= self.p(2 * i);
+            r ^= self.round_function(l);
+            r ^= self.p(2 * i + 1);
+            l ^= self.round_function(r);
+        }
+        l ^= self.p(16);
+        r ^= self.p(17);
+        [r, l]
+    }
+
+    fn decrypt_lowlevel(&self, [mut l, mut r]: [u32; 2]) -> [u32; 2] {
+        for i in (1..9).rev() {
+            l ^= self.p(2 * i + 1);
+            r ^= self.round_function(l);
+            r ^= self.p(2 * i);
+            l ^= self.round_function(r);
+        }
+        l ^= self.p(1);
+        r ^= self.p(0);
+        [r, l]
+    }
+}
+
+impl BlowfishImpl for Blowfish {
+    fn s(&self, i: usize, s: usize) -> u32 {
+        self.s[i][s]
+    }
+
+    fn p(&self, p: usize) -> u32 {
+        self.p[p]
+    }
+}
+
+impl <'a> BlowfishImpl for FrozenBlowfish<'a> {
+    fn s(&self, i: usize, s: usize) -> u32 {
+        let start = (i * SSIZE) + s * size_of::<u32>();
+        u32::from_ne_bytes(*<&[u8; size_of::<u32>()]>::try_from(&self.bs[start..start+size_of::<u32>()]).unwrap())
+    }
+
+    fn p(&self, p: usize) -> u32 {
+        let start = SSIZES + p * size_of::<u32>();
+        u32::from_ne_bytes(*<&[u8; size_of::<u32>()]>::try_from(&self.bs[start..start+size_of::<u32>()]).unwrap())
     }
 }
 
@@ -309,9 +337,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn agrees_with_reference_implementation() {
+    fn unfrozen_agrees_with_reference_implementation() {
         let key = b"12345678901234567890123456789012345678901234567890123456";
         let bf = Blowfish::new(key);
+        let encrypted = bf.encrypt(0x123456789abcdef);
+        assert_eq!(encrypted, 0x84a0a6b45839fcff);
+        let decrypted = bf.decrypt(encrypted);
+        assert_eq!(decrypted, 0x123456789abcdef);
+    }
+
+    #[test]
+    fn frozen_agrees_with_reference_implementation() {
+        let key = b"12345678901234567890123456789012345678901234567890123456";
+        let bf = Blowfish::new(key).into_bytes();
+        let bf = FrozenBlowfish::from_bytes(&bf);
         let encrypted = bf.encrypt(0x123456789abcdef);
         assert_eq!(encrypted, 0x84a0a6b45839fcff);
         let decrypted = bf.decrypt(encrypted);

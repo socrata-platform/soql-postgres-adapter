@@ -7,7 +7,8 @@ $$
 mod blowfish {
   undivert(src/blowfish.rs)
 }
-Ok(Some(blowfish::Blowfish::new(&key).into_bytes()))
+use blowfish::Blowfish;
+Ok(Some(Blowfish::new(&key).into_bytes()))
 $$;
 
 CREATE OR REPLACE FUNCTION obfuscate(obfuscator BYTEA, value bigint)
@@ -19,7 +20,8 @@ $$
 mod blowfish {
   undivert(src/blowfish.rs)
 }
-Ok(Some(blowfish::Blowfish::from_bytes(obfuscator).encrypt(value as u64) as i64))
+use blowfish::{FrozenBlowfish, Blowfishish};
+Ok(Some(FrozenBlowfish::from_bytes(obfuscator).encrypt(value as u64) as i64))
 $$;
 
 CREATE OR REPLACE FUNCTION make_rowid(value BIGINT)
