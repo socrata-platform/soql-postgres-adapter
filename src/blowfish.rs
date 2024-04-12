@@ -4,6 +4,7 @@
 
 use std::mem::size_of;
 
+/// A cipher wich can be used as a random permutation of 64-bit ints.
 pub struct Blowfish {
     s: [[u32; 256]; 4],
     p: [u32; 18]
@@ -15,6 +16,8 @@ const PSIZE: usize = size_of::<u32>()*18;
 const BYTESIZE: usize = SSIZES + PSIZE;
 
 impl Blowfish {
+    /// Create a `Blowfish` cipher with the given key, which must be
+    /// exactly 56 bytes long.
     pub fn new(key: &[u8]) -> Self {
         if key.len() != 56 {
             panic!("Invalid key");
@@ -24,6 +27,9 @@ impl Blowfish {
         blowfish
     }
 
+    /// Freeze this `Blowfish` value into a byte array, which can
+    /// subsequently be thawed with `FrozenBlowfish::from_bytes` and
+    /// used.
     pub fn into_bytes(&self) -> Vec<u8> {
         let mut result = Vec::with_capacity(BYTESIZE);
 
@@ -72,7 +78,8 @@ impl Blowfish {
     }
 }
 
-// This doesn't need to copy the data in order to operate on it
+/// A cipher which can be used as a random permutation of 64-bit ints,
+/// rehydrated from a byte array produced with `Blowfish::into_bytes`.
 pub struct FrozenBlowfish<'a> {
     bs: &'a [u8; BYTESIZE]
 }
@@ -86,7 +93,7 @@ impl <'a> FrozenBlowfish<'a> {
     }
 }
 
-// The public interface shared by both Blowfish and FrozenBlowfish
+/// The public interface shared by both Blowfish and FrozenBlowfish
 pub trait Blowfishish {
     fn encrypt(&self, n: u64) -> u64;
     fn decrypt(&self, n: u64) -> u64;
