@@ -13,7 +13,9 @@ pub struct Blowfish {
 const SSIZE: usize = size_of::<u32>()*256;
 const SSIZES: usize = SSIZE*4;
 const PSIZE: usize = size_of::<u32>()*18;
-const BYTESIZE: usize = SSIZES + PSIZE;
+const BYTESIZE_BASE: usize = SSIZES + PSIZE;
+const BYTESIZE: usize = BYTESIZE_BASE + size_of::<u32>();
+const TAG: &[u8] = &0x12345678u32.to_ne_bytes();
 
 impl Blowfish {
     /// Create a `Blowfish` cipher with the given key, which must be
@@ -41,6 +43,7 @@ impl Blowfish {
         for p in &self.p {
             result.extend(p.to_ne_bytes());
         }
+        result.extend(TAG);
 
         result
     }
@@ -86,9 +89,16 @@ pub struct FrozenBlowfish<'a> {
 
 impl <'a> FrozenBlowfish<'a> {
     pub fn from_bytes(bs: &'a [u8]) -> Self {
-        let Ok(bs) = bs.try_into() else {
-            panic!("Not a serialized blowfish");
+        let Ok(bs) = <&[u8; BYTESIZE]>::try_from(bs) else {
+            panic!("Not a serialized blowfish - incorrect size");
         };
+        // Because we serialize native-endian bytes, this shouldn't be
+        // persisted anywhere.  But if it is persisted somewhere and
+        // gets deserialized on a machine with a different endianness,
+        // yell loudly.
+        if &bs[BYTESIZE_BASE..BYTESIZE] != TAG {
+            panic!("Not a serialized blowfish - incorrect tag");
+        }
         Self { bs }
     }
 }
