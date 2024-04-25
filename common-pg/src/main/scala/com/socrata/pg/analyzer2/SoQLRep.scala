@@ -711,8 +711,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       override def physicalColumnCount = 2
 
       override def physicalDatabaseColumns(name: ColumnLabel) = {
-        val base = namespace.columnBase(name)
-        Seq(base ++ d"_number", base ++ d"_type")
+        Seq(namespace.columnName(name, "number"), namespace.columnName(name, "type"))
       }
 
       override def physicalDatabaseTypes = Seq(d"text", d"text")
@@ -727,7 +726,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       }
 
       override def compressedDatabaseColumn(name: ColumnLabel) =
-        namespace.columnBase(name)
+        namespace.columnName(name)
 
       override def compressedDatabaseType = d"jsonb"
 
@@ -833,12 +832,17 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       }
 
       override def physicalDatabaseColumns(name: ColumnLabel) = {
-        val base = namespace.columnBase(name)
-        Seq(base, base ++ d"_address", base ++ d"_city", base ++ d"_state", base ++ d"_zip")
+        Seq(
+          namespace.columnName(name),
+          namespace.columnName(name, "address"),
+          namespace.columnName(name, "city"),
+          namespace.columnName(name, "state"),
+          namespace.columnName(name, "zip")
+        )
       }
 
       override def compressedDatabaseColumn(name: ColumnLabel) =
-        namespace.columnBase(name)
+        namespace.columnName(name)
 
       override def compressedDatabaseType = d"jsonb"
 
@@ -957,8 +961,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       override def physicalColumnCount = 2
 
       override def physicalDatabaseColumns(name: ColumnLabel) = {
-        val base = namespace.columnBase(name)
-        Seq(base ++ d"_url", base ++ d"_description")
+        Seq(namespace.columnName(name, "url"), namespace.columnName(name, "description"))
       }
 
       override def physicalDatabaseTypes = Seq(d"text", d"text")
@@ -973,7 +976,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       }
 
       override def compressedDatabaseColumn(name: ColumnLabel) =
-        namespace.columnBase(name)
+        namespace.columnName(name)
 
       override def compressedDatabaseType = d"jsonb"
 

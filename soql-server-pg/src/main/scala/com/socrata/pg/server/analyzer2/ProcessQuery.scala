@@ -125,7 +125,7 @@ object ProcessQuery {
 
                 private val columns = statement.schema.keysIterator.toArray
                 override def databaseColumnNameOfIndex(idx: Int) =
-                  DatabaseColumnName(Namespaces.rawAutoColumnBase(columns(idx)))
+                  DatabaseColumnName(Namespaces.rawAutoColumnName(columns(idx)))
               }
             }
         }

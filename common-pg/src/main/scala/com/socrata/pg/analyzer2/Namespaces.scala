@@ -12,9 +12,14 @@ object Namespaces extends SqlNamespaces[DatabaseNamesMetaTypes] {
     dataTableName.name
   }
 
-  override def rawDatabaseColumnBase(dcn: DatabaseColumnName) = {
+  override def rawDatabaseColumnName(dcn: DatabaseColumnName) = {
     val DatabaseColumnName(physicalColumnBase) = dcn
     physicalColumnBase
+  }
+
+  override def rawDatabaseColumnName(dcn: DatabaseColumnName, suffix: String) = {
+    val DatabaseColumnName(physicalColumnBase) = dcn
+    physicalColumnBase + "_" + suffix
   }
 
   override def gensymPrefix: String = "g"
