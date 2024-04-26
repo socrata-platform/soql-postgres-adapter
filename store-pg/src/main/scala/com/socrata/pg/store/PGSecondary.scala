@@ -772,14 +772,11 @@ class PGSecondary(val storeConfig: StoreConfig) extends Secondary[SoQLType, SoQL
     val sidColumnInfo = newSchema.values.find(_.isSystemPrimaryKey).get
 
     for { iter <- rows } {
-      // TODO: divide rows based on data size instead of number of rows.
-      iter.grouped(resyncBatchSize).foreach { bi =>
-        for { row: ColumnIdMap[SoQLValue] <- bi } {
-           logger.trace("adding row: {}", row)
-           val rowId = pgu.commonSupport.typeContext.makeSystemIdFromValue(row.get(sidColumnInfo.systemId).get)
-           loader.insert(rowId, row)
+      pgu.rowInserter(copyCtx) { inserter =>
+        for(row <- iter) {
+          val rowId = pgu.commonSupport.typeContext.makeSystemIdFromValue(row.get(sidColumnInfo.systemId).get)
+          inserter.insert(Insert(rowId, row).data)
         }
-        loader.flush()
       }
     }
     truthSchema.values.find(_.isSystemPrimaryKey).foreach { pkCol =>

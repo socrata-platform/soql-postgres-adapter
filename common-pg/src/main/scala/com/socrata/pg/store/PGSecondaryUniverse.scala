@@ -64,6 +64,10 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
                       logger: Logger[SoQLType, SoQLValue]): SqlPrevettedLoader[SoQLType,SoQLValue] =
     new SqlPrevettedLoader(conn, sqlizerFactory(copyCtx.copyInfo, datasetContextFactory(copyCtx.schema)), logger)
 
+  def rowInserter[T](copyCtx: DatasetCopyContext[SoQLType])(op: DataSqlizer[SoQLType, SoQLValue]#Inserter => T): (Long, T) =
+    sqlizerFactory(copyCtx.copyInfo, datasetContextFactory(copyCtx.schema)).
+      insertBatch(conn)(op)
+
   def sqlizerFactory(copyInfo: CopyInfo, datasetContext: RepBasedSqlDatasetContext[SoQLType, SoQLValue])
   : PostgresRepBasedDataSqlizer[SoQLType,SoQLValue] =
     new PostgresRepBasedDataSqlizer(copyInfo.dataTableName, datasetContext, copyInProvider)
