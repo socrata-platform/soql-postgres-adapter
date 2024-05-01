@@ -5,7 +5,7 @@
 use std::mem::size_of;
 
 /// A cipher wich can be used as a random permutation of 64-bit ints.
-pub struct Blowfish {
+pub struct OwnedBlowfish {
     s: [[u32; 256]; 4],
     p: [u32; 18]
 }
@@ -17,8 +17,8 @@ const BYTESIZE_BASE: usize = SSIZES + PSIZE;
 const BYTESIZE: usize = BYTESIZE_BASE + size_of::<u32>();
 const TAG: &[u8] = &0x12345678u32.to_ne_bytes();
 
-impl Blowfish {
-    /// Create a `Blowfish` cipher with the given key, which must be
+impl OwnedBlowfish {
+    /// Create a `OwnedBlowfish` cipher with the given key, which must be
     /// exactly 56 bytes long.
     pub fn new(key: &[u8]) -> Self {
         if key.len() != 56 {
@@ -29,8 +29,8 @@ impl Blowfish {
         blowfish
     }
 
-    /// Freeze this `Blowfish` value into a byte array, which can
-    /// subsequently be thawed with `FrozenBlowfish::from_bytes` and
+    /// Freeze this `OwnedBlowfish` value into a byte array, which can
+    /// subsequently be thawed with `BorrowedBlowfish::from_bytes` and
     /// used.
     pub fn into_bytes(&self) -> Vec<u8> {
         let mut result = Vec::with_capacity(BYTESIZE);
@@ -83,11 +83,11 @@ impl Blowfish {
 
 /// A cipher which can be used as a random permutation of 64-bit ints,
 /// rehydrated from a byte array produced with `Blowfish::into_bytes`.
-pub struct FrozenBlowfish<'a> {
+pub struct BorrowedBlowfish<'a> {
     bs: &'a [u8; BYTESIZE]
 }
 
-impl <'a> FrozenBlowfish<'a> {
+impl <'a> BorrowedBlowfish<'a> {
     pub fn from_bytes(bs: &'a [u8]) -> Self {
         let Ok(bs) = <&[u8; BYTESIZE]>::try_from(bs) else {
             panic!("Not a serialized blowfish - incorrect size");
@@ -103,14 +103,14 @@ impl <'a> FrozenBlowfish<'a> {
     }
 }
 
-/// The public interface shared by both Blowfish and FrozenBlowfish
-pub trait Blowfishish {
+/// The public interface shared by both OwnedBlowfish and BorrowedBlowfish
+pub trait Blowfish {
     fn encrypt(&self, n: u64) -> u64;
     fn decrypt(&self, n: u64) -> u64;
 }
 
 // ..implemented with a blanket impl for both.
-impl <T> Blowfishish for T where T: BlowfishImpl {
+impl <T> Blowfish for T where T: BlowfishImpl {
     fn encrypt(&self, n: u64) -> u64 {
         let n = n.to_be();
         let [hi, lo] = self.encrypt_lowlevel([(n >> 32) as u32, n as u32]);
@@ -162,7 +162,7 @@ trait BlowfishImpl {
     }
 }
 
-impl BlowfishImpl for Blowfish {
+impl BlowfishImpl for OwnedBlowfish {
     fn s(&self, i: usize, s: usize) -> u32 {
         self.s[i][s]
     }
@@ -172,7 +172,7 @@ impl BlowfishImpl for Blowfish {
     }
 }
 
-impl <'a> BlowfishImpl for FrozenBlowfish<'a> {
+impl <'a> BlowfishImpl for BorrowedBlowfish<'a> {
     fn s(&self, i: usize, s: usize) -> u32 {
         let start = (i * SSIZE) + s * size_of::<u32>();
         u32::from_ne_bytes(*<&[u8; size_of::<u32>()]>::try_from(&self.bs[start..start+size_of::<u32>()]).unwrap())
@@ -354,9 +354,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn unfrozen_agrees_with_reference_implementation() {
+    fn owned_agrees_with_reference_implementation() {
         let key = b"12345678901234567890123456789012345678901234567890123456";
-        let bf = Blowfish::new(key);
+        let bf = OwnedBlowfish::new(key);
         let encrypted = bf.encrypt(0x123456789abcdef);
         assert_eq!(encrypted, 0x84a0a6b45839fcff);
         let decrypted = bf.decrypt(encrypted);
@@ -364,10 +364,10 @@ mod tests {
     }
 
     #[test]
-    fn frozen_agrees_with_reference_implementation() {
+    fn borrowed_agrees_with_reference_implementation() {
         let key = b"12345678901234567890123456789012345678901234567890123456";
-        let bf = Blowfish::new(key).into_bytes();
-        let bf = FrozenBlowfish::from_bytes(&bf);
+        let bf = OwnedBlowfish::new(key).into_bytes();
+        let bf = BorrowedBlowfish::from_bytes(&bf);
         let encrypted = bf.encrypt(0x123456789abcdef);
         assert_eq!(encrypted, 0x84a0a6b45839fcff);
         let decrypted = bf.decrypt(encrypted);
