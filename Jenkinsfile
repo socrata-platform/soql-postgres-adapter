@@ -21,13 +21,16 @@ def releaseTag = new com.socrata.ReleaseTag(steps, service_server)
 pipeline {
   options {
     ansiColor('xterm')
+    buildDiscarder(logRotator(numToKeepStr: '50'))
+    disableConcurrentBuilds(abortPrevious: true)
+    timeout(time: 100, unit: 'MINUTES')
   }
   parameters {
+    string(name: 'AGENT', defaultValue: 'build-worker', description: 'Which build agent to use?')
+    string(name: 'BRANCH_SPECIFIER', defaultValue: 'origin/main', description: 'Use this branch for building the artifact.')
     booleanParam(name: 'RELEASE_BUILD', defaultValue: false, description: 'Are we building a release candidate?')
     booleanParam(name: 'RELEASE_DRY_RUN', defaultValue: false, description: 'To test out the release build without creating a new tag.')
     string(name: 'RELEASE_NAME', defaultValue: '', description: 'For release builds, the release name which is used for the git tag and the deploy tag.')
-    string(name: 'AGENT', defaultValue: 'build-worker', description: 'Which build agent to use?')
-    string(name: 'BRANCH_SPECIFIER', defaultValue: 'origin/main', description: 'Use this branch for building the artifact.')
   }
   agent {
     label params.AGENT
@@ -38,23 +41,7 @@ pipeline {
     WEBHOOK_ID = 'WEBHOOK_IQ'
   }
   stages {
-    stage('Release Tag') {
-      when {
-        expression { return params.RELEASE_BUILD }
-      }
-      steps {
-        script {
-          lastStage = env.STAGE_NAME
-          if (params.RELEASE_DRY_RUN) {
-            echo 'DRY RUN: Skipping release tag creation'
-          }
-          else {
-            env.GIT_TAG = releaseTag.create(params.RELEASE_NAME)
-          }
-        }
-      }
-    }
-    stage('Build SoQL Server PG') {
+    stage('Build') {
       steps {
         script {
           lastStage = env.STAGE_NAME
@@ -70,81 +57,161 @@ pipeline {
         }
       }
     }
-    stage('Dockerize SoQL Server PG') {
+    stage('Docker Build:') {
       when {
         not { expression { isPr } }
       }
-      steps {
-        script {
-          lastStage = env.STAGE_NAME
-          if (params.RELEASE_BUILD) {
-            env.REGISTRY_PUSH = (params.RELEASE_DRY_RUN) ? 'none' : 'all'
-            env.DOCKER_TAG = dockerize_server.docker_build_specify_tag_and_push(params.RELEASE_NAME, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server), env.REGISTRY_PUSH)
-          } else {
-            env.REGISTRY_PUSH = 'internal'
-            env.DOCKER_TAG = dockerize_server.docker_build('STAGING', env.GIT_COMMIT, sbtbuild.getDockerPath(project_wd_server), sbtbuild.getDockerArtifact(project_wd_server), env.REGISTRY_PUSH)
+      parallel {
+        stage ('Docker Build - SoQL Server') {
+          steps {
+            script {
+              lastStage = env.STAGE_NAME
+              if (params.RELEASE_BUILD) {
+                env.DOCKER_TAG = dockerize_server.dockerBuildWithSpecificTag(
+                  tag: params.RELEASE_NAME,
+                  path: sbtbuild.getDockerPath(project_wd_server),
+                  artifacts: [sbtbuild.getDockerArtifact(project_wd_server)]
+                )
+              } else {
+                env.DOCKER_TAG = dockerize_server.dockerBuildWithDefaultTag(
+                  version: 'STAGING',
+                  sha: env.GIT_COMMIT,
+                  path: sbtbuild.getDockerPath(project_wd_server),
+                  artifacts: [sbtbuild.getDockerArtifact(project_wd_server)]
+                )
+              }
+            }
+          }
+        }
+        stage ('Docker Build - Secondary') {
+          steps {
+            script {
+              lastStage = env.STAGE_NAME
+              // Here's where we're getting the secondary artifact (named
+              // via env.STORE_PG_ARTIFACT) out for dockerizing, per the
+              // comment above.
+              if (params.RELEASE_BUILD) {
+                env.SECONDARY_DOCKER_TAG = dockerize_secondary.dockerBuildWithSpecificTag(
+                  tag: params.RELEASE_NAME,
+                  path: sbtbuild.getDockerPath(project_wd_secondary),
+                  artifacts: [env.STORE_PG_ARTIFACT]
+                )
+              } else {
+                env.SECONDARY_DOCKER_TAG = dockerize_secondary.dockerBuildWithDefaultTag(
+                  version: 'STAGING',
+                  sha: env.GIT_COMMIT,
+                  path: sbtbuild.getDockerPath(project_wd_secondary),
+                  artifacts: [env.STORE_PG_ARTIFACT]
+                )
+              }
+            }
           }
         }
       }
       post {
         success {
           script {
-            if (params.RELEASE_BUILD && !params.RELEASE_DRY_RUN) {
-              Map buildInfoServer = [
-                "project_id": service_server,
-                "build_id": env.DOCKER_TAG,
-                "release_id": params.RELEASE_NAME,
-                "git_tag": env.GIT_TAG
-              ]
-              createBuild(
-                buildInfoServer,
-                rmsSupportedEnvironment.production
-              )
+            if (params.RELEASE_BUILD) {
+              env.GIT_TAG = releaseTag.getFormattedTag(params.RELEASE_NAME)
+              if (releaseTag.doesReleaseTagExist(params.RELEASE_NAME)) {
+                echo "REBUILD: Tag ${env.GIT_TAG} already exists"
+                return
+              }
+              if (params.RELEASE_DRY_RUN) {
+                echo "DRY RUN: Would have created ${env.GIT_TAG} and pushed it to the repo"
+                currentBuild.description = "${service_server}:${params.RELEASE_NAME} and ${service_secondary}:${params.RELEASE_NAME} - DRY RUN"
+                return
+              }
+              releaseTag.create(params.RELEASE_NAME)
             }
           }
         }
       }
     }
-    stage('Dockerize Secondary') {
+    stage('Publish:') {
       when {
-        not { expression { isPr } }
+        allOf {
+          not { expression { isPr } }
+          not { expression { return params.RELEASE_BUILD && params.RELEASE_DRY_RUN } }
+        }
       }
-      steps {
-        script {
-          lastStage = env.STAGE_NAME
-          // Here's where we're getting the secondary artifact (named
-          // via env.STORE_PG_ARTIFACT) out for dockerizing, per the
-          // comment above.
-          if (params.RELEASE_BUILD) {
-            env.REGISTRY_PUSH = (params.RELEASE_DRY_RUN) ? 'none' : 'all'
-            env.SECONDARY_DOCKER_TAG = dockerize_secondary.docker_build_specify_tag_and_push(params.RELEASE_NAME, sbtbuild.getDockerPath(project_wd_secondary), env.STORE_PG_ARTIFACT, env.REGISTRY_PUSH)
-          } else {
-            env.REGISTRY_PUSH = 'internal'
-            env.SECONDARY_DOCKER_TAG = dockerize_secondary.docker_build('STAGING', env.GIT_COMMIT, sbtbuild.getDockerPath(project_wd_secondary), env.STORE_PG_ARTIFACT, env.REGISTRY_PUSH)
+      parallel {
+        stage('Publish - SoQL Server') {
+          steps {
+            script {
+              lastStage = env.STAGE_NAME
+              if (params.RELEASE_BUILD) {
+                env.BUILD_ID = dockerize_server.publish(sourceTag: env.DOCKER_TAG)
+              } else {
+                env.BUILD_ID = dockerize_server.publish(
+                  sourceTag: env.DOCKER_TAG,
+                  environments: ['internal']
+                )
+              }
+            }
           }
-          currentBuild.description = "${env.DOCKER_TAG} & ${env.SECONDARY_DOCKER_TAG}"
+          post {
+            success {
+              script {
+                if (params.RELEASE_BUILD) {
+                  Map buildInfo = [
+                    "project_id": service_server,
+                    "build_id": env.BUILD_ID,
+                    "release_id": params.RELEASE_NAME,
+                    "git_tag": env.GIT_TAG
+                  ]
+                  createBuild(
+                    buildInfo,
+                    rmsSupportedEnvironment.production
+                  )
+                }
+              }
+            }
+          }
+        }
+        stage('Publish - Secondary') {
+          steps {
+            script {
+              lastStage = env.STAGE_NAME
+              if (params.RELEASE_BUILD) {
+                env.SECONDARY_BUILD_ID = dockerize_secondary.publish(sourceTag: env.SECONDARY_DOCKER_TAG)
+              } else {
+                env.SECONDARY_BUILD_ID = dockerize_secondary.publish(
+                  sourceTag: env.SECONDARY_DOCKER_TAG,
+                  environments: ['internal']
+                )
+              }
+            }
+          }
+          post {
+            success {
+              script {
+                if (params.RELEASE_BUILD) {
+                  Map buildInfo = [
+                    "project_id": service_secondary,
+                    "build_id": env.SECONDARY_BUILD_ID,
+                    "release_id": params.RELEASE_NAME,
+                    "git_tag": env.GIT_TAG
+                  ]
+                  createBuild(
+                    buildInfo,
+                    rmsSupportedEnvironment.production
+                  )
+                }
+              }
+            }
+          }
         }
       }
       post {
         success {
           script {
-            if (params.RELEASE_BUILD && !params.RELEASE_DRY_RUN) {
-              Map buildInfoSecondary = [
-                "project_id": service_secondary,
-                "build_id": env.SECONDARY_DOCKER_TAG,
-                "release_id": params.RELEASE_NAME,
-                "git_tag": env.GIT_TAG
-              ]
-              createBuild(
-                buildInfoSecondary,
-                rmsSupportedEnvironment.production
-              )
-            }
+            currentBuild.description = "${env.BUILD_ID} & ${env.SECONDARY_BUILD_ID}"
           }
         }
       }
     }
-    stage('Deploys:') {
+    stage('Deploy:') {
       when {
         allOf {
           not { expression { isPr } }
@@ -152,21 +219,28 @@ pipeline {
         }
       }
       stages {
-        stage('Deploy SoQL Server PG') {
+        stage('Deploy - SoQL Server') {
           steps {
             script {
               lastStage = env.STAGE_NAME
-              // uses env.DOCKER_TAG and deploys to staging by default
-              marathonDeploy(serviceName: env.DEPLOY_PATTERN, waitTime: '60')
+              marathonDeploy(
+                serviceName: env.DEPLOY_PATTERN,
+                tag: env.BUILD_ID,
+                environment: 'staging',
+                waitTime: '60'
+              )
             }
           }
         }
-        stage('Deploy Secondary') {
+        stage('Deploy - Secondary') {
           steps {
             script {
               lastStage = env.STAGE_NAME
-              // deploys to staging by default
-              marathonDeploy(serviceName: env.SECONDARY_DEPLOY_PATTERN, tag: env.SECONDARY_DOCKER_TAG)
+              marathonDeploy(
+                serviceName: env.SECONDARY_DEPLOY_PATTERN,
+                tag: env.SECONDARY_BUILD_ID,
+                environment: 'staging'
+              )
             }
           }
         }
@@ -177,7 +251,10 @@ pipeline {
     failure {
       script {
         if (env.JOB_NAME.contains("${service_server}/main")) {
-          teamsMessage(message: "Build [${currentBuild.fullDisplayName}](${env.BUILD_URL}) has failed in stage ${lastStage}", webhookCredentialID: WEBHOOK_ID)
+          teamsMessage(
+            message: "Build [${currentBuild.fullDisplayName}](${env.BUILD_URL}) has failed in stage ${lastStage}",
+            webhookCredentialID: WEBHOOK_ID
+          )
         }
       }
     }
