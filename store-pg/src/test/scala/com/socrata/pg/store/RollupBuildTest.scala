@@ -11,8 +11,8 @@ import org.joda.time.DateTime
 class RollupBuildTest extends PlaybackBase {
 
   test("rollup rebuilds with unique table name when referenced dataset is updated") {
-    val peopleDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, Some("_people5"))
-    val actionDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, Some("_action5"))
+    val peopleDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, "_people5")
+    val actionDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, "_action5")
     val peopleLikeCountRollup = RollupInfo("peopleLikeCount", "SELECT _id, _name, count(@actions._subject) AS `like_count` JOIN @action5 AS @actions ON _id = @actions._person WHERE @actions._action='like' GROUP BY _id, _name")
 
     var originalRollupInfo:Option[LocalRollupInfo] = None

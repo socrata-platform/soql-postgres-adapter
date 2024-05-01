@@ -1,7 +1,7 @@
 package com.socrata.pg.store
 
 import com.rojoma.simplearm.v2._
-import com.socrata.datacoordinator.id.{CopyId, DatasetId, RollupName}
+import com.socrata.datacoordinator.id.{CopyId, DatasetId, DatasetResourceName, RollupName}
 import com.socrata.datacoordinator.id.sql._
 import com.socrata.datacoordinator.truth.DatabaseInReadOnlyMode
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo, DatasetInfo, TypeNamespace}
@@ -69,19 +69,20 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
 
   val createDatasetOnlyQueryTableMap =
     """INSERT INTO dataset_map
-      |(next_counter_value, locale_name, obfuscation_key)
-      |VALUES (?, ?, ?)
+      |(next_counter_value, locale_name, obfuscation_key, resource_name)
+      |VALUES (?, ?, ?, ?)
       |RETURNING system_id
     """.stripMargin
 
   /**
    * Creates a dataset_map entry with no copy info.
    */
-  def createDatasetOnly(localeName: String): DatasetId = {
+  def createDatasetOnly(localeName: String, resourceName: DatasetResourceName): DatasetId = {
     using(conn.prepareStatement(createDatasetOnlyQueryTableMap)) { stmt =>
       stmt.setLong(1, initialCounterValue)
       stmt.setString(2, localeName)
       stmt.setBytes(3, obfuscationKeyGenerator())
+      stmt.setString(4, resourceName.underlying)
       try {
         using(stmt.executeQuery()) { rs =>
           val returnedSomething = rs.next()

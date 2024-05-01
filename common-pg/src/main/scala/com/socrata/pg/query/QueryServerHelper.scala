@@ -1,7 +1,7 @@
 package com.socrata.pg.query
 
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
-import com.socrata.datacoordinator.id.{ColumnId, CopyId, DatasetId, RollupName, UserColumnId}
+import com.socrata.datacoordinator.id.{ColumnId, CopyId, DatasetId, DatasetResourceName, RollupName, UserColumnId}
 import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, DatasetCopyContext, DatasetInfo, LifecycleStage}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
@@ -62,8 +62,8 @@ object QueryServerHelper {
       val copyInfo = readCtx.copyInfo
 
       val relatedTableNames = removeTableAlias(collectRelatedTableNames(analyses))
-      val (relatedCopyMap, _relatedRollupMap) = getCopyAndRollupMaps(pgu, relatedTableNames, datasetInfo.resourceName.map(ResourceName(_)), reqCopy)
-      val joinCopiesMap = relatedCopyMap ++ copyInfo.datasetInfo.resourceName.map(rn => Map(TableName(rn) -> copyInfo)).getOrElse(Map.empty)
+      val (relatedCopyMap, _relatedRollupMap) = getCopyAndRollupMaps(pgu, relatedTableNames, ResourceName(datasetInfo.resourceName.underlying), reqCopy)
+      val joinCopiesMap = relatedCopyMap ++ Map(TableName(copyInfo.datasetInfo.resourceName.underlying) -> copyInfo)
       val sqlRepsWithJoin = joinCopiesMap.foldLeft(sqlReps) { (acc, joinCopy) =>
         val (tableName, copyInfo) = joinCopy
         acc ++ getJoinReps(pgu, copyInfo, tableName)
@@ -122,7 +122,7 @@ object QueryServerHelper {
 
   def getCopyAndRollupMaps(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                            tableNames: Seq[TableName],
-                           myResourceName: Option[ResourceName],
+                           myResourceName: ResourceName,
                            myCopy: Option[String]):
       (Map[TableName, CopyInfo], Map[TableName, LocalRollupInfo]) = {
     tableNames.foldLeft((Map.empty[TableName, CopyInfo], Map.empty[TableName, LocalRollupInfo])) { (acc, tableName) =>
@@ -143,7 +143,7 @@ object QueryServerHelper {
           val rn = new ResourceName(name)
 
           val desiredCopy =
-            if(Some(rn) == myResourceName) { // self-joins use this copy
+            if(rn == myResourceName) { // self-joins use this copy
               myCopy
             } else {
               None
@@ -210,8 +210,8 @@ object QueryServerHelper {
       val columnIdReps = schema.mapValuesStrict(pgu.commonSupport.repFor)
       columnIdReps.keys.map { columnId =>
         val userColumnId: UserColumnId = columnIdUserColumnIdMap(columnId)
-        val qualifier = tableName.alias.orElse(copy.datasetInfo.resourceName)
-        val qualifiedUserColumnId = new QualifiedUserColumnId(qualifier, userColumnId)
+        val qualifier = tableName.alias.getOrElse(copy.datasetInfo.resourceName.underlying)
+        val qualifiedUserColumnId = new QualifiedUserColumnId(Some(qualifier), userColumnId)
         qualifiedUserColumnId -> columnIdReps(columnId)
       }.toMap
     }
@@ -252,7 +252,7 @@ object QueryServerHelper {
   val typeReps: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]] = {
     // build fake columnInfo where most properties values do not matter except type
     val cid = new ColumnId(0)
-    val datasetInfo = DatasetInfo(DatasetId.Invalid, 0, 0, "", Array.empty[Byte], None)(null)
+    val datasetInfo = DatasetInfo(DatasetId.Invalid, 0, 0, "", Array.empty[Byte], DatasetResourceName(""))(null)
     val copyInfo = CopyInfo(datasetInfo, CopyId.Invalid, 0, LifecycleStage.Published, 0, 0, new DateTime(0), None)(null)
     SoQLType.typePreferences.foldLeft(Map.empty[SoQLType, SqlColumnRep[SoQLType, SoQLValue]]) { (map, entry) =>
       entry match {

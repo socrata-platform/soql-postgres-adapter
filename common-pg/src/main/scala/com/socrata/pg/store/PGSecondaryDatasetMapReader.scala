@@ -1,7 +1,7 @@
 package com.socrata.pg.store
 
 import com.rojoma.simplearm.v2._
-import com.socrata.datacoordinator.id.{CopyId, DatasetId, RollupName, DatasetInternalName}
+import com.socrata.datacoordinator.id.{CopyId, DatasetId, RollupName, DatasetInternalName, DatasetResourceName}
 import com.socrata.datacoordinator.truth.metadata.sql.{BasePostgresDatasetMapReader, PostgresDatasetMapReader}
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo, DatasetInfo, LifecycleStage, TypeNamespace}
 import com.socrata.datacoordinator.util.TimingReport
@@ -78,7 +78,7 @@ where referenced_copy_system_id = ?"""
           .takeWhile(_.next())
           .map(rs=>
             CopyInfo(
-              DatasetInfo(new DatasetId(rs.getLong("dataset_map_system_id")), rs.getLong("dataset_map_next_counter_value"), rs.getLong("dataset_map_latest_data_version"), rs.getString("dataset_map_locale_name"), rs.getBytes("dataset_map_obfuscation_key"), Option(rs.getString("dataset_map_resource_name"))),
+              DatasetInfo(new DatasetId(rs.getLong("dataset_map_system_id")), rs.getLong("dataset_map_next_counter_value"), rs.getLong("dataset_map_latest_data_version"), rs.getString("dataset_map_locale_name"), rs.getBytes("dataset_map_obfuscation_key"), DatasetResourceName(rs.getString("dataset_map_resource_name"))),
               new CopyId(rs.getLong("copy_map_system_id")),
               rs.getLong("copy_map_copy_number"),
               LifecycleStage.valueOf(rs.getString("copy_map_lifecycle_stage")),
@@ -127,7 +127,7 @@ where referenced_copy_system_id = ?"""
           .map(rs=>
             new LocalRollupInfo(
               CopyInfo(
-                DatasetInfo(new DatasetId(rs.getLong("dataset_map_system_id")), rs.getLong("dataset_map_next_counter_value"), rs.getLong("dataset_map_latest_data_version"), rs.getString("dataset_map_locale_name"), rs.getBytes("dataset_map_obfuscation_key"), Option(rs.getString("dataset_map_resource_name"))),
+                DatasetInfo(new DatasetId(rs.getLong("dataset_map_system_id")), rs.getLong("dataset_map_next_counter_value"), rs.getLong("dataset_map_latest_data_version"), rs.getString("dataset_map_locale_name"), rs.getBytes("dataset_map_obfuscation_key"), DatasetResourceName(rs.getString("dataset_map_resource_name"))),
                 new CopyId(rs.getLong("copy_map_system_id")),
                 rs.getLong("copy_map_copy_number"),
                 LifecycleStage.valueOf(rs.getString("copy_map_lifecycle_stage")),

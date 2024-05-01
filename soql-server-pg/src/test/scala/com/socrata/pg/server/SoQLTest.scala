@@ -1,5 +1,7 @@
 package com.socrata.pg.server
 
+import java.util.UUID
+
 import com.socrata.datacoordinator.id.DatasetId
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
@@ -41,22 +43,24 @@ abstract class SoQLTest extends PGSecondaryTestBase with PGQueryServerDatabaseTe
     }
   }
 
-  lazy val plainCtx = Map(TableName("_manufacturer").qualifier -> joinCtx2,
-                          TableName("_classification").qualifier -> joinCtx3,
-                          TableName("_country").qualifier -> joinCtx4)
-  lazy val aliasCtx = plainCtx ++ Map(TableName("_manufacturer", Some("_m")).qualifier -> joinCtx2,
-                                      TableName("_manufacturer", Some("_m2")).qualifier -> joinCtx2,
-                                      TableName("_manufacturer", Some("_z$")).qualifier -> joinCtx2) ++
-                                  Map(TableName("_classification", Some("_c")).qualifier -> joinCtx3,
-                                      TableName("_classification", Some("_c2")).qualifier -> joinCtx3) ++
-                                  Map(TableName("_country", Some("_co")).qualifier -> joinCtx4)
+  val uniquifier = UUID.randomUUID().toString.toLowerCase
+
+  lazy val plainCtx = Map(TableName(s"_manufacturer_${uniquifier}").qualifier -> joinCtx2,
+                          TableName(s"_classification_${uniquifier}").qualifier -> joinCtx3,
+                          TableName(s"_country_${uniquifier}").qualifier -> joinCtx4)
+  lazy val aliasCtx = plainCtx ++ Map(TableName(s"_manufacturer_${uniquifier}", Some("_m")).qualifier -> joinCtx2,
+                                      TableName(s"_manufacturer_${uniquifier}", Some("_m2")).qualifier -> joinCtx2,
+                                      TableName(s"_manufacturer_${uniquifier}", Some("_z$")).qualifier -> joinCtx2) ++
+                                  Map(TableName(s"_classification_${uniquifier}", Some("_c")).qualifier -> joinCtx3,
+                                      TableName(s"_classification_${uniquifier}", Some("_c2")).qualifier -> joinCtx3) ++
+                                  Map(TableName(s"_country_${uniquifier}", Some("_co")).qualifier -> joinCtx4)
 
   override def beforeAll: Unit = {
     createDatabases()
     withDb { conn =>
-      val (truthDsId2, secDsId2) = importDataset(conn, "mutate-create-2nd-dataset.json")
-      val (truthDsId3, secDsId3) = importDataset(conn, "mutate-create-3rd-dataset.json")
-      val (truthDsId4, secDsId4) = importDataset(conn, "mutate-create-4th-dataset.json")
+      val (truthDsId2, secDsId2) = importDataset(conn, "mutate-create-2nd-dataset.json", forceUnique = Some(uniquifier))
+      val (truthDsId3, secDsId3) = importDataset(conn, "mutate-create-3rd-dataset.json", forceUnique = Some(uniquifier))
+      val (truthDsId4, secDsId4) = importDataset(conn, "mutate-create-4th-dataset.json", forceUnique = Some(uniquifier))
 
       truthDatasetIdJoin2 = truthDsId2
       secDatasetIdJoin2 = secDsId2
