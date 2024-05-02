@@ -8,6 +8,9 @@ mod blowfish {
   undivert(src/blowfish.rs)
 }
 use blowfish::OwnedBlowfish;
+let Ok(key) = <&[u8; blowfish::KEYSIZE]>::try_from(key) else {
+    return Err("Invalid key".into());
+};
 Ok(Some(OwnedBlowfish::new(&key).into_bytes()))
 $$;
 
@@ -21,7 +24,10 @@ mod blowfish {
   undivert(src/blowfish.rs)
 }
 use blowfish::{BorrowedBlowfish, Blowfish};
-Ok(Some(BorrowedBlowfish::from_bytes(obfuscator).encrypt(value as u64) as i64))
+let Ok(obfuscator) = <&[u8; blowfish::BYTESIZE]>::try_from(obfuscator) else {
+    return Err("Invalid obfuscator".into());
+};
+Ok(Some(BorrowedBlowfish::from_bytes(obfuscator)?.encrypt(value as u64) as i64))
 $$;
 
 CREATE OR REPLACE FUNCTION make_rowid(value BIGINT)

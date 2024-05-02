@@ -2,7 +2,7 @@
 //  https://github.com/RustCrypto/block-ciphers/blob/master/blowfish/src/lib.rs
 // which is Apache/MIT dual-licensed.
 
-use std::mem::size_of;
+use std::{error::Error, fmt::{self, Display}, mem::size_of};
 
 /// A cipher wich can be used as a random permutation of 64-bit ints.
 pub struct OwnedBlowfish {
@@ -10,20 +10,18 @@ pub struct OwnedBlowfish {
     p: [u32; 18]
 }
 
+pub const KEYSIZE: usize = 56;
 const SSIZE: usize = size_of::<u32>()*256;
 const SSIZES: usize = SSIZE*4;
 const PSIZE: usize = size_of::<u32>()*18;
 const BYTESIZE_BASE: usize = SSIZES + PSIZE;
-const BYTESIZE: usize = BYTESIZE_BASE + size_of::<u32>();
+pub const BYTESIZE: usize = BYTESIZE_BASE + size_of::<u32>();
 const TAG: &[u8] = &0x12345678u32.to_ne_bytes();
 
 impl OwnedBlowfish {
     /// Create a `OwnedBlowfish` cipher with the given key, which must be
     /// exactly 56 bytes long.
-    pub fn new(key: &[u8]) -> Self {
-        if key.len() != 56 {
-            panic!("Invalid key");
-        }
+    pub fn new(key: &[u8; KEYSIZE]) -> Self {
         let mut blowfish = Self { s: S, p: P };
         blowfish.expand_key(key);
         blowfish
@@ -48,7 +46,7 @@ impl OwnedBlowfish {
         result
     }
 
-    fn expand_key(&mut self, key: &[u8]) {
+    fn expand_key(&mut self, key: &[u8; KEYSIZE]) {
         let mut key_pos = 0;
         for i in 0..18 {
             self.p[i] ^= Self::next_u32_wrap(key, &mut key_pos);
@@ -68,7 +66,7 @@ impl OwnedBlowfish {
         }
     }
 
-    fn next_u32_wrap(buf: &[u8], offset: &mut usize) -> u32 {
+    fn next_u32_wrap(buf: &[u8; KEYSIZE], offset: &mut usize) -> u32 {
         let mut v = 0;
         for _ in 0..4 {
             if *offset >= buf.len() {
@@ -87,19 +85,32 @@ pub struct BorrowedBlowfish<'a> {
     bs: &'a [u8; BYTESIZE]
 }
 
+#[derive(Debug)]
+pub enum BorrowedBlowfishError {
+    InvalidTag
+}
+
+impl Display for BorrowedBlowfishError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BorrowedBlowfishError::InvalidTag => f.write_str("Not a serialized blowfish - incorrect tag"),
+        }
+    }
+}
+
+impl Error for BorrowedBlowfishError {}
+
 impl <'a> BorrowedBlowfish<'a> {
-    pub fn from_bytes(bs: &'a [u8]) -> Self {
-        let Ok(bs) = <&[u8; BYTESIZE]>::try_from(bs) else {
-            panic!("Not a serialized blowfish - incorrect size");
-        };
+    pub fn from_bytes(bs: &'a [u8; BYTESIZE]) -> Result<Self, BorrowedBlowfishError> {
         // Because we serialize native-endian bytes, this shouldn't be
         // persisted anywhere.  But if it is persisted somewhere and
         // gets deserialized on a machine with a different endianness,
         // yell loudly.
         if &bs[BYTESIZE_BASE..BYTESIZE] != TAG {
-            panic!("Not a serialized blowfish - incorrect tag");
+            Err(BorrowedBlowfishError::InvalidTag)
+        } else {
+            Ok(Self { bs })
         }
-        Self { bs }
     }
 }
 
@@ -367,7 +378,7 @@ mod tests {
     fn borrowed_agrees_with_reference_implementation() {
         let key = b"12345678901234567890123456789012345678901234567890123456";
         let bf = OwnedBlowfish::new(key).into_bytes();
-        let bf = BorrowedBlowfish::from_bytes(&bf);
+        let bf = BorrowedBlowfish::from_bytes(bf.as_slice().try_into().unwrap()).unwrap();
         let encrypted = bf.encrypt(0x123456789abcdef);
         assert_eq!(encrypted, 0x84a0a6b45839fcff);
         let decrypted = bf.decrypt(encrypted);
