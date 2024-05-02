@@ -33,7 +33,7 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
 
   test("Universe creates table with passed-in obfuscation key") {
     val expected = "super secret".getBytes()
-    val dsInfo = new secondary.DatasetInfo("not-used", "not-used", expected, None)
+    val dsInfo = new secondary.DatasetInfo("not-used", "not-used", expected, freshResourceNameRaw())
     withDb { conn =>
       val (pgu, copyInfo, _) = createTable(conn:Connection, Some(dsInfo))
       assert(copyInfo.datasetInfo.obfuscationKey == expected, "Expected that the dataset used our obfuscation key")
@@ -41,11 +41,11 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
   }
 
   test("Universe creates table with resource name") {
-    val expected = Some("_reso-urce")
+    val expected = "_reso-urce"
     val dsInfo = new secondary.DatasetInfo("not-used", "not-used", "super secret".getBytes(), expected)
     withDb { conn =>
       val (pgu, copyInfo, _) = createTable(conn:Connection, Some(dsInfo))
-      assert(copyInfo.datasetInfo.resourceName == expected, "Expected that the dataset used our resource name")
+      assert(copyInfo.datasetInfo.resourceName == DatasetResourceName(expected), "Expected that the dataset used our resource name")
     }
   }
 

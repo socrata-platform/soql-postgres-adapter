@@ -11,8 +11,8 @@ import org.joda.time.DateTime
 class RollupCopyDroppedHandlerTest extends PlaybackBase {
 
   test("dropping an unpublished working copy handles rollup metadata deletion") {
-    val peopleDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, Some("_people6"))
-    val actionDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, Some("_action6"))
+    val peopleDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, "_people6")
+    val actionDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, "_action6")
     val peopleLikeCountRollup = RollupInfo("peopleLikeCount", "SELECT _id, _name, count(@actions._subject) AS `like_count` JOIN @action6 AS @actions ON _id = @actions._person WHERE @actions._action='like' GROUP BY _id, _name")
 
     var originalRollupInfo:Option[LocalRollupInfo] = None

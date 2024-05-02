@@ -105,7 +105,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
   test("rollup is copied from first to second copy") {
     withPgu { pgu =>
 
-      val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, None)
+      val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, freshResourceNameRaw())
       val dataVersion = 0L
       val copyId = new CopyId(100)
 
@@ -172,7 +172,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
   test("rollup survives resync") {
     withPgu { pgu =>
       val pgs = new PGSecondary(config)
-      val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, None)
+      val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, freshResourceNameRaw())
       val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55, 55, new DateTime())
       val cookie = Option("monkey")
 
@@ -241,7 +241,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
   test("rollup of previous published copy is still good after a working copy is dropped") {
     withPgu { pgu =>
 
-      val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, None)
+      val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, freshResourceNameRaw())
       val dataVersion = 0L
       val copyId = new CopyId(100)
 
@@ -317,9 +317,9 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       jdbcRowCount(pgu.conn,tableName) should be (18)
 
       // test getCopyAndRollupMaps
-      val regularTableName = TableName(datasetInfo.resourceName.get)
-      val rollupTableName = TableName(s"${datasetInfo.resourceName.get}.${rollupInfo.name.underlying}")
-      val (copyMap, rollupMap) = QueryServerHelper.getCopyAndRollupMaps(pgu,Seq(regularTableName, rollupTableName, PrimaryTable), datasetInfo.resourceName.map(ResourceName(_)), None)
+      val regularTableName = TableName(datasetInfo.resourceName.underlying)
+      val rollupTableName = TableName(s"${datasetInfo.resourceName.underlying}.${rollupInfo.name.underlying}")
+      val (copyMap, rollupMap) = QueryServerHelper.getCopyAndRollupMaps(pgu,Seq(regularTableName, rollupTableName, PrimaryTable), ResourceName(datasetInfo.resourceName.underlying), None)
       copyMap(regularTableName) should be (copyInfo)
       rollupMap(rollupTableName) should be (rollupInfo)
       copyMap.size should be (1)

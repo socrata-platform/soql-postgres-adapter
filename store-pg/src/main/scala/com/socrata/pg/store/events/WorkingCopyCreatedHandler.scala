@@ -1,6 +1,7 @@
 package com.socrata.pg.store.events
 
 import com.socrata.datacoordinator.secondary.{CopyInfo => SecondaryCopyInfo, DatasetInfo => SecondaryDatasetInfo}
+import com.socrata.datacoordinator.id.DatasetResourceName
 import com.socrata.datacoordinator.truth.loader.SchemaLoader
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo => TruthCopyInfo}
 import com.socrata.pg.store.{IndexManager, PGSecondaryLogger, PGSecondaryUniverse, RollupManager}
@@ -27,7 +28,7 @@ case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
   copyInfo.copyNumber match {
     case 1 =>
       logger.info(s"create first copy {}", datasetInfo.internalName)
-      val (copyInfoSecondary: TruthCopyInfo, sLoader) = createDataset(pgu, datasetInfo.localeName, datasetInfo.resourceName)
+      val (copyInfoSecondary: TruthCopyInfo, sLoader) = createDataset(pgu, datasetInfo.localeName, DatasetResourceName(datasetInfo.resourceName))
       pgu.datasetMapWriter.createInternalNameMapping(
         datasetInfo.internalName,
         copyInfoSecondary.datasetInfo.systemId
@@ -69,7 +70,7 @@ case class WorkingCopyCreatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQLValu
   }
 
   private def createDataset(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
-                            locale: String, resourceName: Option[String]): (TruthCopyInfo, SchemaLoader[SoQLType]) = {
+                            locale: String, resourceName: DatasetResourceName): (TruthCopyInfo, SchemaLoader[SoQLType]) = {
     val copyInfo = pgu.datasetMapWriter.create(locale, resourceName)
     val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
     sLoader.create(copyInfo)

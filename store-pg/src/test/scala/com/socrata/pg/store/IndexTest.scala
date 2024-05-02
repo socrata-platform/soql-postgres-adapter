@@ -83,7 +83,7 @@ class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wit
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
 
-      val secDatasetInfo = DatasetInfo(datasetIdToInternal(truthDatasetId), localeName, obfuscationKey, None)
+      val secDatasetInfo = DatasetInfo(datasetIdToInternal(truthDatasetId), localeName, obfuscationKey, freshResourceNameRaw())
       val datasetId = pgu.datasetMapReader.datasetIdForInternalName(datasetIdToInternal(truthDatasetId))
 
       val index = IndexInfo(new IndexId(1), "idx1", "make", None)
@@ -126,7 +126,7 @@ class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wit
   test("index survives resync") {
     withPgu { pgu =>
       val pgs = new PGSecondary(config)
-      val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, None)
+      val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, freshResourceNameRaw())
       val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55, 55, new DateTime())
       val cookie = Option("monkey")
 
@@ -202,7 +202,7 @@ class IndexTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wit
       val datasetInfo = pgu.datasetMapReader.datasetInfo(secDatasetId).get
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
 
-      val secDatasetInfo = DatasetInfo(datasetIdToInternal(truthDatasetId), localeName, obfuscationKey, None)
+      val secDatasetInfo = DatasetInfo(datasetIdToInternal(truthDatasetId), localeName, obfuscationKey, freshResourceNameRaw())
       val datasetId = pgu.datasetMapReader.datasetIdForInternalName(datasetIdToInternal(truthDatasetId))
 
       val index = IndexInfo(new IndexId(1), "idx1", "make", None)

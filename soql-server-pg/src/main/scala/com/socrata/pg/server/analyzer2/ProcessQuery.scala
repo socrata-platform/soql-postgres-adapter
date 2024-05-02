@@ -36,7 +36,7 @@ import com.socrata.soql.sql.Debug
 import com.socrata.soql.sqlizer.{Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, SqlNamespaces}
 import com.socrata.soql.stdlib.analyzer2.SoQLRewritePassHelpers
 import com.socrata.soql.stdlib.analyzer2.rollup.SoQLRollupExact
-import com.socrata.datacoordinator.id.RollupName
+import com.socrata.datacoordinator.id.{RollupName, DatasetResourceName}
 import com.socrata.metrics.rollup.RollupMetrics
 import com.socrata.metrics.rollup.events.RollupHit
 
@@ -258,7 +258,7 @@ object ProcessQuery {
     Header("X-SODA2-Data-Out-Of-Date", JsonUtil.renderJson(outOfDate.iterator.toSeq.sorted, pretty=false))
 
   trait QueryServerRollupInfo {
-    val rollupDatasetName: Option[String]
+    val rollupDatasetName: DatasetResourceName
     val rollupName: RollupName
   }
 
@@ -451,7 +451,7 @@ object ProcessQuery {
       for(ri <- rollups) {
         RollupMetrics.digest(
           RollupHit(
-            ri.rollupDatasetName.getOrElse("unknown"),
+            ri.rollupDatasetName.underlying,
             ri.rollupName.underlying,
             now
           )

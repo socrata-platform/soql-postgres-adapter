@@ -7,7 +7,7 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.io.Codec
-import com.rojoma.json.v3.ast.{JArray, JValue}
+import com.rojoma.json.v3.ast.{JArray, JValue, JObject, JString}
 import com.rojoma.json.v3.io.{JsonEventIterator, JsonReader}
 import com.rojoma.json.v3.util.{JsonArrayIterator, JsonUtil}
 import com.rojoma.json.v3.codec.JsonDecode
@@ -31,7 +31,7 @@ import com.socrata.pg.config.StoreConfig
  * Recreate test databases of truth and secondary.
  * Provide the tools for creating a dataset and replicated to secondary.
  */
-trait DatabaseTestBase {
+trait DatabaseTestBase extends TestResourceNames {
 
   val dcInstance: String // alpha
 
@@ -98,9 +98,9 @@ trait DatabaseTestBase {
    * @param conn
    * @return truth dataset id and secondary dataset id pair.
    */
-  def importDataset(conn: Connection, mutationScript: String = "mutate-create.json"): Tuple2[DatasetId, DatasetId] = {
+  def importDataset(conn: Connection, mutationScript: String = "mutate-create.json", forceUnique: Option[String] = None): Tuple2[DatasetId, DatasetId] = {
     withSoQLCommon(truthDataSourceConfig) { common =>
-      val ProcessCreationReturns(datasetId, _, _, _, _) = processMutationCreate(common, fixtureFile[JArray](mutationScript))
+      val ProcessCreationReturns(datasetId, _, _, _, _) = processMutationCreate(common, fixtureFile[JArray](mutationScript), forceUnique)
       processMutation(common, fixtureFile[JArray]("mutate-publish.json"), datasetId)
       pushToSecondary(common, datasetId)
       truthDatasetId = datasetId
@@ -125,13 +125,38 @@ trait DatabaseTestBase {
     fixtureFile[JArray](name).iterator
   }
 
-  def processMutationCreate(common: SoQLCommon, script: JArray): ProcessCreationReturns = {
+  class UniquifyResourceName(underlying: Iterator[JValue], forceUnique: Option[String] = None) extends Iterator[JValue] {
+    private var first = true
+
+    override def hasNext = underlying.hasNext
+    override def next() = {
+      val item = underlying.next()
+      if(first) {
+        first = false
+        val JObject(obj) = item
+        val rn = obj.get("resource") match {
+          case Some(JString(name)) =>
+            forceUnique match {
+              case Some(u) => s"${name}_${u}"
+              case None => name
+            }
+          case Some(_) => throw new Exception("resource was not a string")
+          case None => freshResourceNameRaw()
+        }
+        JObject(obj.toMap + ("resource" -> JString(rn)))
+      } else {
+        item
+      }
+    }
+  }
+
+  def processMutationCreate(common: SoQLCommon, script: JArray, forceUnique: Option[String] = None): ProcessCreationReturns = {
     for {
       u <- common.universe
       indexedTempFile <- managed(new IndexedTempFile(10 * 1024, 10 * 1024))
     } {
       val mutator = new Mutator(indexedTempFile, common.Mutator)
-      mutator.createScript(u, script.iterator)
+      mutator.createScript(u, new UniquifyResourceName(script.iterator, forceUnique))
     }
   }
 

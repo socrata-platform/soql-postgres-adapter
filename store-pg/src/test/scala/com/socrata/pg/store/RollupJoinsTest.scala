@@ -11,8 +11,8 @@ import org.joda.time.DateTime
 class RollupJoinsTest extends PlaybackBase {
 
   test("rollup updates when referenced dataset is updated") {
-    val peopleDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, Some("_people1"))
-    val actionDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, Some("_action1"))
+    val peopleDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, "_people1")
+    val actionDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, "_action1")
     val peopleLikeCountRollup = RollupInfo("peopleLikeCount", "SELECT _id, _name, count(@actions._subject) AS `like_count` JOIN @action1 AS @actions ON _id = @actions._person WHERE @actions._action='like' GROUP BY _id, _name")
 
     //Seq(dataset, version, Seq(Event), assertionFunction)
@@ -86,8 +86,8 @@ class RollupJoinsTest extends PlaybackBase {
   }
 
   test("dropping a rollup deletes the rollup_map and rollup_relationship_map records") {
-    val peopleDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, Some("_people2"))
-    val actionDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, Some("_action2"))
+    val peopleDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, "_people2")
+    val actionDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, "_action2")
     val peopleLikeCountRollup = RollupInfo("peopleLikeCount", "SELECT _id, _name, count(@actions._subject) AS `like_count` JOIN @action2 AS @actions ON _id = @actions._person WHERE @actions._action='like' GROUP BY _id, _name")
 
     //Seq(dataset, version, Seq(Event), assertionFunction)
@@ -157,8 +157,8 @@ class RollupJoinsTest extends PlaybackBase {
   }
 
   test("dropping a dataset deletes the rollup_map and rollup_relationship_map records") {
-    val peopleDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, Some("_people3"))
-    val actionDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, Some("_action3"))
+    val peopleDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, "_people3")
+    val actionDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, "_action3")
     val peopleLikeCountRollup = RollupInfo("peopleLikeCount", "SELECT _id, _name, count(@actions._subject) AS `like_count` JOIN @action3 AS @actions ON _id = @actions._person WHERE @actions._action='like' GROUP BY _id, _name")
 
     //Seq(dataset, version, Seq(Event), assertionFunction)
@@ -230,8 +230,8 @@ class RollupJoinsTest extends PlaybackBase {
   }
 
   test("row changed preview event does not cause rollup metadata to get deleted") {
-    val peopleDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, Some("_people4"))
-    val actionDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, Some("_action4"))
+    val peopleDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, "_people4")
+    val actionDatasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, "_action4")
     val peopleLikeCountRollup = RollupInfo("peopleLikeCount", "SELECT _id, _name, count(@actions._subject) AS `like_count` JOIN @action4 AS @actions ON _id = @actions._person WHERE @actions._action='like' GROUP BY _id, _name")
 
     //Seq(dataset, version, Seq(Event), assertionFunction)

@@ -11,7 +11,7 @@ import com.socrata.pg.BuildInfo
 import com.mchange.v2.c3p0.DataSources
 import com.rojoma.json.v3.ast.{JObject, JString}
 import com.rojoma.simplearm.v2._
-import com.socrata.datacoordinator.id.{RollupName, DatasetId, DatasetInternalName}
+import com.socrata.datacoordinator.id.{RollupName, DatasetId, DatasetInternalName, DatasetResourceName}
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
 import com.socrata.datacoordinator.secondary.Secondary.Cookie
@@ -702,7 +702,7 @@ class PGSecondary(val storeConfig: StoreConfig) extends Secondary[SoQLType, SoQL
         //   DELETE from falth.dataset_internal_name_map
         //    WHERE dataset_internal_name = ? -- 'alpha.20'
         logger.info("re-creating secondary dataset with new id")
-        val newDatasetInfo = pgu.datasetMapWriter.unsafeCreateDatasetAllocatingSystemId(secondaryDatasetInfo.localeName, secondaryDatasetInfo.obfuscationKey, secondaryDatasetInfo.resourceName)
+        val newDatasetInfo = pgu.datasetMapWriter.unsafeCreateDatasetAllocatingSystemId(secondaryDatasetInfo.localeName, secondaryDatasetInfo.obfuscationKey, DatasetResourceName(secondaryDatasetInfo.resourceName))
         takeRollupLocks(pgu, newDatasetInfo, rollups)
         val newDatasetId = newDatasetInfo.systemId
         logger.info("new secondary dataset {} {}", secondaryDatasetInfo.internalName, newDatasetId.toString())

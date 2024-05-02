@@ -28,7 +28,7 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
   }
 
   def workingCopyCreatedFixture = new { // scalastyle:ignore
-    val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, None)
+    val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, freshResourceNameRaw())
     val dataVersion = 0L
     val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, dataVersion, new DateTime())
     val pgs = new PGSecondary(config)
@@ -38,7 +38,7 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
   }
 
   def columnsCreatedFixture = new { // scalastyle:ignore
-    val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, None)
+    val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, freshResourceNameRaw())
     val dataVersion = 0L
     val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, dataVersion, new DateTime())
     val pgs = new PGSecondary(config)
@@ -52,7 +52,7 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
   }
 
   def publishedDatasetFixture = new { // scalastyle:ignore
-    val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, None)
+    val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, freshResourceNameRaw())
     val dataVersion = 0L
     val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, dataVersion, new DateTime())
     val pgs = new PGSecondary(config)
@@ -67,7 +67,7 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
   }
 
   def columnsRemovedFixture = new { // scalastyle:ignore
-    val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, None)
+    val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, freshResourceNameRaw())
     val dataVersion = 0L
     val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, dataVersion, new DateTime())
     val pgs = new PGSecondary(config)
@@ -83,7 +83,7 @@ abstract class PGSecondaryTestBase extends FunSuite with Matchers with BeforeAnd
   }
 
   def fieldNameUpdatedFixture = new { // scalastyle:ignore
-  val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, None)
+  val datasetInfo = DatasetInfo(testInternalName, localeName, obfuscationKey, freshResourceNameRaw())
     val dataVersion = 0L
     val copyInfo = SecondaryCopyInfo(new CopyId(-1), 1, LifecycleStage.Published, dataVersion, dataVersion, new DateTime())
     val pgs = new PGSecondary(config)

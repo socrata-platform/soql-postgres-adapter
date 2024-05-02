@@ -4,7 +4,7 @@ import java.sql.{Connection, DriverManager, ResultSet}
 import java.util.UUID
 import com.rojoma.json.v3.ast.{JArray, JObject, JString}
 import com.rojoma.simplearm.v2._
-import com.socrata.datacoordinator.id.{ColumnId, RowId, UserColumnId}
+import com.socrata.datacoordinator.id.{ColumnId, RowId, UserColumnId, DatasetResourceName}
 import com.socrata.datacoordinator.secondary.DatasetInfo
 import com.socrata.datacoordinator.truth.RowUserIdMap
 import com.socrata.datacoordinator.truth.loader.SchemaLoader
@@ -24,7 +24,7 @@ import com.socrata.datacoordinator.common.DbType
 import com.socrata.datacoordinator.common.DataSourceConfig
 
 // scalastyle:off null cyclomatic.complexity
-trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with BeforeAndAfterAll {
+trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with BeforeAndAfterAll with TestResourceNames {
   val common = PostgresUniverseCommon
 
   val config: StoreConfig
@@ -66,7 +66,12 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
 
   def createTable(conn:Connection, datasetInfo:Option[DatasetInfo] = None): (PGSecondaryUniverse[SoQLType, SoQLValue], CopyInfo, SchemaLoader[SoQLType]) = {
     val pgu = new PGSecondaryUniverse[SoQLType, SoQLValue](conn,  PostgresUniverseCommon, datasetInfo)
-    val copyInfo = pgu.datasetMapWriter.create("us", datasetInfo.map(_.resourceName).flatten) // locale, resource_name
+    val copyInfo = pgu.datasetMapWriter.create(
+      "us",
+      datasetInfo.fold(freshResourceName()) { di =>
+        DatasetResourceName(di.resourceName)
+      }
+    ) // locale, resource_name
     val sLoader = pgu.schemaLoader(new PGSecondaryLogger[SoQLType, SoQLValue])
     sLoader.create(copyInfo)
     (pgu, copyInfo, sLoader)

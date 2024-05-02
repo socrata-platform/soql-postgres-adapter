@@ -33,7 +33,7 @@ case class RollupCreatedOrUpdatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQL
       }
       dsInfo match {
         case Some(dataSetInfo) if dataSetInfo.systemId != copyInfo.datasetInfo.systemId =>
-          logger.info(s"dataset '${rollupInfo.copyInfo.datasetInfo.resourceName.getOrElse(rollupInfo.copyInfo.datasetInfo.systemId)}' rollup '${rollupInfo.name}' relates to dataset '${dataSetInfo.resourceName.getOrElse(dataSetInfo.systemId)}'")
+          logger.info(s"dataset '${rollupInfo.copyInfo.datasetInfo.resourceName}' rollup '${rollupInfo.name}' relates to dataset '${dataSetInfo.resourceName}'")
           pgu.datasetMapWriter.createRollupRelationship(rollupInfo,pgu.datasetMapReader.latest(dataSetInfo))
         case Some(_) =>
           logger.debug("Not adding a relationship from a dataset to itself")

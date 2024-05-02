@@ -377,7 +377,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                   // This will significantly change the tests; however.
                   rollupName.foreach(rollupName=>
                     //rollup name exists and we just successfully executed the query, lets tell someone
-                    RollupMetrics.digest(RollupHit(datasetInfo.resourceName.getOrElse("unknown"),rollupName.underlying,LocalDateTime.now(Clock.systemUTC())))
+                    RollupMetrics.digest(RollupHit(datasetInfo.resourceName.underlying,rollupName.underlying,LocalDateTime.now(Clock.systemUTC())))
                   )
                   if(debug) logger.info(s"Returning etag: ${etag.asBytes.mkString(",")}")
                   ETag(etag)(resp)
@@ -409,7 +409,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
 
   private def writeRollupHeader(header: String, ru: Option[RollupName], rus: Seq[RollupInfo])(resp: HttpServletResponse): Unit = {
     val combined = ru.toSeq.map(_.underlying) ++
-      rus.map(ru => s"${(new TableName(ru.copyInfo.datasetInfo.resourceName.get)).nameWithoutPrefix}.${ru.name.underlying}")
+      rus.map(ru => s"${(new TableName(ru.copyInfo.datasetInfo.resourceName.underlying)).nameWithoutPrefix}.${ru.name.underlying}")
     if (combined.nonEmpty) {
       Header(header, combined.mkString(","))(resp)
     }
@@ -489,8 +489,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
         // 1. regular tablename contains dataset_map.resource_name
         // 2. rollup tablename contains dataset_map.resource_name + "." + rollup_map.name
         val relatedTableNames = removeTableAlias(collectRelatedTableNames(analysis))
-        val (relatedCopyMap, relatedRollupMap) = getCopyAndRollupMaps(pgu, relatedTableNames, datasetInfo.resourceName.map(ResourceName(_)), reqCopy)
-        val joinCopiesMap = relatedCopyMap ++ copyInfo.datasetInfo.resourceName.map(rn => Map(TableName(rn) -> copyInfo)).getOrElse(Map.empty)
+        val (relatedCopyMap, relatedRollupMap) = getCopyAndRollupMaps(pgu, relatedTableNames, ResourceName(datasetInfo.resourceName.underlying), reqCopy)
+        val joinCopiesMap = relatedCopyMap ++ Map(TableName(copyInfo.datasetInfo.resourceName.underlying) -> copyInfo)
 
         val sqlRepsWithJoin = relatedCopyMap.foldLeft(sqlReps) { (acc, joinCopy) =>
           val (tableName, copyInfo) = joinCopy

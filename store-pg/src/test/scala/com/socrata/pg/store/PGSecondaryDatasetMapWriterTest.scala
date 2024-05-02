@@ -30,12 +30,13 @@ class PGSecondaryDatasetMapWriterTest extends PGSecondaryTestBase with PGSeconda
   }
 
   def loadDatasetMapRows(conn: Connection): Unit = {
-    val sql = "INSERT INTO dataset_map (system_id, next_counter_value, locale_name, obfuscation_key) values (?, ?, ?, ?)"
+    val sql = "INSERT INTO dataset_map (system_id, next_counter_value, locale_name, obfuscation_key, resource_name) values (?, ?, ?, ?, ?)"
     using(conn.prepareStatement(sql)) { statement =>
       statement.setLong(1, 123)
       statement.setLong(2, 456)
       statement.setString(3, "us")
       statement.setBytes(4, StandardObfuscationKeyGenerator())
+      statement.setString(5, freshResourceNameRaw())
       statement.execute()
     }
   }
@@ -52,7 +53,7 @@ class PGSecondaryDatasetMapWriterTest extends PGSecondaryTestBase with PGSeconda
   test("Can create dataset only") {
     withPgu { pgu =>
       createSchema(pgu.conn)
-      val datasetId = pgu.datasetMapWriter.createDatasetOnly("locale")
+      val datasetId = pgu.datasetMapWriter.createDatasetOnly("locale", freshResourceName())
 
       val dataSetInfo = pgu.datasetMapReader.datasetInfo(datasetId).get
       pgu.datasetMapReader.allCopies(dataSetInfo) shouldBe empty

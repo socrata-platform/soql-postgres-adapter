@@ -18,7 +18,7 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
   test("handle resync") {
     withPgu { pgu =>
       val pgs = new PGSecondary(config)
-      val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, None)
+      val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, freshResourceNameRaw())
       val secondaryCopyInfo = CopyInfo(new CopyId(123), 1, LifecycleStage.Published, 55, 55, new DateTime())
       val cookie = Option("monkey")
 
@@ -72,7 +72,7 @@ class ResyncTest extends PGSecondaryTestBase with PGStoreTestBase with PGSeconda
   test("handle drop copy") {
     withPgu { pgu =>
       val pgs = new PGSecondary(config)
-      val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, None)
+      val secondaryDatasetInfo = DatasetInfo(PGSecondaryUtil.testInternalName, "locale", "obfuscate".getBytes, freshResourceNameRaw())
 
       val snapshottedCopy = CopyInfo(new CopyId(123), 1, LifecycleStage.Snapshotted, 24, 24, new DateTime())
       val publishedCopy = CopyInfo(new CopyId(123), 2, LifecycleStage.Published, 55, 55, new DateTime())

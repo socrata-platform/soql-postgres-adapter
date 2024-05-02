@@ -68,11 +68,11 @@ class SoQLUnionTest extends PGSecondaryTestBase with PGQueryServerDatabaseTestBa
     val copyInfo: CopyInfo = pgu.datasetMapReader.latest(pgu.datasetMapReader.datasetInfo(secondaryDatasetId).get)
 
     pgu.datasetReader.openDataset(copyInfo).run { readCtx =>
-      val qualifier = copyInfo.datasetInfo.resourceName
+      val qualifier = copyInfo.datasetInfo.resourceName.underlying
       val baseSchema: ColumnIdMap[com.socrata.datacoordinator.truth.metadata.ColumnInfo[SoQLType]] = readCtx.schema
       baseSchema.values.map { columnInfo =>
         val userColumnId = columnInfo.userColumnId
-        QualifiedColumnName(qualifier, ColumnName(userColumnId.underlying)) -> userColumnId
+        QualifiedColumnName(Some(qualifier), ColumnName(userColumnId.underlying)) -> userColumnId
       }
     }.toMap
   }

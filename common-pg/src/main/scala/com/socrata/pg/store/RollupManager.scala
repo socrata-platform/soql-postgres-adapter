@@ -252,7 +252,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
                 execute(d"ANALYZE" +#+ Doc(rollupInfo.tableName))
               }
             }((_,dur)=>{
-                RollupMetrics.digest(RollupBuilt(rollupInfo.copyInfo.datasetInfo.resourceName.getOrElse("unknown"),rollupInfo.name.underlying,LocalDateTime.now(Clock.systemUTC()),dur,pgu.datasetMapReader.getTotalRelationSize(rollupInfo.tableName).getOrElse(-1L)))
+                RollupMetrics.digest(RollupBuilt(rollupInfo.copyInfo.datasetInfo.resourceName.underlying,rollupInfo.name.underlying,LocalDateTime.now(Clock.systemUTC()),dur,pgu.datasetMapReader.getTotalRelationSize(rollupInfo.tableName).getOrElse(-1L)))
               })
 
           case None =>
@@ -331,7 +331,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
               populateRollupTable(rollupInfo, rollupAnalyses, rollupReps)
               createIndexes(rollupInfo, rollupReps)
             }((_,dur)=>{
-                RollupMetrics.digest(RollupBuilt(rollupInfo.copyInfo.datasetInfo.resourceName.getOrElse("unknown"),rollupInfo.name.underlying,LocalDateTime.now(Clock.systemUTC()),dur,pgu.datasetMapReader.getTotalRelationSize(rollupInfo.tableName).getOrElse(-1L)))
+                RollupMetrics.digest(RollupBuilt(rollupInfo.copyInfo.datasetInfo.resourceName.underlying,rollupInfo.name.underlying,LocalDateTime.now(Clock.systemUTC()),dur,pgu.datasetMapReader.getTotalRelationSize(rollupInfo.tableName).getOrElse(-1L)))
               })
         }
       case Failure(e) =>
