@@ -31,6 +31,10 @@ impl OwnedBlowfish {
     /// subsequently be thawed with `BorrowedBlowfish::from_bytes` and
     /// used.
     pub fn into_bytes(&self) -> Vec<u8> {
+        // it would be nice to return a Box<[u8; BYTESIZE]> here,
+        // rather than a Vec, but it needs to be turned back into a
+        // Vec<u8> to be passed to PG anyway, and that can't currently
+        // be done in safe rust without copying the array.
         let mut result = Vec::with_capacity(BYTESIZE);
 
         for s in &self.s {
