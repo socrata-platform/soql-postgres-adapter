@@ -22,6 +22,7 @@ import com.socrata.datacoordinator.truth.metadata.{DatasetInfo => TruthDatasetIn
 import com.socrata.datacoordinator.truth.universe.sql.{C3P0WrappedPostgresCopyIn, PostgresCopyIn}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.SecondaryBase
+import com.socrata.pg.analyzer2.metatypes.RollupMetaTypes
 import com.socrata.pg.config.StoreConfig
 import com.socrata.pg.store.events.{ColumnCreatedHandler, WorkingCopyPublishedHandler, _}
 import com.socrata.pg.store.index._
@@ -267,19 +268,19 @@ class PGSecondary(val storeConfig: StoreConfig) extends Secondary[SoQLType, SoQL
     def compare(a: DatasetId, b: DatasetId) = a.underlying.compareTo(b.underlying)
   }
 
-  type NameSet = Set[Either[String, DatasetInternalName]]
+  type NameSet = Set[RollupMetaTypes.TableName]
 
   def tableNamesToDatasetIds(dmr: PGSecondaryDatasetMapReader[SoQLType], tableNames: NameSet): SortedSet[DatasetId] = {
     SortedSet() ++ tableNames.iterator.flatMap {
-      case Left(name) =>
-        dmr.datasetInfoByResourceName(new ResourceName(name)) match {
+      case RollupMetaTypes.TableName.ResourceName(name) =>
+        dmr.datasetInfoByResourceName(name) match {
           case Some(dsi) =>
             Some(dsi.systemId)
           case None =>
-            logger.warn("Told I have a rollup that references table {} but I can't find it", JString(name))
+            logger.warn("Told I have a rollup that references table {} but I can't find it", JString(name.underlying))
             None
         }
-      case Right(dsInternalName) =>
+      case RollupMetaTypes.TableName.InternalName(dsInternalName) =>
         dmr.datasetInfoByInternalName(dsInternalName) match {
           case Some(dsi) =>
             Some(dsi.systemId)
