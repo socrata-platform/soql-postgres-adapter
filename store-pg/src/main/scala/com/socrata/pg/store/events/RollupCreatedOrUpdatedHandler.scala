@@ -3,6 +3,7 @@ package com.socrata.pg.store.events
 import com.socrata.datacoordinator.id.RollupName
 import com.socrata.datacoordinator.secondary.{RollupInfo => SecRollupInfo}
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
+import com.socrata.pg.analyzer2.metatypes.RollupMetaTypes
 import com.socrata.pg.store.RollupManager.parseAndCollectTableNames
 import com.socrata.pg.store.{LocalRollupInfo, PGSecondary, PGSecondaryUniverse, RollupManager}
 import com.socrata.soql.environment.ResourceName
@@ -26,9 +27,9 @@ case class RollupCreatedOrUpdatedHandler(pgu: PGSecondaryUniverse[SoQLType, SoQL
   def updateRollupRelationships(rollupInfo: LocalRollupInfo): Unit ={
     for(tableNameOrInternalName <- parseAndCollectTableNames(rollupInfo)) {
       val dsInfo = tableNameOrInternalName match {
-        case Left(tableName) =>
-          pgu.datasetMapReader.datasetInfoByResourceName(new ResourceName(tableName))
-        case Right(dsInternalName) =>
+        case RollupMetaTypes.TableName.ResourceName(tableName) =>
+          pgu.datasetMapReader.datasetInfoByResourceName(tableName)
+        case RollupMetaTypes.TableName.InternalName(dsInternalName) =>
           pgu.datasetMapReader.datasetInfoByInternalName(dsInternalName)
       }
       dsInfo match {

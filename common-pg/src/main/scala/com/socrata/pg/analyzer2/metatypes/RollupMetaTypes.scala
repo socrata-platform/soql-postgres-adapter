@@ -2,12 +2,14 @@ package com.socrata.pg.analyzer2.metatypes
 
 import scala.collection.{mutable => scm}
 
+import com.rojoma.json.v3.ast.JValue
 import com.rojoma.json.v3.util.JsonUtil
+import com.rojoma.json.v3.codec.{JsonEncode, JsonDecode, DecodeError, FieldEncode, FieldDecode}
 
 import com.socrata.prettyprint.prelude._
 
 import com.socrata.datacoordinator.truth.metadata.{CopyInfo, ColumnInfo}
-import com.socrata.datacoordinator.id.{DatasetInternalName, UserColumnId}
+import com.socrata.datacoordinator.id.{DatasetInternalName, DatasetResourceName, UserColumnId}
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.collection.OrderedMap
@@ -25,11 +27,55 @@ final class RollupMetaTypes extends MetaTypes {
   override type ResourceNameScope = Int
   override type ColumnType = SoQLType
   override type ColumnValue = SoQLValue
-  override type DatabaseTableNameImpl = DatasetInternalName
+  override type DatabaseTableNameImpl = RollupMetaTypes.TableName
   override type DatabaseColumnNameImpl = UserColumnId
 }
 
 object RollupMetaTypes {
+  // This is basically Either[DatasetInternalName, DatasetResourceName] but it
+  // can be used as a map key.  It's temporary until we migrate existing rollups
+  // to be all resource-name based
+  sealed abstract class TableName
+  object TableName {
+    case class InternalName(internalName: DatasetInternalName) extends TableName
+    case class ResourceName(resourceName: DatasetResourceName) extends TableName
+
+    implicit val jCodec = new JsonEncode[TableName] with JsonDecode[TableName] {
+      def encode(tableName: TableName) =
+        tableName match {
+          case InternalName(in) => JsonEncode.toJValue(in)
+          case ResourceName(rn) => JsonEncode.toJValue(rn)
+        }
+
+      def decode(x: JValue) =
+        JsonDecode.fromJValue[DatasetInternalName](x) match {
+          case Right(in) =>
+            Right(InternalName(in))
+          case Left(err1) =>
+            JsonDecode.fromJValue[DatasetResourceName](x) match {
+              case Right(rn) => Right(ResourceName(rn))
+              case Left(err2) => Left(DecodeError.join(Seq(err1, err2)))
+            }
+        }
+    }
+
+    implicit def fCodec = new FieldEncode[TableName] with FieldDecode[TableName] {
+      def encode(tn: TableName) =
+        tn match {
+          case InternalName(in) => in.underlying
+          case ResourceName(rn) => rn.underlying
+        }
+
+      def decode(x: String) =
+        DatasetInternalName(x) match {
+          case Some(in) =>
+            Right(InternalName(in))
+          case None =>
+            Right(ResourceName(DatasetResourceName(x)))
+        }
+    }
+  }
+
   val provenanceMapper = new types.ProvenanceMapper[RollupMetaTypes] {
     def fromProvenance(prov: Provenance): types.DatabaseTableName[RollupMetaTypes] = {
       JsonUtil.parseJson[types.DatabaseTableName[RollupMetaTypes]](prov.value) match {
@@ -80,10 +126,13 @@ object RollupMetaTypes {
     // returns None if the database table name is unknown to this secondary
     def apply(dtn: DatabaseTableName): Option[(CopyInfo, OrderedMap[UserColumnId, ColumnInfo[CT]])] =
       map.get(dtn).orElse {
-        val DatabaseTableName(internalName) = dtn
+        val DatabaseTableName(internalNameOrResourceName) = dtn
         val reader = pgu.datasetMapReader
         for {
-          dsInfo <- reader.datasetInfoByInternalName(internalName)
+          dsInfo <- internalNameOrResourceName match {
+            case TableName.InternalName(internalName) => reader.datasetInfoByInternalName(internalName)
+            case TableName.ResourceName(resourceName) => reader.datasetInfoByResourceName(resourceName)
+          }
           copy <- if(dsInfo.systemId == myCopy.datasetInfo.systemId) {
             Some(myCopy)
           } else {

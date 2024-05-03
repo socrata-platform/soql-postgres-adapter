@@ -130,7 +130,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
           getCopy(pgu, ds, copy)
         case None => Option(servReq.getParameter("rn")) match {
           case Some(rn) =>
-            getCopy(pgu, new ResourceName(rn), copy)
+            getCopy(pgu, DatasetResourceName(rn), copy)
           case None =>
             None
         }
@@ -489,7 +489,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
         // 1. regular tablename contains dataset_map.resource_name
         // 2. rollup tablename contains dataset_map.resource_name + "." + rollup_map.name
         val relatedTableNames = removeTableAlias(collectRelatedTableNames(analysis))
-        val (relatedCopyMap, relatedRollupMap) = getCopyAndRollupMaps(pgu, relatedTableNames, ResourceName(datasetInfo.resourceName.underlying), reqCopy)
+        val (relatedCopyMap, relatedRollupMap) = getCopyAndRollupMaps(pgu, relatedTableNames, datasetInfo.resourceName, reqCopy)
         val joinCopiesMap = relatedCopyMap ++ Map(TableName(copyInfo.datasetInfo.resourceName.underlying) -> copyInfo)
 
         val sqlRepsWithJoin = relatedCopyMap.foldLeft(sqlReps) { (acc, joinCopy) =>
@@ -604,10 +604,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     }
   }
 
-  def getSchema(id: ResourceName, reqCopy: Option[String]): Option[Schema] = {
+  def getSchema(id: DatasetResourceName, reqCopy: Option[String]): Option[Schema] = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       for {
-        datasetInfo <- pgu.datasetMapReader.datasetInfoByResourceName(ResourceName(id.name))
+        datasetInfo <- pgu.datasetMapReader.datasetInfoByResourceName(id)
       } yield {
         val copy = getCopy(pgu, datasetInfo, reqCopy)
         pgu.datasetReader.openDataset(copy).run(readCtx => pgu.schemaFinder.getSchema(readCtx.copyCtx))
@@ -615,10 +615,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     }
   }
 
-  def getSchemaWithFieldName(id: ResourceName, reqCopy: Option[String]): Option[SchemaWithFieldName] = {
+  def getSchemaWithFieldName(id: DatasetResourceName, reqCopy: Option[String]): Option[SchemaWithFieldName] = {
     withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
       for {
-        datasetInfo <- pgu.datasetMapReader.datasetInfoByResourceName(ResourceName(id.name))
+        datasetInfo <- pgu.datasetMapReader.datasetInfoByResourceName(id)
       } yield {
         val copy = getCopy(pgu, datasetInfo, reqCopy)
         pgu.datasetReader.openDataset(copy).run(readCtx => pgu.schemaFinder.getSchemaWithFieldName(readCtx.copyCtx))
@@ -633,7 +633,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
         case Left(ds) =>
           pgu.datasetMapReader.datasetIdForInternalName(ds, checkDisabled = true)
         case Right(rn) =>
-          val datasetInfo = pgu.datasetMapReader.datasetInfoByResourceName(ResourceName(rn))
+          val datasetInfo = pgu.datasetMapReader.datasetInfoByResourceName(DatasetResourceName(rn))
           datasetInfo.map(_.systemId)
         case _ =>
           logger.warn("Require either dataset internal name or resource name to fetch rollups.  Possibly error from upstream Query Coordinator")

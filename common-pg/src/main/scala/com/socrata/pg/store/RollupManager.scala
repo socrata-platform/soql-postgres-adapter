@@ -10,7 +10,7 @@ import com.rojoma.json.v3.ast.JNull
 import com.rojoma.json.v3.io.JsonReaderException
 import com.rojoma.json.v3.util.{JsonUtil, AllowMissing, AutomaticJsonDecodeBuilder}
 import com.socrata.prettyprint.prelude._
-import com.socrata.datacoordinator.id.{RollupName, UserColumnId, DatasetInternalName}
+import com.socrata.datacoordinator.id.{RollupName, UserColumnId, DatasetInternalName, DatasetResourceName}
 import com.socrata.datacoordinator.secondary.{RollupInfo => SecondaryRollupInfo}
 import com.socrata.datacoordinator.truth.loader.sql.{ChangeOwner, SqlTableDropper}
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, LifecycleStage}
@@ -74,22 +74,22 @@ object RollupManager {
     }
   }
 
-  private def parseAndCollectTableNames(soql: String, isNewAnalyzer: Boolean): Set[Either[String, DatasetInternalName]] = {
+  private def parseAndCollectTableNames(soql: String, isNewAnalyzer: Boolean): Set[RollupMetaTypes.TableName] = {
     if(isNewAnalyzer) {
       val Right(nrsi) = JsonUtil.parseJson[RollupAnalyzer.NewRollupSoqlInfo](soql)
       nrsi.foundTables.allTableDescriptions.map { ds =>
         val DatabaseTableName(internalName) = ds.name
-        Right(internalName)
+        internalName
       }.toSet
     } else {
-      collectTableNames(new StandaloneParser().binaryTreeSelect(soql)).map(Left(_))
+      collectTableNames(new StandaloneParser().binaryTreeSelect(soql)).map(DatasetResourceName(_)).map(RollupMetaTypes.TableName.ResourceName(_))
     }
   }
 
-  def parseAndCollectTableNames(rollupInfo: LocalRollupInfo):Set[Either[String, DatasetInternalName]] =
+  def parseAndCollectTableNames(rollupInfo: LocalRollupInfo):Set[RollupMetaTypes.TableName] =
     parseAndCollectTableNames(rollupInfo.soql, rollupInfo.isNewAnalyzer)
 
-  def parseAndCollectTableNames(rollupInfo: SecondaryRollupInfo):Set[Either[String, DatasetInternalName]] =
+  def parseAndCollectTableNames(rollupInfo: SecondaryRollupInfo):Set[RollupMetaTypes.TableName] =
     parseAndCollectTableNames(rollupInfo.soql, rollupInfo.isNewAnalyzer)
 
   private type MT = DatabaseNamesMetaTypes
@@ -104,7 +104,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
   private val dsSchema = getDsSchema(copyInfo)
 
-  private def getDsContext(resourceName: ResourceName) = new DatasetContext[SoQLType] {
+  private def getDsContext(resourceName: DatasetResourceName) = new DatasetContext[SoQLType] {
     val dsSchemaX = getDsSchema(resourceName)
 
     // we are sorting by the column name for consistency with query coordinator and how we build
@@ -283,7 +283,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
                                        OrderedMap(dsSchema.values.map(x => (columnIdToPrefixNameMap(x.userColumnId), x.typ)).toSeq.sortBy(_._1): _*)
                                    })
       val prefixedDsSchemas = tableNames.foldLeft(prefixedDsContext0) { (acc, tableName) =>
-        val resourceName = ResourceName(tableName)
+        val resourceName = DatasetResourceName(tableName)
         val dsctx = getDsContext(resourceName)
         acc + (tableName -> dsctx)
       }

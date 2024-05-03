@@ -62,7 +62,7 @@ object QueryServerHelper {
       val copyInfo = readCtx.copyInfo
 
       val relatedTableNames = removeTableAlias(collectRelatedTableNames(analyses))
-      val (relatedCopyMap, _relatedRollupMap) = getCopyAndRollupMaps(pgu, relatedTableNames, ResourceName(datasetInfo.resourceName.underlying), reqCopy)
+      val (relatedCopyMap, _relatedRollupMap) = getCopyAndRollupMaps(pgu, relatedTableNames, datasetInfo.resourceName, reqCopy)
       val joinCopiesMap = relatedCopyMap ++ Map(TableName(copyInfo.datasetInfo.resourceName.underlying) -> copyInfo)
       val sqlRepsWithJoin = joinCopiesMap.foldLeft(sqlReps) { (acc, joinCopy) =>
         val (tableName, copyInfo) = joinCopy
@@ -122,14 +122,14 @@ object QueryServerHelper {
 
   def getCopyAndRollupMaps(pgu: PGSecondaryUniverse[SoQLType, SoQLValue],
                            tableNames: Seq[TableName],
-                           myResourceName: ResourceName,
+                           myResourceName: DatasetResourceName,
                            myCopy: Option[String]):
       (Map[TableName, CopyInfo], Map[TableName, LocalRollupInfo]) = {
     tableNames.foldLeft((Map.empty[TableName, CopyInfo], Map.empty[TableName, LocalRollupInfo])) { (acc, tableName) =>
       tableName.name match {
         case rollupTablenameRx(resourceName, rollupName) =>
           val ruOpt = for {
-            datasetInfo <- pgu.datasetMapReader.datasetInfoByResourceName(ResourceName(resourceName))
+            datasetInfo <- pgu.datasetMapReader.datasetInfoByResourceName(DatasetResourceName(resourceName))
             copyInfo <- pgu.datasetMapReader.lookup(datasetInfo, LifecycleStage.Published)
             rollupInfo <- pgu.datasetMapReader.rollup(copyInfo, new RollupName(rollupName))
           } yield { rollupInfo }
@@ -140,7 +140,7 @@ object QueryServerHelper {
               acc
           }
         case name =>
-          val rn = new ResourceName(name)
+          val rn = DatasetResourceName(name)
 
           val desiredCopy =
             if(rn == myResourceName) { // self-joins use this copy
@@ -149,7 +149,7 @@ object QueryServerHelper {
               None
             }
 
-          getCopy(pgu, new ResourceName(name), desiredCopy) match {
+          getCopy(pgu, DatasetResourceName(name), desiredCopy) match {
             case Some(copy) =>
               (acc._1 + (tableName -> copy), acc._2)
             case _ =>
@@ -185,7 +185,7 @@ object QueryServerHelper {
     }
   }
 
-  def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], resourceName: ResourceName, reqCopy: Option[String]): Option[CopyInfo] = {
+  def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], resourceName: DatasetResourceName, reqCopy: Option[String]): Option[CopyInfo] = {
     for {
       datasetInfo <- pgu.datasetMapReader.datasetInfoByResourceName(resourceName)
     } yield {

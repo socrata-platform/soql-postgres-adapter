@@ -1,6 +1,6 @@
 package com.socrata.pg.store
 
-import com.socrata.datacoordinator.id.UserColumnId
+import com.socrata.datacoordinator.id.{UserColumnId, DatasetResourceName}
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
@@ -42,7 +42,7 @@ abstract class SecondaryManagerBase(pgu: PGSecondaryUniverse[SoQLType, SoQLValue
     }.toMap
   }
 
-  protected def getDsSchema(resourceName: ResourceName): ColumnIdMap[ColumnInfo[SoQLType]] = {
+  protected def getDsSchema(resourceName: DatasetResourceName): ColumnIdMap[ColumnInfo[SoQLType]] = {
     val dsInfo = pgu.datasetMapReader.datasetInfoByResourceName(resourceName).get
     val copyInfo = pgu.datasetMapReader.latest(dsInfo)
     getDsSchema(copyInfo)

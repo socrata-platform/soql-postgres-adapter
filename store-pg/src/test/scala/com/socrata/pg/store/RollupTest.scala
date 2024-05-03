@@ -319,7 +319,7 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       // test getCopyAndRollupMaps
       val regularTableName = TableName(datasetInfo.resourceName.underlying)
       val rollupTableName = TableName(s"${datasetInfo.resourceName.underlying}.${rollupInfo.name.underlying}")
-      val (copyMap, rollupMap) = QueryServerHelper.getCopyAndRollupMaps(pgu,Seq(regularTableName, rollupTableName, PrimaryTable), ResourceName(datasetInfo.resourceName.underlying), None)
+      val (copyMap, rollupMap) = QueryServerHelper.getCopyAndRollupMaps(pgu,Seq(regularTableName, rollupTableName, PrimaryTable), datasetInfo.resourceName, None)
       copyMap(regularTableName) should be (copyInfo)
       rollupMap(rollupTableName) should be (rollupInfo)
       copyMap.size should be (1)
