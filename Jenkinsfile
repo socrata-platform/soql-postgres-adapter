@@ -43,7 +43,7 @@ pipeline {
     WEBHOOK_ID = 'WEBHOOK_IQ'
   }
   stages {
-    stage('Hotfix Tag') {
+    stage('Hotfix') {
       when {
         expression { isHotfix }
       }
@@ -198,7 +198,7 @@ pipeline {
                   ]
                   createBuild(
                     buildInfo,
-                    rmsSupportedEnvironment.staging //production
+                    rmsSupportedEnvironment.production
                   )
                 }
               }
@@ -232,7 +232,7 @@ pipeline {
                   ]
                   createBuild(
                     buildInfo,
-                    rmsSupportedEnvironment.staging //production
+                    rmsSupportedEnvironment.production
                   )
                 }
               }
@@ -280,7 +280,7 @@ pipeline {
                   ]
                   createDeployment(
                     deployInfo,
-                    rmsSupportedEnvironment.staging // production - for testing
+                    rmsSupportedEnvironment.production
                   )
                 }
               }
@@ -308,7 +308,7 @@ pipeline {
                   ]
                   createDeployment(
                     deployInfo,
-                    rmsSupportedEnvironment.staging // production - for testing
+                    rmsSupportedEnvironment.production
                   )
                 }
               }
