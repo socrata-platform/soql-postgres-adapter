@@ -81,14 +81,17 @@ object ProcessQuery {
     val metadataAnalysis = dmtState.rewriteFrom(analysis, copyCache, InputMetaTypes.provenanceMapper) // this populates the copy cache
 
     val outOfDate = copyCache.asMap.iterator.flatMap { case (dtn@DatabaseTableName((_, stage)), (copyInfo, _)) =>
-      request.auxTableData.get(dtn).flatMap { auxTableData =>
-        val isOutOfDate = copyInfo.dataVersion < auxTableData.truthDataVersion
-        if(isOutOfDate) {
-          Some((auxTableData.sfResourceName, stage))
-        } else {
+      request.auxTableData.get(dtn) match {
+        case Some(auxTableData) =>
+          val isOutOfDate = copyInfo.dataVersion < auxTableData.truthDataVersion
+          if(isOutOfDate) {
+            Some((auxTableData.sfResourceName, stage))
+          } else {
+            None
+          }
+        case None =>
           log.warn("No aux data found for table {}?!?!?", dtn)
           None
-        }
       }
     }.toSet
 
