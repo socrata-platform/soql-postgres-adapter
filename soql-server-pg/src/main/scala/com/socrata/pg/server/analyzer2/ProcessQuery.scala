@@ -164,7 +164,7 @@ object ProcessQuery {
       rollups: Seq[QueryServerRollupInfo],
       sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]],
       extractor: ResultExtractor[DatabaseNamesMetaTypes],
-      nonliteralSystemContextLookupFound: Boolean,
+      systemContextUsed: SoQLExtraContext.SystemContextUsed,
       now: Option[DateTime],
       estimatedCost: Double
     )
@@ -172,7 +172,7 @@ object ProcessQuery {
     val onlyOne = nameAnalyses.lengthCompare(1) == 0
     val sqlized = nameAnalyses.map { nameAnalysis =>
       val sqlizer = SoQLSqlizer
-      val Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(nonliteralSystemContextLookupFound, now)) = sqlizer(nameAnalysis._1, new SoQLExtraContext(systemContext, cryptProviders, RewriteSubcolumns[InputMetaTypes](request.auxTableData.mapValues(_.locationSubcolumns), copyCache), SqlUtils.escapeString(pgu.conn, _))) match {
+      val Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(systemContextUsed, now)) = sqlizer(nameAnalysis._1, new SoQLExtraContext(systemContext, cryptProviders, RewriteSubcolumns[InputMetaTypes](request.auxTableData.mapValues(_.locationSubcolumns), copyCache), SqlUtils.escapeString(pgu.conn, _))) match {
         case Right(result) => result
         case Left(nothing) => nothing
       }
@@ -183,7 +183,7 @@ object ProcessQuery {
         relevantRollups.filter { rr => nameAnalysis._2.contains(rr.id) },
         sql,
         extractor,
-        nonliteralSystemContextLookupFound,
+        systemContextUsed,
         now,
         if(onlyOne) 0.0 else CostEstimator(pgu.conn, sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded)).toString)
       )
@@ -195,7 +195,7 @@ object ProcessQuery {
       columnsByName,
       stringifiedAnalysis,
       copyCache.orderedVersions,
-      systemContext,
+      sqlized.systemContextUsed.relevantEtagContext,
       request.auxTableData.mapValues(_.locationSubcolumns),
       passes,
       request.allowRollups,
@@ -232,7 +232,7 @@ object ProcessQuery {
 
         fulfillRequest(
           columnsByName,
-          if(sqlized.nonliteralSystemContextLookupFound) Some(systemContext) else None,
+          sqlized.systemContextUsed.dynamicContext,
           copyCache,
           dataVersionsBySFName,
           etag,
@@ -376,7 +376,7 @@ object ProcessQuery {
 
   def fulfillRequest(
     columnsByName: Map[ColumnName, SerializationColumnInfo],
-    systemContext: Option[Map[String, String]],
+    systemContext: Map[String, String],
     copyCache: CopyCache[InputMetaTypes],
     dataVersionsBySFName: Seq[((SFResourceName, Stage), Long)],
     etag: EntityTag,
@@ -531,12 +531,12 @@ object ProcessQuery {
   def runQuery(
     conn: Connection,
     sql: String,
-    systemContext: Option[Map[String, String]],
+    systemContext: Map[String, String],
     cryptProviders: CryptProviderProvider,
     extractor: ResultExtractor[DatabaseNamesMetaTypes],
     rs: ResourceScope
   ): Iterator[Array[JValue]] = {
-    systemContext.foreach(setupSystemContext(conn, _))
+    setupSystemContext(conn, systemContext)
 
     new Iterator[Array[JValue]] {
       private val stmt = rs.open(conn.createStatement())
@@ -625,6 +625,8 @@ object ProcessQuery {
   }
 
   def setupSystemContext(conn: Connection, systemContext: Map[String, String]): Unit = {
+    if(systemContext.isEmpty) return
+
     using(new ResourceScope) { rs =>
       val BatchSize = 5
       var fullStmt = Option.empty[PreparedStatement]

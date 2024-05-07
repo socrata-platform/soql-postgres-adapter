@@ -141,7 +141,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
 
     f.args(0) match {
       case lit@LiteralValue(SoQLText(key)) =>
-        ctx.extraContext.systemContext.get(key) match {
+        ctx.extraContext.systemContextKeyUsed(key) match {
           case Some(value) =>
             ctx.repFor(SoQLText).literal(LiteralValue[MT](SoQLText(value))(f.position.asAtomic))
               .withExpr(f)
@@ -151,7 +151,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
       case e@NullLiteral(typ) =>
         nullLiteral
       case _ =>
-        ctx.extraContext.nonliteralSystemContextLookupFound = true
+        ctx.extraContext.nonLiteralSystemContextUsed()
         val hashedArg = Seq(args(0).compressed.sql).funcall(d"md5").group
         val prefixedArg = d"'socrata_system.a' ||" +#+ hashedArg
         val lookup = Seq(prefixedArg.group, d"true").funcall(d"current_setting")
@@ -219,7 +219,6 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
     assert(f.typ == SoQLFixedTimestamp)
     assert(args.length == 0)
 
-    ctx.extraContext.nowUsed = true
     ctx.repFor(f.typ).
       literal(LiteralValue[MT](SoQLFixedTimestamp(ctx.extraContext.now))(AtomicPositionInfo.Synthetic)).
       withExpr(f)
