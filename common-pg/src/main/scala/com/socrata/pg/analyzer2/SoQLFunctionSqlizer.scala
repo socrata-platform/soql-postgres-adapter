@@ -224,6 +224,27 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
       withExpr(f)
   }
 
+  def convertToText(v: ExprSql, ctx: DynamicContext): ExprSql = {
+    val rep = ctx.repFor(v.typ)
+    ctx.extraContext.obfuscatorRequired ||= rep.isProvenanced
+    rep.convertToText(v).getOrElse {
+      throw new Exception("All types should be convertable to text, but ${v.typ} wasn't?")
+    }
+  }
+
+  def sqlizeConcat = {
+    val concat = sqlizeBinaryOp("||")
+    ofs { (f, args, ctx) =>
+      concat(f, args.map(convertToText(_, ctx)), ctx)
+    }
+  }
+
+  def sqlizeCastToText = ofs { (f, args, ctx) =>
+    assert(f.typ == SoQLText)
+    assert(args.length == 1)
+    convertToText(args(0), ctx).withExpr(f)
+  }
+
   def sqlizeIsEmpty = ofs { (f, args, ctx) =>
     assert(f.typ == SoQLBoolean)
     assert(args.length == 1)
@@ -335,7 +356,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
 
       Like -> sqlizeBinaryOp("LIKE"),
       NotLike -> sqlizeBinaryOp("NOT LIKE"),
-      Concat -> sqlizeBinaryOp("||"),
+      Concat -> sqlizeConcat,
       Lower -> sqlizeNormalOrdinaryFuncall("lower"),
       Upper -> sqlizeNormalOrdinaryFuncall("upper"),
       Length -> sqlizeNormalOrdinaryFuncall("length"),
@@ -494,7 +515,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
       JsonProp -> sqlizeBinaryOp("->"),
       JsonIndex -> sqlizeBinaryOp("->"),
       TextToJson -> sqlizeCast("jsonb"),
-      JsonToText -> sqlizeCast("text"),
+      JsonToText -> sqlizeCastToText,
 
       // conditional
       Nullif -> sqlizeNormalOrdinaryFuncall("nullif"),
@@ -511,9 +532,9 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
 
       // simple casts
       TextToBool -> sqlizeCast("boolean"),
-      BoolToText -> sqlizeCast("text"),
+      BoolToText -> sqlizeCastToText,
       TextToNumber -> sqlizeCast("numeric"),
-      NumberToText -> sqlizeCast("text"),
+      NumberToText -> sqlizeCastToText,
       TextToFixedTimestamp -> sqlizeCast("timestamp with time zone"),
       TextToFloatingTimestamp -> sqlizeCast("timestamp without time zone"),
       TextToInterval -> sqlizeCast("interval"),

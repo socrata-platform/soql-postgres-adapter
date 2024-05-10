@@ -67,7 +67,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     CaselessStartsWith -> upperize(infixSuffixWildcard("like", prefix = false) _),
     Contains -> infixSuffixWildcard("like", prefix = true) _,
     CaselessContains -> upperize(infixSuffixWildcard("like", prefix = true) _),
-    Concat -> infix("||") _,
+    Concat -> concat _,
 
     Lower -> nary("lower") _,
     Upper -> nary("upper") _,
@@ -284,6 +284,53 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     }
 
     val s = foldSegments(lrs, foldOp)
+    ParametricSql(Seq(s), setParamsLR)
+  }
+
+  private def concat(fn: FunCall,
+                     rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                     typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                     setParams: Seq[SetParam],
+                     ctx: Sqlizer.Context,
+                     escape: Escape): ParametricSql = {
+    def obfuscate(tag: String, sql: ParametricSql): ParametricSql = {
+      val key = ctx(SqlizerContext.ObfuscationKeySql)
+      ParametricSql(Seq(s"format_obfuscated('${tag}', obfuscate($key, ${sql.sql.head}))"), sql.setParams)
+    }
+
+    def sqlToText(param: CoreExpr[UserColumnId, SoQLType], setParams: Seq[SetParam]) = {
+      val sql =
+        Sqlizer.sql(param)(rep, typeRep, setParams, ctx, escape)
+      param.typ match {
+        case SoQLID =>
+          obfuscate("row", sql)
+        case SoQLVersion =>
+          obfuscate("rv", sql)
+        case _ =>
+          sql
+      }
+    }
+
+    val ParametricSql(ls, setParamsL) = sqlToText(fn.parameters(0), setParams)
+    val ParametricSql(rs, setParamsLR) = sqlToText(fn.parameters(1), setParamsL)
+
+    val moreThanOneExpression = ls.tail.nonEmpty
+    val lrs = ls.zip(rs).foldLeft(Seq.empty[String]) { (acc, lr) =>
+      lr match {
+        case (_, r) if moreThanOneExpression && r == SqlNullInParen =>
+          // Choose to not compare null to make it easy to work with obe.
+          // May be consider skipping nulls only by flag in the future.
+          // select phone, phone_type where phone = '4251234567' is rewritten by fuse column to
+          // select phone(phone, phone_type) where phone(phone, phone_type) = '4251234567'
+          // ignore the null field in compound type.
+          acc
+        case (l, r) =>
+          val s = s"$l || $r"
+          acc :+ s
+      }
+    }
+
+    val s = foldSegments(lrs, " || ")
     ParametricSql(Seq(s), setParamsLR)
   }
 

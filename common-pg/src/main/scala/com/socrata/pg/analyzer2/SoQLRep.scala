@@ -65,39 +65,42 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       exprSqlFactory(raw.compressed.sql.funcall(d"st_asbinary"), raw.expr)
     }
 
+    override def convertToText(e: ExprSql): Option[ExprSql] =
+      Some(exprSqlFactory(e.compressed.sql.funcall(d"st_astext"), e.expr))
+
     override def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
       Option(rs.getBytes(dbCol)).flatMap { bytes =>
         t.WkbRep.unapply(bytes) // TODO: this just turns invalid values into null, we should probably be noisier than that
       }.map(ctor).getOrElse(SoQLNull)
     }
 
-      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
-        new IngressRep[MT] {
-          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
-            cv match {
-              case SoQLNull =>
-                stmt.setNull(start, Types.VARCHAR)
-              case other =>
-                val geo = downcast(other)
-                stmt.setString(start, t.EWktRep(geo, Geo.defaultSRID))
-            }
-            start + 1
+    override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+      new IngressRep[MT] {
+        override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+          cv match {
+            case SoQLNull =>
+              stmt.setNull(start, Types.VARCHAR)
+            case other =>
+              val geo = downcast(other)
+              stmt.setString(start, t.EWktRep(geo, Geo.defaultSRID))
           }
-          override def csvify(cv: CV): Seq[Option[String]] = {
-            cv match {
-              case SoQLNull =>
-                Seq(None)
-              case other =>
-                val geo = downcast(other)
-                Seq(Some(t.EWktRep(geo, Geo.defaultSRID)))
-            }
-          }
-          override def placeholders: Seq[Doc] = Seq(d"ST_GeomFromEWKT(?)")
-          override def indices =
-            Seq(
-              d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, columnName) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"USING GIST (" ++ compressedDatabaseColumn(columnName) ++ d")"
-            )
+          start + 1
         }
+        override def csvify(cv: CV): Seq[Option[String]] = {
+          cv match {
+            case SoQLNull =>
+              Seq(None)
+            case other =>
+              val geo = downcast(other)
+              Seq(Some(t.EWktRep(geo, Geo.defaultSRID)))
+          }
+        }
+        override def placeholders: Seq[Doc] = Seq(d"ST_GeomFromEWKT(?)")
+        override def indices =
+          Seq(
+            d"CREATE INDEX IF NOT EXISTS" +#+ namespace.indexName(tableName, columnName) +#+ d"ON" +#+ namespace.databaseTableName(tableName) +#+ d"USING GIST (" ++ compressedDatabaseColumn(columnName) ++ d")"
+          )
+      }
   }
 
   private def badType(expected: String, value: CV): Nothing =
@@ -120,6 +123,24 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       }
 
       override def compressedDatabaseType = d"jsonb"
+
+      override def convertToText(e: ExprSql): Option[ExprSql] = {
+        val Seq(provenance, value) =
+          e match {
+            case compressed: ExprSql.Compressed[MT] =>
+              Seq(d"(" ++ compressed.sql ++ d") ->> 0", d"((" ++ compressed.sql ++ d") ->> 1) :: bigint")
+            case expanded: ExprSql.Expanded[MT] =>
+              expanded.sqls
+          }
+        val converted = Seq(
+          d"'row'",
+          Seq(
+            Seq(provenance).funcall(d"pg_temp.soql_obfuscate"),
+            value
+          ).funcall(d"obfuscate")
+        ).funcall(d"format_obfuscated")
+        Some(exprSqlFactory(converted, e.expr))
+      }
 
       override def literal(e: LiteralValue) = {
         val rawId = e.value.asInstanceOf[SoQLID]
@@ -262,6 +283,24 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
 
       override def compressedDatabaseType = d"jsonb"
 
+      def convertToText(e: ExprSql): Option[ExprSql] = {
+        val Seq(provenance, value) =
+          e match {
+            case compressed: ExprSql.Compressed[MT] =>
+              Seq(d"(" ++ compressed.sql ++ d") ->> 0", d"((" ++ compressed.sql ++ d") ->> 1) :: bigint")
+            case expanded: ExprSql.Expanded[MT] =>
+              expanded.sqls
+          }
+        val converted = Seq(
+          d"'rv'",
+          Seq(
+            Seq(provenance).funcall(d"pg_temp.soql_obfuscate"),
+            value
+          ).funcall(d"obfuscate")
+        ).funcall(d"format_obfuscated")
+        Some(exprSqlFactory(converted, e.expr))
+      }
+
       override def literal(e: LiteralValue) = {
         val rawId = e.value.asInstanceOf[SoQLVersion]
         val rawFormatted = SoQLVersion.FormattedButUnobfuscatedStringRep(rawId)
@@ -394,6 +433,9 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         val SoQLText(s) = e.value
         exprSqlFactory(mkTextLiteral(s), e)
       }
+
+      def convertToText(e: ExprSql): Option[ExprSql] = Some(e)
+
       override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getString(dbCol)) match {
           case None => SoQLNull
@@ -428,6 +470,10 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         val SoQLNumber(n) = e.value
         exprSqlFactory(Doc(n.toString) +#+ d"::" +#+ sqlType, e)
       }
+
+      def convertToText(e: ExprSql): Option[ExprSql] =
+        Some(exprSqlFactory(d"(" ++ e.compressed.sql ++ d") :: text", e.expr))
+
       override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getBigDecimal(dbCol)) match {
           case None => SoQLNull
@@ -462,6 +508,11 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         val SoQLBoolean(b) = e.value
         exprSqlFactory(if(b) d"true" else d"false", e)
       }
+
+      def convertToText(e: ExprSql): Option[ExprSql] =
+        // precise control over how booleans get stringified
+        Some(exprSqlFactory(d"case (" ++ e.compressed.sql ++ d") when true then 'true' when false then 'false' end", e.expr))
+
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         val v = rs.getBoolean(dbCol)
         if(rs.wasNull) {
@@ -497,6 +548,13 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         val SoQLFixedTimestamp(s) = e.value
         exprSqlFactory(sqlType +#+ mkStringLiteral(SoQLFixedTimestamp.StringRep(s)), e)
       }
+
+      def convertToText(e: ExprSql): Option[ExprSql] = {
+        val converted =
+          Seq(e.compressed.sql).funcall(d"soql_fixed_timestamp_to_text")
+        Some(exprSqlFactory(converted, e.expr))
+      }
+
       private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.FixedTimestampRep("")
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
@@ -519,6 +577,13 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         val SoQLFloatingTimestamp(s) = e.value
         exprSqlFactory(sqlType +#+ mkStringLiteral(SoQLFloatingTimestamp.StringRep(s)), e)
       }
+
+      override def convertToText(e: ExprSql): Option[ExprSql] = {
+        val converted =
+          Seq(e.compressed.sql).funcall(d"soql_floating_timestamp_to_text")
+        Some(exprSqlFactory(converted, e.expr))
+      }
+
       private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.FloatingTimestampRep("")
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
@@ -541,6 +606,13 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         val SoQLDate(s) = e.value
         exprSqlFactory(sqlType +#+ mkStringLiteral(SoQLDate.StringRep(s)), e)
       }
+
+      override def convertToText(e: ExprSql): Option[ExprSql] = {
+        val converted =
+          Seq(e.compressed.sql).funcall(d"soql_date_to_text")
+        Some(exprSqlFactory(converted, e.expr))
+      }
+
       private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.DateRep("")
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
@@ -563,6 +635,13 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         val SoQLTime(s) = e.value
         exprSqlFactory(sqlType +#+ mkStringLiteral(SoQLTime.StringRep(s)), e)
       }
+
+      override def convertToText(e: ExprSql): Option[ExprSql] = {
+        val converted =
+          Seq(e.compressed.sql).funcall(d"soql_time_to_text")
+        Some(exprSqlFactory(converted, e.expr))
+      }
+
       private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.TimeRep("")
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
@@ -585,6 +664,12 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         val SoQLJson(j) = e.value
         exprSqlFactory(sqlType +#+ mkStringLiteral(CompactJsonWriter.toString(j)), e)
       }
+
+      override def convertToText(e: ExprSql): Option[ExprSql] = {
+        val converted = d"(" ++ e.compressed.sql ++ d""") :: text"""
+        Some(exprSqlFactory(converted, e.expr))
+      }
+
       private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.JsonRep("")
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
@@ -607,6 +692,13 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
 
     SoQLDocument -> new SingleColumnRep(SoQLDocument, d"jsonb") {
       override def literal(e: LiteralValue) = ??? // no such thing as a doc liteal
+
+      // TODO: This isn't a very useful text representation
+      override def convertToText(e: ExprSql): Option[ExprSql] = {
+        val converted = d"(" ++ e.compressed.sql ++ d""") :: text"""
+        Some(exprSqlFactory(converted, e.expr))
+      }
+
       override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getString(dbCol)) match {
           case Some(s) =>
@@ -645,6 +737,12 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         val SoQLInterval(p) = e.value
         exprSqlFactory(d"interval" +#+ mkStringLiteral(SoQLInterval.StringRep(p)), e)
       }
+
+      override def convertToText(e: ExprSql): Option[ExprSql] = {
+        val converted = Seq(e.compressed.sql).funcall(d"soql_interval_to_text")
+        Some(exprSqlFactory(converted, e.expr))
+      }
+
       override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         Option(rs.getObject(dbCol).asInstanceOf[PGInterval]) match {
           case Some(pgInterval) =>
@@ -712,6 +810,17 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
 
       override def physicalDatabaseColumns(name: ColumnLabel) = {
         Seq(namespace.columnName(name, "number"), namespace.columnName(name, "type"))
+      }
+
+      override def convertToText(e: ExprSql): Option[ExprSql] = {
+        val subcolumns =
+          e match {
+            case expanded: ExprSql.Expanded[MT] => expanded.sqls
+            case compressed: ExprSql.Compressed[MT] => Seq(compressed.sql)
+          }
+
+        val converted = subcolumns.funcall(d"soql_phone_to_text")
+        Some(exprSqlFactory(converted, e.expr))
       }
 
       override def physicalDatabaseTypes = Seq(d"text", d"text")
@@ -814,6 +923,17 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
 
       override def nullLiteral(e: NullLiteral) =
         exprSqlFactory(Seq(d"null :: geometry", d"null :: text", d"null :: text", d"null :: text", d"null :: text"), e)
+
+      override def convertToText(e: ExprSql): Option[ExprSql] = {
+        val subcolumns =
+          e match {
+            case expanded: ExprSql.Expanded[MT] => expanded.sqls
+            case compressed: ExprSql.Compressed[MT] => Seq(compressed.sql)
+          }
+
+        val converted = subcolumns.funcall(d"soql_location_to_text")
+        Some(exprSqlFactory(converted, e.expr))
+      }
 
       override def physicalColumnCount = 5
 
@@ -957,6 +1077,17 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
     SoQLUrl -> new CompoundColumnRep(SoQLUrl) {
       override def nullLiteral(e: NullLiteral) =
         exprSqlFactory(Seq(d"null :: text", d"null :: text"), e)
+
+      override def convertToText(e: ExprSql): Option[ExprSql] = {
+        val subcolumns =
+          e match {
+            case expanded: ExprSql.Expanded[MT] => expanded.sqls
+            case compressed: ExprSql.Compressed[MT] => Seq(compressed.sql)
+          }
+
+        val converted = subcolumns.funcall(d"soql_url_to_text")
+        Some(exprSqlFactory(converted, e.expr))
+      }
 
       override def physicalColumnCount = 2
 

@@ -460,6 +460,20 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                  analyze: Boolean): QueryResultBall = {
       val cryptProvider = latestCopy.datasetInfo.cryptProvider
 
+      val obfuscationKeySql = new Object {
+        override lazy val toString =
+          for {
+            stmt <- managed(pgu.conn.prepareStatement("select make_obfuscator(?)"))
+            .and(_.setBytes(1, cryptProvider.key))
+            rs <- managed(stmt.executeQuery())
+          } {
+            if(!rs.next()) {
+              throw new Exception("Selecting a single value didn't return one?")
+            }
+            rs.getBytes(1).map { b => "%02x".format(b & 0xff) }.mkString("bytea '\\x", "", "'")
+          }
+      }
+
       val sqlCtx = Map[SqlizerContext, Any](
         SqlizerContext.IdRep -> (if (obfuscateId) { new SoQLID.StringRep(cryptProvider) }
                                  else { new ClearNumberRep(cryptProvider) }),
@@ -467,6 +481,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
         SqlizerContext.CaseSensitivity -> caseSensitivity,
         SqlizerContext.LeadingSearch -> leadingSearch,
         SqlizerContext.SoQLContext -> context,
+        SqlizerContext.ObfuscationKeySql -> obfuscationKeySql
       )
       val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit)
 

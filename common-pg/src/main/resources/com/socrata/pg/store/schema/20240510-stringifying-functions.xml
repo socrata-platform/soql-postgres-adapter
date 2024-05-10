@@ -1,0 +1,136 @@
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+    <changeSet author="robertm" id="20240501-stringifying-functions" runOnChange="true">
+      <sql splitStatements="false"><![CDATA[
+        CREATE OR REPLACE FUNCTION soql_fixed_timestamp_to_text(ts timestamp with time zone) RETURNS text as $$
+          select to_char(ts at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
+        $$ LANGUAGE SQL
+        IMMUTABLE STRICT PARALLEL SAFE;
+
+        CREATE OR REPLACE FUNCTION soql_floating_timestamp_to_text(ts timestamp without time zone) RETURNS text as $$
+          select to_char(ts, 'YYYY-MM-DD"T"HH24:MI:SS.MS');
+        $$ LANGUAGE SQL
+        IMMUTABLE STRICT PARALLEL SAFE;
+
+        CREATE OR REPLACE FUNCTION soql_date_to_text(d date) RETURNS text as $$
+          select to_char(d, 'YYYY-MM-DD');
+        $$ LANGUAGE SQL
+        IMMUTABLE STRICT PARALLEL SAFE;
+
+        CREATE OR REPLACE FUNCTION soql_time_to_text(t time without time zone) RETURNS text as $$
+          select to_char(t, 'HH24:MI:SS.MS');
+        $$ LANGUAGE SQL
+        IMMUTABLE STRICT PARALLEL SAFE;
+
+        CREATE OR REPLACE FUNCTION soql_interval_to_text(i interval) RETURNS text as $$
+          SELECT i :: text;
+        $$ LANGUAGE SQL
+        IMMUTABLE STRICT PARALLEL SAFE
+        SET intervalstyle TO iso_8601;
+
+        CREATE OR REPLACE FUNCTION soql_phone_to_text(phone text, typ text) RETURNS text as $$
+          SELECT CASE
+            WHEN phone IS NULL THEN typ
+            WHEN typ IS NULL THEN phone
+            ELSE typ || ' ' || phone
+          END;
+        $$ LANGUAGE SQL
+        IMMUTABLE PARALLEL SAFE;
+
+        CREATE OR REPLACE FUNCTION soql_phone_to_text(phone jsonb) RETURNS text as $$
+          SELECT soql_phone_to_text(phone ->> 0, phone ->> 1);
+        $$ LANGUAGE SQL
+        IMMUTABLE PARALLEL SAFE;
+
+        CREATE OR REPLACE FUNCTION soql_concat_with_newline(a text, b text) RETURNS text as $$
+        BEGIN
+          case
+            when a = '' then return b;
+            when b = '' then return a;
+            else return a || E'\n' || b;
+          end case;
+        END;
+        $$ LANGUAGE plpgsql
+        IMMUTABLE STRICT PARALLEL SAFE;
+
+        CREATE OR REPLACE FUNCTION soql_location_to_text(point geometry, address text, city text, state text, zip text) RETURNS text as $$
+        DECLARE
+          address_line text;
+          city_state_zip_line text;
+          point_line text;
+        BEGIN
+          if point is null and address is null and city is null and state is null and zip is null then
+            return null;
+          end if;
+          if address is not null then
+            address_line := address;
+          else
+            address_line := '';
+          end if;
+          if city is not null then
+            city_state_zip_line := city;
+            if state is not null or zip is not null then
+              city_state_zip_line := city_state_zip_line || ', ';
+            end if;
+          else
+            city_state_zip_line := '';
+          end if;
+          if state is not null then
+            city_state_zip_line := city_state_zip_line || state;
+            if zip is not null then
+              city_state_zip_line := city_state_zip_line || ' ';
+            end if;
+          end if;
+          if zip is not null then
+            city_state_zip_line := city_state_zip_line || zip;
+          end if;
+          if point is not null then
+            point_line := '(' || st_y(point) || ', ' || st_x(point) || ')';
+          else
+            point_line := '';
+          end if;
+          return soql_concat_with_newline(address_line, soql_concat_with_newline(city_state_zip_line, point_line));
+        END;
+        $$ LANGUAGE plpgsql
+        IMMUTABLE PARALLEL SAFE;
+
+        CREATE OR REPLACE FUNCTION soql_location_to_text(loc jsonb) RETURNS text as $$
+          SELECT soql_location_to_text(soql_extract_compressed_location_point(loc), loc ->> 1, loc ->> 2, loc ->> 3, loc ->> 4);
+        $$ LANGUAGE SQL
+        IMMUTABLE PARALLEL SAFE;
+
+        CREATE OR REPLACE FUNCTION soql_url_to_text(url text, description text) RETURNS text as $$
+          -- This is icky because it does _not_ represent a format accepted by URL literals
+          SELECT CASE
+            WHEN url IS NULL THEN description
+            WHEN description IS NULL THEN url
+            ELSE description || ' (' || url || ')'
+          END;
+        $$ LANGUAGE SQL
+        IMMUTABLE PARALLEL SAFE;
+
+        CREATE OR REPLACE FUNCTION soql_url_to_text(url jsonb) RETURNS text as $$
+          SELECT soql_url_to_text(url ->> 0, url ->> 1);
+        $$ LANGUAGE SQL
+        IMMUTABLE PARALLEL SAFE;
+      ]]></sql>
+      <rollback>
+        <sql><![CDATA[
+DROP FUNCTION soql_url_to_text(jsonb);
+DROP FUNCTION soql_url_to_text(text, text);
+DROP FUNCTION soql_location_to_text(jsonb);
+DROP FUNCTION soql_location_to_text(geometry, text, text, text, text);
+DROP FUNCTION soql_concat_with_newline(text, text);
+DROP FUNCTION soql_phone_to_text(jsonb);
+DROP FUNCTION soql_phone_to_text(text, text);
+DROP FUNCTION soql_interval_to_text(interval);
+DROP FUNCTION soql_time_to_text(time without time zone);
+DROP FUNCTION soql_date_to_text(date);
+DROP FUNCTION soql_floating_timestamp_to_text(timestamp without time zone);
+DROP FUNCTION soql_fixed_timestamp_to_text(timestamp with time zone);
+        ]]></sql>
+      </rollback>
+    </changeSet>
+</databaseChangeLog>

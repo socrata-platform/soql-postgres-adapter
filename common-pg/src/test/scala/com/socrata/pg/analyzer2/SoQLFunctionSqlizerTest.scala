@@ -90,7 +90,10 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
 
   def extraContext = new SoQLExtraContext(
     Map("hello" -> "world"),
-    _ => Some(obfuscation.CryptProvider.zeros),
+    new CryptProviderProvider {
+      def forProvenance(provenance: Provenance) = Some(obfuscation.CryptProvider.zeros)
+      def allProviders = Map.empty
+    },
     Map.empty,
     JString(_).toString
   )
