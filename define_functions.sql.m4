@@ -30,7 +30,7 @@ let Ok(obfuscator) = <&[u8; blowfish::BYTESIZE]>::try_from(obfuscator) else {
 Ok(Some(BorrowedBlowfish::from_bytes(obfuscator)?.encrypt(value as u64) as i64))
 $$;
 
-CREATE OR REPLACE FUNCTION make_rowid(value BIGINT)
+CREATE OR REPLACE FUNCTION format_obfuscated(tag TEXT, value BIGINT)
   RETURNS TEXT
   LANGUAGE PLRUST
   IMMUTABLE STRICT PARALLEL SAFE COST 1
@@ -39,8 +39,9 @@ $$
 mod longformatter {
   undivert(src/longformatter.rs)
 }
-let mut result = String::with_capacity(4 + 14);
-result.push_str("row-");
+let mut result = String::with_capacity(tag.`len'() + 1 + 14);
+result.push_str(tag);
+result.push_str("-");
 result.push_str(std::str::from_utf8(&longformatter::LongFormatter::`format'(value as u64)).unwrap());
 Ok(Some(result.to_string()))
 $$;
