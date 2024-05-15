@@ -11,7 +11,7 @@ import java.util.Base64
 import java.util.zip.GZIPOutputStream
 import javax.servlet.http.HttpServletResponse
 
-import com.rojoma.json.v3.ast.{JArray, JString, JValue, JNull}
+import com.rojoma.json.v3.ast.{JArray, JString, JValue, JNull, JAtom, JObject}
 import com.rojoma.json.v3.interpolation._
 import com.rojoma.json.v3.io.{CompactJsonWriter, JsonReader}
 import com.rojoma.json.v3.util.{AutomaticJsonEncode, JsonUtil}
@@ -40,7 +40,7 @@ import com.socrata.datacoordinator.id.{RollupName, DatasetResourceName}
 import com.socrata.metrics.rollup.RollupMetrics
 import com.socrata.metrics.rollup.events.RollupHit
 
-import com.socrata.pg.analyzer2.{CryptProviderProvider, TransformManager, CostEstimator, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, Namespaces, SoQLExtraContext}
+import com.socrata.pg.analyzer2.{CryptProviderProvider, TransformManager, CostEstimator, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, Namespaces, SoQLExtraContext, SoQLSqlizeAnnotation}
 import com.socrata.pg.analyzer2.metatypes.{CopyCache, InputMetaTypes, DatabaseMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName, SoQLMetaTypesExt, Stage}
 import com.socrata.pg.analyzer2.ordering._
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils, RollupAnalyzer, RollupId}
@@ -170,14 +170,33 @@ object ProcessQuery {
     )
 
     val onlyOne = nameAnalyses.lengthCompare(1) == 0
-    val sqlized = nameAnalyses.map { nameAnalysis =>
-      val sqlizer = SoQLSqlizer
-      val Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(systemContextUsed, now)) = sqlizer(nameAnalysis._1, new SoQLExtraContext(systemContext, cryptProviders, RewriteSubcolumns[InputMetaTypes](request.auxTableData.mapValues(_.locationSubcolumns), copyCache), SqlUtils.escapeString(pgu.conn, _))) match {
-        case Right(result) => result
+    val sqlizerResults = nameAnalyses.map { nameAnalysis =>
+      SoQLSqlizer(
+        nameAnalysis._1,
+        new SoQLExtraContext(
+          systemContext,
+          cryptProviders,
+          RewriteSubcolumns[InputMetaTypes](
+            request.auxTableData.mapValues(_.locationSubcolumns),
+            copyCache
+          ),
+          SqlUtils.escapeString(pgu.conn, _)
+        )
+      ) match {
+        case Right(result) => (nameAnalysis, result)
         case Left(nothing) => nothing
       }
-      log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
+    }
 
+    // This has to happen before cost-estimation, because the EXPLAIN
+    // it does will depend on the obfuscator temp function existing.
+    if(sqlizerResults.exists(_._2.extraContextResult.obfuscatorRequired)) {
+      ObfuscatorHelper.setupObfuscators(pgu.conn, cryptProviders.allProviders.mapValues(_.key))
+    }
+
+    val sqlized = sqlizerResults.iterator.map { sqlizerResult =>
+      val (nameAnalysis, Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(systemContextUsed, now, _obfuscatorRequired))) = sqlizerResult
+      log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
       Sqlized(
         nameAnalysis._1,
         relevantRollups.filter { rr => nameAnalysis._2.contains(rr.id) },
@@ -304,6 +323,20 @@ object ProcessQuery {
     }
   }
 
+  def redactObfuscateInExplain(s: String): String = {
+    // each obfuscator is 4172 bytes, which are then doubled by
+    // hex-encoding them, giving 8344
+    s.replaceAll("""obfuscate\('\\x[0-9a-f]{8344}+'""", "obfuscate(/*redacted*/")
+  }
+
+  def redactObfuscateInExplain(j: JValue): JValue =
+    j match {
+      case JString(s) => JString(redactObfuscateInExplain(s))
+      case otherAtom: JAtom => otherAtom
+      case JArray(elems) => JArray(elems.map(redactObfuscateInExplain(_)))
+      case JObject(fields) => JObject(fields.mapValues(redactObfuscateInExplain(_)))
+    }
+
   def explainText(
     conn: Connection,
     query: String,
@@ -321,7 +354,7 @@ object ProcessQuery {
           while(rs.next()) {
             if(didOne) sb.append('\n')
             else didOne = true
-            sb.append(rs.getString(1))
+            sb.append(redactObfuscateInExplain(rs.getString(1)))
           }
           sb.toString
         }
@@ -344,7 +377,7 @@ object ProcessQuery {
           if(!rs.next()) {
             throw new Exception("Should've gotten a row for the explanation")
           }
-          JsonReader.fromString(rs.getString(1))
+          redactObfuscateInExplain(JsonReader.fromString(rs.getString(1)))
         }
       }
     }
@@ -402,7 +435,7 @@ object ProcessQuery {
     }
 
     val laidOutSql: SimpleDocStream[SqlizeAnnotation[DatabaseNamesMetaTypes]] = sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded))
-    val renderedSql = laidOutSql.toString
+    val renderedSql = singleLineSql(sql, forDebug = false)
     val debugFields =
       debug.map { debug =>
         Seq(
@@ -410,9 +443,9 @@ object ProcessQuery {
             val s =
               fmt match {
                 case Debug.Sql.Format.Compact =>
-                  renderedSql
+                  singleLineSql(sql, forDebug = true)
                 case Debug.Sql.Format.Pretty =>
-                  prettierSql(nameAnalysis, sql)
+                  prettierSql(nameAnalysis, sql, forDebug = true)
               }
             JString(s)
           }.map("sql" -> _),
@@ -658,12 +691,8 @@ object ProcessQuery {
     }
   }
 
-  def prettierSql[MT <: MetaTypes with SoQLMetaTypesExt](analysis: SoQLAnalysis[MT], doc: Doc[SqlizeAnnotation[MT]]): String = {
-    val sb = new StringBuilder
-
-    val map = new LabelMap(analysis)
-
-    def walk(tree: SimpleDocTree[SqlizeAnnotation[MT]]): Unit = {
+  def singleLineSql[MT <: MetaTypes with SoQLMetaTypesExt](doc: Doc[SqlizeAnnotation[MT]], forDebug: Boolean): String = {
+    def walk(sb: StringBuilder, tree: SimpleDocTree[SqlizeAnnotation[MT]]): Unit = {
       tree match {
         case doctree.Empty =>
           // nothing
@@ -679,11 +708,57 @@ object ProcessQuery {
             i += 1
           }
         case doctree.Ann(a, doc) if doc.isInstanceOf[doctree.Ann[_]] =>
-          walk(doc)
+          walk(sb, doc)
+        case doctree.Ann(a, doc) =>
+          a match {
+            case SqlizeAnnotation.Expression(_) =>
+              walk(sb, doc)
+            case SqlizeAnnotation.Table(_) =>
+              walk(sb, doc)
+            case SqlizeAnnotation.OutputName(_) =>
+              walk(sb, doc)
+            case SqlizeAnnotation.Custom(SoQLSqlizeAnnotation.Hidden) =>
+              if(forDebug) {
+                sb.append("/* hidden */")
+                walk(new StringBuilder(), doc)
+              } else {
+                walk(sb, doc)
+              }
+          }
+        case doctree.Concat(elems) =>
+          elems.foreach(walk(sb, _))
+      }
+    }
+
+    val sb = new StringBuilder
+    walk(sb, doc.group.layoutPretty(LayoutOptions(PageWidth.Unbounded)).asTree)
+    sb.toString
+  }
+
+  def prettierSql[MT <: MetaTypes with SoQLMetaTypesExt](analysis: SoQLAnalysis[MT], doc: Doc[SqlizeAnnotation[MT]], forDebug: Boolean): String = {
+    val map = new LabelMap(analysis)
+
+    def walk(sb: StringBuilder, tree: SimpleDocTree[SqlizeAnnotation[MT]]): Unit = {
+      tree match {
+        case doctree.Empty =>
+          // nothing
+        case doctree.Char(c) =>
+          sb.append(c)
+        case doctree.Text(s) =>
+          sb.append(s)
+        case doctree.Line(n) =>
+          sb.append('\n')
+          var i = 0
+          while(i < n) {
+            sb.append(' ')
+            i += 1
+          }
+        case doctree.Ann(a, doc) if doc.isInstanceOf[doctree.Ann[_]] =>
+          walk(sb, doc)
         case doctree.Ann(a, doc) =>
           a match {
             case SqlizeAnnotation.Expression(VirtualColumn(tLabel, cLabel, _)) =>
-              walk(doc)
+              walk(sb, doc)
               for((rn, cn) <- map.virtualColumnNames.get((tLabel, cLabel))) {
                 sb.append(" /* ")
                 for(rn <- rn) {
@@ -694,7 +769,7 @@ object ProcessQuery {
                 sb.append(" */")
               }
             case SqlizeAnnotation.Expression(PhysicalColumn(tLabel, _, cLabel, _)) =>
-              walk(doc)
+              walk(sb, doc)
               for((rn, cn) <- map.physicalColumnNames.get((tLabel, cLabel))) {
                 sb.append(" /* ")
                 for(rn <- rn) {
@@ -704,8 +779,10 @@ object ProcessQuery {
                 sb.append(cn.name)
                 sb.append(" */")
               }
+            case SqlizeAnnotation.Expression(expr) =>
+              walk(sb, doc)
             case SqlizeAnnotation.Table(tLabel) =>
-              walk(doc)
+              walk(sb, doc)
               for {
                 rn <- map.tableNames.get(tLabel)
                 rn <- rn
@@ -715,19 +792,26 @@ object ProcessQuery {
                 sb.append(" */")
               }
             case SqlizeAnnotation.OutputName(name) =>
-              walk(doc)
+              walk(sb, doc)
               sb.append(" /* ")
               sb.append(name.name)
               sb.append(" */")
-            case _=>
-              walk(doc)
+
+            case SqlizeAnnotation.Custom(SoQLSqlizeAnnotation.Hidden) =>
+              if(forDebug) {
+                sb.append("/* hidden */")
+                walk(new StringBuilder(), doc)
+              } else {
+                walk(sb, doc)
+              }
           }
         case doctree.Concat(elems) =>
-          elems.foreach(walk)
+          elems.foreach(walk(sb, _))
       }
     }
-    walk(doc.layoutSmart().asTree)
 
+    val sb = new StringBuilder
+    walk(sb, doc.layoutSmart().asTree)
     sb.toString
   }
 

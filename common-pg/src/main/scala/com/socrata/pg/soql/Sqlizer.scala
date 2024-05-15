@@ -196,6 +196,7 @@ object SqlizerContext extends Enumeration {
 
   val TimestampLiteral = Value("timestamp-literal")
   val SoQLContext = Value("soql-context")
+  val ObfuscationKeySql = Value("obfuscation-key-sql")
 }
 
 sealed trait CaseSensitivity

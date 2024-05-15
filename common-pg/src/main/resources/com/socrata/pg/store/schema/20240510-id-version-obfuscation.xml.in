@@ -1,0 +1,196 @@
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+
+<!--
+
+This is an unusual migration file in a couple of different ways.
+First, it's a template which is filled in by the build script, rather
+than actually being a runnable migration file on its own.  Second, it
+contains six changesets, each of which has a precondition check.
+Three of them are mutually exclusive with the other three.  If plrust
+is installed in the database, the ones with expectedResult="1" will
+run, producing three Rust functions which do obfuscation of
+provenanced columns.  If plrust is not installed in the database, the
+other three will run, creating stub pl/pgsql functions that preserve
+the old-analyzer behavior.
+
+If at some point plrust goes from not-enabled to enabled (or
+vice-versa), the migration script will automatically notice and run
+the three previously skipped migrations, which will replace the
+previously existing function with the new one.
+
+The one case that is not gracefully handled is if plrust's
+installation-state changes _twice_ - in that case, whichever
+state-change happened first will win, because all six changesets will
+be marked as having run successfully in the database and so none will
+run again.
+
+-->
+
+    <changeSet author="robertm" id="20240501-make-obfuscator" runOnChange="true">
+        <preConditions onFail="CONTINUE">
+          <sqlCheck expectedResult="1">
+            select case when exists (select 1 from pg_extension where extname = 'plrust') then 1 else 0 end;
+          </sqlCheck>
+        </preConditions>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION make_obfuscator(key bytea)
+  RETURNS bytea
+  LANGUAGE plrust
+  IMMUTABLE STRICT PARALLEL SAFE COST 100
+AS
+$$
+mod blowfish {
+%%INCLUDE_BLOWFISH%%
+}
+use blowfish::OwnedBlowfish;
+Ok(Some(OwnedBlowfish::new(key).into_bytes()))
+$$
+        ]]></sql>
+        <rollback>
+            <sql><![CDATA[
+DROP FUNCTION IF EXISTS make_obfuscator(bytea);
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="robertm" id="20240501-make-obfuscator-disabled" runOnChange="true">
+        <preConditions onFail="CONTINUE">
+          <sqlCheck expectedResult="0">
+            select case when exists (select 1 from pg_extension where extname = 'plrust') then 1 else 0 end;
+          </sqlCheck>
+        </preConditions>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION make_obfuscator(key bytea)
+  RETURNS bytea
+  LANGUAGE plpgsql
+  IMMUTABLE STRICT PARALLEL SAFE COST 100
+AS
+$$
+BEGIN
+  -- Don't want to throw an exception here, because this is always
+  -- called to set up the obfuscator map, so instead return an empty
+  -- (not null!) bytea.
+  RETURN bytea '\x';
+END;
+$$
+        ]]></sql>
+        <rollback>
+            <sql><![CDATA[
+DROP FUNCTION IF EXISTS make_obfuscator(bytea);
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="robertm" id="20240501-obfuscate" runOnChange="true">
+        <preConditions onFail="CONTINUE">
+          <sqlCheck expectedResult="1">
+            select case when exists (select 1 from pg_extension where extname = 'plrust') then 1 else 0 end;
+          </sqlCheck>
+        </preConditions>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION obfuscate(obfuscator bytea, value bigint)
+  RETURNS bigint
+  LANGUAGE plrust
+  IMMUTABLE STRICT PARALLEL SAFE COST 1
+AS
+$$
+mod blowfish {
+%%INCLUDE_BLOWFISH%%
+}
+use blowfish::{BorrowedBlowfish, Blowfish};
+let Ok(obfuscator) = <&[u8; blowfish::BYTESIZE]>::try_from(obfuscator) else {
+    return Err("Invalid obfuscator".into());
+};
+Ok(Some(BorrowedBlowfish::from_bytes(obfuscator)?.encrypt(value as u64) as i64))
+$$
+        ]]></sql>
+        <rollback>
+            <sql><![CDATA[
+DROP FUNCTION IF EXISTS obfuscate(bytea, bigint);
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="robertm" id="20240501-obfuscate-disabled" runOnChange="true">
+        <preConditions onFail="CONTINUE">
+          <sqlCheck expectedResult="0">
+            select case when exists (select 1 from pg_extension where extname = 'plrust') then 1 else 0 end;
+          </sqlCheck>
+        </preConditions>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION obfuscate(obfuscator bytea, value bigint)
+  RETURNS bigint
+  LANGUAGE plpgsql
+  IMMUTABLE STRICT PARALLEL SAFE COST 100
+AS
+$$
+BEGIN
+  RETURN value;
+END;
+$$
+        ]]></sql>
+        <rollback>
+            <sql><![CDATA[
+DROP FUNCTION IF EXISTS obfuscate(bytea, bigint);
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="robertm" id="20240501-format-obfuscated" runOnChange="true">
+        <preConditions onFail="CONTINUE">
+          <sqlCheck expectedResult="1">
+            select case when exists (select 1 from pg_extension where extname = 'plrust') then 1 else 0 end;
+          </sqlCheck>
+        </preConditions>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION format_obfuscated(tag text, value bigint)
+  RETURNS text
+  LANGUAGE plrust
+  IMMUTABLE STRICT PARALLEL SAFE COST 1
+AS
+$$
+mod longformatter {
+%%INCLUDE_LONGFORMATTER%%
+}
+let mut result = String::with_capacity(tag.len() + 1 + 14);
+result.push_str(tag);
+result.push_str("-");
+result.push_str(std::str::from_utf8(&longformatter::LongFormatter::format(value as u64)).unwrap());
+Ok(Some(result.to_string()))
+$$
+        ]]></sql>
+        <rollback>
+            <sql><![CDATA[
+DROP FUNCTION IF EXISTS format_obfuscated(text, bigint);
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="robertm" id="20240501-format-obfuscated-disabled" runOnChange="true">
+        <preConditions onFail="CONTINUE">
+          <sqlCheck expectedResult="0">
+            select case when exists (select 1 from pg_extension where extname = 'plrust') then 1 else 0 end;
+          </sqlCheck>
+        </preConditions>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION format_obfuscated(tag text, value bigint)
+  RETURNS text
+  LANGUAGE plpgsql
+  IMMUTABLE STRICT PARALLEL SAFE COST 100
+AS
+$$
+BEGIN
+  RETURN value :: text;
+END;
+$$
+        ]]></sql>
+        <rollback>
+            <sql><![CDATA[
+DROP FUNCTION IF EXISTS format_obfuscated(text, bigint);
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

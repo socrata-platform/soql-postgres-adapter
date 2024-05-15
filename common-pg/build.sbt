@@ -40,3 +40,11 @@ buildInfoPackage := "com.socrata.pg"
 buildInfoOptions += BuildInfoOption.ToJson
 
 disablePlugins(AssemblyPlugin)
+
+Compile/resourceGenerators += Def.task {
+  BuildRustStoredProcs(
+    (Compile/resourceManaged).value,
+    (Compile/resourceDirectory).value,
+    (Compile/sourceDirectory).value / "rust"
+  )
+}.taskValue

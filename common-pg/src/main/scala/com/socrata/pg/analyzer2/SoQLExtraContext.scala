@@ -13,6 +13,8 @@ class SoQLExtraContext(
   val locationSubcolumns: SoQLExtraContext.LocationSubcolumns,
   val escapeString: String => String
 ) extends ExtraContext[SoQLExtraContext.Result] {
+  var obfuscatorRequired = false
+
   private val actualNow = DateTime.now()
   private var nowUsed = false
 
@@ -35,7 +37,8 @@ class SoQLExtraContext(
   override def finish() =
     SoQLExtraContext.Result(
       systemContextUsed,
-      if(nowUsed) Some(actualNow) else None
+      if(nowUsed) Some(actualNow) else None,
+      obfuscatorRequired
     )
 }
 
@@ -64,5 +67,5 @@ object SoQLExtraContext extends StatementUniverse[DatabaseNamesMetaTypes] {
     }
   }
 
-  case class Result(systemContextUsed: SystemContextUsed, now: Option[DateTime])
+  case class Result(systemContextUsed: SystemContextUsed, now: Option[DateTime], obfuscatorRequired: Boolean)
 }

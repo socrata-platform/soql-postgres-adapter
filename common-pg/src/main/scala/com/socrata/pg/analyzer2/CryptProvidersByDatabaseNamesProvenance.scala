@@ -11,12 +11,12 @@ import com.socrata.pg.analyzer2.metatypes.{DatabaseMetaTypes, DatabaseNamesMetaT
 object CryptProvidersByDatabaseNamesProvenance extends StatementUniverse[DatabaseMetaTypes] {
   def apply(stmt: Statement): CryptProviderProvider = {
     new CryptProviderProvider {
-      val map = findCryptProvidersS(stmt, Map.empty).iterator.map { case (provenance, dsInfo) =>
+      val allProviders = findCryptProvidersS(stmt, Map.empty).iterator.map { case (provenance, dsInfo) =>
         provenance -> dsInfo.cryptProvider
       }.toMap
 
       def forProvenance(prov: Provenance) =
-        map.get(prov)
+        allProviders.get(prov)
     }
   }
 

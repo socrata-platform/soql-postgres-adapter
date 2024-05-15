@@ -9,6 +9,6 @@ import com.socrata.pg.analyzer2._
 trait SoQLMetaTypesExt extends MetaTypesExt { this: MetaTypes =>
   type ExtraContext = SoQLExtraContext
   type ExtraContextResult = SoQLExtraContext.Result
-  type CustomSqlizeAnnotation = Nothing
+  type CustomSqlizeAnnotation = SoQLSqlizeAnnotation
   type SqlizerError = Nothing
 }
