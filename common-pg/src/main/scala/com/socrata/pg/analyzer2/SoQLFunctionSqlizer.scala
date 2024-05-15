@@ -34,6 +34,12 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
     exprSqlFactory(e.compressed.sql.parenthesized +#+ d":: numeric", f)
   }
 
+  def dateify(sqlizer: OrdinaryFunctionSqlizer) = ofs { (f, args, ctx) =>
+    val e = sqlizer(f, args, ctx)
+    assert(e.typ == SoQLDate)
+    exprSqlFactory(e.compressed.sql.parenthesized +#+ d":: date", f)
+  }
+
   def sqlizeNormalOrdinaryWithWrapper(name: String, wrapper: String) = ofs { (f, args, ctx) =>
     val exprSql = sqlizeNormalOrdinaryFuncall(name)(f, args, ctx)
     wrap(f, exprSql, wrapper)
@@ -291,7 +297,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
 
   def sqlizeExtractDateSubfield(field: Doc) = ofs { (f, args, ctx) =>
     assert(args.length == 1)
-    assert(args(0).typ == SoQLFloatingTimestamp)
+    assert(args(0).typ == SoQLFloatingTimestamp || args(0).typ == SoQLDate || args(0).typ == SoQLTime)
     assert(f.typ == SoQLNumber)
 
     // EXTRACT returns numeric; there's no need to cast to keep soqlnumber's representation correct
@@ -408,6 +414,8 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
       FloatingTimeStampTruncYmd -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'day'")),
       FloatingTimeStampTruncYm -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'month'")),
       FloatingTimeStampTruncY -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'year'")),
+      DateTruncYm -> dateify(sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'month'"))),
+      DateTruncY -> dateify(sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'year'"))),
       FixedTimeStampZTruncYmd -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'day'")),
       FixedTimeStampZTruncYm -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'month'")),
       FixedTimeStampZTruncY -> sqlizeNormalOrdinaryFuncall("date_trunc", prefixArgs = Seq(d"'year'")),
@@ -415,18 +423,49 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
       FixedTimeStampTruncYmAtTimeZone -> sqlizeNormalOrdinaryFuncall("soql_trunc_fixed_timestamp_at_timezone", prefixArgs = Seq(d"'month'")),
       FixedTimeStampTruncYAtTimeZone -> sqlizeNormalOrdinaryFuncall("soql_trunc_fixed_timestamp_at_timezone", prefixArgs = Seq(d"'year'")),
       FloatingTimeStampExtractY -> sqlizeExtractDateSubfield(d"year"),
+      FloatingTimestampYearField -> sqlizeExtractDateSubfield(d"year"),
+      DateYearField -> sqlizeExtractDateSubfield(d"year"),
       FloatingTimeStampExtractM -> sqlizeExtractDateSubfield(d"month"),
+      FloatingTimestampMonthField -> sqlizeExtractDateSubfield(d"month"),
+      DateMonthField -> sqlizeExtractDateSubfield(d"month"),
       FloatingTimeStampExtractD -> sqlizeExtractDateSubfield(d"day"),
+      FloatingTimestampDayField -> sqlizeExtractDateSubfield(d"day"),
+      DateDayField -> sqlizeExtractDateSubfield(d"day"),
       FloatingTimeStampExtractHh -> sqlizeExtractDateSubfield(d"hour"),
+      FloatingTimestampHourField -> sqlizeExtractDateSubfield(d"hour"),
+      TimeHourField -> sqlizeExtractDateSubfield(d"hour"),
       FloatingTimeStampExtractMm -> sqlizeExtractDateSubfield(d"minute"),
+      FloatingTimestampMinuteField -> sqlizeExtractDateSubfield(d"minute"),
+      TimeMinuteField -> sqlizeExtractDateSubfield(d"minute"),
       FloatingTimeStampExtractSs -> sqlizeExtractDateSubfield(d"second"),
+      FloatingTimestampSecondField -> sqlizeExtractDateSubfield(d"second"),
+      TimeSecondField -> sqlizeExtractDateSubfield(d"seoncd"),
       FloatingTimeStampExtractDow -> sqlizeExtractDateSubfield(d"dow"),
+      FloatingTimestampDayOfWeekField -> sqlizeExtractDateSubfield(d"dow"),
+      DateDayOfWeekField -> sqlizeExtractDateSubfield(d"dow"),
       FloatingTimeStampExtractWoy -> sqlizeExtractDateSubfield(d"week"),
+      FloatingTimestampWeekOfYearField -> sqlizeExtractDateSubfield(d"week"),
+      DateWeekOfYearField -> sqlizeExtractDateSubfield(d"week"),
       FloatingTimestampExtractIsoY -> sqlizeExtractDateSubfield(d"isoyear"),
+      FloatingTimestampIsoYearField -> sqlizeExtractDateSubfield(d"isoyear"),
+      DateIsoYearField -> sqlizeExtractDateSubfield(d"isoyear"),
+      FloatingTimestampDateField -> sqlizeCast("date"),
+      FloatingTimestampTimeField -> sqlizeCast("time without time zone"),
       EpochSeconds -> sqlizeNormalOrdinaryFuncall("soql_epoch_seconds"),
       TimeStampDiffD -> sqlizeNormalOrdinaryFuncall("soql_timestamp_diff_d"),
       TimeStampAdd -> sqlizeBinaryOp("+"),  // These two are exactly
       TimeStampPlus -> sqlizeBinaryOp("+"), // the same function??
+      DateTimeAdd -> sqlizeBinaryOp("+"),
+      TimeDateAdd -> sqlizeBinaryOp("+"),
+      TimeIntervalAdd -> sqlizeBinaryOp("+"),
+      IntervalTimeAdd -> sqlizeBinaryOp("+"),
+      TimeIntervalSub -> sqlizeBinaryOp("-"),
+      TimeTimeSub -> sqlizeBinaryOp("-"),
+      DateIntervalAdd -> sqlizeBinaryOp("+"),
+      IntervalDateAdd -> sqlizeBinaryOp("+"),
+      DateIntervalSub -> sqlizeBinaryOp("-"),
+      DateDiffD -> numericize(sqlizeBinaryOp("-")),
+      DateDateSub -> numericize(sqlizeBinaryOp("-")),
       TimeStampMinus -> sqlizeBinaryOp("-"),
       GetUtcDate -> sqlizeGetUtcDate,
 
@@ -531,13 +570,20 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
       SoQLRewriteSearch.TsSearch -> sqlizeBinaryOp("@@"),
 
       // simple casts
+      RowIdentifierToText -> sqlizeCastToText,
+      RowVersionToText -> sqlizeCastToText,
       TextToBool -> sqlizeCast("boolean"),
       BoolToText -> sqlizeCastToText,
       TextToNumber -> sqlizeCast("numeric"),
       NumberToText -> sqlizeCastToText,
+      FixedTimestampToText -> sqlizeCastToText,
       TextToFixedTimestamp -> sqlizeCast("timestamp with time zone"),
+      FloatingTimestampToText -> sqlizeCastToText,
       TextToFloatingTimestamp -> sqlizeCast("timestamp without time zone"),
+      DateToText -> sqlizeCastToText,
+      TimeToText -> sqlizeCastToText,
       TextToInterval -> sqlizeCast("interval"),
+      IntervalToText -> sqlizeCastToText,
       TextToBlob -> sqlizeTypechangingIdentityCast,
       TextToPhoto -> sqlizeTypechangingIdentityCast
     ) ++ castIdentities.map { f =>
