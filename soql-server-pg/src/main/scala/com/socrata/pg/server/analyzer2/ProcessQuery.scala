@@ -314,7 +314,7 @@ object ProcessQuery {
       withTimeout(conn, timeout, cond = analyze) {
         for {
           stmt <- managed(conn.createStatement())
-          rs <- managed(stmt.executeQuery(s"EXPLAIN (analyze $analyze, format text) $query"))
+          rs <- managed(stmt.executeQuery(s"EXPLAIN (analyze $analyze, buffers $analyze, format text) $query"))
         } {
           val sb = new StringBuilder
           var didOne = false
@@ -339,10 +339,8 @@ object ProcessQuery {
       withTimeout(conn, timeout, cond = analyze) {
         for {
           stmt <- managed(conn.createStatement())
-          rs <- managed(stmt.executeQuery(s"EXPLAIN (analyse $analyze, format json) $query"))
+          rs <- managed(stmt.executeQuery(s"EXPLAIN (analyse $analyze, buffers $analyze, format json) $query"))
         } {
-          val sb = new StringBuilder
-          var didOne = false
           if(!rs.next()) {
             throw new Exception("Should've gotten a row for the explanation")
           }
