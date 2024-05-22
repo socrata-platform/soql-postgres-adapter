@@ -36,20 +36,18 @@ object ObfuscatorHelper {
 
     val sqlPrefix =
       """CREATE OR REPLACE FUNCTION pg_temp.soql_obfuscate(provenance text) RETURNS bytea AS $$
-         BEGIN
-            CASE provenance
+          SELECT CASE provenance
               """
 
     val sqlSuffix = """
-            END CASE;
           END;
-          $$ LANGUAGE plpgsql
+          $$ LANGUAGE sql
           IMMUTABLE
           STRICT
           PARALLEL SAFE"""
 
     preppedObfuscators.iterator.map { case (prov, preppedObfuscator) =>
-      s"""WHEN ${mkTextLiteral(prov)} THEN RETURN ${mkByteaLiteral(preppedObfuscator)};"""
+      s"""WHEN ${mkTextLiteral(prov)} THEN ${mkByteaLiteral(preppedObfuscator)}"""
     }.mkString(sqlPrefix, "\n", sqlSuffix)
   }
 
