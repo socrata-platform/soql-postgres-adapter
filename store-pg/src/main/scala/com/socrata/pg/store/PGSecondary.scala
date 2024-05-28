@@ -223,7 +223,8 @@ class PGSecondary(val storeConfig: StoreConfig) extends Secondary[SoQLType, SoQL
                 pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, copyInfo.systemId, copyInfo.copyNumber,
                   TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
                   secondaryCopyInfo.dataVersion,
-                  secondaryCopyInfo.dataVersion)
+                  secondaryCopyInfo.dataVersion,
+                  copyInfo.tableModifier)
               }
             case None =>
               // no copy to drop
@@ -234,7 +235,8 @@ class PGSecondary(val storeConfig: StoreConfig) extends Secondary[SoQLType, SoQL
                   secondaryCopyInfo.copyNumber,
                   TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
                   secondaryCopyInfo.dataVersion,
-                  secondaryCopyInfo.dataVersion)
+                  secondaryCopyInfo.dataVersion,
+                  None)
               }
           }
         }
@@ -713,7 +715,8 @@ class PGSecondary(val storeConfig: StoreConfig) extends Secondary[SoQLType, SoQL
           secondaryCopyInfo.copyNumber,
           TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
           secondaryCopyInfo.dataVersion,
-          secondaryCopyInfo.dataVersion)
+          secondaryCopyInfo.dataVersion,
+          None)
       case Some(dsId) =>
         // Find the very top record - dataset_internal_name_map.
         // Delete and recreate the copy with the same dataset id.
@@ -736,20 +739,23 @@ class PGSecondary(val storeConfig: StoreConfig) extends Secondary[SoQLType, SoQL
                 truthDatasetInfo.systemId.toString(),
                 secondaryCopyInfo.copyNumber.toString
               )
+              val oldModifier = copyInfo.tableModifier
               val rm = new RollupManager(pgu, copyInfo)
               rm.dropRollups(immediate = true) // drop all rollup tables
               pgu.datasetMapWriter.deleteCopy(copyInfo)
               pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, copyInfo.systemId, copyInfo.copyNumber,
                 TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
                 secondaryCopyInfo.dataVersion,
-                secondaryCopyInfo.dataVersion)
+                secondaryCopyInfo.dataVersion,
+                oldModifier)
             case None =>
               val secCopyId = pgu.datasetMapWriter.allocateCopyId()
               pgu.datasetMapWriter.unsafeCreateCopy(truthDatasetInfo, secCopyId,
                 secondaryCopyInfo.copyNumber,
                 TruthLifecycleStage.valueOf(secondaryCopyInfo.lifecycleStage.toString),
                 secondaryCopyInfo.dataVersion,
-                secondaryCopyInfo.dataVersion)
+                secondaryCopyInfo.dataVersion,
+                None)
           }
         }.getOrElse(throw new Exception(
           s"""Cannot find existing dataset info.
