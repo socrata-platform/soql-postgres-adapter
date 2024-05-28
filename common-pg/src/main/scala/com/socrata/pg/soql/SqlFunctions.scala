@@ -123,21 +123,46 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     FloatingTimeStampTruncYm -> formatCall("date_trunc('month', %s)") _,
     FloatingTimeStampTruncY -> formatCall("date_trunc('year', %s)") _,
 
+    DateTruncYm -> formatCall("date_trunc('month', %s) :: date") _,
+    DateTruncY -> formatCall("date_trunc('year', %s) :: date") _,
+
     FloatingTimeStampExtractY-> formatCall("extract(year from %s)::numeric") _,
+    FloatingTimestampYearField -> formatCall("extract(year from %s)::numeric") _,
     FloatingTimeStampExtractM-> formatCall("extract(month from %s)::numeric") _,
+    FloatingTimestampMonthField -> formatCall("extract(month from %s)::numeric") _,
     FloatingTimeStampExtractD -> formatCall("extract(day from %s)::numeric") _,
+    FloatingTimestampDayField -> formatCall("extract(day from %s)::numeric") _,
     FloatingTimeStampExtractHh -> formatCall("extract(hour from %s)::numeric") _,
+    FloatingTimestampHourField -> formatCall("extract(hour from %s)::numeric") _,
     FloatingTimeStampExtractMm -> formatCall("extract(minute from %s)::numeric") _,
+    FloatingTimestampMinuteField -> formatCall("extract(minute from %s)::numeric") _,
     FloatingTimeStampExtractSs -> formatCall("extract(second from %s)::numeric") _,
+    FloatingTimestampSecondField -> formatCall("extract(second from %s)::numeric") _,
     FloatingTimeStampExtractDow -> formatCall("extract(dow from %s)::numeric") _,
+    FloatingTimestampDayOfWeekField -> formatCall("extract(dow from %s)::numeric") _,
     // Extracting the week from a floating timestamp extracts the iso week (1-53), which
     // means that sometimes the last few days of December may be considered the first week
     // of the next year (https://en.wikipedia.org/wiki/ISO_week_date)
     FloatingTimeStampExtractWoy -> formatCall("extract(week from %s)::numeric") _,
+    FloatingTimestampWeekOfYearField -> formatCall("extract(week from %s)::numeric") _,
   // This is useful when you are also extracting the week (iso week). This is
   // because the iso year will give the year associated with the iso week whereas
   // the year will give the year associated with the iso date.
     FloatingTimestampExtractIsoY -> formatCall("extract(isoyear from %s)::numeric") _,
+    FloatingTimestampIsoYearField -> formatCall("extract(isoyear from %s)::numeric") _,
+    FloatingTimestampDateField -> formatCall("(%s)::date") _,
+    FloatingTimestampTimeField -> formatCall("(%s)::time without time zone") _,
+
+    DateYearField -> formatCall("extract(year from %s)::numeric") _,
+    DateMonthField -> formatCall("extract(month from %s)::numeric") _,
+    DateDayField -> formatCall("extract(day from %s)::numeric") _,
+    DateDayOfWeekField -> formatCall("extract(dow from %s)::numeric") _,
+    DateWeekOfYearField -> formatCall("extract(week from %s)::numeric") _,
+    DateIsoYearField -> formatCall("extract(isoyear from %s)::numeric") _,
+
+    TimeHourField -> formatCall("extract(hour from %s)::numeric") _,
+    TimeMinuteField -> formatCall("extract(minute from %s)::numeric") _,
+    TimeSecondField -> formatCall("extract(second from %s)::numeric") _,
 
     FixedTimeStampZTruncYmd -> formatCall("date_trunc('day', %s)") _,
     FixedTimeStampZTruncYm -> formatCall("date_trunc('month', %s)") _,
@@ -153,6 +178,19 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     TimeStampPlus -> infix("+") _,
     TimeStampMinus -> infix("-") _,
 
+    DateTimeAdd -> infix("+") _,
+    TimeDateAdd -> infix("+") _,
+    DateIntervalAdd -> infix("+") _,
+    IntervalDateAdd -> infix("+") _,
+    DateIntervalSub -> infix("-") _,
+    DateDateSub -> infix("-", castTo = "numeric") _,
+    DateDiffD -> infix("-", castTo = "numeric") _,
+
+    TimeIntervalAdd -> infix("+") _,
+    IntervalTimeAdd -> infix("+") _,
+    TimeIntervalSub -> infix("-") _,
+    TimeTimeSub -> infix("-") _,
+
     // Translate a fixed timestamp to a given time zone and convert it to a floating timestamp.
     ToFloatingTimestamp -> formatCall("%s at time zone %s") _,
 
@@ -160,6 +198,9 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
     // datatype conversions
     // http://beta.dev.socrata.com/docs/datatypes/converting.html
+    RowIdentifierToText -> obfuscateToText("row") _,
+    RowVersionToText -> obfuscateToText("rv") _,
+
     NumberToText -> formatCall("%s::varchar") _,
     NumberToMoney -> passthrough,
     NumberToDouble -> formatCall("%s::float") _,
@@ -189,6 +230,12 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     BoolToText -> formatCall("%s::varchar") _,
     TextToJson -> formatCall("%s::jsonb") _,
     JsonToText -> formatCall("%s::text") _,
+
+    FixedTimestampToText -> nary("soql_fixed_timestamp_to_text") _,
+    FloatingTimestampToText -> nary("soql_floating_timestamp_to_text") _,
+    DateToText -> nary("soql_date_to_text") _,
+    TimeToText -> nary("soql_time_to_text") _,
+    IntervalToText -> nary("soql_interval_to_text") _,
 
     Iif -> formatCall("case when %s then %s else %s end") _,
     Case -> caseCall _,
@@ -255,7 +302,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
 
   private def passthrough: FunCallToSql = formatCall("%s")
 
-  private def infix(fnName: String, foldOp: String = " and ")
+  private def infix(fnName: String, foldOp: String = " and ", castTo: String = "")
                    (fn: FunCall,
                     rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
                     typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
@@ -283,8 +330,26 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
       }
     }
 
-    val s = foldSegments(lrs, foldOp)
+    var s = foldSegments(lrs, foldOp)
+    if(castTo.nonEmpty) {
+      s = s"($s) :: $castTo"
+    }
     ParametricSql(Seq(s), setParamsLR)
+  }
+
+  private def obfuscate(tag: String, sql: ParametricSql, ctx: Sqlizer.Context): ParametricSql = {
+    val key = ctx(SqlizerContext.ObfuscationKeySql)
+    ParametricSql(Seq(s"format_obfuscated('${tag}', obfuscate($key, ${sql.sql.head}))"), sql.setParams)
+  }
+
+  private def obfuscateToText(tag: String)
+                             (fn: FunCall,
+                              rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
+                              typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
+                              setParams: Seq[SetParam],
+                              ctx: Sqlizer.Context,
+                              escape: Escape): ParametricSql = {
+    obfuscate(tag, Sqlizer.sql(fn.parameters(0))(rep, typeRep, setParams, ctx, escape), ctx)
   }
 
   private def concat(fn: FunCall,
@@ -293,19 +358,14 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                      setParams: Seq[SetParam],
                      ctx: Sqlizer.Context,
                      escape: Escape): ParametricSql = {
-    def obfuscate(tag: String, sql: ParametricSql): ParametricSql = {
-      val key = ctx(SqlizerContext.ObfuscationKeySql)
-      ParametricSql(Seq(s"format_obfuscated('${tag}', obfuscate($key, ${sql.sql.head}))"), sql.setParams)
-    }
-
     def sqlToText(param: CoreExpr[UserColumnId, SoQLType], setParams: Seq[SetParam]) = {
       val sql =
         Sqlizer.sql(param)(rep, typeRep, setParams, ctx, escape)
       param.typ match {
         case SoQLID =>
-          obfuscate("row", sql)
+          obfuscate("row", sql, ctx)
         case SoQLVersion =>
-          obfuscate("rv", sql)
+          obfuscate("rv", sql, ctx)
         case _ =>
           sql
       }
