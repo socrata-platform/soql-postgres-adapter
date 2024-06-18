@@ -306,7 +306,9 @@ class PGSecondary(val storeConfig: StoreConfig) extends Secondary[SoQLType, SoQL
   // returned from relevantTableNames) so we'll track their dataset
   // ids directly.
   def existingRollupsTableNamesAndOrIds(dmr: PGSecondaryDatasetMapReader[SoQLType], dsInfo: TruthDatasetInfo): (NameSet, Set[DatasetId]) = {
-    dmr.allCopies(dsInfo).foldLeft[(NameSet, Set[DatasetId])]((Set.empty, Set(dsInfo.systemId))) { case ((names, ids), copy) =>
+    dmr.allCopies(dsInfo).filter { copy =>
+      copy.lifecycleStage != TruthLifecycleStage.Discarded
+    }.foldLeft[(NameSet, Set[DatasetId])]((Set.empty, Set(dsInfo.systemId))) { case ((names, ids), copy) =>
       val newNames =
         dmr.rollups(copy).foldLeft(names) { (acc, rollup) =>
           acc ++ relevantTableNames(rollup)
