@@ -306,9 +306,7 @@ class PGSecondary(val storeConfig: StoreConfig) extends Secondary[SoQLType, SoQL
   // returned from relevantTableNames) so we'll track their dataset
   // ids directly.
   def existingRollupsTableNamesAndOrIds(dmr: PGSecondaryDatasetMapReader[SoQLType], dsInfo: TruthDatasetInfo): (NameSet, Set[DatasetId]) = {
-    dmr.allCopies(dsInfo).filter { copy =>
-      copy.lifecycleStage != TruthLifecycleStage.Discarded
-    }.foldLeft[(NameSet, Set[DatasetId])]((Set.empty, Set(dsInfo.systemId))) { case ((names, ids), copy) =>
+    dmr.allActiveCopies(dsInfo).foldLeft[(NameSet, Set[DatasetId])]((Set.empty, Set(dsInfo.systemId))) { case ((names, ids), copy) =>
       val newNames =
         dmr.rollups(copy).foldLeft(names) { (acc, rollup) =>
           acc ++ relevantTableNames(rollup)
@@ -394,7 +392,7 @@ class PGSecondary(val storeConfig: StoreConfig) extends Secondary[SoQLType, SoQL
           val theCopy = existingDataset match {
             case Some(dsInfo) =>
               takeRollupLocks(pgu, dsInfo, upcomingRollups)
-              val allCopies = pgu.datasetMapReader.allCopies(dsInfo)
+              val allCopies = pgu.datasetMapReader.allActiveCopies(dsInfo)
               // Either this copy or some newer copy
               allCopies.find(existingCopyInfo => existingCopyInfo.copyNumber >= copyInfo.copyNumber)
             case None =>
@@ -440,8 +438,7 @@ class PGSecondary(val storeConfig: StoreConfig) extends Secondary[SoQLType, SoQL
     // verified that playing back multiple versions in one go actually works in
     // every case. At some point, we should take the time to verify this and
     // revisit whether we actually want this resync logic to exist.
-    val allCopiesInOrder = pgu.datasetMapReader.allCopies(truthDatasetInfo)
-    val dvExpect = allCopiesInOrder.maxBy(_.dataVersion).dataVersion + 1
+    val dvExpect = pgu.datasetMapReader.mostRecentlyChangedCopy(truthDatasetInfo).fold(0L)(_.dataVersion) + 1
     if (newDataVersion != dvExpect) {
       throw new ResyncSecondaryException(
        s"Current version ${initialTruthCopyInfo.dataVersion}, next version ${newDataVersion} but should be ${dvExpect}")
