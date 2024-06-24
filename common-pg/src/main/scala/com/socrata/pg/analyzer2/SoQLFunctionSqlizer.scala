@@ -158,9 +158,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
         nullLiteral
       case _ =>
         ctx.extraContext.nonLiteralSystemContextUsed()
-        val hashedArg = Seq(args(0).compressed.sql).funcall(d"md5").group
-        val prefixedArg = d"'socrata_system.a' ||" +#+ hashedArg
-        val lookup = Seq(prefixedArg.group, d"true").funcall(d"current_setting")
+        val lookup = Seq(args(0).compressed.sql).funcall(d"pg_temp.dynamic_system_context")
         exprSqlFactory(lookup, f)
     }
   }

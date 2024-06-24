@@ -194,6 +194,19 @@ object ProcessQuery {
       ObfuscatorHelper.setupObfuscators(pgu.conn, cryptProviders.allProviders.mapValues(_.key))
     }
 
+    // Ditto for the dynamic context function
+    for {
+      // Any dynamic access will, of course, contain the whole
+      // context, so we only need to find the first one
+      sysContext <- sqlizerResults.iterator
+        .map(_._2.extraContextResult.systemContextUsed)
+        .collect { case SoQLExtraContext.SystemContextUsed.Dynamic(dyn) => dyn }
+        .buffered
+        .headOption
+    } {
+      DynamicSystemContextHelper.setupDynamicSystemContext(pgu.conn, sysContext)
+    }
+
     val sqlized = sqlizerResults.iterator.map { sqlizerResult =>
       val (nameAnalysis, Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(systemContextUsed, now, _obfuscatorRequired))) = sqlizerResult
       log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
@@ -251,7 +264,6 @@ object ProcessQuery {
 
         fulfillRequest(
           columnsByName,
-          sqlized.systemContextUsed.dynamicContext,
           copyCache,
           dataVersionsBySFName,
           etag,
@@ -407,7 +419,6 @@ object ProcessQuery {
 
   def fulfillRequest(
     columnsByName: Map[ColumnName, SerializationColumnInfo],
-    systemContext: Map[String, String],
     copyCache: CopyCache[InputMetaTypes],
     dataVersionsBySFName: Seq[((SFResourceName, Stage), Long)],
     etag: EntityTag,
@@ -473,7 +484,7 @@ object ProcessQuery {
       } else {
         timeout.foreach(setTimeout(pgu.conn, _))
         handlingSqlErrors(timeout) {
-          runQuery(pgu.conn, renderedSql, systemContext, cryptProviders, extractor, rs)
+          runQuery(pgu.conn, renderedSql, cryptProviders, extractor, rs)
         } match {
           case Left(resp) => return resp
           case Right(rows) => rows
@@ -562,13 +573,10 @@ object ProcessQuery {
   def runQuery(
     conn: Connection,
     sql: String,
-    systemContext: Map[String, String],
     cryptProviders: CryptProviderProvider,
     extractor: ResultExtractor[DatabaseNamesMetaTypes],
     rs: ResourceScope
   ): Iterator[Array[JValue]] = {
-    setupSystemContext(conn, systemContext)
-
     new Iterator[Array[JValue]] {
       private val stmt = rs.open(conn.createStatement())
       stmt.setFetchSize(extractor.fetchSize)
@@ -651,42 +659,6 @@ object ProcessQuery {
         }
 
         result
-      }
-    }
-  }
-
-  def setupSystemContext(conn: Connection, systemContext: Map[String, String]): Unit = {
-    if(systemContext.isEmpty) return
-
-    using(new ResourceScope) { rs =>
-      val BatchSize = 5
-      var fullStmt = Option.empty[PreparedStatement]
-
-      def sql(n: Int) =
-        Iterator.fill(n) { s"set_config('socrata_system.a' || md5(?), ?, true)" }.
-          mkString("SELECT ", ", ", "")
-
-      for(group <- systemContext.iterator.grouped(BatchSize)) {
-        val stmt =
-          group.length match {
-            case BatchSize =>
-              fullStmt match {
-                case None =>
-                  val stmt = rs.open(conn.prepareStatement(sql(BatchSize)))
-                  fullStmt = Some(stmt)
-                  stmt
-                case Some(stmt) =>
-                  stmt
-              }
-            case n =>
-              rs.open(conn.prepareStatement(sql(n)))
-          }
-
-        for(((varName, varValue), i) <- group.iterator.zipWithIndex) {
-          stmt.setString(1 + 2*i, varName)
-          stmt.setString(2 + 2*i, varValue)
-        }
-        stmt.executeQuery().close()
       }
     }
   }
