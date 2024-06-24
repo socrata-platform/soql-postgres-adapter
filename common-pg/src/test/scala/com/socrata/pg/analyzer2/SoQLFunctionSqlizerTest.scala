@@ -216,7 +216,7 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
   }
 
   test("get_context non-literal") {
-    analyze("get_context(text)") must equal ("""current_setting('socrata_system.a' || md5(x1.text), true)""")
+    analyze("get_context(text)") must equal ("""pg_temp.dynamic_system_context(x1.text)""")
   }
 
   test("url(x, y).url == x") {
