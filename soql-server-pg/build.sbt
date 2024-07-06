@@ -5,6 +5,7 @@ name := "soql-server-pg"
 libraryDependencies ++= Seq(
   commonsCollections,
   secondarylib,
+  simpleCsv,
   socrataHttpCuratorBroker,
   soqlUtils
 )

@@ -1,14 +1,19 @@
 package com.socrata.pg.analyzer2
 
+import scala.{collection => sc}
+
+import java.math.{MathContext, BigDecimal => JBigDecimal}
 import java.sql.{ResultSet, PreparedStatement, Types}
 
 import com.rojoma.json.v3.ast.{JNull, JValue, JString}
-import com.rojoma.json.v3.io.CompactJsonWriter
+import com.rojoma.json.v3.io.{CompactJsonWriter, JsonReader}
 import com.rojoma.json.v3.interpolation._
 import com.rojoma.json.v3.util.JsonUtil
 import com.rojoma.json.v3.util.OrJNull.implicits._
 import com.vividsolutions.jts.geom.{Geometry, Point}
+import org.apache.commons.codec.binary.Hex
 import org.joda.time.Period
+import org.joda.time.format.DateTimeFormat
 import org.postgresql.util.PGInterval
 
 import com.socrata.prettyprint.prelude._
@@ -49,6 +54,10 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
     )
   }
 
+  private def csvToBytes(s: String): Array[Byte] = {
+    Hex.decodeHex(s.substring(2) /* skip '\x' */)
+  }
+
   abstract class GeometryRep[T <: Geometry](t: SoQLType with SoQLGeometryLike[T], ctor: T => CV, name: String) extends SingleColumnRep(t, d"geometry") {
     private val open = d"st_${name}fromwkb"
 
@@ -72,6 +81,16 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       Option(rs.getBytes(dbCol)).flatMap { bytes =>
         t.WkbRep.unapply(bytes) // TODO: this just turns invalid values into null, we should probably be noisier than that
       }.map(ctor).getOrElse(SoQLNull)
+    }
+
+    override def doExtractFromCsv(v: Option[String]): CV = {
+      v match {
+        case Some(s) =>
+          t.WkbRep.unapply(csvToBytes(s)) // TODO: this just turns invalid values into null, we should probably be noisier than that)
+            .map(ctor).getOrElse(SoQLNull)
+        case None =>
+          SoQLNull
+      }
     }
 
     override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
@@ -180,8 +199,11 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         }
       }
 
-      override protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV = {
-        Option(rs.getString(dbCol)) match {
+      override protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV =
+        fromCompressed(Option(rs.getString(dbCol)))
+
+      private def fromCompressed(v: Option[String]): CV = {
+        v match {
           case None =>
             SoQLNull
           case Some(v) =>
@@ -197,6 +219,21 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
             }
         }
       }
+
+      override protected def doExtractExpandedFromCsv(row: sc.Seq[Option[String]], dbCol: Int): CV = {
+        val provenance = row(dbCol).map(Provenance(_))
+        row(dbCol + 1).map(_.toLong) match {
+          case Some(rawId) =>
+            val result = SoQLID(rawId)
+            result.provenance = provenance
+            result
+          case None =>
+            SoQLNull
+        }
+      }
+
+      override protected def doExtractCompressedFromCsv(value: Option[String]): CV =
+        fromCompressed(value)
 
       override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
         new IngressRep[MT] {
@@ -339,8 +376,11 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         }
       }
 
-      override protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV = {
-        Option(rs.getString(dbCol)) match {
+      override protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV =
+        fromCompressed(Option(rs.getString(dbCol)))
+
+      private def fromCompressed(value: Option[String]): CV = {
+        value match {
           case None =>
             SoQLNull
           case Some(v) =>
@@ -356,6 +396,21 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
             }
         }
       }
+
+      override protected def doExtractExpandedFromCsv(row: sc.Seq[Option[String]], dbCol: Int): CV = {
+        val provenance = row(dbCol).map(Provenance(_))
+        row(dbCol + 1).map(_.toLong) match {
+          case Some(rawId) =>
+            val result = SoQLVersion(rawId)
+            result.provenance = provenance
+            result
+          case None =>
+            SoQLNull
+        }
+      }
+
+      override protected def doExtractCompressedFromCsv(value: Option[String]): CV =
+        fromCompressed(value)
 
       override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
         new IngressRep[MT] {
@@ -443,6 +498,13 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         }
       }
 
+      override protected def doExtractFromCsv(v: Option[String]): CV = {
+        v match {
+          case Some(t) => SoQLText(t)
+          case None => SoQLNull
+        }
+      }
+
       override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
         new IngressRep[MT] {
           override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
@@ -478,6 +540,13 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         Option(rs.getBigDecimal(dbCol)) match {
           case None => SoQLNull
           case Some(t) => SoQLNumber(t)
+        }
+      }
+
+      override protected def doExtractFromCsv(v: Option[String]): CV = {
+        v match {
+          case Some(n) => SoQLNumber(new JBigDecimal(n, MathContext.UNLIMITED))
+          case None => SoQLNull
         }
       }
 
@@ -521,6 +590,16 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
           SoQLBoolean(v)
         }
       }
+
+      override protected def doExtractFromCsv(v: Option[String]): CV = {
+        v match {
+          case Some("t") => SoQLBoolean(true)
+          case Some("f") => SoQLBoolean(false)
+          case Some(other) => throw new IllegalArgumentException("Not a boolean: " + JString(other))
+          case None => SoQLNull
+        }
+      }
+
       override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
         new IngressRep[MT] {
           override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
@@ -559,6 +638,15 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
       }
+
+      private val pgCsvFormat = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.SSSSSSZ").withZoneUTC
+      override protected def doExtractFromCsv(v: Option[String]): CV = {
+        v match {
+          case Some(v) => SoQLFixedTimestamp(pgCsvFormat.parseDateTime(v))
+          case None => SoQLNull
+        }
+      }
+
       override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
         new IngressRep[MT] {
           override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
@@ -588,6 +676,15 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
       }
+
+      private val pgCsvFormat = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.SSSSSS").withZoneUTC
+      override protected def doExtractFromCsv(v: Option[String]): CV = {
+        v match {
+          case Some(v) => SoQLFloatingTimestamp(pgCsvFormat.parseLocalDateTime(v))
+          case None => SoQLNull
+        }
+      }
+
       override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
         new IngressRep[MT] {
           override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
@@ -617,6 +714,15 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
       }
+
+      private val pgCsvFormat = DateTimeFormat.forPattern("yyyy-MM-dd").withZoneUTC
+      override protected def doExtractFromCsv(v: Option[String]): CV = {
+        v match {
+          case Some(v) => SoQLDate(pgCsvFormat.parseLocalDate(v))
+          case None => SoQLNull
+        }
+      }
+
       override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
         new IngressRep[MT] {
           override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
@@ -646,6 +752,15 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
         ugh.fromResultSet(rs, dbCol)
       }
+
+      private val pgCsvFormat = DateTimeFormat.forPattern("HH:mm:ss.SSSSSS").withZoneUTC
+      override protected def doExtractFromCsv(v: Option[String]): CV = {
+        v match {
+          case Some(v) => SoQLTime(pgCsvFormat.parseLocalTime(v))
+          case None => SoQLNull
+        }
+      }
+
       override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
         new IngressRep[MT] {
           override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
@@ -670,10 +785,21 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         Some(exprSqlFactory(converted, e.expr))
       }
 
-      private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.JsonRep("")
       protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
-        ugh.fromResultSet(rs, dbCol)
+        Option(rs.getString(dbCol)) match {
+          case Some(v) => SoQLJson(JsonReader.fromString(v))
+          case None => SoQLNull
+        }
       }
+
+      override protected def doExtractFromCsv(v: Option[String]): CV = {
+        v match {
+          case Some(v) => SoQLJson(JsonReader.fromString(v))
+          case None => SoQLNull
+        }
+      }
+
+      private val ugh = new com.socrata.datacoordinator.common.soql.sqlreps.JsonRep("")
       override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
         new IngressRep[MT] {
           override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
@@ -700,7 +826,11 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       }
 
       override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
-        Option(rs.getString(dbCol)) match {
+        convertJson(Option(rs.getString(dbCol)))
+      }
+
+      private def convertJson(v: Option[String]) = {
+        v match {
           case Some(s) =>
             JsonUtil.parseJson[SoQLDocument](s) match {
               case Right(doc) => doc
@@ -710,6 +840,11 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
             SoQLNull
         }
       }
+
+      override protected def doExtractFromCsv(v: Option[String]): CV = {
+        convertJson(v)
+      }
+
       override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
         new IngressRep[MT] {
           override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
@@ -750,6 +885,14 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
             SoQLInterval(period)
           case None =>
             SoQLNull
+        }
+      }
+
+      // n.b., assumes intervalstyle is iso
+      override protected def doExtractFromCsv(v: Option[String]): CV = {
+        v match {
+          case Some(v) => SoQLInterval(Period.parse(v))
+          case None => SoQLNull
         }
       }
 
@@ -870,7 +1013,11 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         ugh.fromResultSet(rs, dbCol)
       }
       override protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV = {
-        Option(rs.getString(dbCol)) match {
+        extractJson(Option(rs.getString(dbCol)))
+      }
+
+      private def extractJson(s: Option[String]): CV = {
+        s match {
           case None =>
             SoQLNull
           case Some(v) =>
@@ -887,6 +1034,17 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
                 throw new Exception(err.english)
             }
         }
+      }
+
+      override protected def doExtractExpandedFromCsv(row: sc.Seq[Option[String]], dbCol: Int): CV = {
+        (row(dbCol), row(dbCol+1)) match {
+          case (None, None) => SoQLNull
+          case (num, typ) => SoQLPhone(num, typ)
+        }
+      }
+
+      override protected def doExtractCompressedFromCsv(s: Option[String]): CV = {
+        extractJson(s)
       }
 
       override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
@@ -1054,7 +1212,11 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
       }
 
       override protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV = {
-        Option(rs.getString(dbCol)) match {
+        extractJson(Option(rs.getString(dbCol)))
+      }
+
+      private def extractJson(s: Option[String]) = {
+        s match {
           case None =>
             SoQLNull
           case Some(v) =>
@@ -1071,6 +1233,22 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
                 throw new Exception(err.english)
             }
         }
+      }
+
+      override protected def doExtractExpandedFromCsv(row: sc.Seq[Option[String]], dbCol: Int): CV = {
+        locify(
+          row(dbCol).map(csvToBytes).flatMap { bytes =>
+            SoQLPoint.WkbRep.unapply(bytes)
+          },
+          row(dbCol + 1),
+          row(dbCol + 2),
+          row(dbCol + 3),
+          row(dbCol + 4)
+        )
+      }
+
+      override protected def doExtractCompressedFromCsv(s: Option[String]): CV = {
+        extractJson(s)
       }
     },
 
@@ -1142,7 +1320,11 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         ugh.fromResultSet(rs, dbCol)
       }
       override protected def doExtractCompressed(rs: ResultSet, dbCol: Int): CV = {
-        Option(rs.getString(dbCol)) match {
+        extractJson(Option(rs.getString(dbCol)))
+      }
+
+      private def extractJson(s: Option[String]) = {
+        s match {
           case None =>
             SoQLNull
           case Some(v) =>
@@ -1159,6 +1341,17 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
                 throw new Exception(err.english)
             }
         }
+      }
+
+      override protected def doExtractExpandedFromCsv(row: sc.Seq[Option[String]], dbCol: Int): CV = {
+        (row(dbCol), row(dbCol+1)) match {
+          case (None, None) => SoQLNull
+          case (url, desc) => SoQLUrl(url, desc)
+        }
+      }
+
+      override protected def doExtractCompressedFromCsv(s: Option[String]): CV = {
+        extractJson(s)
       }
 
       override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
