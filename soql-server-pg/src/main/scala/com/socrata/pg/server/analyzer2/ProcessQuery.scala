@@ -54,6 +54,8 @@ final abstract class ProcessQuery
 object ProcessQuery {
   val log = LoggerFactory.getLogger(classOf[ProcessQuery])
 
+  val errorCodecs = PostgresSoQLError.errorCodecs[PostgresSoQLError]().build
+
   @AutomaticJsonEncode
   case class SerializationColumnInfo(hint: Option[JValue], isSynthetic: Boolean)
 
@@ -402,14 +404,14 @@ object ProcessQuery {
       case e: SQLException =>
         QueryResult.QueryRuntimeError(e, timeout) match {
           case Some(QueryResult.RequestTimedOut(timeout)) =>
-            Left(RequestTimeout ~> Json(json"{ timeout: ${timeout.toString} }"))
+            Left(RequestTimeout ~> Json(errorCodecs.encode(PostgresSoQLError.RequestTimedOut(timeout))))
           case Some(QueryResult.QueryError(description)) =>
             // Sadness: PG _doesn't_ report position info for runtime
             // errors so this position info isn't actually useful,
             // even if the sql were available here...
             // val posInfo = Sqlizer.positionInfo(laidOutSql)
 
-            Left(BadRequest ~> Json(json"{ message: $description }"))
+            Left(BadRequest ~> Json(errorCodecs.encode(PostgresSoQLError.QueryError(description))))
           case None =>
             log.error("Exception running query", e)
             Left(InternalServerError)
