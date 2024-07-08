@@ -3,7 +3,7 @@ package com.socrata.pg.server.analyzer2
 import scala.collection.{mutable => scm}
 import scala.concurrent.duration.FiniteDuration
 
-import java.io.{BufferedWriter, OutputStreamWriter, OutputStream, ByteArrayOutputStream}
+import java.io.{BufferedWriter, OutputStreamWriter, OutputStream, ByteArrayOutputStream, InputStreamReader, IOException}
 import java.nio.charset.StandardCharsets
 import java.sql.{Connection, PreparedStatement, SQLException, ResultSet}
 import java.time.{Clock, LocalDateTime}
@@ -17,6 +17,8 @@ import com.rojoma.json.v3.io.{CompactJsonWriter, JsonReader}
 import com.rojoma.json.v3.util.{AutomaticJsonEncode, JsonUtil}
 import com.rojoma.simplearm.v2._
 import org.joda.time.DateTime
+import org.postgresql.PGConnection
+import org.postgresql.copy.PGCopyInputStream
 import org.slf4j.LoggerFactory
 
 import com.socrata.http.server.HttpResponse
@@ -25,12 +27,13 @@ import com.socrata.http.server.implicits._
 import com.socrata.http.server.util.{EntityTag, Precondition}
 import com.socrata.prettyprint.prelude._
 import com.socrata.prettyprint.{SimpleDocStream, SimpleDocTree, tree => doctree}
+import com.socrata.simplecsv.scala.CSVParserBuilder
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.analyzer2.rollup.RollupInfo
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, ResourceName, Provenance, ScopedResourceName}
-import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLID, SoQLVersion, SoQLNull, CJsonWriteRep, NonObfuscatedType}
+import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLID, SoQLVersion, SoQLInterval, SoQLNull, CJsonWriteRep, NonObfuscatedType}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.sql.Debug
 import com.socrata.soql.sqlizer.{Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, SqlNamespaces}
@@ -579,12 +582,18 @@ object ProcessQuery {
     extractor: ResultExtractor[DatabaseNamesMetaTypes],
     rs: ResourceScope
   ): Iterator[Array[JValue]] = {
-    new Iterator[Array[JValue]] {
-      private val stmt = rs.open(conn.createStatement())
-      stmt.setFetchSize(extractor.fetchSize)
-      private val resultSet = rs.open(stmt.executeQuery(sql))
-      private var done = false
-      private var ready = false
+    if(extractor.schema.values.exists(_ == SoQLInterval)) {
+      // CSV parser expects intervals to be rendered as ISO 8601,
+      // which is not the default, so set it for this txn.
+      using(conn.createStatement()) { stmt =>
+        stmt.execute("SET LOCAL intervalstyle = 'iso_8601'")
+      }
+    }
+
+    val it = new Iterator[Array[JValue]] {
+      private val stream = rs.open(new PGCopyInputStream(conn.unwrap(classOf[PGConnection]), s"COPY ($sql) TO STDOUT WITH (FORMAT csv, HEADER false)"))
+      private val reader = rs.open(new InputStreamReader(stream, StandardCharsets.UTF_8), transitiveClose = List(stream))
+      private val csv = rs.open(CSVParserBuilder.Postgresql.build(reader).iterator, transitiveClose = List(reader))
 
       private val idReps = new scm.HashMap[Option[Provenance], CJsonWriteRep[SoQLID]]
       private val versionReps = new scm.HashMap[Option[Provenance], CJsonWriteRep[SoQLVersion]]
@@ -638,21 +647,21 @@ object ProcessQuery {
         }
       }
 
-      override def hasNext: Boolean = {
-        if(done) return false
-        if(ready) return true
-
-        ready = resultSet.next()
-        done = !ready
-        ready
+      private def unwrapSQLException[T](f: => T): T = {
+        // PGCopyInputStream wraps SQLExceptions in IOExceptions
+        try {
+          f
+        } catch {
+          case e: IOException if e.getCause.isInstanceOf[SQLException] =>
+            throw e.getCause
+        }
       }
 
-      def next(): Array[JValue] = {
-        if(!hasNext) return Iterator.empty.next()
-        ready = false
+      override def hasNext: Boolean = unwrapSQLException(csv.hasNext)
 
+      def next(): Array[JValue] = {
         val result = new Array[JValue](width)
-        val row = extractor.extractRow(resultSet)
+        val row = extractor.extractCsvRow(unwrapSQLException(csv.next()))
 
         var i = 0
         while(i != width) {
@@ -663,6 +672,10 @@ object ProcessQuery {
         result
       }
     }
+
+    it.hasNext // force execution to start
+
+    it
   }
 
   def singleLineSql[MT <: MetaTypes with SoQLMetaTypesExt](doc: Doc[SqlizeAnnotation[MT]], forDebug: Boolean): String = {

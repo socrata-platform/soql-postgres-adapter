@@ -4,7 +4,7 @@ object Dependencies {
   object versions {
     val c3p0 = "0.9.5-pre9"
     val commonsCli = "1.2"
-    val commonsCodec = "1.5"
+    val commonsCodec = "1.11"
     val commonsCollections = "4.4"
     val commonsIo = "1.4"
     val commonsLang = "2.6"
@@ -20,7 +20,8 @@ object Dependencies {
     val socrataCuratorUtils = "1.2.0"
     val socrataThirdPartyUtils = "5.0.0"
     val socrataHttpCuratorBroker = "3.13.4"
-    val soqlStdlib = "4.14.57"
+    val soqlStdlib = "4.14.58"
+    val simpleCsv = "0.0.2"
     val typesafeConfig = "1.0.0"
     val dataCoordinator = "4.2.28"
     val typesafeScalaLogging = "3.9.2"
@@ -54,6 +55,8 @@ object Dependencies {
   val postgresql = "org.postgresql" % "postgresql" % versions.postgresql
 
   val simpleArm = "com.rojoma" %% "simple-arm" % versions.simpleArm
+
+  val simpleCsv = "com.socrata" %% "simplecsv-scala" % versions.simpleCsv
 
   val socrataUtil = "com.socrata" %% "socrata-utils" % versions.socrataUtils
 
