@@ -13,7 +13,7 @@ import com.rojoma.json.v3.util.OrJNull.implicits._
 import com.vividsolutions.jts.geom.{Geometry, Point}
 import org.apache.commons.codec.binary.Hex
 import org.joda.time.Period
-import org.joda.time.format.DateTimeFormat
+import org.joda.time.format.DateTimeFormatterBuilder
 import org.postgresql.util.PGInterval
 
 import com.socrata.prettyprint.prelude._
@@ -21,6 +21,66 @@ import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.Provenance
 import com.socrata.soql.types._
 import com.socrata.soql.sqlizer._
+
+object SoQLRepProvider {
+  val pgCsvFixedFormat = new DateTimeFormatterBuilder()
+    .appendYear(4,4)
+    .appendLiteral('-')
+    .appendMonthOfYear(2)
+    .appendLiteral('-')
+    .appendDayOfMonth(2)
+    .appendLiteral(' ')
+    .appendHourOfDay(2)
+    .appendLiteral(':')
+    .appendMinuteOfHour(2)
+    .appendLiteral(':')
+    .appendSecondOfMinute(2)
+    .appendOptional(new DateTimeFormatterBuilder()
+                      .appendLiteral('.')
+                      .appendFractionOfSecond(0, 9)
+                      .toParser())
+    .appendTimeZoneOffset("Z", false, 1, 2)
+    .toFormatter
+    .withZoneUTC
+
+  val pgCsvFloatingFormat = new DateTimeFormatterBuilder()
+    .appendYear(4,4)
+    .appendLiteral('-')
+    .appendMonthOfYear(2)
+    .appendLiteral('-')
+    .appendDayOfMonth(2)
+    .appendLiteral(' ')
+    .appendHourOfDay(2)
+    .appendLiteral(':')
+    .appendMinuteOfHour(2)
+    .appendLiteral(':')
+    .appendSecondOfMinute(2)
+    .appendOptional(new DateTimeFormatterBuilder()
+                      .appendLiteral('.')
+                      .appendFractionOfSecond(0, 9)
+                      .toParser())
+    .toFormatter
+
+  val pgCsvDateFormat = new DateTimeFormatterBuilder()
+    .appendYear(4,4)
+    .appendLiteral('-')
+    .appendMonthOfYear(2)
+    .appendLiteral('-')
+    .appendDayOfMonth(2)
+    .toFormatter
+
+  val pgCsvTimeFormat = new DateTimeFormatterBuilder()
+    .appendHourOfDay(2)
+    .appendLiteral(':')
+    .appendMinuteOfHour(2)
+    .appendLiteral(':')
+    .appendSecondOfMinute(2)
+    .appendOptional(new DateTimeFormatterBuilder()
+                      .appendLiteral('.')
+                      .appendFractionOfSecond(0, 9)
+                      .toParser())
+    .toFormatter
+}
 
 abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({type ColumnType = SoQLType; type ColumnValue = SoQLValue; type DatabaseColumnNameImpl = String})](
   cryptProviders: CryptProviderProvider,
@@ -639,10 +699,9 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         ugh.fromResultSet(rs, dbCol)
       }
 
-      private val pgCsvFormat = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.SSSSSSZ").withZoneUTC
       override protected def doExtractFromCsv(v: Option[String]): CV = {
         v match {
-          case Some(v) => SoQLFixedTimestamp(pgCsvFormat.parseDateTime(v))
+          case Some(v) => SoQLFixedTimestamp(SoQLRepProvider.pgCsvFixedFormat.parseDateTime(v))
           case None => SoQLNull
         }
       }
@@ -677,10 +736,9 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         ugh.fromResultSet(rs, dbCol)
       }
 
-      private val pgCsvFormat = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.SSSSSS").withZoneUTC
       override protected def doExtractFromCsv(v: Option[String]): CV = {
         v match {
-          case Some(v) => SoQLFloatingTimestamp(pgCsvFormat.parseLocalDateTime(v))
+          case Some(v) => SoQLFloatingTimestamp(SoQLRepProvider.pgCsvFloatingFormat.parseLocalDateTime(v))
           case None => SoQLNull
         }
       }
@@ -715,10 +773,9 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         ugh.fromResultSet(rs, dbCol)
       }
 
-      private val pgCsvFormat = DateTimeFormat.forPattern("yyyy-MM-dd").withZoneUTC
       override protected def doExtractFromCsv(v: Option[String]): CV = {
         v match {
-          case Some(v) => SoQLDate(pgCsvFormat.parseLocalDate(v))
+          case Some(v) => SoQLDate(SoQLRepProvider.pgCsvDateFormat.parseLocalDate(v))
           case None => SoQLNull
         }
       }
@@ -753,10 +810,9 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         ugh.fromResultSet(rs, dbCol)
       }
 
-      private val pgCsvFormat = DateTimeFormat.forPattern("HH:mm:ss.SSSSSS").withZoneUTC
       override protected def doExtractFromCsv(v: Option[String]): CV = {
         v match {
-          case Some(v) => SoQLTime(pgCsvFormat.parseLocalTime(v))
+          case Some(v) => SoQLTime(SoQLRepProvider.pgCsvTimeFormat.parseLocalTime(v))
           case None => SoQLNull
         }
       }
