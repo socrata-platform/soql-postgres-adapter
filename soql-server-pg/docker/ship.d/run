@@ -9,8 +9,9 @@ else
   /bin/env_parse ${SERVER_CONFIG}.j2
 fi
 
-PG_SECONDARY_DB_HOST=$PG_SECONDARY_DB_HOST_NO_REPLICA su socrata -c '/usr/bin/java \
+su socrata -c '/usr/bin/java \
     -Dconfig.file=${SERVER_CONFIG} \
+    -Dcom.socrata.soql-server-pg.store.database.host="$PG_SECONDARY_DB_HOST_NO_REPLICA"
     -cp $SERVER_ARTIFACT \
     com.socrata.pg.server.MigrateSchema Migrate \
     com.socrata.soql-server-pg.migrations \
