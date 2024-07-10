@@ -591,7 +591,7 @@ object ProcessQuery {
     }
 
     val it = new Iterator[Array[JValue]] {
-      private val stream = rs.open(new PGCopyInputStream(conn.unwrap(classOf[PGConnection]), s"COPY ($sql) TO STDOUT WITH (FORMAT csv, HEADER false)"))
+      private val stream = rs.open(new PGCopyInputStream(conn.unwrap(classOf[PGConnection]), s"COPY ($sql) TO STDOUT WITH (FORMAT csv, HEADER false, ENCODING 'utf-8')"))
       private val reader = rs.open(new InputStreamReader(stream, StandardCharsets.UTF_8), transitiveClose = List(stream))
       private val csv = rs.open(CSVParserBuilder.Postgresql.build(reader).iterator, transitiveClose = List(reader))
 
