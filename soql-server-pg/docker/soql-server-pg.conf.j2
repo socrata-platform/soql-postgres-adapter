@@ -43,7 +43,10 @@ com.socrata.soql-server-pg {
   migrations {
     database {
       app-name = "soql-server-pg"
+      host = "{{ PG_SECONDARY_DB_HOST }}"
+      {% if PG_SECONDARY_DB_HOST_NO_REPLICA -%}
       host = "{{ PG_SECONDARY_DB_HOST_NO_REPLICA }}"
+      {%- endif %}
       port = "{{ PG_SECONDARY_DB_PORT }}"
       database = "{{ PG_SECONDARY_DB_NAME }}"
       username = "{{ PG_SECONDARY_MIGRATE_DB_USER }}"
