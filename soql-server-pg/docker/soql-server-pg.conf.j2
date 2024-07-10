@@ -43,7 +43,7 @@ com.socrata.soql-server-pg {
   migrations {
     database {
       app-name = "soql-server-pg"
-      {% if PG_SECONDARY_DB_HOST_NO_REPLICA -%}
+      {% if PG_SECONDARY_DB_HOST_NO_REPLICA is defined -%}
       host = "{{ PG_SECONDARY_DB_HOST_NO_REPLICA }}"
       {% else %}
       host = "{{ PG_SECONDARY_DB_HOST }}"
