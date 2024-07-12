@@ -53,7 +53,6 @@ import com.socrata.datacoordinator.common.DbType
 import com.socrata.datacoordinator.common.Postgres
 import com.socrata.pg.analyzer2.SoQLSqlizer
 
-final abstract class ProcessQuery
 object ProcessQuery {
   val log = LoggerFactory.getLogger(classOf[ProcessQuery])
 
@@ -61,6 +60,10 @@ object ProcessQuery {
 
   @AutomaticJsonEncode
   case class SerializationColumnInfo(hint: Option[JValue], isSynthetic: Boolean)
+}
+
+class ProcessQuery(resultCache: ResultCache) {
+  import ProcessQuery._
 
   def apply(
     request: Deserializer.Request,
@@ -441,7 +444,7 @@ object ProcessQuery {
   ): HttpResponse = {
     val locale = "en_US"
 
-    for(result <- ResultCache(etag)) {
+    for(result <- resultCache(etag)) {
       log.info("Serving result from cache")
       return buildResponse(result.etag, result.lastModified, result.contentType, outOfDate, os => os.write(result.body))
     }
@@ -509,7 +512,7 @@ object ProcessQuery {
 
     val resultStream: OutputStream => Unit = { rawOutputStream =>
       for {
-        cos <- managed(new ResultCache.CachingOutputStream(rawOutputStream))(ResultCache.cosResource(etag, lastModified, contentType))
+        cos <- resultCache.cachingOutputStream(rawOutputStream, etag, lastModified, contentType)
         gzos <- managed(new GZIPOutputStream(cos))
         osw <- managed(new OutputStreamWriter(gzos, StandardCharsets.UTF_8))
         writer <- managed(new BufferedWriter(osw))

@@ -77,7 +77,7 @@ import scala.collection.immutable.SortedMap
 import scala.language.existentials
 
 class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val leadingSearch: Boolean = true,
-                  val httpQueryTimeoutDelta: FiniteDuration = Duration.Zero) extends SecondaryBase {
+                  val httpQueryTimeoutDelta: FiniteDuration = Duration.Zero, val processQuery: analyzer2.ProcessQuery) extends SecondaryBase {
   import QueryServer._ // scalastyle:ignore import.grouping
   import QueryServerHelper._
   import com.socrata.pg.query.QueryResult._
@@ -191,7 +191,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
 
     val parsed = analyzer2.Deserializer(req.inputStream)
 
-    analyzer2.ProcessQuery(parsed, openPgu(dsInfo, None, rs), req.precondition, rs)
+    processQuery(parsed, openPgu(dsInfo, None, rs), req.precondition, rs)
   }
 
   def etagFromCopy(datasetInternalName: String, copy: CopyInfo, etagInfo: Option[String], debug: Boolean = false): EntityTag = {
@@ -736,7 +736,15 @@ object QueryServer extends DynamicPortMap {
       reporter <- MetricsReporter.managed(config.metrics)
     } {
       pong.start()
-      val queryServer = new QueryServer(dsInfo, CaseSensitive, config.leadingSearch, config.httpQueryTimeoutDelta)
+      val queryServer = new QueryServer(
+        dsInfo,
+        CaseSensitive,
+        config.leadingSearch,
+        config.httpQueryTimeoutDelta,
+        new analyzer2.ProcessQuery(
+          new analyzer2.InMemoryResultCache(config.cache.maxCachedResults, config.cache.maxResultSize)
+        )
+      )
       val advertisedLivenessCheckInfo = new LivenessCheckInfo(hostPort(pong.livenessCheckInfo.getPort),
                                                               pong.livenessCheckInfo.getResponse)
       val auxData = new AuxiliaryData(livenessCheckInfo = Some(advertisedLivenessCheckInfo))
