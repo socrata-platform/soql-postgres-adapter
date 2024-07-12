@@ -53,7 +53,6 @@ import com.socrata.datacoordinator.common.DbType
 import com.socrata.datacoordinator.common.Postgres
 import com.socrata.pg.analyzer2.SoQLSqlizer
 
-final abstract class ProcessQuery
 object ProcessQuery {
   val log = LoggerFactory.getLogger(classOf[ProcessQuery])
 
@@ -61,6 +60,10 @@ object ProcessQuery {
 
   @AutomaticJsonEncode
   case class SerializationColumnInfo(hint: Option[JValue], isSynthetic: Boolean)
+}
+
+class ProcessQuery(resultCache: ResultCache) {
+  import ProcessQuery._
 
   def apply(
     request: Deserializer.Request,
@@ -441,13 +444,9 @@ object ProcessQuery {
   ): HttpResponse = {
     val locale = "en_US"
 
-    val cacheable = ResultCache.isCacheable(nameAnalysis)
-
-    if(cacheable) {
-      for(result <- ResultCache(etag)) {
-        log.info("Serving result from cache")
-        return buildResponse(result.etag, result.lastModified, result.contentType, outOfDate, os => os.write(result.body))
-      }
+    for(result <- resultCache(etag)) {
+      log.info("Serving result from cache")
+      return buildResponse(result.etag, result.lastModified, result.contentType, outOfDate, os => os.write(result.body))
     }
 
     val laidOutSql: SimpleDocStream[SqlizeAnnotation[DatabaseNamesMetaTypes]] = sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded))
@@ -511,56 +510,42 @@ object ProcessQuery {
 
     val contentType = "application/x-socrata-gzipped-cjson"
 
-    val resultStream: OutputStream => Unit = {
-      def computeResult(rawOutputStream: OutputStream): Unit = {
-        for {
-          gzos <- managed(new GZIPOutputStream(rawOutputStream))
-          osw <- managed(new OutputStreamWriter(gzos, StandardCharsets.UTF_8))
-          writer <- managed(new BufferedWriter(osw))
-        } {
-          writer.write("[{")
-          writer.write("\"dataVersions\":%s\n ,".format(JsonUtil.renderJson(dataVersionsBySFName, pretty = false)))
-          for(debugFields <- debugFields) {
-            writer.write("\"debug\":%s\n ,".format(JsonUtil.renderJson(debugFields, pretty = false)))
-          }
-          writer.write("\"fingerprint\":%s\n ,".format(JString(Base64.getUrlEncoder.withoutPadding.encodeToString(etag.asBytes))))
-          writer.write("\"last_modified\":%s\n ,".format(JString(CJSONWriter.dateTimeFormat.print(lastModified))))
-          writer.write("\"locale\":%s\n ,".format(JString(locale)))
-          writer.write("\"schema\":")
-
-          @AutomaticJsonEncode
-          case class Field(c: ColumnName, t: SoQLType, h: Option[JValue], s: Boolean)
-
-          val reformattedSchema = nameAnalysis.statement.schema.values.map { case Statement.SchemaEntry(cn, typ, _hint, isSynthetic) =>
-            // not using the analysis's schema's hints because it's
-            // post-rollup, so any hints inherited from parts of the
-            // query served by a rollup will have been destroyed.
-            Field(cn, typ, columnsByName.get(cn).flatMap(_.hint), columnsByName.get(cn).map(_.isSynthetic).getOrElse(false))
-          }.toArray
-
-          JsonUtil.writeJson(writer, reformattedSchema)
-          writer.write("\n }")
-
-          for(row <- rows) {
-            writer.write("\n,")
-            CompactJsonWriter.toWriter(writer, JArray(row))
-          }
-
-          writer.write("\n]\n")
+    val resultStream: OutputStream => Unit = { rawOutputStream =>
+      for {
+        cos <- resultCache.cachingOutputStream(rawOutputStream, etag, lastModified, contentType)
+        gzos <- managed(new GZIPOutputStream(cos))
+        osw <- managed(new OutputStreamWriter(gzos, StandardCharsets.UTF_8))
+        writer <- managed(new BufferedWriter(osw))
+      } {
+        writer.write("[{")
+        writer.write("\"dataVersions\":%s\n ,".format(JsonUtil.renderJson(dataVersionsBySFName, pretty = false)))
+        for(debugFields <- debugFields) {
+          writer.write("\"debug\":%s\n ,".format(JsonUtil.renderJson(debugFields, pretty = false)))
         }
-      }
+        writer.write("\"fingerprint\":%s\n ,".format(JString(Base64.getUrlEncoder.withoutPadding.encodeToString(etag.asBytes))))
+        writer.write("\"last_modified\":%s\n ,".format(JString(CJSONWriter.dateTimeFormat.print(lastModified))))
+        writer.write("\"locale\":%s\n ,".format(JString(locale)))
+        writer.write("\"schema\":")
 
-      if(cacheable) {
-        log.info("Caching result")
+        @AutomaticJsonEncode
+        case class Field(c: ColumnName, t: SoQLType, h: Option[JValue], s: Boolean)
 
-        val bodyStream = new ByteArrayOutputStream
-        computeResult(bodyStream)
-        val body = bodyStream.toByteArray
-        ResultCache.save(etag, lastModified, contentType, body)
+        val reformattedSchema = nameAnalysis.statement.schema.values.map { case Statement.SchemaEntry(cn, typ, _hint, isSynthetic) =>
+          // not using the analysis's schema's hints because it's
+          // post-rollup, so any hints inherited from parts of the
+          // query served by a rollup will have been destroyed.
+          Field(cn, typ, columnsByName.get(cn).flatMap(_.hint), columnsByName.get(cn).map(_.isSynthetic).getOrElse(false))
+        }.toArray
 
-        os => os.write(body)
-      } else {
-        computeResult _
+        JsonUtil.writeJson(writer, reformattedSchema)
+        writer.write("\n }")
+
+        for(row <- rows) {
+          writer.write("\n,")
+          CompactJsonWriter.toWriter(writer, JArray(row))
+        }
+
+        writer.write("\n]\n")
       }
     }
 
