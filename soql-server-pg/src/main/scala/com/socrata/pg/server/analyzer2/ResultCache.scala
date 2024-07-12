@@ -2,13 +2,23 @@ package com.socrata.pg.server.analyzer2
 
 import scala.util.hashing.MurmurHash3
 
-import org.apache.commons.collections4.map.LRUMap
+import java.io.OutputStream
+import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
+
+import com.rojoma.simplearm.v2.Resource
+import org.apache.commons.collections4.map.{AbstractLinkedMap, LRUMap}
 import org.joda.time.DateTime
+import org.slf4j.LoggerFactory
 
 import com.socrata.http.server.util.{EntityTag, WeakEntityTag, StrongEntityTag}
-import com.socrata.soql.analyzer2._
+
+final abstract class ResultCache
 
 object ResultCache {
+  val log = LoggerFactory.getLogger(classOf[ResultCache])
+
+  private val uselessCache = new AtomicLong(0)
+
   case class Result(etag: EntityTag, lastModified: DateTime, contentType: String, body: Array[Byte])
 
   private class WrappedETag(private val underlying: EntityTag) {
@@ -41,13 +51,72 @@ object ResultCache {
     cache.synchronized { cache.put(k, r) }
   }
 
-  def isCacheable(analysis: SoQLAnalysis[_]): Boolean = {
-    // a response is cacheable if it's known to be small - currently,
-    // "known to be small" means "it's an aggregate query with no
-    // GROUP BY clause (i.e., the entire query is one group)".
-    analysis.statement match {
-      case sel: Select[_] if sel.isAggregated && sel.groupBy.isEmpty => true
-      case _ => false
+  class CachingOutputStream(underlying: OutputStream) extends OutputStream {
+    private val limit = 10240
+    private var bytes = new Array[Byte](limit)
+    private var endPtr = 0
+
+    override def write(b: Int): Unit = {
+      underlying.write(b)
+      if(bytes ne null) {
+        if(endPtr != limit) {
+          bytes(endPtr) = b.toByte
+          endPtr += 1
+        } else { // response was too big, stop caching
+          bytes = null
+        }
+      }
+    }
+
+    override def write(bs: Array[Byte]): Unit = {
+      write(bs, 0, bs.length)
+    }
+
+    override def write(bs: Array[Byte], off: Int, len: Int): Unit = {
+      underlying.write(bs, off, len)
+      if(bytes ne null) {
+        if(len <= limit - endPtr) {
+          System.arraycopy(bs, off, bytes, endPtr, len)
+          endPtr += len
+        } else { // resposne was too big, stop caching
+          bytes = null
+        }
+      }
+    }
+
+    override def close(): Unit = {
+      underlying.close()
+    }
+
+    override def flush(): Unit = {
+      underlying.flush()
+    }
+
+    def save(etag: EntityTag, lastModified: DateTime, contentType: String): Unit = {
+      if(bytes ne null) {
+        log.info("Caching result")
+        val result = new Array[Byte](endPtr)
+        System.arraycopy(bytes, 0, result, 0, endPtr)
+        bytes = null
+        ResultCache.save(etag, lastModified, contentType, result)
+      }
+    }
+
+    def abandon(): Unit = {
+      bytes = null
     }
   }
+
+  def cosResource(etag: EntityTag, lastModified: DateTime, contentType: String): Resource[CachingOutputStream] =
+    new Resource[CachingOutputStream] {
+      override def closeAbnormally(cos: CachingOutputStream, e: Throwable): Unit = {
+        cos.abandon()
+        cos.close()
+      }
+
+      override def close(cos: CachingOutputStream): Unit = {
+        cos.close()
+        cos.save(etag, lastModified, contentType)
+      }
+    }
 }
