@@ -3,7 +3,6 @@ package com.socrata.pg.server.analyzer2
 import scala.util.hashing.MurmurHash3
 
 import java.io.OutputStream
-import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 
 import com.rojoma.simplearm.v2.Resource
 import org.apache.commons.collections4.map.{AbstractLinkedMap, LRUMap}
@@ -16,8 +15,6 @@ final abstract class ResultCache
 
 object ResultCache {
   val log = LoggerFactory.getLogger(classOf[ResultCache])
-
-  private val uselessCache = new AtomicLong(0)
 
   case class Result(etag: EntityTag, lastModified: DateTime, contentType: String, body: Array[Byte])
 
