@@ -40,7 +40,7 @@ pipeline {
   environment {
     DEPLOY_PATTERN = "${service_server}*"
     SECONDARY_DEPLOY_PATTERN = "${service_secondary}*"
-    WEBHOOK_ID = 'WEBHOOK_IQ'
+    WEBHOOK_ID = 'WORKFLOW_IQ'
   }
   stages {
     stage('Hotfix') {
@@ -323,9 +323,9 @@ pipeline {
       script {
         boolean buildingMain = (env.JOB_NAME.contains("${service_server}/main"))
         if (buildingMain) {
-          teamsMessage(
+          teamsWorkflowMessage(
             message: "[${currentBuild.fullDisplayName}](${env.BUILD_URL}) has failed in stage ${lastStage}",
-            webhookCredentialID: WEBHOOK_ID
+            workflowCredentialID: WEBHOOK_ID
           )
         }
       }
