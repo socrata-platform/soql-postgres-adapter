@@ -1,0 +1,89 @@
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+    <changeSet author="robertm" id="20240821-business-days-diff" runOnChange="true">
+      <sql splitStatements="false"><![CDATA[
+        -- note that despite the name, this returns _1_ if given the same date twice
+        -- 2 if given a day and the following business day, etc.
+        -- This is because that's how the dsmapi business-days-diff calculation works.
+        -- Also, this always returns a non-negative integer (again, because of how
+        -- dsmapi works) and will only return 0 if both dates fall on the same weekend.
+        CREATE OR REPLACE FUNCTION soql_diff_business_days(a date, b date) RETURNS numeric as $$
+          DECLARE
+            start date;
+            stop date;
+            week_offset integer := 0;
+            delta_days integer;
+            delta_weeks integer;
+            start_dow integer;
+            stop_dow integer;
+          BEGIN
+            if a <= b then
+              start := a;
+              stop := b;
+            else
+              stop := a;
+              start := b;
+            end if;
+
+            -- adjust start to be the first weekday no earlier than it
+            start := case extract(dow from start)
+               when 6 then start + 2
+               when 0 then start + 1
+               else start
+            end;
+
+            -- adjust stop to be one past the last weekday no later than it
+            stop := case extract(dow from stop)
+              when 6 then stop
+              when 0 then stop - 1
+              else stop + 1
+            end;
+
+            if stop < start then
+              return 0;
+            end if;
+
+            -- postgresql treats sunday as the first day of the week,
+            -- but we want it to be the last.
+            start_dow := extract(dow from start);
+            if start_dow = 0 then
+              start_dow := 7;
+            end if;
+            stop_dow := extract(dow from stop);
+            if stop_dow = 0 then
+              stop_dow := 7;
+            end if;
+
+            if stop_dow < start_dow then
+              week_offset := 1;
+            end if;
+
+            delta_days := stop - start;
+            delta_weeks := delta_days / 7;
+            return delta_days - (delta_weeks + week_offset) * 2;
+          END;
+        $$ LANGUAGE PLPGSQL
+        IMMUTABLE STRICT PARALLEL SAFE;
+
+        CREATE OR REPLACE FUNCTION soql_diff_business_days(a timestamp without time zone, b timestamp without time zone) RETURNS numeric as $$
+          select soql_diff_business_days(a::date, b::date);
+        $$ LANGUAGE SQL
+        IMMUTABLE STRICT PARALLEL SAFE;
+
+        CREATE OR REPLACE FUNCTION soql_diff_business_days(a timestamp with time zone, b timestamp with time zone, tz text) RETURNS numeric as $$
+          select soql_diff_business_days(a at time zone tz, b at time zone tz);
+        $$ LANGUAGE SQL
+        IMMUTABLE STRICT PARALLEL SAFE;
+
+      ]]></sql>
+      <rollback>
+        <sql><![CDATA[
+DROP FUNCTION soql_diff_business_days(timestamp with time zone, timestamp with time zone, text);
+DROP FUNCTION soql_diff_business_days(timestamp without time zone, timestamp without time zone);
+DROP FUNCTION soql_diff_business_days(date, date);
+        ]]></sql>
+      </rollback>
+    </changeSet>
+</databaseChangeLog>

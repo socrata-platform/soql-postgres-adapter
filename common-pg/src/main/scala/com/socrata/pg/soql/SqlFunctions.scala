@@ -173,6 +173,8 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     FixedTimeStampTruncYAtTimeZone -> formatCall("date_trunc('year', %s at time zone %s)") _,
 
     TimeStampDiffD -> formatCall("trunc((extract(epoch from %s) - extract(epoch from %s))::numeric / 86400)") _,
+    FixedTimeStampDiffBusinessDays -> nary("soql_diff_business_days") _,
+    FloatingTimeStampDiffBusinessDays -> nary("soql_diff_business_days") _,
     EpochSeconds -> formatCall("round(extract(epoch from %s) :: numeric, 3)") _,
     TimeStampAdd -> infix("+") _,
     TimeStampPlus -> infix("+") _,
@@ -185,6 +187,7 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     DateIntervalSub -> infix("-") _,
     DateDateSub -> infix("-", castTo = "numeric") _,
     DateDiffD -> infix("-", castTo = "numeric") _,
+    DateDiffBusinessDays -> nary("soql_diff_business_days") _,
 
     TimeIntervalAdd -> infix("+") _,
     IntervalTimeAdd -> infix("+") _,
