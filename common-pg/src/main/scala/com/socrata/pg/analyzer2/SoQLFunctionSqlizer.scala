@@ -451,6 +451,8 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
       FloatingTimestampTimeField -> sqlizeCast("time without time zone"),
       EpochSeconds -> sqlizeNormalOrdinaryFuncall("soql_epoch_seconds"),
       TimeStampDiffD -> sqlizeNormalOrdinaryFuncall("soql_timestamp_diff_d"),
+      FixedTimeStampDiffBusinessDays -> sqlizeNormalOrdinaryFuncall("soql_diff_business_days"),
+      FloatingTimeStampDiffBusinessDays -> sqlizeNormalOrdinaryFuncall("soql_diff_business_days"),
       TimeStampAdd -> sqlizeBinaryOp("+"),  // These two are exactly
       TimeStampPlus -> sqlizeBinaryOp("+"), // the same function??
       DateTimeAdd -> sqlizeBinaryOp("+"),
@@ -463,6 +465,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
       IntervalDateAdd -> sqlizeBinaryOp("+"),
       DateIntervalSub -> sqlizeBinaryOp("-"),
       DateDiffD -> numericize(sqlizeBinaryOp("-")),
+      DateDiffBusinessDays -> sqlizeNormalOrdinaryFuncall("soql_diff_business_days"),
       DateDateSub -> numericize(sqlizeBinaryOp("-")),
       TimeStampMinus -> sqlizeBinaryOp("-"),
       GetUtcDate -> sqlizeGetUtcDate,
