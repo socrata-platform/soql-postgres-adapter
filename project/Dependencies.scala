@@ -8,6 +8,7 @@ object Dependencies {
     val commonsCollections = "4.4"
     val commonsIo = "1.4"
     val commonsLang = "2.6"
+    val jedis = "4.2.3"
     val jodaConvert = "1.2"
     val jodaTime = "2.1"
     val liquibaseCore = "2.0.0"
@@ -43,6 +44,8 @@ object Dependencies {
   val commonsIo = "commons-io" % "commons-io" % versions.commonsIo
 
   val commonsLang = "commons-lang" % "commons-lang" % versions.commonsLang
+
+  val jedis = "redis.clients" % "jedis" % versions.jedis
 
   val jodaConvert = "org.joda" % "joda-convert" % versions.jodaConvert
 

@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory
 import com.socrata.http.server.HttpResponse
 import com.socrata.http.server.responses._
 import com.socrata.http.server.implicits._
-import com.socrata.http.server.util.{EntityTag, Precondition}
+import com.socrata.http.server.util.{EntityTag, WeakEntityTag, Precondition}
 import com.socrata.prettyprint.prelude._
 import com.socrata.prettyprint.{SimpleDocStream, SimpleDocTree, tree => doctree}
 import com.socrata.simplecsv.scala.CSVParserBuilder
@@ -446,7 +446,7 @@ class ProcessQuery(resultCache: ResultCache) {
 
     for(result <- resultCache(etag)) {
       log.info("Serving result from cache")
-      return buildResponse(result.etag, result.lastModified, result.contentType, outOfDate, os => os.write(result.body))
+      return buildResponse(result.etag, result.lastModified, result.contentType, outOfDate, result.body)
     }
 
     val laidOutSql: SimpleDocStream[SqlizeAnnotation[DatabaseNamesMetaTypes]] = sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded))
