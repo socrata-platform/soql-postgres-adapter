@@ -7,10 +7,19 @@ com.socrata.soql-server-pg {
   port = 6090
   liveness-check.port = 6091
 
+  {% if PG_SECONDARY_CACHE_REDIS_URL is defined -%}
   cache {
+    type: "redis"
+    url: "{{ PG_SECONDARY_CACHE_REDIS_URL }}"
+    max-result-size: {{ PG_SECONDARY_MAX_CACHED_RESULT_SIZE }}
+  }
+  {%- else -%}
+  cache {
+    type: "memory"
     max-cached-results: {{ PG_SECONDARY_MAX_CACHED_RESULTS }}
     max-result-size: {{ PG_SECONDARY_MAX_CACHED_RESULT_SIZE }}
   }
+  {%- endif}
 
   metrics {
     {% if SOQL_SERVER_METRICS_PREFIX is defined -%}
