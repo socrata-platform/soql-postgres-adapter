@@ -149,6 +149,7 @@ object Hashable {
           hasher.hash(lim)
         case rewrite.Pass.RemoveTrivialJoins => hasher.hashByte(12)
         case rewrite.Pass.RemoveSyntheticColumns => hasher.hashByte(13)
+        case rewrite.Pass.RemoveSystemColumns => hasher.hashByte(14)
       }
   }
 
