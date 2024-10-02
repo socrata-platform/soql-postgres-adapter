@@ -19,7 +19,7 @@ com.socrata.soql-server-pg {
     max-cached-results: {{ PG_SECONDARY_MAX_CACHED_RESULTS }}
     max-result-size: {{ PG_SECONDARY_MAX_CACHED_RESULT_SIZE }}
   }
-  {%- endif}
+  {%- endif %}
 
   metrics {
     {% if SOQL_SERVER_METRICS_PREFIX is defined -%}
