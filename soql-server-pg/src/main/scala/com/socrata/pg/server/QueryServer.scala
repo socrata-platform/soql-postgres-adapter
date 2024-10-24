@@ -475,6 +475,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
       }
 
       val sqlCtx = Map[SqlizerContext, Any](
+        SqlizerContext.NameCache -> new Sqlizer.NameCache,
         SqlizerContext.IdRep -> (if (obfuscateId) { new SoQLID.StringRep(cryptProvider) }
                                  else { new ClearNumberRep(cryptProvider) }),
         SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),

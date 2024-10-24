@@ -1,5 +1,6 @@
 package com.socrata.pg.soql
 
+import scala.collection.mutable
 import java.sql.PreparedStatement
 
 import com.socrata.datacoordinator.id.UserColumnId
@@ -68,10 +69,14 @@ trait Sqlizer[T] {
         // Geometry types require ST_AsBinary and does not work well with aliases
         // Normally, aliases is not needed in the outermost soql.
         val alias = ctx(SqlizerContext.ColumnName).asInstanceOf[String] + subColumn.getOrElse("")
-        " as \"%s\"".format(alias.replace("\"", "\"\""))
+        " as \"%s\"".format(internAlias(ctx, alias).replace("\"", "\"\""))
       case _ =>
         ""
     }
+  }
+
+  def internAlias(ctx: Context, alias: String): String = {
+    ctx(SqlizerContext.NameCache).asInstanceOf[Sqlizer.NameCache].intern(alias)
   }
 
   protected val ParamPlaceHolder: String = "?"
@@ -99,6 +104,50 @@ object Sqlizer {
                    ctx: Context,
                    escape: Escape)(implicit ev: Sqlizer[T]): ParametricSql = {
     ev.sql(e)(rep, typeRep, setParams, ctx, escape)
+  }
+
+  class NameCache {
+    private val cache = new mutable.HashMap[String, String]
+
+    private def unquote(s: String) =
+      // sql crimes.  This is so bad, mitigated only by the fact that
+      // SoQL aliases have to be valid identifiers - quoting in SoQL
+      // is _only_ to avoid collisions with reserved words, and
+      // therefore there can be no quoting mischief happening.  This
+      // is only necessary because sometimes we're dealing with quoted
+      // names and sometimes we're not, and there's no indication
+      // which is which, sigh.
+      if(s.startsWith("\"") && s.endsWith("\"")) {
+        s.drop(1).dropRight(1).replace("\"\"", "\"")
+      } else {
+        s
+      }
+
+    def intern(rawName: String) = {
+      val normalizedName = unquote(rawName)
+      cache.get(normalizedName) match {
+        case Some(name) =>
+          name
+        case None if normalizedName.length() > 63 || normalizedName.matches("^[Ii][0-9]+$") =>
+          // the "i" prefix is not used by either rollup tables (which
+          // use "c") or database tables (which use "s" and "u").
+          // Note this isn't actually correct _in general_ but the
+          // places it is not correct are tests (which don't follow
+          // the actual ttable column naming scheme).  They also don't
+          // create columns named "i###" though.
+          //
+          // We're force-renaming columns that already look like this
+          // in order to make `... join (select i0, x as
+          // some_very_long_alias) ...` work correctly without needing
+          // to know locally that "i0" was taken as a physical table
+          // name.
+          val name = s"i${cache.size}"
+          cache += normalizedName -> name
+          name
+        case None =>
+          rawName
+      }
+    }
   }
 
   implicit val stringLiteralSqlizer = StringLiteralSqlizer
@@ -162,6 +211,7 @@ object Sqlizer {
 
 object SqlizerContext extends Enumeration {
   type SqlizerContext = Value
+  val NameCache = Value("name-cache")
   val Analysis = Value("analysis")
   val SoqlPart = Value("soql-part")
   val SoqlSelect = Value("select")

@@ -23,9 +23,10 @@ object SqlizerTest {
 
   implicit val materialized: Boolean = false
 
-  val sqlCtx = Map[SqlizerContext, Any](
+  def sqlCtx = Map[SqlizerContext, Any](
     SqlizerContext.IdRep -> new SoQLID.StringRep(cryptProvider),
-    SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider)
+    SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
+    SqlizerContext.NameCache -> new Sqlizer.NameCache
   )
 
   val typeTable = TableName("_type", None)

@@ -245,6 +245,8 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
         reps.get(QualifiedUserColumnId(expr.qualifier.flatMap(simpleJoinMap.get(_)), expr.column))
     }
 
+    val nameCache = ctx(NameCache).asInstanceOf[Sqlizer.NameCache]
+
     maybeRep match {
       case Some(rep) if !useTypeRep =>
         if (ExprSqlizerCommon.complexTypes.contains(expr.typ) &&
@@ -252,7 +254,8 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           ctx.get(RootExpr).exists(_ == expr)) {
           val qualifer = getQualifier()
           val maybeUpperPhysColumns =
-            rep.physColumns.zip(rep.sqlTypes).map { case (physCol, sqlType) =>
+            rep.physColumns.zip(rep.sqlTypes).map { case (physColRaw, sqlType) =>
+              val physCol = nameCache.intern(physColRaw)
               toUpper(expr, sqlType)(qualifer.map(q => s""""$q".$physCol""").getOrElse(physCol), ctx)
             }
           val subColumns = rep.physColumns.map(pc => pc.replace(rep.base, ""))
@@ -264,7 +267,10 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
         } else {
           val qualifier = getQualifier()
           qualifier.foreach(qualifierRx.findFirstMatchIn(_).orElse(throw BadParse("Invalid table alias", expr.position)))
-          val maybeUpperPhysColumns = rep.physColumns.map(c => toUpper(expr)(qualifier.map(q => s""""$q".$c""").getOrElse(c), ctx))
+          val maybeUpperPhysColumns = rep.physColumns.map { cRaw =>
+            val c = nameCache.intern(cRaw)
+            toUpper(expr)(qualifier.map(q => s""""$q".$c""").getOrElse(c), ctx)
+          }
           ParametricSql(maybeUpperPhysColumns.map(c => c + selectAlias(expr)(ctx)), setParams)
         }
       case _ => // rollups also flow here by not finding entries in reps
@@ -274,7 +280,7 @@ object ColumnRefSqlizer extends Sqlizer[ColumnRef[UserColumnId, SoQLType]] {
           case Some(rep) =>
             val subColumns = rep.physColumns.map { pc => pc.replace(rep.base, "") }
             val sqls = subColumns.map { subCol =>
-              val c = idQuote(expr.column.underlying + subCol)
+              val c = nameCache.intern(idQuote(expr.column.underlying + subCol))
               expr.qualifier.foreach(qualifierRx.findFirstMatchIn(_).orElse(throw BadParse("Invalid table alias", expr.position)))
               val qualifier = expr.qualifier.orElse(ctx.get(PrimaryTableAlias).map(_.toString))
               toUpper(expr)(qualifier.map(q => s""""$q".$c""").getOrElse(c), ctx) + selectAlias(expr, Some(subCol))(ctx)
