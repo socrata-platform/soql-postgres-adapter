@@ -73,12 +73,15 @@ class IndexManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Copy
       val querier = readerWithQuery(pgu.conn, pgu, readCtx.copyCtx, baseSchema, None)
       val sqlReps = querier.getSqlReps(readCtx.copyInfo.dataTableName, systemToUserColumnMap)
       val typeReps = toTypeRepMap(baseSchema.values)
+
+      val sqlCtx = sqlizeContext + (NameCache -> new Sqlizer.NameCache)
+
       val psqls = coreExprs.map { expr =>
-        Sqlizer.sql(expr)(sqlReps, typeReps, Seq.empty, sqlizeContext, escape)
+        Sqlizer.sql(expr)(sqlReps, typeReps, Seq.empty, sqlCtx, escape)
       }
 
       val psqlsWhere = analysisCid.where.map { expr =>
-        Sqlizer.sql(expr)(sqlReps, typeReps, Seq.empty, sqlizeContext, escape)
+        Sqlizer.sql(expr)(sqlReps, typeReps, Seq.empty, sqlCtx, escape)
       }
 
       val setParams = psqls.flatMap(_.setParams) ++ psqlsWhere.toSeq.flatMap(_.setParams)

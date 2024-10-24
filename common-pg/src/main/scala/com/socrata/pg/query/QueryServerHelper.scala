@@ -39,12 +39,13 @@ object QueryServerHelper {
     val copy = getCopy(pgu, datasetInfo, reqCopy)
     val cryptProvider = datasetInfo.cryptProvider
 
-    val sqlCtx = Map[SqlizerContext, Any](
+    def sqlCtx = Map[SqlizerContext, Any](
       SqlizerContext.IdRep -> (if (obfuscateId) { new SoQLID.StringRep(cryptProvider) }
                                else { new ClearNumberRep(cryptProvider) }),
       SqlizerContext.VerRep -> new SoQLVersion.StringRep(cryptProvider),
       SqlizerContext.CaseSensitivity -> caseSensitivity,
-      SqlizerContext.LeadingSearch -> leadingSearch
+      SqlizerContext.LeadingSearch -> leadingSearch,
+      SqlizerContext.NameCache -> new Sqlizer.NameCache
     )
     val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit)
 

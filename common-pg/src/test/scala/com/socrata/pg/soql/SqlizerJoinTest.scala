@@ -105,6 +105,28 @@ class SqlizerJoinTest  extends SqlizerTest {
     params should be (Seq(30, 2000).map(BigDecimal(_)))
   }
 
+  test("join with chained sub-query - select columns with aliases") {
+    val soql = "select case_number, primary_type, @y.y, @y.wow_this_average_temperature_is_quite_large_is_it_not_i_sure_hope_the_sqlizer_knows_about_postgresql_column_length_limits join (SELECT * FROM @year |> SELECT year as y, avg_temperature as wow_this_average_temperature_is_quite_large_is_it_not_i_sure_hope_the_sqlizer_knows_about_postgresql_column_length_limits WHERE avg_temperature > 30) as y on @y.y = year and year = 2000"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+
+    val expectedSql = """SELECT "t1".case_number,"t1".primary_type,"_y"."y","_y".i0 FROM t1 JOIN (SELECT "year" as "y","avg_temperature" as "i0" FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1" WHERE ("avg_temperature" > ?)) as "_y" ON (("_y"."y" = "t1".year) and ("t1".year = ?))"""
+
+    sql should be (expectedSql)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq(30, 2000).map(BigDecimal(_)))
+  }
+
+  test("join with chained sub-query - select columns with reserved aliases") {
+    val soql = "select case_number, primary_type, @y.i2000, @y.i72 join (SELECT * FROM @year |> SELECT year as i2000, avg_temperature as i72 WHERE avg_temperature > 30) as y on @y.i2000 = year and year = 2000"
+    val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
+
+    val expectedSql = """SELECT "t1".case_number,"t1".primary_type,"_y".i0,"_y".i1 FROM t1 JOIN (SELECT "year" as "i0","avg_temperature" as "i1" FROM (SELECT "t3".year as "year","t3".avg_temperature as "avg_temperature" FROM t3) AS "x1" WHERE ("avg_temperature" > ?)) as "_y" ON (("_y".i0 = "t1".year) and ("t1".year = ?))"""
+
+    sql should be (expectedSql)
+    val params = setParams.map { (setParam) => setParam(None, 0).get }
+    params should be (Seq(30, 2000).map(BigDecimal(_)))
+  }
+
   test("join and date extract") {
     val soql = "select case_number, primary_type, date_extract_woy(@type.registered) join @type on primary_type = @type.primary_type"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
