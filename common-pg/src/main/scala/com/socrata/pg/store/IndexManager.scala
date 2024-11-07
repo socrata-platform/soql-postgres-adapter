@@ -1,6 +1,7 @@
 package com.socrata.pg.store
 
 import com.rojoma.simplearm.v2.using
+import com.socrata.soql.brita.AsciiIdentifierFilter
 import com.socrata.datacoordinator.id.{IndexId, IndexName}
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, IndexInfo, LifecycleStage}
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
@@ -35,6 +36,12 @@ class IndexManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Copy
   val escape = (stringLit: String) => SqlUtils.escapeString(pgu.conn, stringLit)
 
   def dbIndexName(index: IndexInfo): String = {
+    val base = dbIndexNameLegacy(index) + "_"
+    val remainder = (63 - base.length).max(0)
+    base + AsciiIdentifierFilter(index.name.underlying).replaceFirst("^_+", "").take(remainder).replaceFirst("_+$", "")
+  }
+
+  def dbIndexNameLegacy(index: IndexInfo): String = {
     s"${copyInfo.dataTableName}_idx_${index.systemId.underlying}"
   }
 
@@ -145,10 +152,16 @@ class IndexManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Copy
 
   def dropIndex(index: IndexInfo): Unit = {
     if (shouldMaterialize()) {
-      val createSql = s"INSERT INTO pending_index_drops(name) VALUES(?)"
+      val createSql = s"INSERT INTO pending_index_drops(name) VALUES(?),(?)"
       using(pgu.conn.prepareStatement(createSql)) { stmt =>
-        val idxName = dbIndexName(index)
-        stmt.setString(1, idxName)
+        // tell it to drop the old-style name and the new-style name -
+        // we only care about index names at creation and deletion
+        // time, and we don't store them in the database, so we have a
+        // bunch of old-style indexes whose name is in the "legacy"
+        // format - which is the same as the existing format minus the
+        // "human-name" suffix.
+        stmt.setString(1, dbIndexName(index))
+        stmt.setString(2, dbIndexNameLegacy(index))
         stmt.execute()
       }
     }
