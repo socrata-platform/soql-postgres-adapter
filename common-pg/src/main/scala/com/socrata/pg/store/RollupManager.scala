@@ -330,6 +330,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
               createRollupTable(rollupReps, rollupInfo)
               populateRollupTable(rollupInfo, rollupAnalyses, rollupReps)
               createIndexes(rollupInfo, rollupReps)
+              analyze(rollupInfo)
             }((_,dur)=>{
                 RollupMetrics.digest(RollupBuilt(rollupInfo.copyInfo.datasetInfo.resourceName.underlying,rollupInfo.name.underlying,LocalDateTime.now(Clock.systemUTC()),dur,pgu.datasetMapReader.getTotalRelationSize(rollupInfo.tableName).getOrElse(-1L)))
               })
@@ -475,6 +476,15 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
             stmt.execute(createIndexSql)
           }
         }
+      }
+    }
+  }
+
+  private def analyze(rollupInfo: LocalRollupInfo) = {
+    time("analyze",
+         "rollupName" -> rollupInfo.name.underlying) {
+      using(pgu.conn.createStatement()) { stmt =>
+        stmt.execute(s"ANALYZE ${rollupInfo.tableName}")
       }
     }
   }
