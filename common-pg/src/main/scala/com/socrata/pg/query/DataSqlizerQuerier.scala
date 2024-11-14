@@ -262,7 +262,7 @@ trait DataSqlizerQuerier[CT, CV] extends AbstractRepBasedDataSqlizer[CT, CV] {
         execute(conn, setTimeout(ms))
       }
 
-      val query = "EXPLAIN " + (if(analyze) "ANALYZE " else "") + pSql.sql.head
+      val query = s"EXPLAIN (ANALYZE $analyze, BUFFERS $analyze, FORMAT text) ${pSql.sql.head}"
 
       // Statement to be closed by caller
       val stmt = conn.prepareStatement(query)
