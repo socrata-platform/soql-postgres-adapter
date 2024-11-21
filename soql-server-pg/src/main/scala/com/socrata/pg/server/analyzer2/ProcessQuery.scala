@@ -43,7 +43,7 @@ import com.socrata.datacoordinator.id.{RollupName, DatasetResourceName}
 import com.socrata.metrics.rollup.RollupMetrics
 import com.socrata.metrics.rollup.events.RollupHit
 
-import com.socrata.pg.analyzer2.{CryptProviderProvider, TransformManager, CostEstimator, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, Namespaces, SoQLExtraContext, SoQLSqlizeAnnotation}
+import com.socrata.pg.analyzer2.{CryptProviderProvider, CostEstimator, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, Namespaces, SoQLExtraContext, SoQLSqlizeAnnotation}
 import com.socrata.pg.analyzer2.metatypes.{CopyCache, InputMetaTypes, DatabaseMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName, SoQLMetaTypesExt, Stage}
 import com.socrata.pg.analyzer2.ordering._
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils, RollupAnalyzer, RollupId}
@@ -157,13 +157,17 @@ class ProcessQuery(resultCache: ResultCache) {
     val nameAnalyses = locally {
       import DatabaseNamesMetaTypes.DebugHelper._
 
-      TransformManager[DatabaseNamesMetaTypes](
+      val transformManager =
+        new TransformManager[DatabaseNamesMetaTypes, RollupId](
+          new SoQLRollupExact(Stringifier.pretty),
+          new SoQLRewritePassHelpers,
+          Stringifier.pretty
+        )
+
+      transformManager(
         DatabaseNamesMetaTypes.rewriteFrom(dmtState, metadataAnalysis),
         relevantRollups,
-        passes,
-        new SoQLRewritePassHelpers,
-        new SoQLRollupExact(Stringifier.pretty),
-        Stringifier.pretty
+        passes
       )
     }
 
