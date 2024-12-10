@@ -227,14 +227,6 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
     analyze("url('x','y').description") must equal ("""text "y"""")
   }
 
-  test("phone(x, y).phone_number == x") {
-    analyze("phone('x','y').phone_number") must equal ("""text "x"""")
-  }
-
-  test("phone(x, y).phone_type == y") {
-    analyze("phone('x','y').phone_type") must equal ("""text "y"""")
-  }
-
   test("negative literals get their operator folded in") {
     analyze("-5") must equal ("""-5 :: numeric""")
   }

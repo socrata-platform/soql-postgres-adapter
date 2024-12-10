@@ -101,18 +101,12 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     BinaryMinus -> infix("-") _,
     TimesNumNum -> infix("*") _,
     TimesDoubleDouble -> infix("*") _,
-    TimesNumMoney -> infix("*") _,
-    TimesMoneyNum -> infix("*") _,
     DivNumNum -> infix("/") _,
     DivDoubleDouble -> infix("/") _,
-    DivMoneyNum -> infix("/") _,
-    DivMoneyMoney -> infix("/") _,
     ExpNumNum -> infix("^") _,
     ExpDoubleDouble -> infix("^") _,
     ModNumNum -> infix("%") _,
     ModDoubleDouble -> infix("%") _,
-    ModMoneyNum -> infix("%") _,
-    ModMoneyMoney -> infix("%") _,
     NaturalLog -> nary("ln") _,
     Absolute -> nary("abs") _,
     Ceiling -> nary("ceil") _,
@@ -205,7 +199,6 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
     RowVersionToText -> obfuscateToText("rv") _,
 
     NumberToText -> formatCall("%s::varchar") _,
-    NumberToMoney -> passthrough,
     NumberToDouble -> formatCall("%s::float") _,
 
     TextToNumber -> formatCall("%s::numeric") _,
@@ -225,7 +218,6 @@ object SqlFunctions extends SqlFunctionsLocation with SqlFunctionsGeometry with 
                                  ((SoQLInterval.StringRep.unapply _): String => Option[Period]) andThen
                                  ((x: Option[Period]) => x.get) andThen
                                  periodPrint) _,
-    TextToMoney -> formatCall("%s::numeric") _,
     TextToBlob -> passthrough,
     TextToPhoto -> passthrough,
 

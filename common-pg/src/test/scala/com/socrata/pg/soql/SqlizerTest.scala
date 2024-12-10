@@ -98,8 +98,6 @@ object SqlizerTest {
     ColumnName("year") -> ((8, SoQLNumber)),
     ColumnName("arrest") -> ((9, SoQLBoolean)),
     ColumnName("updated_on") -> ((10, SoQLFloatingTimestamp)),
-    ColumnName("object") -> ((11, SoQLObject)),
-    ColumnName("array") -> ((12, SoQLArray)),
     ColumnName("point") -> ((13, SoQLPoint)),
     ColumnName("multiline") -> ((14, SoQLMultiLine)),
     ColumnName("multipolygon") -> ((15, SoQLMultiPolygon)),
@@ -107,7 +105,6 @@ object SqlizerTest {
     ColumnName("line") -> ((17, SoQLLine)),
     ColumnName("multipoint") -> ((18, SoQLMultiPoint)),
     ColumnName("location") -> ((19, SoQLLocation)),
-    ColumnName("phone") -> ((20, SoQLPhone)),
     ColumnName("url") -> ((21, SoQLUrl)),
     ColumnName("document") -> ((22, SoQLDocument)),
     ColumnName("json") -> ((23, SoQLJson))

@@ -59,7 +59,7 @@ class PostgresUniverseCommon(val tablespace: String => Option[String],
 
   val initialLatestDataVersion: Long = 0
 
-  val SearchableTypes: Set[SoQLType] = Set(SoQLText, SoQLUrl, SoQLObject, SoQLArray)
+  val SearchableTypes: Set[SoQLType] = Set(SoQLText, SoQLUrl)
   val SearchableNumericTypes: Set[SoQLType] = Set(SoQLNumber)
 
   val AllSearchableTypes = SearchableTypes ++ SearchableNumericTypes

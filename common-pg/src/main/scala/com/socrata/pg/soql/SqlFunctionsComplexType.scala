@@ -10,7 +10,7 @@ import com.socrata.pg.soql.Sqlizer._
 import com.socrata.soql.functions.Function
 import com.socrata.soql.functions.SoQLFunctions.{DocumentToFilename, _}
 import com.socrata.soql.typed.StringLiteral
-import com.socrata.soql.types.{SoQLPhone, SoQLType, SoQLUrl, SoQLValue}
+import com.socrata.soql.types.{SoQLType, SoQLUrl, SoQLValue}
 
 /**
  * Complex types support does not have the same expressiveness of simple types.
@@ -35,11 +35,6 @@ import com.socrata.soql.types.{SoQLPhone, SoQLType, SoQLUrl, SoQLValue}
 trait SqlFunctionsComplexType {
 
   protected val funComplexTypeMap = Map[Function[SoQLType], FunCallToSql](
-    TextToPhone -> textToPhone _,
-    PhoneToPhoneNumber -> subColumn(0),
-    PhoneToPhoneType -> subColumn(1),
-    Phone -> formatCall("%s" + SqlFragments.Separator + "%s"),
-
     TextToUrl -> textToUrl _,
     UrlToUrl -> subColumn(0),
     UrlToDescription -> subColumn(1),
@@ -49,39 +44,6 @@ trait SqlFunctionsComplexType {
     DocumentToFilename -> jsonProp("filename"),
     DocumentToContentType -> jsonProp("content_type")
   )
-
-  private def textToPhone(fn: FunCall,
-                             rep: Map[QualifiedUserColumnId, SqlColumnRep[SoQLType, SoQLValue]],
-                             typeRep: Map[SoQLType, SqlColumnRep[SoQLType, SoQLValue]],
-                             setParams: Seq[SetParam],
-                             ctx: Sqlizer.Context,
-                             escape: Escape): ParametricSql = {
-    fn.parameters match {
-      case Seq(strLit@StringLiteral(value: String, _)) =>
-        val phone = value match {
-          case SoQLPhone.phoneRx(phoneType, sep, phoneNumber) => // Phone regex...  because Regexes can `match`
-            SoQLPhone(Option(phoneNumber).filter(_.nonEmpty),
-                      Option(phoneType).filter(_.nonEmpty))
-          case _ =>
-            JsonUtil.parseJson[SoQLPhone](value).right.get
-        }
-        val subCols = Seq(phone.phoneNumber, phone.phoneType.map(camelCase))
-        val sqls = subCols.map { subCol: Option[String] =>
-          if (subCol.isDefined) { SqlParamPlaceHolder } else { SqlNull }
-        }
-        val setParam: Seq[SetParam] =
-          subCols.filter(_.isDefined)
-                 .map(_.get)
-                 .map { subCol =>
-                   (stmt: Option[PreparedStatement], pos: Int) => {
-                     stmt.foreach(_.setString(pos, subCol))
-                     Some(subCol)
-                   }
-                 }
-        ParametricSql(sqls, setParams ++ setParam)
-      case _ => throw new Exception("should never get anything but string literal")
-    }
-  }
 
   private def subColumn(subColumnIndex: Int)
                             (fn: FunCall,
