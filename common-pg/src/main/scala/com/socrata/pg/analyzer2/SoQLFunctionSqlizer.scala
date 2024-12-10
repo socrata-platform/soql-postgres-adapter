@@ -386,18 +386,12 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
       BinaryMinus -> sqlizeBinaryOp("-"),
       TimesNumNum -> sqlizeBinaryOp("*"),
       TimesDoubleDouble -> sqlizeBinaryOp("*"),
-      TimesMoneyNum -> sqlizeBinaryOp("*"),
-      TimesNumMoney -> sqlizeBinaryOp("*"),
       DivNumNum -> sqlizeBinaryOp("/"),
       DivDoubleDouble -> sqlizeBinaryOp("/"),
-      DivMoneyNum -> sqlizeBinaryOp("/"),
-      DivMoneyMoney -> sqlizeBinaryOp("/"),
       ExpNumNum -> sqlizeBinaryOp("^"),
       ExpDoubleDouble -> sqlizeBinaryOp("^"),
       ModNumNum -> sqlizeBinaryOp("%"),
       ModDoubleDouble -> sqlizeBinaryOp("%"),
-      ModMoneyNum -> sqlizeBinaryOp("%"),
-      ModMoneyMoney -> sqlizeBinaryOp("%"),
       NaturalLog -> sqlizeNormalOrdinaryFuncall("ln"),
       Absolute -> sqlizeNormalOrdinaryFuncall("abs"),
       Ceiling -> sqlizeNormalOrdinaryFuncall("ceil"),
@@ -540,11 +534,6 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
       UrlToUrl -> sqlizeSubcol(SoQLUrl, "url"),
       UrlToDescription -> sqlizeSubcol(SoQLUrl, "description"),
       Url -> sqlizeSimpleCompoundColumn(SoQLUrl),
-
-      // Phone
-      PhoneToPhoneNumber -> sqlizeSubcol(SoQLPhone, "phone_number"),
-      PhoneToPhoneType -> sqlizeSubcol(SoQLPhone, "phone_type"),
-      Phone -> sqlizeSimpleCompoundColumn(SoQLPhone),
 
       // Document
       DocumentToFilename  -> sqlizeJsonSubcol(SoQLDocument, "'filename'", SoQLText),

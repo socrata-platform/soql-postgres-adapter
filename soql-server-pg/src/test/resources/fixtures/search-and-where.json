@@ -1,3 +1,3 @@
-[{"color":["Red","Yellow","Royal Blue","Purple","Turquoise"],"make":"APCO","name":"Karma"}
-,{"color":["Blue","Tangerine","Brasiliera","Jade","Greybird"],"make":"APCO","name":"Vista II SP"}
+[{"color":"[\"Red\",\"Yellow\",\"Royal Blue\",\"Purple\",\"Turquoise\"]","make":"APCO","name":"Karma"}
+,{"color":"[\"Blue\",\"Tangerine\",\"Brasiliera\",\"Jade\",\"Greybird\"]","make":"APCO","name":"Vista II SP"}
 ]

@@ -1,5 +1,5 @@
-[{"color":["Red","Yellow","Blue"],"make":"OZONE","name":"Buzz"}
-,{"color":["Red","Yellow","Royal Blue","Purple","Turquoise"],"make":"APCO","name":"Karma"}
-,{"color":["Red","Yellow","Blue"],"make":"OZONE","name":"Rush"}
-,{"color":["Blue","Tangerine","Brasiliera","Jade","Greybird"],"make":"APCO","name":"Vista II SP"}
+[{"color":"[\"Red\",\"Yellow\",\"Blue\"]","make":"OZONE","name":"Buzz"}
+,{"color":"[\"Red\",\"Yellow\",\"Royal Blue\",\"Purple\",\"Turquoise\"]","make":"APCO","name":"Karma"}
+,{"color":"[\"Red\",\"Yellow\",\"Blue\"]","make":"OZONE","name":"Rush"}
+,{"color":"[\"Blue\",\"Tangerine\",\"Brasiliera\",\"Jade\",\"Greybird\"]","make":"APCO","name":"Vista II SP"}
 ]

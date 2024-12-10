@@ -217,22 +217,13 @@ object SoQLIndexableRep {
         _.asInstanceOf[SoQLNumber].value,
         SoQLNumber(_),
         base) with NumberLikeIndexable[SoQLType]),
-    SoQLMoney -> ((base, _) =>
-      new NumberLikeRep(
-        SoQLMoney,
-        _.asInstanceOf[SoQLMoney].value,
-        SoQLMoney(_),
-        base) with NumberLikeIndexable[SoQLType]),
     SoQLFixedTimestamp -> ((base, _) => new FixedTimestampRep(base) with TimestampLikeIndexable[SoQLType]),
     SoQLFloatingTimestamp -> ((base, _) => new FloatingTimestampRep(base) with TimestampLikeIndexable[SoQLType]),
-    SoQLDate -> ((base, _) => new DateRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLTime -> ((base, _) => new TimeRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLInterval -> ((base, _) => new ObjectRep(base) with NoIndex[SoQLType]),
+    SoQLDate -> ((base, _) => new DateRep(base) with TimestampLikeIndexable[SoQLType]),
+    SoQLTime -> ((base, _) => new TimeRep(base) with TimestampLikeIndexable[SoQLType]),
+    SoQLInterval -> ((base, _) => new IntervalRep(base) with BaseIndexable[SoQLType]),
     SoQLDouble -> ((base, _) => new DoubleRep(base) with NumberLikeIndexable[SoQLType]),
-    SoQLObject -> ((base, _) => new ObjectRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
-    SoQLArray -> ((base, _) => new ArrayRep(base) with NoIndex[SoQLType]), // TODO: Revisit index need
     SoQLBlob -> ((base, _) => new BlobRep(base) with BlobIndexable[SoQLType]), // TODO: Revisit index need
-    SoQLPhone -> ((base, _) => new PhoneRep(base) with TextIndexable[SoQLType]),
     SoQLLocation -> ((base, _) => new LocationRep(base) with LocationIndexable[SoQLType]),
     SoQLUrl -> ((base, _) => new UrlRep(base) with TextIndexable[SoQLType]),
     // document->filename @> 'literal'::jsonb so that this index can be used.

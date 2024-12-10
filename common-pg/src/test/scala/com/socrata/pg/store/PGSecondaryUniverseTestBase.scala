@@ -242,15 +242,12 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
           case SoQLVersion => SoQLVersion(0)
           case SoQLBoolean => SoQLBoolean.canonicalTrue
           case SoQLNumber => SoQLNumber(new java.math.BigDecimal(0.0))
-          case SoQLMoney  => SoQLMoney(new java.math.BigDecimal(0.0))
           case SoQLDouble => SoQLDouble(0.1)
           case SoQLFixedTimestamp => SoQLFixedTimestamp(new DateTime())
           case SoQLFloatingTimestamp => SoQLFloatingTimestamp(new LocalDateTime())
           case SoQLDate => SoQLDate(new LocalDate())
           case SoQLTime => SoQLTime(new LocalTime())
           case SoQLInterval => SoQLInterval(Period.hours(1))
-          case SoQLObject => SoQLObject(new JObject(Map("hi" -> JString("there"))))
-          case SoQLArray => SoQLArray(new JArray(Seq(JString("there"))))
           case SoQLJson => SoQLJson(new JArray(Seq(JString("there"))))
           case SoQLPoint => SoQLPoint(SoQLPoint.WktRep.unapply("POINT (47.6303 -122.3148)").get)
           case SoQLMultiPoint => SoQLMultiPoint(SoQLMultiPoint.WktRep.unapply("MULTIPOINT ((10 40), (40 30), (20 20), (30 10))").get)
@@ -264,7 +261,6 @@ trait PGSecondaryUniverseTestBase extends FunSuiteLike with Matchers with Before
             Some(java.math.BigDecimal.valueOf(1.1)),
             Some(java.math.BigDecimal.valueOf(2.2)),
             Some("""{ "address": "101 Main St", "city": "Seattle", "state": "WA", "zip": "98104" }"""))
-          case SoQLPhone => SoQLPhone(Some("4251234567"), Some("Home"))
           case SoQLUrl => SoQLUrl(Some("http://www.socrata.com"), Some("Home Site"))
           case SoQLDocument => SoQLDocument(UUID.randomUUID().toString, Some("text/csv"), Some("document"))
           case SoQLPhoto => SoQLPhoto(UUID.randomUUID().toString)

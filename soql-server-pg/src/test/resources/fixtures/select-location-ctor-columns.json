@@ -1,2 +1,2 @@
-[{"code":"LOCATION","location": { "latitude": 1.1, "longitude": 2.2, "human_address": "{\"address\": \"Home\", \"city\": \"LOCATION\", \"state\": \"WA\", \"zip\": \"98104\"}"}}
+[{"code":"LOCATION","location": { "latitude": 1.1, "longitude": 2.2, "human_address": "{\"address\": \"Home Site\", \"city\": \"LOCATION\", \"state\": \"WA\", \"zip\": \"98104\"}"}}
 ]

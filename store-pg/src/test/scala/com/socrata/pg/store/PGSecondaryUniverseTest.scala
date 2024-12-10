@@ -76,11 +76,9 @@ class PGSecondaryUniverseTest extends FunSuite with Matchers with BeforeAndAfter
 
       validateSchema(cols, getSchema(pgu, copyInfo))
       val locationMultiColumnsAdjust = 1
-      val phoneMultiColumnsAdjust = 1
       val urlMultiColumnsAdjust = 1
       assert(jdbcColumnCount(conn, copyInfo.dataTableName) == ( cols.size
         + locationMultiColumnsAdjust
-        + phoneMultiColumnsAdjust
         + urlMultiColumnsAdjust),
         s"Expected table to have ${cols.size} columns")
 

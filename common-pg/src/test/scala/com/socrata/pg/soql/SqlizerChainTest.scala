@@ -77,11 +77,11 @@ class SqlizerChainTest extends SqlizerTest {
   }
 
   test("chained soql only adds ST_AsBinary in the outermost sql") {
-    val soql = "select point, object |> select /*hint*/ point where within_box(point, 1, 2, 3, 4)"
+    val soql = "select point, json |> select /*hint*/ point where within_box(point, 1, 2, 3, 4)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     val expected = Seq(
-      """SELECT ST_AsBinary("point") AS point FROM (SELECT "t1".point as "point","t1".object as "object" FROM t1) AS "x1" WHERE (ST_MakeEnvelope(?, ?, ?, ?, 4326) ~ "point")""",
-      """WITH "x1" AS MATERIALIZED (SELECT "t1".point as "point","t1".object as "object" FROM t1)
+      """SELECT ST_AsBinary("point") AS point FROM (SELECT "t1".point as "point","t1".json as "json" FROM t1) AS "x1" WHERE (ST_MakeEnvelope(?, ?, ?, ?, 4326) ~ "point")""",
+      """WITH "x1" AS MATERIALIZED (SELECT "t1".point as "point","t1".json as "json" FROM t1)
         |SELECT ST_AsBinary("point") AS point FROM x1 WHERE (ST_MakeEnvelope(?, ?, ?, ?, 4326) ~ "point")""".stripMargin
     )
     sql should be (expected(index))
@@ -90,11 +90,11 @@ class SqlizerChainTest extends SqlizerTest {
   }
 
   test("chained soql only adds ST_AsBinary - location in the outermost sql") {
-    val soql = "select location, object |> select /*hint*/ location::point where within_box(location::point, 1, 2, 3, 4)"
+    val soql = "select location, json |> select /*hint*/ location::point where within_box(location::point, 1, 2, 3, 4)"
     val ParametricSql(Seq(sql), setParams) = sqlize(soql, CaseSensitive)
     val expected = Seq(
-      """SELECT ST_AsBinary(("location_geom")) AS location_point FROM (SELECT "t1".location_geom as "location_geom","t1".location_address as "location_address","t1".object as "object" FROM t1) AS "x1" WHERE (ST_MakeEnvelope(?, ?, ?, ?, 4326) ~ ("location_geom"))""",
-      """WITH "x1" AS MATERIALIZED (SELECT "t1".location_geom as "location_geom","t1".location_address as "location_address","t1".object as "object" FROM t1)
+      """SELECT ST_AsBinary(("location_geom")) AS location_point FROM (SELECT "t1".location_geom as "location_geom","t1".location_address as "location_address","t1".json as "json" FROM t1) AS "x1" WHERE (ST_MakeEnvelope(?, ?, ?, ?, 4326) ~ ("location_geom"))""",
+      """WITH "x1" AS MATERIALIZED (SELECT "t1".location_geom as "location_geom","t1".location_address as "location_address","t1".json as "json" FROM t1)
         |SELECT ST_AsBinary(("location_geom")) AS location_point FROM x1 WHERE (ST_MakeEnvelope(?, ?, ?, ?, 4326) ~ ("location_geom"))""".stripMargin
     )
     sql should be (expected(index))
@@ -108,8 +108,8 @@ class SqlizerChainTest extends SqlizerTest {
     // search before select, filter, grouping, join
     val ParametricSql(Seq(sqlLeadingSearch), setParamsLeadingSearch) = sqlize(soql, CaseSensitive, useRepsWithId = true, leadingSearch = true)
     val expectedSqlLeadingSearch = Seq(
-      """SELECT "case_number","primary_type" FROM (SELECT "t1".case_number_6 as "case_number","t1".primary_type_7 as "primary_type" FROM t1 WHERE (to_tsvector('english', coalesce("t1".array_12,'') || ' ' || coalesce("t1".case_number_6,'') || ' ' || coalesce("t1".object_11,'') || ' ' || coalesce("t1".primary_type_7,'') || ' ' || coalesce("t1".url_21_description,'') || ' ' || coalesce("t1".url_21_url,'')) @@ plainto_tsquery('english', ?))) AS "x1" WHERE (to_tsvector('english', coalesce("case_number",'') || ' ' || coalesce("primary_type",'')) @@ plainto_tsquery('english', ?))""",
-      """WITH "x1" AS MATERIALIZED (SELECT "t1".case_number_6 as "case_number","t1".primary_type_7 as "primary_type" FROM t1 WHERE (to_tsvector('english', coalesce("t1".array_12,'') || ' ' || coalesce("t1".case_number_6,'') || ' ' || coalesce("t1".object_11,'') || ' ' || coalesce("t1".primary_type_7,'') || ' ' || coalesce("t1".url_21_description,'') || ' ' || coalesce("t1".url_21_url,'')) @@ plainto_tsquery('english', ?)))
+      """SELECT "case_number","primary_type" FROM (SELECT "t1".case_number_6 as "case_number","t1".primary_type_7 as "primary_type" FROM t1 WHERE (to_tsvector('english', coalesce("t1".case_number_6,'') || ' ' || coalesce("t1".primary_type_7,'') || ' ' || coalesce("t1".url_21_description,'') || ' ' || coalesce("t1".url_21_url,'')) @@ plainto_tsquery('english', ?))) AS "x1" WHERE (to_tsvector('english', coalesce("case_number",'') || ' ' || coalesce("primary_type",'')) @@ plainto_tsquery('english', ?))""",
+      """WITH "x1" AS MATERIALIZED (SELECT "t1".case_number_6 as "case_number","t1".primary_type_7 as "primary_type" FROM t1 WHERE (to_tsvector('english', coalesce("t1".case_number_6,'') || ' ' || coalesce("t1".primary_type_7,'') || ' ' || coalesce("t1".url_21_description,'') || ' ' || coalesce("t1".url_21_url,'')) @@ plainto_tsquery('english', ?)))
         |SELECT "case_number","primary_type" FROM x1 WHERE (to_tsvector('english', coalesce("case_number",'') || ' ' || coalesce("primary_type",'')) @@ plainto_tsquery('english', ?))""".stripMargin)
     sqlLeadingSearch should be (expectedSqlLeadingSearch(index))
     val paramsLeadingSearch = setParamsLeadingSearch.map { setParam => setParam(None, 0).get }
@@ -133,8 +133,8 @@ class SqlizerChainTest extends SqlizerTest {
     // search before select, filter, grouping, join
     val ParametricSql(Seq(sqlLeadingSearch), setParamsLeadingSearch) = sqlize(soql, CaseSensitive, useRepsWithId = true, leadingSearch = true)
     val expectedSqlLeadingSearch = Seq(
-      """SELECT "id" FROM (SELECT "t1".id_5 as "id" FROM t1 WHERE (to_tsvector('english', coalesce("t1".array_12,'') || ' ' || coalesce("t1".case_number_6,'') || ' ' || coalesce("t1".object_11,'') || ' ' || coalesce("t1".primary_type_7,'') || ' ' || coalesce("t1".url_21_description,'') || ' ' || coalesce("t1".url_21_url,'')) @@ plainto_tsquery('english', ?))) AS "x1" WHERE (false)""",
-      """WITH "x1" AS MATERIALIZED (SELECT "t1".id_5 as "id" FROM t1 WHERE (to_tsvector('english', coalesce("t1".array_12,'') || ' ' || coalesce("t1".case_number_6,'') || ' ' || coalesce("t1".object_11,'') || ' ' || coalesce("t1".primary_type_7,'') || ' ' || coalesce("t1".url_21_description,'') || ' ' || coalesce("t1".url_21_url,'')) @@ plainto_tsquery('english', ?)))
+      """SELECT "id" FROM (SELECT "t1".id_5 as "id" FROM t1 WHERE (to_tsvector('english', coalesce("t1".case_number_6,'') || ' ' || coalesce("t1".primary_type_7,'') || ' ' || coalesce("t1".url_21_description,'') || ' ' || coalesce("t1".url_21_url,'')) @@ plainto_tsquery('english', ?))) AS "x1" WHERE (false)""",
+      """WITH "x1" AS MATERIALIZED (SELECT "t1".id_5 as "id" FROM t1 WHERE (to_tsvector('english', coalesce("t1".case_number_6,'') || ' ' || coalesce("t1".primary_type_7,'') || ' ' || coalesce("t1".url_21_description,'') || ' ' || coalesce("t1".url_21_url,'')) @@ plainto_tsquery('english', ?)))
         |SELECT "id" FROM x1 WHERE (false)""".stripMargin
     )
     sqlLeadingSearch should be (expectedSqlLeadingSearch(index))

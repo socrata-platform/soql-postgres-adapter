@@ -118,7 +118,7 @@ class SoQLLocationTest extends SoQLTest {
 
   test("location constructor from columns") {
     compareSoqlResult(
-      "SELECT code, location('point (2.2 1.1)'::point, phone.phone_type, code, 'WA', '98104') as location WHERE code = 'LOCATION'",
+      "SELECT code, location('point (2.2 1.1)'::point, url.description, code, 'WA', '98104') as location WHERE code = 'LOCATION'",
       "select-location-ctor-columns.json")
   }
 }

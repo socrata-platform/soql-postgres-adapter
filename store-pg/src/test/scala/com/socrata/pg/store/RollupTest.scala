@@ -31,14 +31,14 @@ class RollupTest extends PGSecondaryTestBase with PGSecondaryUniverseTestBase wi
       val copyInfo = pgu.datasetMapReader.latest(datasetInfo)
       val dsName = s"$dcInstance.${truthDatasetId.underlying}"
       val rollupInfo = pgu.datasetMapWriter.createOrUpdateRollupSecondary(copyInfo, new RollupName("roll1"),
-        "select * (EXCEPT _point, _multipolygon, _location, _phone)", None).getOrElse(fail("Could not create rollup"))
+        "select * (EXCEPT _point, _multipolygon, _location)", None).getOrElse(fail("Could not create rollup"))
 
       val rm = new RollupManager(pgu, copyInfo)
       rm.updateRollup(rollupInfo, None, Function.const(false))
 
       val tableName = rollupInfo.tableName
 
-      jdbcColumnCount(pgu.conn, tableName) should be (24)
+      jdbcColumnCount(pgu.conn, tableName) should be (22)
       jdbcRowCount(pgu.conn,tableName) should be (totalRows)
       secondary.shutdown()
     }
