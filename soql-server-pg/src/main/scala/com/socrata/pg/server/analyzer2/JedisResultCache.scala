@@ -27,7 +27,8 @@ final class JedisResultCache(jedisPool: JedisPool, maxValueSize: Int) extends Re
   import JedisResultCache._
 
   private implicit object JedisResource extends Resource[Jedis] {
-    def close(j: Jedis) = jedisPool.returnResource(j)
+    def close(j: Jedis) =
+      if(j.isBroken) j.close() else jedisPool.returnResource(j)
   }
 
   private def withJedis[T](f: Jedis => T): T = using(jedisPool.getResource())(f)
