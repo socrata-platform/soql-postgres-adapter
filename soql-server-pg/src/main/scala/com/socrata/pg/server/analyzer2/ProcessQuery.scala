@@ -274,6 +274,8 @@ class ProcessQuery(resultCache: ResultCache) {
             }
           }.toVector.sortBy(_._1)
 
+        val debug = request.debug.getOrElse(Debug.default)
+
         fulfillRequest(
           columnsByName,
           copyCache,
@@ -287,7 +289,7 @@ class ProcessQuery(resultCache: ResultCache) {
           cryptProviders,
           sqlized.extractor,
           lastModified,
-          request.debug,
+          debug,
           request.queryTimeout,
           rs
         )
@@ -300,6 +302,8 @@ class ProcessQuery(resultCache: ResultCache) {
     }
   }
 
+  def cachedHeader(cached: Boolean): HttpServletResponse => Unit =
+    Header("X-SODA2-Cached", JsonUtil.renderJson(cached, pretty = false))
   def outOfDateHeader(outOfDate: Set[(SFResourceName, Stage)]): HttpServletResponse => Unit =
     Header("X-SODA2-Data-Out-Of-Date", JsonUtil.renderJson(outOfDate.iterator.toSeq.sorted, pretty=false))
 
@@ -442,21 +446,23 @@ class ProcessQuery(resultCache: ResultCache) {
     cryptProviders: CryptProviderProvider,
     extractor: ResultExtractor[DatabaseNamesMetaTypes],
     lastModified: DateTime,
-    debug: Option[Debug],
+    debug: Debug,
     timeout: Option[FiniteDuration],
     rs: ResourceScope
   ): HttpResponse = {
     val locale = "en_US"
 
-    for(result <- resultCache(etag)) {
-      log.info("Serving result from cache")
-      return buildResponse(result.etag, result.lastModified, result.contentType, outOfDate, result.body)
+    if(debug.useCache) {
+      for(result <- resultCache(etag)) {
+        log.info("Serving result from cache")
+        return buildResponse(result.etag, result.lastModified, result.contentType, outOfDate, result.body, cached = true)
+      }
     }
 
     val laidOutSql: SimpleDocStream[SqlizeAnnotation[DatabaseNamesMetaTypes]] = sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded))
     val renderedSql = singleLineSql(sql, forDebug = false)
     val debugFields =
-      debug.map { debug =>
+      Some(
         Seq(
           debug.sql.map { fmt =>
             val s =
@@ -482,12 +488,10 @@ class ProcessQuery(resultCache: ResultCache) {
             }
           }.map("explain" -> _)
         ).flatten.toMap
-      }
-
-    val preventRun = debug.fold(false)(_.inhibitRun)
+      ).filter(_.nonEmpty)
 
     val rows =
-      if(preventRun) {
+      if(debug.inhibitRun) {
         Iterator.empty
       } else {
         timeout.foreach(setTimeout(pgu.conn, _))
@@ -499,7 +503,7 @@ class ProcessQuery(resultCache: ResultCache) {
         }
       }
 
-    if(!preventRun) {
+    if(!debug.inhibitRun) {
       val now = LocalDateTime.now(Clock.systemUTC())
       for(ri <- rollups) {
         RollupMetrics.digest(
@@ -516,7 +520,8 @@ class ProcessQuery(resultCache: ResultCache) {
 
     val resultStream: OutputStream => Unit = { rawOutputStream =>
       for {
-        cos <- resultCache.cachingOutputStream(rawOutputStream, etag, lastModified, contentType)
+        cos <- if(debug.useCache) resultCache.cachingOutputStream(rawOutputStream, etag, lastModified, contentType)
+               else unmanaged(rawOutputStream)
         gzos <- managed(new GZIPOutputStream(cos))
         osw <- managed(new OutputStreamWriter(gzos, StandardCharsets.UTF_8))
         writer <- managed(new BufferedWriter(osw))
@@ -553,14 +558,15 @@ class ProcessQuery(resultCache: ResultCache) {
       }
     }
 
-    buildResponse(etag, lastModified, contentType, outOfDate, resultStream)
+    buildResponse(etag, lastModified, contentType, outOfDate, resultStream, cached = false)
   }
 
-  def buildResponse(etag: EntityTag, lastModified: DateTime, contentType: String, outOfDate: Set[(SFResourceName, Stage)], body: OutputStream => Unit): HttpResponse = {
+  def buildResponse(etag: EntityTag, lastModified: DateTime, contentType: String, outOfDate: Set[(SFResourceName, Stage)], body: OutputStream => Unit, cached: Boolean): HttpResponse = {
     ETag(etag) ~>
       LastModified(lastModified) ~>
       ContentType(contentType) ~>
       outOfDateHeader(outOfDate) ~>
+      cachedHeader(cached) ~>
       Stream(body)
   }
 
