@@ -821,6 +821,7 @@ class PGSecondary(val storeConfig: StoreConfig) extends Secondary[SoQLType, SoQL
       val im = new IndexManager(pgu, postUpdateTruthCopyInfo)
       im.updateIndexes()
     }
+    pgu.analyzer.analyze(postUpdateTruthCopyInfo)
 
     pgu.datasetMapWriter.enableDataset(truthCopyInfo.datasetInfo.systemId) // re-enable soql reads
     cookie
