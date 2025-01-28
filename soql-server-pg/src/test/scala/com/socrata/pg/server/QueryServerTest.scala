@@ -14,7 +14,7 @@ import scala.concurrent.duration.Duration
  * @param pgu
  */
 class QueryServerTest(dsInfo:DSInfo, pgu: PGSecondaryUniverse[SoQLType, SoQLValue]) extends
-  QueryServer(dsInfo, CaseSensitive, leadingSearch = true, Duration.Zero, new analyzer2.ProcessQuery(analyzer2.NoopResultCache)) {
+  QueryServer(dsInfo, CaseSensitive, leadingSearch = true, Duration.Zero, new analyzer2.ProcessQuery(analyzer2.NoopResultCache, analyzer2.ProcessQuery.TimeoutManager.Noop)) {
 
   override protected def withPgu[T](dsInfo:DSInfo, truthStoreDatasetInfo:Option[DatasetInfo])(f: (PGSecondaryUniverse[SoQLType, SoQLValue]) => T): T = {
     f(pgu)
