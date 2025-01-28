@@ -60,9 +60,34 @@ object ProcessQuery {
 
   @AutomaticJsonEncode
   case class SerializationColumnInfo(hint: Option[JValue], isSynthetic: Boolean)
+
+  trait TimeoutHandle {
+    def ping(): Unit // Call this whenever productive work is observed to reset the timeout
+    def cancelled: Boolean // true if the manager has issued a pg_cancel_backend on us
+    def duration: Option[FiniteDuration]
+  }
+
+  object TimeoutHandle {
+    class Noop extends TimeoutHandle {
+      override def ping() = {}
+      override def cancelled = false
+      override def duration = None
+    }
+    object Noop extends Noop
+  }
+
+  trait TimeoutManager {
+    def register(pid: Int, timeout: FiniteDuration, rs: ResourceScope): TimeoutHandle
+  }
+
+  object TimeoutManager {
+    object Noop extends TimeoutManager {
+      def register(pid: Int, timeout: FiniteDuration, rs: ResourceScope): TimeoutHandle = rs.openUnmanaged(new TimeoutHandle.Noop)
+    }
+  }
 }
 
-class ProcessQuery(resultCache: ResultCache) {
+class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.TimeoutManager) {
   import ProcessQuery._
 
   def apply(
@@ -74,6 +99,20 @@ class ProcessQuery(resultCache: ResultCache) {
     val analysis = request.analysis
     val passes = request.passes
     val systemContext = request.context
+
+    val timeoutHandle =
+      request.queryTimeout match {
+        case Some(timeout) =>
+          for {
+            stmt <- managed(pgu.conn.prepareStatement("SELECT pg_backend_pid()"))
+            result <- managed(stmt.executeQuery())
+          } {
+            if(!result.next()) throw new Exception("SELECT pg_backend_pid() should have returned exactly one row")
+            timeoutManager.register(result.getInt(1), timeout, rs)
+          }
+        case None =>
+          TimeoutHandle.Noop
+      }
 
     locally {
       import InputMetaTypes.DebugHelper._
@@ -87,6 +126,8 @@ class ProcessQuery(resultCache: ResultCache) {
     val copyCache = new InputMetaTypes.CopyCache(pgu)
     val dmtState = new DatabaseMetaTypes
     val metadataAnalysis = dmtState.rewriteFrom(analysis, copyCache, InputMetaTypes.provenanceMapper) // this populates the copy cache
+
+    timeoutHandle.ping()
 
     val outOfDate = copyCache.asMap.iterator.flatMap { case (dtn@DatabaseTableName((_, stage)), (copyInfo, _)) =>
       request.auxTableData.get(dtn) match {
@@ -118,6 +159,7 @@ class ProcessQuery(resultCache: ResultCache) {
         copyCache.allCopies.flatMap { copy =>
           pgu.datasetMapReader.rollups(copy).
             iterator.
+            map { rollup => timeoutHandle.ping(); rollup }.
             filter { rollup => rollup.isNewAnalyzer && tableExists(pgu, rollup.tableName) }.
             flatMap { rollup => RollupAnalyzer(pgu, copy, rollup).map((rollup, _)) }.
             map { case (rollup, (_foundTables, analysis, _locationSubcolumnsMap, _cryptProvider)) =>
@@ -183,6 +225,7 @@ class ProcessQuery(resultCache: ResultCache) {
 
     val onlyOne = nameAnalyses.lengthCompare(1) == 0
     val sqlizerResults = nameAnalyses.map { nameAnalysis =>
+      timeoutHandle.ping()
       SoQLSqlizer(
         nameAnalysis._1,
         new SoQLExtraContext(
@@ -204,6 +247,7 @@ class ProcessQuery(resultCache: ResultCache) {
     // it does will depend on the obfuscator temp function existing.
     if(sqlizerResults.exists(_._2.extraContextResult.obfuscatorRequired)) {
       ObfuscatorHelper.setupObfuscators(pgu.conn, cryptProviders.allProviders.mapValues(_.key))
+      timeoutHandle.ping()
     }
 
     // Ditto for the dynamic context function
@@ -217,11 +261,13 @@ class ProcessQuery(resultCache: ResultCache) {
         .headOption
     } {
       DynamicSystemContextHelper.setupDynamicSystemContext(pgu.conn, sysContext)
+      timeoutHandle.ping()
     }
 
     val sqlized = sqlizerResults.iterator.map { sqlizerResult =>
       val (nameAnalysis, Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(systemContextUsed, now, _obfuscatorRequired))) = sqlizerResult
       log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
+      timeoutHandle.ping()
       Sqlized(
         nameAnalysis._1,
         relevantRollups.filter { rr => nameAnalysis._2.contains(rr.id) },
@@ -290,7 +336,7 @@ class ProcessQuery(resultCache: ResultCache) {
           sqlized.extractor,
           lastModified,
           debug,
-          request.queryTimeout,
+          timeoutHandle,
           rs
         )
       case Precondition.FailedBecauseMatch(_) =>
@@ -338,19 +384,6 @@ class ProcessQuery(resultCache: ResultCache) {
     }
   }
 
-  // note this _doesn't_ reset the timeout if it throws
-  def withTimeout[T](conn: Connection, timeout: Option[FiniteDuration], cond: Boolean = true)(f: => T): T = {
-    timeout match {
-      case Some(finite) if cond =>
-        setTimeout(conn, finite)
-        val result = f
-        resetTimeout(conn)
-        result
-      case _ =>
-        f
-    }
-  }
-
   def redactObfuscateInExplain(s: String): String = {
     // each obfuscator is 4172 bytes, which are then doubled by
     // hex-encoding them, giving 8344
@@ -369,23 +402,22 @@ class ProcessQuery(resultCache: ResultCache) {
     conn: Connection,
     query: String,
     analyze: Boolean,
-    timeout: Option[FiniteDuration]
+    timeout: TimeoutHandle
   ): Either[HttpResponse, String] = {
     handlingSqlErrors(timeout) {
-      withTimeout(conn, timeout, cond = analyze) {
-        for {
-          stmt <- managed(conn.createStatement())
-          rs <- managed(stmt.executeQuery(s"EXPLAIN (analyze $analyze, buffers $analyze, format text) $query"))
-        } {
-          val sb = new StringBuilder
-          var didOne = false
-          while(rs.next()) {
-            if(didOne) sb.append('\n')
-            else didOne = true
-            sb.append(redactObfuscateInExplain(rs.getString(1)))
-          }
-          sb.toString
+      for {
+        stmt <- managed(conn.createStatement())
+        rs <- managed(stmt.executeQuery(s"EXPLAIN (analyze $analyze, buffers $analyze, format text) $query"))
+      } {
+        val sb = new StringBuilder
+        var didOne = false
+        while(rs.next()) {
+          if(didOne) sb.append('\n')
+          else didOne = true
+          sb.append(redactObfuscateInExplain(rs.getString(1)))
         }
+        timeout.ping()
+        sb.toString
       }
     }
   }
@@ -394,29 +426,30 @@ class ProcessQuery(resultCache: ResultCache) {
     conn: Connection,
     query: String,
     analyze: Boolean,
-    timeout: Option[FiniteDuration]
+    timeout: TimeoutHandle
   ): Either[HttpResponse, JValue] = {
     handlingSqlErrors(timeout) {
-      withTimeout(conn, timeout, cond = analyze) {
-        for {
-          stmt <- managed(conn.createStatement())
-          rs <- managed(stmt.executeQuery(s"EXPLAIN (analyse $analyze, buffers $analyze, format json) $query"))
-        } {
-          if(!rs.next()) {
-            throw new Exception("Should've gotten a row for the explanation")
-          }
-          redactObfuscateInExplain(JsonReader.fromString(rs.getString(1)))
+      for {
+        stmt <- managed(conn.createStatement())
+        rs <- managed(stmt.executeQuery(s"EXPLAIN (analyse $analyze, buffers $analyze, format json) $query"))
+      } {
+        if(!rs.next()) {
+          throw new Exception("Should've gotten a row for the explanation")
         }
+        timeout.ping()
+        redactObfuscateInExplain(JsonReader.fromString(rs.getString(1)))
       }
     }
   }
 
-  def handlingSqlErrors[T](timeout: Option[FiniteDuration])(f: => T): Either[HttpResponse, T] = {
+  def handlingSqlErrors[T](timeout: TimeoutHandle)(f: => T): Either[HttpResponse, T] = {
     try {
       Right(f)
     } catch {
+      case e: SQLException if timeout.cancelled =>
+        Left(RequestTimeout ~> Json(errorCodecs.encode(PostgresSoQLError.RequestTimedOut(timeout.duration))))
       case e: SQLException =>
-        QueryResult.QueryRuntimeError(e, timeout) match {
+        QueryResult.QueryRuntimeError(e, None) match {
           case Some(QueryResult.RequestTimedOut(timeout)) =>
             Left(RequestTimeout ~> Json(errorCodecs.encode(PostgresSoQLError.RequestTimedOut(timeout))))
           case Some(QueryResult.QueryError(description)) =>
@@ -447,7 +480,7 @@ class ProcessQuery(resultCache: ResultCache) {
     extractor: ResultExtractor[DatabaseNamesMetaTypes],
     lastModified: DateTime,
     debug: Debug,
-    timeout: Option[FiniteDuration],
+    timeout: TimeoutHandle,
     rs: ResourceScope
   ): HttpResponse = {
     val locale = "en_US"
@@ -494,7 +527,7 @@ class ProcessQuery(resultCache: ResultCache) {
       if(debug.inhibitRun) {
         Iterator.empty
       } else {
-        timeout.foreach(setTimeout(pgu.conn, _))
+        timeout.ping()
         handlingSqlErrors(timeout) {
           runQuery(pgu.conn, renderedSql, cryptProviders, extractor, rs)
         } match {
@@ -502,6 +535,8 @@ class ProcessQuery(resultCache: ResultCache) {
           case Right(rows) => rows
         }
       }
+
+    timeout.ping()
 
     if(!debug.inhibitRun) {
       val now = LocalDateTime.now(Clock.systemUTC())
@@ -550,6 +585,7 @@ class ProcessQuery(resultCache: ResultCache) {
         writer.write("\n }")
 
         for(row <- rows) {
+          timeout.ping()
           writer.write("\n,")
           CompactJsonWriter.toWriter(writer, JArray(row))
         }

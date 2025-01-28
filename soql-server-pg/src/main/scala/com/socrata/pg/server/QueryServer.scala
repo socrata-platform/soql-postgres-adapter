@@ -736,6 +736,8 @@ object QueryServer extends DynamicPortMap {
       conn <- managed(dsInfo.dataSource.getConnection)
       reporter <- MetricsReporter.managed(config.metrics)
       resultCache <- config.cache.makeCache
+      timeoutManager <- managed(new analyzer2.BundledTimeoutManager(dsInfo.dataSource))
+        .and(_.start())
     } {
       pong.start()
       val queryServer = new QueryServer(
@@ -743,7 +745,7 @@ object QueryServer extends DynamicPortMap {
         CaseSensitive,
         config.leadingSearch,
         config.httpQueryTimeoutDelta,
-        new analyzer2.ProcessQuery(resultCache)
+        new analyzer2.ProcessQuery(resultCache, timeoutManager)
       )
       val advertisedLivenessCheckInfo = new LivenessCheckInfo(hostPort(pong.livenessCheckInfo.getPort),
                                                               pong.livenessCheckInfo.getResponse)
