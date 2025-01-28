@@ -116,12 +116,12 @@ class BundledTimeoutManager(ds: DataSource) extends ProcessQuery.TimeoutManager 
 
         timeout match {
           case Some(0) =>
-            // don't want, just process
+            // don't wait, just process
           case Some(timeout) =>
-            log.info("Zzzzz... {}ms", timeout)
+            log.debug("Zzzzz... {}ms", timeout)
             alertSemaphore.tryAcquire(timeout, TimeUnit.MILLISECONDS)
           case None =>
-            log.info("Zzzzz...")
+            log.debug("Zzzzz...")
             alertSemaphore.acquire() // queue is empty, wait forever.
         }
 
