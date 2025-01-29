@@ -24,7 +24,7 @@ object Dependencies {
     val soqlStdlib = "4.14.69"
     val simpleCsv = "0.0.2"
     val typesafeConfig = "1.0.0"
-    val dataCoordinator = "4.2.36"
+    val dataCoordinator = "4.2.37"
     val typesafeScalaLogging = "3.9.2"
     val rojomaJson = "3.13.0"
     val metrics = "4.1.2"
