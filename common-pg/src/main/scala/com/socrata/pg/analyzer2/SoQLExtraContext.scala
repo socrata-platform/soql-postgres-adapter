@@ -1,6 +1,6 @@
 package com.socrata.pg.analyzer2
 
-import org.joda.time.DateTime
+import org.joda.time.{DateTime, DateTimeZone}
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.sqlizer.ExtraContext
@@ -15,7 +15,7 @@ class SoQLExtraContext(
 ) extends ExtraContext[SoQLExtraContext.Result] {
   var obfuscatorRequired = false
 
-  private val actualNow = DateTime.now()
+  private val actualNow = DateTime.now().withZone(DateTimeZone.UTC).withMillisOfSecond(0)
   private var nowUsed = false
 
   def now: DateTime = {
