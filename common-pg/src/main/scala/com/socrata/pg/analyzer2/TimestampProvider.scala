@@ -28,6 +28,9 @@ trait TimestampProvider {
   def nowExtractDay(zoneName: String): Option[Int]
   def nowExtractMonth(zoneName: String): Option[Int]
   def nowExtractYear(zoneName: String): Option[Int]
+  def nowExtractDayOfWeek(zoneName: String): Option[Int]
+  def nowExtractWeekOfYear(zoneName: String): Option[Int]
+  def nowExtractIsoYear(zoneName: String): Option[Int]
 
   def finish(): TimestampUsage
 }
@@ -58,6 +61,9 @@ object TimestampProvider {
     override def nowExtractDay(zoneName: String) = explode()
     override def nowExtractMonth(zoneName: String) = explode()
     override def nowExtractYear(zoneName: String) = explode()
+    override def nowExtractDayOfWeek(zoneName: String) = explode()
+    override def nowExtractWeekOfYear(zoneName: String) = explode()
+    override def nowExtractIsoYear(zoneName: String) = explode()
     override def finish() = TimestampUsage.NoUsage
   }
 
@@ -87,7 +93,6 @@ object TimestampProvider {
     protected def nowInZoneIntl(name: String): Option[LocalDateTime]
 
     override final def now = {
-      nowUsed = true
       cached[DateTime]("now", _.getMillis.toString)(Some(actualNow)).get
     }
 
@@ -129,6 +134,21 @@ object TimestampProvider {
     override final def nowExtractYear(zoneName: String) =
       cached[Int]("year", _.toString) {
         nowInZoneIntl(zoneName).map(_.getYear)
+      }
+
+    override final def nowExtractDayOfWeek(zoneName: String) =
+      cached[Int]("dow", _.toString) {
+        nowInZoneIntl(zoneName).map(_.getDayOfWeek)
+      }
+
+    override final def nowExtractWeekOfYear(zoneName: String) =
+      cached[Int]("woy", _.toString) {
+        nowInZoneIntl(zoneName).map(_.getWeekOfWeekyear)
+      }
+
+    override final def nowExtractIsoYear(zoneName: String) =
+      cached[Int]("isoyear", _.toString) {
+        nowInZoneIntl(zoneName).map(_.getWeekyear)
       }
 
     override final def finish() = {
