@@ -43,7 +43,7 @@ import com.socrata.datacoordinator.id.{RollupName, DatasetResourceName}
 import com.socrata.metrics.rollup.RollupMetrics
 import com.socrata.metrics.rollup.events.RollupHit
 
-import com.socrata.pg.analyzer2.{CryptProviderProvider, CostEstimator, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, Namespaces, SoQLExtraContext, SoQLSqlizeAnnotation}
+import com.socrata.pg.analyzer2.{CryptProviderProvider, CostEstimator, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, Namespaces, SoQLExtraContext, SoQLSqlizeAnnotation, TimestampProvider, TimestampUsage}
 import com.socrata.pg.analyzer2.metatypes.{CopyCache, InputMetaTypes, DatabaseMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName, SoQLMetaTypesExt, Stage}
 import com.socrata.pg.analyzer2.ordering._
 import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils, RollupAnalyzer, RollupId}
@@ -219,7 +219,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
       sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]],
       extractor: ResultExtractor[DatabaseNamesMetaTypes],
       systemContextUsed: SoQLExtraContext.SystemContextUsed,
-      now: Option[DateTime],
+      timestampUsage: TimestampUsage,
       estimatedCost: Double
     )
 
@@ -235,7 +235,8 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
             request.auxTableData.mapValues(_.locationSubcolumns),
             copyCache
           ),
-          SqlUtils.escapeString(pgu.conn, _)
+          SqlUtils.escapeString(pgu.conn, _),
+          new TimestampProvider.InProcess
         )
       ) match {
         case Right(result) => (nameAnalysis, result)
@@ -265,7 +266,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
     }
 
     val sqlized = sqlizerResults.iterator.map { sqlizerResult =>
-      val (nameAnalysis, Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(systemContextUsed, now, _obfuscatorRequired))) = sqlizerResult
+      val (nameAnalysis, Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(systemContextUsed, tsu, _obfuscatorRequired))) = sqlizerResult
       log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
       timeoutHandle.ping()
       Sqlized(
@@ -274,7 +275,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
         sql,
         extractor,
         systemContextUsed,
-        now,
+        tsu,
         if(onlyOne) 0.0 else CostEstimator(pgu.conn, sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded)).toString)
       )
     }.minBy(_.estimatedCost)
@@ -290,7 +291,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
       passes,
       request.allowRollups,
       request.debug,
-      sqlized.now
+      sqlized.timestampUsage.etagInfo
     )
 
     // "last modified" is problematic because it doesn't include
@@ -299,7 +300,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
     // can change over time.
     val lastModified = locally {
       val tablesLastModified = copyCache.mostRecentlyModifiedAt.getOrElse(new DateTime(0L))
-      val nowLastModified = sqlized.now.getOrElse(new DateTime(0L))
+      val nowLastModified = sqlized.timestampUsage.effectiveLastModified.getOrElse(new DateTime(0L))
       if(tablesLastModified.getMillis > nowLastModified.getMillis) {
         tablesLastModified
       } else {

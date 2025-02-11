@@ -1,7 +1,5 @@
 package com.socrata.pg.analyzer2
 
-import org.joda.time.{DateTime, DateTimeZone}
-
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.sqlizer.ExtraContext
 
@@ -11,17 +9,10 @@ class SoQLExtraContext(
   systemContext: Map[String, String],
   val cryptProviderProvider: CryptProviderProvider,
   val locationSubcolumns: SoQLExtraContext.LocationSubcolumns,
-  val escapeString: String => String
+  val escapeString: String => String,
+  val timestampProvider: TimestampProvider
 ) extends ExtraContext[SoQLExtraContext.Result] {
   var obfuscatorRequired = false
-
-  private val actualNow = DateTime.now().withZone(DateTimeZone.UTC).withMillisOfSecond(0)
-  private var nowUsed = false
-
-  def now: DateTime = {
-    nowUsed = true
-    actualNow
-  }
 
   private var systemContextUsed: SoQLExtraContext.SystemContextUsed =
     SoQLExtraContext.SystemContextUsed.Static(systemContext, Set())
@@ -37,7 +28,7 @@ class SoQLExtraContext(
   override def finish() =
     SoQLExtraContext.Result(
       systemContextUsed,
-      if(nowUsed) Some(actualNow) else None,
+      timestampProvider.finish(),
       obfuscatorRequired
     )
 }
@@ -67,5 +58,5 @@ object SoQLExtraContext extends StatementUniverse[DatabaseNamesMetaTypes] {
     }
   }
 
-  case class Result(systemContextUsed: SystemContextUsed, now: Option[DateTime], obfuscatorRequired: Boolean)
+  case class Result(systemContextUsed: SystemContextUsed, timestampInfo: TimestampUsage, obfuscatorRequired: Boolean)
 }

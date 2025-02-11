@@ -34,7 +34,7 @@ object ETagify extends StatementUniverse[InputMetaTypes] {
     passes: Seq[Seq[rewrite.Pass]],
     allowRollups: Boolean,
     debug: Option[Debug],
-    now: Option[DateTime]
+    timestampUsage: Option[String]
   ): EntityTag = {
     val hasher = Hasher.newSha256()
 
@@ -69,8 +69,8 @@ object ETagify extends StatementUniverse[InputMetaTypes] {
     log.debug("Mixing in debug: {}", debug)
     hasher.hash(debug)
 
-    log.debug("Mixing in now: {}", now)
-    hasher.hash(now.map(_.getMillis))
+    log.debug("Mixing in timestamp usage: {}", timestampUsage)
+    hasher.hash(timestampUsage)
 
     // Should this be strong or weak?  I'm choosing weak here because
     // I don't think we actually guarantee two calls will be
