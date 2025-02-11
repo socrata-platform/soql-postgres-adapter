@@ -6,12 +6,20 @@ import java.sql.Connection
 
 import com.rojoma.json.v3.ast.{JObject, JString}
 import com.rojoma.json.v3.io.CompactJsonWriter
+import com.rojoma.simplearm.v2._
 import org.joda.time.{DateTime, DateTimeZone, LocalDateTime, LocalDate}
 import org.joda.time.format.ISODateTimeFormat
+import org.slf4j.LoggerFactory
+
+import com.socrata.soql.analyzer2.{MetaTypes, LiteralValue, AtomicPositionInfo}
+import com.socrata.soql.sqlizer.{Rep, MetaTypesExt}
+import com.socrata.soql.functions.SoQLTypeInfo
+import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLFixedTimestamp, SoQLFloatingTimestamp}
 
 trait TimestampProvider {
   def now: DateTime
 
+  // These all return None if zoneName does not name a valid time zone
   def nowInZone(zoneName: String): Option[LocalDateTime]
   def nowTruncDay(zoneName: String): Option[LocalDateTime]
   def nowTruncMonth(zoneName: String): Option[LocalDateTime]
@@ -53,13 +61,10 @@ object TimestampProvider {
     override def finish() = TimestampUsage.NoUsage
   }
 
-  // This is used in tests.  We don't have a database connection to
-  // run against, so instead just implement it in terms of joda-time's
-  // timezone database.
-  class InProcess extends TimestampProvider {
+  abstract class SimpleTimestampProvider extends TimestampProvider {
     private val tracker = new scm.TreeMap[String, (Any, String)]
 
-    private def cached[T](tag: String, f: T => String)(value: => Option[T]): Option[T] = {
+    protected def cached[T](tag: String, f: T => String)(value: => Option[T]): Option[T] = {
       tracker.get(tag) match {
         case Some((x, _)) =>
           Some(x.asInstanceOf[T])
@@ -72,9 +77,76 @@ object TimestampProvider {
       }
     }
 
-    private val actualNow = DateTime.now().withZone(DateTimeZone.UTC).withMillisOfSecond(0)
+    private val nowValue = DateTime.now().withZone(DateTimeZone.UTC).withMillisOfSecond(0)
     private var nowUsed = false
+    protected def actualNow = {
+      nowUsed = true
+      nowValue
+    }
 
+    protected def nowInZoneIntl(name: String): Option[LocalDateTime]
+
+    override final def now = {
+      nowUsed = true
+      cached[DateTime]("now", _.getMillis.toString)(Some(actualNow)).get
+    }
+
+    private def iso(ldt: LocalDateTime): String = ISODateTimeFormat.dateTime.print(ldt)
+    private def isoDate(ld: LocalDate): String = ISODateTimeFormat.date.print(ld)
+
+    override final def nowInZone(zoneName: String) =
+      cached("now/" + zoneName, iso) { nowInZoneIntl(zoneName) }
+
+    override final def nowTruncDay(zoneName: String) = {
+      cached("trunc day/" + zoneName, iso) { nowInZoneIntl(zoneName).map(_.withTime(0, 0, 0, 0)) }
+    }
+
+    override final def nowTruncMonth(zoneName: String) =
+      cached("trunc month/" + zoneName, iso) {
+        nowInZoneIntl(zoneName).map(_.withTime(0, 0, 0, 0).withDayOfMonth(1))
+      }
+
+    override final def nowTruncYear(zoneName: String) =
+      cached("trunc year/" + zoneName, iso) {
+        nowInZoneIntl(zoneName).map(_.withTime(0, 0, 0, 0).withDayOfMonth(1).withMonthOfYear(1))
+      }
+
+    override final def nowDate(zoneName: String) =
+      cached("date/" + zoneName, isoDate) {
+        nowInZoneIntl(zoneName).map(_.toLocalDate)
+      }
+
+    override final def nowExtractDay(zoneName: String) =
+      cached[Int]("day", _.toString) {
+        nowInZoneIntl(zoneName).map(_.getDayOfMonth)
+      }
+
+    override final def nowExtractMonth(zoneName: String) =
+      cached[Int]("month", _.toString) {
+        nowInZoneIntl(zoneName).map(_.getMonthOfYear)
+      }
+
+    override final def nowExtractYear(zoneName: String) =
+      cached[Int]("year", _.toString) {
+        nowInZoneIntl(zoneName).map(_.getYear)
+      }
+
+    override final def finish() = {
+      new TimestampUsage {
+        override val etagInfo: Option[String] =
+          Some(CompactJsonWriter.toString(JObject(tracker.mapValues { v => JString(v._2) })))
+
+        override val effectiveLastModified: Option[DateTime] =
+          if(nowUsed) None
+          else Some(nowValue)
+      }
+    }
+  }
+
+  // This is used in tests.  We don't have a database connection to
+  // run against, so instead just implement it in terms of joda-time's
+  // timezone database.
+  class InProcess extends SimpleTimestampProvider {
     private def zone(name: String): Option[DateTimeZone] =
       try {
         Some(DateTimeZone.forID(name))
@@ -83,87 +155,59 @@ object TimestampProvider {
           None
       }
 
-    private def nowInZoneIntl(name: String) = {
-      nowUsed = true
-      zone(name).map { z => actualNow.withZone(z).toLocalDateTime }
-    }
-
-    override def now = {
-      nowUsed = true
-      cached[DateTime]("now", _.getMillis.toString)(Some(actualNow)).get
-    }
-
-    private def iso(ldt: LocalDateTime): String = ISODateTimeFormat.dateTime.print(ldt)
-    private def isoDate(ld: LocalDate): String = ISODateTimeFormat.date.print(ld)
-
-    override def nowInZone(zoneName: String) =
-      cached("now/" + zoneName, iso) { nowInZoneIntl(zoneName) }
-
-    override def nowTruncDay(zoneName: String) = {
-      cached("trunc day/" + zoneName, iso) { nowInZoneIntl(zoneName).map(_.withTime(0, 0, 0, 0)) }
-    }
-
-    override def nowTruncMonth(zoneName: String) =
-      cached("trunc month/" + zoneName, iso) {
-        nowInZoneIntl(zoneName).map(_.withTime(0, 0, 0, 0).withDayOfMonth(1))
-      }
-
-    override def nowTruncYear(zoneName: String) =
-      cached("trunc year/" + zoneName, iso) {
-        nowInZoneIntl(zoneName).map(_.withTime(0, 0, 0, 0).withDayOfMonth(1).withMonthOfYear(1))
-      }
-
-    override def nowDate(zoneName: String) =
-      cached("date/" + zoneName, isoDate) {
-        nowInZoneIntl(zoneName).map(_.toLocalDate)
-      }
-
-    override def nowExtractDay(zoneName: String) =
-      cached[Int]("day", _.toString) {
-        nowInZoneIntl(zoneName).map(_.getDayOfMonth)
-      }
-
-    override def nowExtractMonth(zoneName: String) =
-      cached[Int]("month", _.toString) {
-        nowInZoneIntl(zoneName).map(_.getMonthOfYear)
-      }
-
-    override def nowExtractYear(zoneName: String) =
-      cached[Int]("year", _.toString) {
-        nowInZoneIntl(zoneName).map(_.getYear)
-      }
-
-    override def finish() = {
-      new TimestampUsage {
-        override val etagInfo: Option[String] =
-          Some(CompactJsonWriter.toString(JObject(tracker.mapValues { v => JString(v._2) })))
-
-        override val effectiveLastModified: Option[DateTime] =
-          if(nowUsed) None
-          else Some(actualNow)
+    protected override def nowInZoneIntl(name: String) = {
+      zone(name).map { z =>
+        actualNow.withZone(z).toLocalDateTime
       }
     }
   }
 
-  class Postgresql(conn: Connection) extends TimestampProvider {
-    private def explode(): Nothing =
-      throw new Exception("get_utc_time() should not have been used in this context")
+  object Postgresql {
+    private val log = LoggerFactory.getLogger(classOf[Postgresql])
+  }
 
-    private val actualNow = DateTime.now().withZone(DateTimeZone.UTC).withMillisOfSecond(0)
-    private var nowUsed = false
+  class Postgresql(conn: Connection) extends SimpleTimestampProvider {
+    import SoQLTypeInfo.hasType
+    import Postgresql.log
 
-    def now: DateTime = {
-      nowUsed = true
-      actualNow
+    private lazy val knownNames =
+      for {
+        stmt <- managed(conn.prepareStatement("SELECT name from pg_catalog.pg_timezone_names"))
+        rs <- managed(stmt.executeQuery())
+      } {
+        val rb = Set.newBuilder[String]
+        while(rs.next()) {
+          rb += rs.getString(1)
+        }
+        rb.result()
+      }
+
+    private val zoned = new scm.HashMap[String, LocalDateTime]
+
+    private val floatingRep = new com.socrata.datacoordinator.common.soql.sqlreps.FloatingTimestampRep("")
+
+    protected override def nowInZoneIntl(name: String): Option[LocalDateTime] = {
+      zoned.get(name).orElse {
+        if(knownNames(name)) {
+          log.debug("Converting {} into zone {}", actualNow:Any, JString(name))
+          val result =
+            for {
+              stmt <- managed(conn.prepareStatement("select (? :: timestamp with time zone) at time zone ?"))
+                .and(_.setString(1, SoQLFixedTimestamp.StringRep(actualNow)))
+                .and(_.setString(2, name))
+              rs <- managed(stmt.executeQuery())
+            } {
+              if(!rs.next()) throw new Exception("SELECT for zone conversion did not return a row?")
+              floatingRep.fromResultSet(rs, 1).asInstanceOf[SoQLFloatingTimestamp].value
+            }
+          log.debug("Converted {} to {} in {}", actualNow, result, JString(name))
+          zoned += name -> result
+          Some(result)
+        } else {
+          log.debug("Postgresql does not know about zone {}; declining the conversion", JString(name))
+          None
+        }
+      }
     }
-    override def nowInZone(zoneName: String) = explode()
-    override def nowTruncDay(zoneName: String) = explode()
-    override def nowTruncMonth(zoneName: String) = explode()
-    override def nowTruncYear(zoneName: String) = explode()
-    override def nowDate(zoneName: String) = explode()
-    override def nowExtractDay(zoneName: String) = explode()
-    override def nowExtractMonth(zoneName: String) = explode()
-    override def nowExtractYear(zoneName: String) = explode()
-    override def finish() = explode()
   }
 }

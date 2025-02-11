@@ -236,7 +236,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
             copyCache
           ),
           SqlUtils.escapeString(pgu.conn, _),
-          new TimestampProvider.InProcess
+          new TimestampProvider.Postgresql(pgu.conn)
         )
       ) match {
         case Right(result) => (nameAnalysis, result)
