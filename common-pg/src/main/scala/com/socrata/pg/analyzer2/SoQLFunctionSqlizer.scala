@@ -224,7 +224,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
     assert(args.length == 0)
 
     ctx.repFor(f.typ).
-      literal(LiteralValue[MT](SoQLFixedTimestamp(ctx.extraContext.now))(AtomicPositionInfo.Synthetic)).
+      literal(LiteralValue[MT](SoQLFixedTimestamp(ctx.extraContext.timestampProvider.now))(AtomicPositionInfo.Synthetic)).
       withExpr(f)
   }
 

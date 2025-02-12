@@ -95,7 +95,8 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
       def allProviders = Map.empty
     },
     Map.empty,
-    JString(_).toString
+    JString(_).toString,
+    new TimestampProvider.InProcess
   )
 
   // The easiest way to make an Expr for sqlization is just to analyze

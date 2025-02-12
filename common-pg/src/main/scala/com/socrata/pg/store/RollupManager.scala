@@ -17,7 +17,7 @@ import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, Lifecyc
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.pg.analyzer2.metatypes.{RollupMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName}
-import com.socrata.pg.analyzer2.{SqlNormalizer, SoQLRewriteSearch, SoQLExtraContext}
+import com.socrata.pg.analyzer2.{SqlNormalizer, SoQLRewriteSearch, SoQLExtraContext, TimestampProvider}
 import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
 import com.socrata.pg.soql._
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
@@ -187,7 +187,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
           case Some((foundTables, analysis, locationSubcolumns, cryptProviders)) =>
             val sqlizer = SoQLSqlizer
 
-            val (denormSql, augSchema, _) = sqlizer.sqlize(analysis, rewriteOutputColumns = false, new SoQLExtraContext(Map.empty, cryptProviders, locationSubcolumns, SqlUtils.escapeString(pgu.conn, _))) match {
+            val (denormSql, augSchema, _) = sqlizer.sqlize(analysis, rewriteOutputColumns = false, new SoQLExtraContext(Map.empty, cryptProviders, locationSubcolumns, SqlUtils.escapeString(pgu.conn, _), TimestampProvider.Forbid)) match {
               case Right(result) => result
               case Left(nothing) => nothing
             }
