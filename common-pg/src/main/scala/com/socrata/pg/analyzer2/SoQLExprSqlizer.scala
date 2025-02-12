@@ -2,9 +2,11 @@ package com.socrata.pg.analyzer2
 
 import java.math.{BigDecimal => JBigDecimal}
 
+import org.joda.time.DateTimeZone
+
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.sqlizer._
-import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLText, SoQLFloatingTimestamp, SoQLDate, SoQLNumber}
+import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLText, SoQLFloatingTimestamp, SoQLFixedTimestamp, SoQLDate, SoQLNumber}
 import com.socrata.soql.functions.{SoQLFunctions, SoQLTypeInfo}
 
 import com.socrata.pg.analyzer2.metatypes.DatabaseNamesMetaTypes
@@ -46,8 +48,6 @@ class SoQLExprSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({ ty
   }
 
   private sealed abstract class NowInZone {
-    val zoneName: String
-
     def asExpr(tsp: TimestampProvider, pos: PositionInfo): Option[LiteralValue]
   }
   private object NowInZone {
@@ -66,6 +66,18 @@ class SoQLExprSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({ ty
     case class YearPrecision(zoneName: String) extends NowInZone {
       override def asExpr(tsp: TimestampProvider, pos: PositionInfo) =
         tsp.nowTruncYear(zoneName).map { v => LiteralValue[MT](SoQLFloatingTimestamp(v))(pos.asAtomic) }
+    }
+    case object DayPrecisionZ extends NowInZone {
+      override def asExpr(tsp: TimestampProvider, pos: PositionInfo) =
+        tsp.nowTruncDay("UTC").map { v => LiteralValue[MT](SoQLFixedTimestamp(v.toDateTime(DateTimeZone.UTC)))(pos.asAtomic) }
+    }
+    case object MonthPrecisionZ extends NowInZone {
+      override def asExpr(tsp: TimestampProvider, pos: PositionInfo) =
+        tsp.nowTruncMonth("UTC").map { v => LiteralValue[MT](SoQLFixedTimestamp(v.toDateTime(DateTimeZone.UTC)))(pos.asAtomic) }
+    }
+    case object YearPrecisionZ extends NowInZone {
+      override def asExpr(tsp: TimestampProvider, pos: PositionInfo) =
+        tsp.nowTruncYear("UTC").map { v => LiteralValue[MT](SoQLFixedTimestamp(v.toDateTime(DateTimeZone.UTC)))(pos.asAtomic) }
     }
     case class Date(zoneName: String) extends NowInZone {
       override def asExpr(tsp: TimestampProvider, pos: PositionInfo) =
@@ -140,11 +152,11 @@ class SoQLExprSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({ ty
         case FunctionCall(MonomorphicFunctions.FloatingTimestampTruncY, Seq(FloatNow(zoneName))) =>
           Some(YearPrecision(zoneName))
         case FunctionCall(MonomorphicFunctions.FixedTimestampZTruncYmd, Seq(FixedNow())) =>
-          Some(DayPrecision("UTC"))
+          Some(DayPrecisionZ)
         case FunctionCall(MonomorphicFunctions.FixedTimestampZTruncYm, Seq(FixedNow())) =>
-          Some(MonthPrecision("UTC"))
+          Some(MonthPrecisionZ)
         case FunctionCall(MonomorphicFunctions.FixedTimestampZTruncY, Seq(FixedNow())) =>
-          Some(YearPrecision("UTC"))
+          Some(YearPrecisionZ)
         case FunctionCall(MonomorphicFunctions.FixedTimestampTruncYmdAtTimeZone, Seq(FixedNow(), LiteralZone(zoneName))) =>
           Some(DayPrecision(zoneName))
         case FunctionCall(MonomorphicFunctions.FixedTimestampTruncYmAtTimeZone, Seq(FixedNow(), LiteralZone(zoneName))) =>
