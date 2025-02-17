@@ -12,7 +12,6 @@ libraryDependencies ++= Seq(
   liquibaseCore,
   liquibasePlugin,
   postgresql,
-  socrataUtil,
   socrataCuratorUtils,
   socrataThirdPartyUtils,
   soqlStdlib,
