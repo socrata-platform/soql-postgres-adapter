@@ -27,8 +27,8 @@ object Dependencies {
     val dataCoordinator = "4.2.37"
     val typesafeScalaLogging = "3.9.2"
     val rojomaJson = "3.13.0"
-    val metrics = "4.1.2"
-    val metricsScala = "4.1.1"
+    val metrics = "4.2.30"
+    val metricsScala = "4.3.3"
     val clojure = "1.5.1"
     val rollupMetrics = "2.2"
   }
