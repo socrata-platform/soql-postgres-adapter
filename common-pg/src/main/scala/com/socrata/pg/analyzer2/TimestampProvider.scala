@@ -77,7 +77,7 @@ object TimestampProvider {
         case None =>
           val result: Option[T] = value
           result.foreach { r =>
-            tracker += tag -> (result, f(r))
+            tracker += tag -> (r, f(r))
           }
           result
       }
