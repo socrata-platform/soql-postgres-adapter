@@ -161,16 +161,13 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
     def exists(req: HttpRequest): HttpResponse = {
       val servReq = req.servletRequest
 
-      val dsOp = Option(servReq.getParameter("ds"))
+      val ds = Option(servReq.getParameter("ds")).getOrElse(throw new IllegalArgumentException("Existence Checking requires the dataset parameter"))
       val copy = Option(servReq.getParameter("copy"))
 
 
       withPgu(dsInfo, truthStoreDatasetInfo = None) { pgu =>
-        val copyInfoOpt = for {
-          ds <- dsOp
-        } yield {
-          getCopy(pgu, ds, copy)
-        }
+        val copyInfoOpt = getCopy(pgu, ds, copy)
+
 
         copyInfoOpt match {
           case Some(copyInfo) => OK
