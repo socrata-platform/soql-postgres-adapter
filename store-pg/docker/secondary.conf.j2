@@ -12,6 +12,7 @@ instances {
         database = "{{ PG_SECONDARY_DB_NAME }}"
         username = "{{ PG_SECONDARY_DB_USER }}"
         {{ PG_SECONDARY_DB_PASSWORD_LINE }}
+        password = ${?PG_SECONDARY_DB_PASSWORD}
         login-timeout = 10s
         connect-timeout = 10s
         cancel-signal-timeout = 10s

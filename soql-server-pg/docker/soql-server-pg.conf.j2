@@ -41,6 +41,7 @@ com.socrata.soql-server-pg {
     database = "{{ PG_SECONDARY_DB_NAME }}"
     username = "{{ PG_SECONDARY_DB_USER }}"
     {{ PG_SECONDARY_DB_PASSWORD_LINE }}
+    password = ${?PG_SECONDARY_DB_PASSWORD}
     login-timeout = 10s
     connect-timeout = 10s
     cancel-signal-timeout = 10s
@@ -66,6 +67,7 @@ com.socrata.soql-server-pg {
       database = "{{ PG_SECONDARY_DB_NAME }}"
       username = "{{ PG_SECONDARY_MIGRATE_DB_USER }}"
       {{ PG_SECONDARY_MIGRATE_DB_PASSWORD_LINE }}
+      password = ${?PG_SECONDARY_MIGRATE_PASSWORD}
     }
     log4j = ${common-log4j}
     log4j.rootLogger = [ {{ LOG_LEVEL }}, console ]
