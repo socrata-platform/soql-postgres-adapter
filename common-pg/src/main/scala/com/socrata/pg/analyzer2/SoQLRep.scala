@@ -913,7 +913,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
           }
           override def placeholders = Seq(d"?")
           override def indices =
-            createTextlikeIndices(namespace.indexName(tableName, columnName), tableName, compressedDatabaseColumn(columnName))
+            createSimpleIndices(namespace.indexName(tableName, columnName), tableName, compressedDatabaseColumn(columnName))
         }
     },
     SoQLPhoto -> new SingleColumnRep(SoQLPhoto, d"text") {
@@ -957,7 +957,7 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
           }
           override def placeholders = Seq(d"?")
           override def indices =
-            createTextlikeIndices(namespace.indexName(tableName, columnName), tableName, compressedDatabaseColumn(columnName))
+            createSimpleIndices(namespace.indexName(tableName, columnName), tableName, compressedDatabaseColumn(columnName))
         }
     },
     SoQLDocument -> new SingleColumnRep(SoQLDocument, d"jsonb") {
