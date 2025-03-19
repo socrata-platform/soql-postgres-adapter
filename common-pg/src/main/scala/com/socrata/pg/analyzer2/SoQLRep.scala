@@ -872,6 +872,94 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
         }
     },
 
+    SoQLBlob -> new SingleColumnRep(SoQLBlob, d"text") {
+      override def literal(e: LiteralValue) = {
+        val SoQLBlob(s) = e.value
+        exprSqlFactory(mkTextLiteral(s), e)
+      }
+
+      def convertToText(e: ExprSql): Option[ExprSql] = Some(e)
+
+      override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
+        Option(rs.getString(dbCol)) match {
+          case None => SoQLNull
+          case Some(t) => SoQLBlob(t)
+        }
+      }
+
+      override protected def doExtractFromCsv(v: Option[String]): CV = {
+        v match {
+          case Some(t) => SoQLBlob(t)
+          case None => SoQLNull
+        }
+      }
+
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            cv match {
+              case SoQLNull => stmt.setNull(start, Types.VARCHAR)
+              case SoQLBlob(t) => stmt.setString(start, t)
+              case other => badType("blob", other)
+            }
+            start + 1
+          }
+          override def csvify(cv: CV): Seq[Option[String]] = {
+            cv match {
+              case SoQLNull => Seq(None)
+              case SoQLBlob(t) => Seq(Some(t))
+              case other => badType("blob", other)
+            }
+          }
+          override def placeholders = Seq(d"?")
+          override def indices =
+            createTextlikeIndices(namespace.indexName(tableName, columnName), tableName, compressedDatabaseColumn(columnName))
+        }
+    },
+    SoQLPhoto -> new SingleColumnRep(SoQLPhoto, d"text") {
+      override def literal(e: LiteralValue) = {
+        val SoQLPhoto(s) = e.value
+        exprSqlFactory(mkTextLiteral(s), e)
+      }
+
+      def convertToText(e: ExprSql): Option[ExprSql] = Some(e)
+
+      override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
+        Option(rs.getString(dbCol)) match {
+          case None => SoQLNull
+          case Some(t) => SoQLPhoto(t)
+        }
+      }
+
+      override protected def doExtractFromCsv(v: Option[String]): CV = {
+        v match {
+          case Some(t) => SoQLPhoto(t)
+          case None => SoQLNull
+        }
+      }
+
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            cv match {
+              case SoQLNull => stmt.setNull(start, Types.VARCHAR)
+              case SoQLPhoto(t) => stmt.setString(start, t)
+              case other => badType("photo", other)
+            }
+            start + 1
+          }
+          override def csvify(cv: CV): Seq[Option[String]] = {
+            cv match {
+              case SoQLNull => Seq(None)
+              case SoQLPhoto(t) => Seq(Some(t))
+              case other => badType("photo", other)
+            }
+          }
+          override def placeholders = Seq(d"?")
+          override def indices =
+            createTextlikeIndices(namespace.indexName(tableName, columnName), tableName, compressedDatabaseColumn(columnName))
+        }
+    },
     SoQLDocument -> new SingleColumnRep(SoQLDocument, d"jsonb") {
       override def literal(e: LiteralValue) = ??? // no such thing as a doc liteal
 
