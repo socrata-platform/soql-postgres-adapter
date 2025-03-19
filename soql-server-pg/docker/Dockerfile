@@ -4,6 +4,8 @@ EXPOSE 6090
 EXPOSE 6091/udp
 ENV JMX_PORT 6099
 
+RUN apt-get -y update && apt-get -y install jq
+
 ENV SERVER_ROOT /srv/soql-server-pg
 ENV SERVER_ARTIFACT soql-server-pg-assembly.jar
 ENV SERVER_CONFIG soql-server-pg.conf

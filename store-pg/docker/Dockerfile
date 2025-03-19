@@ -4,6 +4,8 @@ FROM socrata/java8-focal
 ENV JMX_PORT 6300
 EXPOSE $JMX_PORT
 
+RUN apt-get -y update && apt-get -y install jq
+
 ENV SERVER_ROOT /srv/secondary-watcher
 ENV SERVER_ARTIFACT store-pg-assembly.jar
 ENV SERVER_CONFIG secondary-watcher.conf
