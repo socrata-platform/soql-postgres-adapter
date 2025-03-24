@@ -268,6 +268,14 @@ pipeline {
                 environment: env.ENVIRONMENT,
                 waitTime: '60'
               )
+              // While working on migrating from marathon to ECS, we are keeping the tagged images up to date
+              // Once the migration is done, we will remove the marathonDeploy and leave in place this publish which triggers the ECS deployment
+              env.TARGET_DEPLOY_TAG = (env.ENVIRONMENT == 'rc') ? 'rc' : 'latest'
+              dockerize_server.publish(
+                sourceTag: env.DOCKER_TAG,
+                targetTag: env.TARGET_DEPLOY_TAG,
+                environments: ['internal']
+              )
             }
           }
           post {
@@ -295,6 +303,13 @@ pipeline {
                 serviceName: env.SECONDARY_DEPLOY_PATTERN,
                 tag: env.SECONDARY_BUILD_ID,
                 environment: env.ENVIRONMENT,
+              )
+              // While working on migrating from marathon to ECS, we are keeping the tagged images up to date
+              // Once the migration is done, we will remove the marathonDeploy and leave in place this publish which triggers the ECS deployment
+              dockerize_secondary.publish(
+                sourceTag: env.SECONDARY_DOCKER_TAG,
+                targetTag: env.TARGET_DEPLOY_TAG,
+                environments: ['internal']
               )
             }
           }
