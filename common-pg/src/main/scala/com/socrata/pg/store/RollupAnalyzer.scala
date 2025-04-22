@@ -14,7 +14,6 @@ import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.functions.{MonomorphicFunction, SoQLFunctions, SoQLFunctionInfo, SoQLTypeInfo2}
 import com.socrata.soql.types.{SoQLType, SoQLValue}
 import com.socrata.soql.stdlib.analyzer2.{UserParameters, SoQLRewritePassHelpers}
-import com.socrata.soql.sql.Debug
 import com.socrata.datacoordinator.truth.metadata.CopyInfo
 
 import com.socrata.pg.analyzer2.metatypes.{RollupMetaTypes, DatabaseMetaTypes, DatabaseNamesMetaTypes}
@@ -45,24 +44,20 @@ object RollupAnalyzer {
   private val analyzer2 = locally {
     val standardSystemColumns = Set(":id", ":version", ":created_at", ":updated_at").map(ColumnName)
 
-    if(Debug.default.mergeSystemColumns) { // EN-77404 removeme
-      new SoQLAnalyzer[RollupMetaTypes](new SoQLTypeInfo2, SoQLFunctionInfo, RollupMetaTypes.provenanceMapper).
-        preserveSystemColumns {
-          case (cname, expr) if standardSystemColumns(cname) =>
-            Some(
-              AggregateFunctionCall[RollupMetaTypes](
-                MonomorphicFunction(SoQLFunctions.Max, Map("a" -> expr.typ)),
-                Seq(expr),
-                false,
-                None
-              )(FuncallPositionInfo.Synthetic)
-            )
-          case _ =>
-            None
-        }
-    } else {
-      new SoQLAnalyzer[RollupMetaTypes](new SoQLTypeInfo2, SoQLFunctionInfo, RollupMetaTypes.provenanceMapper)
-    }
+    new SoQLAnalyzer[RollupMetaTypes](new SoQLTypeInfo2, SoQLFunctionInfo, RollupMetaTypes.provenanceMapper).
+      preserveSystemColumns {
+        case (cname, expr) if standardSystemColumns(cname) =>
+          Some(
+            AggregateFunctionCall[RollupMetaTypes](
+              MonomorphicFunction(SoQLFunctions.Max, Map("a" -> expr.typ)),
+              Seq(expr),
+              false,
+              None
+            )(FuncallPositionInfo.Synthetic)
+          )
+        case _ =>
+          None
+      }
   }
 
   type LocationSubcolumnsMap = Map[

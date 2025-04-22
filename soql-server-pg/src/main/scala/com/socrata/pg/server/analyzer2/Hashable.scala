@@ -186,12 +186,11 @@ object Hashable {
     }
 
     override def hash(hasher: Hasher, value: Debug) = {
-      val Debug(sql, explainSpec, inhibitRun, useCache, mergeSystemColumns) = value
+      val Debug(sql, explainSpec, inhibitRun, useCache) = value
       hasher.hash(sql)
       hasher.hash(explainSpec)
       hasher.hash(inhibitRun)
       hasher.hash(useCache)
-      hasher.hash(mergeSystemColumns)
     }
   }
 
