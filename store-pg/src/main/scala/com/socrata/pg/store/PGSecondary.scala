@@ -648,7 +648,9 @@ class PGSecondary(val storeConfig: StoreConfig) extends Secondary[SoQLType, SoQL
     }
 
     val im = new IndexManager(pgu, endCtx.truthCopyInfo)
-    if (im.justPublish(startCtx.truthCopyInfo) || endCtx.indexesUpdate.nonEmpty) {
+    if(im.justPublish(startCtx.truthCopyInfo) || endCtx.rebuildIndex) {
+      im.updateIndexes()
+    } else if(endCtx.indexesUpdate.nonEmpty) {
       im.updateIndexes(endCtx.indexesUpdate)
     }
     cookie
