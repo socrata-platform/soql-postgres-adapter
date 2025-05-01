@@ -542,6 +542,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
     if(!debug.inhibitRun) {
       val now = LocalDateTime.now(Clock.systemUTC())
       for(ri <- rollups) {
+        log.info("New-analyzer rollup hit: {}/{}", ri.rollupDatasetName.underlying:Any, ri.rollupName.underlying)
         RollupMetrics.digest(
           RollupHit(
             ri.rollupDatasetName.underlying,
