@@ -392,10 +392,11 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                   // Very weird separation of concerns between execQuery and streaming. Most likely we will
                   // want yet-another-refactoring where much of execQuery is lifted out into this function.
                   // This will significantly change the tests; however.
-                  rollupName.foreach(rollupName=>
+                  rollupName.foreach { rollupName=>
                     //rollup name exists and we just successfully executed the query, lets tell someone
+                    logger.info("Old-analyzer rollup hit: {}/{}", datasetInfo.resourceName.underlying, rollupName.underlying)
                     RollupMetrics.digest(RollupHit(datasetInfo.resourceName.underlying,rollupName.underlying,LocalDateTime.now(Clock.systemUTC())))
-                  )
+                  }
                   if(debug) logger.info(s"Returning etag: ${etag.asBytes.mkString(",")}")
                   ETag(etag)(resp)
                   copyInfoHeaderForRows(copyNumber, dataVersion, lastModified)(resp)
