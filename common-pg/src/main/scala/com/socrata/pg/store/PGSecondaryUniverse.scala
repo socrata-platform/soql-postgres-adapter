@@ -42,7 +42,7 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
   with DatasetDropperProvider
   with TableCleanupProvider
   with TableAnalyzerProvider
-{
+{ self =>
   import commonSupport._ // scalastyle:ignore import.grouping
   private val txnStart = DateTime.now()
   private var isAutoCommit_ = false
@@ -113,8 +113,6 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
   lazy val lowLevelDatabaseReader = new PostgresDatabaseReader(conn, datasetMapReader, repFor)
 
   lazy val secondaryMetrics = new PGSecondaryMetrics(conn)
-
-  def openDatabase: () => Managed[Any] = lowLevelDatabaseReader.openDatabase _
 
   def logger(datasetInfo: DatasetInfo, user: String): Logger[SoQLType,SoQLValue] =
     new PGSecondaryLogger[SoQLType, SoQLValue]()
