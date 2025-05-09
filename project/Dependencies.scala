@@ -20,11 +20,11 @@ object Dependencies {
     val socrataUtils = "0.11.0"
     val socrataCuratorUtils = "1.2.0"
     val socrataThirdPartyUtils = "5.0.0"
-    val socrataHttpCuratorBroker = "3.13.4"
+    val socrataHttp = "3.13.4"
     val soqlStdlib = "4.14.77"
     val simpleCsv = "0.0.2"
     val typesafeConfig = "1.0.0"
-    val dataCoordinator = "4.2.37"
+    val dataCoordinator = "4.2.43"
     val typesafeScalaLogging = "3.9.2"
     val rojomaJson = "3.13.0"
     val metrics = "4.2.30"
@@ -66,7 +66,8 @@ object Dependencies {
   val socrataCuratorUtils = "com.socrata" %% "socrata-curator-utils" % versions.socrataCuratorUtils
   val socrataThirdPartyUtils = "com.socrata" %% "socrata-thirdparty-utils" % versions.socrataThirdPartyUtils
 
-  val socrataHttpCuratorBroker = "com.socrata" %% "socrata-http-curator-broker" % versions.socrataHttpCuratorBroker
+  val socrataHttpCuratorBroker = "com.socrata" %% "socrata-http-curator-broker" % versions.socrataHttp
+  val socrataHttpServer = "com.socrata" %% "socrata-http-server" % versions.socrataHttp
 
   val soqlStdlib = "com.socrata" %% "soql-stdlib" % versions.soqlStdlib
   val soqlUtils = "com.socrata" %% "soql-utils" % versions.soqlStdlib
