@@ -7,11 +7,23 @@ import com.socrata.datacoordinator.truth.metadata.{CopyInfo, DatasetInfo, Lifecy
 import com.socrata.datacoordinator.util.TimingReport
 import org.joda.time.DateTime
 
-import java.sql.Connection
+import java.sql.{Connection, ResultSet}
 import scala.reflect.ClassTag
+
+object LocalRollupReaderOverride {
+  private implicit class AugResultSet(val __underlying: ResultSet) extends AnyVal {
+    def getNullableLong(col: String): Option[Long] = {
+      val v = __underlying.getLong(col)
+      if(v == 0 && __underlying.wasNull) None
+      else Some(v)
+    }
+  }
+}
 
 trait LocalRollupReaderOverride[CT] {
   self: BasePostgresDatasetMapReader[CT] =>
+
+  import LocalRollupReaderOverride._
 
   def localRollupsQuery = "SELECT system_id, name, soql, table_name FROM rollup_map WHERE copy_system_id = ?"
   override def rollups(copyInfo: CopyInfo): Seq[LocalRollupInfo] = {
@@ -85,7 +97,7 @@ where referenced_copy_system_id = ?"""
               rs.getLong("copy_map_data_version"),
               rs.getLong("copy_map_data_shape_version"),
               new DateTime(rs.getTimestamp("copy_map_last_modified").getTime),
-              Some(rs.getLong("copy_map_table_modifiers_table_modifier"))
+              rs.getNullableLong("copy_map_table_modifiers_table_modifier")
             )
           ).toList.toSet
       }
@@ -134,7 +146,7 @@ where referenced_copy_system_id = ?"""
                 rs.getLong("copy_map_data_version"),
                 rs.getLong("copy_map_data_shape_version"),
                 new DateTime(rs.getTimestamp("copy_map_last_modified").getTime),
-                Some(rs.getLong("copy_map_table_modifiers_table_modifier"))
+                rs.getNullableLong("copy_map_table_modifiers_table_modifier")
               ),
               new RollupName(rs.getString("rollup_map_name")),
               rs.getString("rollup_map_soql"),
