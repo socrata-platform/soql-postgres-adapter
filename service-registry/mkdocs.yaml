@@ -1,0 +1,7 @@
+site_name: 'soql-postgres-adapter'
+docs_dir: '.'
+nav:
+  - Home: README.md
+  - Secondary Watcher Docker: ../store-pg/docker/README.md
+  - Soql Server Docker: ../soql-server-pg/docker/README.md
+
