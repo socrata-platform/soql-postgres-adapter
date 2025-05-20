@@ -19,6 +19,12 @@ com.socrata.soql-server-pg {
     url: "{{ PG_SECONDARY_CACHE_REDIS_URL }}"
     max-result-size: {{ PG_SECONDARY_MAX_CACHED_RESULT_SIZE }}
   }
+  {% elif PG_SECONDARY_CACHE_REDIS_PASSWORD is defined -%}
+  cache {
+    type: "redis"
+    url: "rediss://:{{ PG_SECONDARY_CACHE_REDIS_PASSWORD }}@{{ PG_SECONDARY_CACHE_REDIS_ENDPOINT }}"
+    max-result-size: {{ PG_SECONDARY_MAX_CACHED_RESULT_SIZE }}
+  }
   {%- else -%}
   cache {
     type: "memory"
