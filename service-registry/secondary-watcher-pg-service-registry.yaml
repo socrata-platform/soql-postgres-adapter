@@ -1,0 +1,31 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: secondary-watcher-pg
+  description: |
+    A Postgres secondary-watcher application. secondary-watcher-pg is the
+    write-side of the Postgres dataset query backend. It maintains a secondary
+    store of datasets in a Postgres instance by implementing the Secondary
+    interface.
+  links:
+    - title: "Ops Doc"
+      url: "https://socrata.atlassian.net/wiki/spaces/ONCALL/pages/2158985270/OpsDoc+-+SODA+Server+aka+NBE"
+    - title: "Teams Channel"
+      url: "https://teams.microsoft.com/l/channel/19%3Acc7bc69e4e1349c98d6de53dea8fcd97%40thread.tacv2/egress-q-and-a?groupId=102da3ef-c928-4a59-afe5-f0d51e6443dd&tenantId=7cc5f0f9-ee5b-4106-a62d-1b9f7be46118"
+    - title: "New Backend (NBE) Crash Course"
+      url: "https://tylertech.sharepoint.com/:v:/r/sites/DataInsightsDivision/Shared%20Documents/Engineering/NewBackendCrashCourse.mov?csf=1&web=1&e=2NsXHJ"
+    - title: "Secondary interface"
+      url: "https://github.com/socrata-platform/data-coordinator/blob/main/coordinatorlib/src/main/scala/com/socrata/datacoordinator/secondary/Secondary.scala"
+    - title: "Event definitions"
+      url: "https://github.com/socrata-platform/data-coordinator/blob/main/coordinatorlib/src/main/scala/com/socrata/datacoordinator/secondary/Event.scala"
+  annotations:
+    github.com/project-slug: 'socrata-platform/soql-postgres-adapter'
+    backstage.io/techdocs-entity: system:soql-server-pg
+  tags:
+    - scala
+    - marathon
+spec:
+  type: service
+  owner: egress
+  lifecycle: production
+  system: soql-postgres-adapter
