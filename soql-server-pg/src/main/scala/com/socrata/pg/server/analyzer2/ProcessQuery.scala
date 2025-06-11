@@ -12,6 +12,7 @@ import java.util.zip.GZIPOutputStream
 import javax.servlet.http.HttpServletResponse
 
 import com.rojoma.json.v3.ast.{JArray, JString, JValue, JNull, JAtom, JObject}
+import com.rojoma.json.v3.codec.JsonEncode
 import com.rojoma.json.v3.interpolation._
 import com.rojoma.json.v3.io.{CompactJsonWriter, JsonReader}
 import com.rojoma.json.v3.util.{AutomaticJsonEncode, JsonUtil}
@@ -265,7 +266,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
       timeoutHandle.ping()
     }
 
-    val sqlized = sqlizerResults.iterator.map { sqlizerResult =>
+    val (Some(sqlized), rollupStats) = sqlizerResults.iterator.map { sqlizerResult =>
       val (nameAnalysis, Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(systemContextUsed, tsu, _obfuscatorRequired))) = sqlizerResult
       log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
       timeoutHandle.ping()
@@ -278,7 +279,20 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
         tsu,
         if(onlyOne) 0.0 else CostEstimator(pgu.conn, sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded)).toString)
       )
-    }.minBy(_.estimatedCost)
+    }.foldLeft((Option.empty[Sqlized], Map.empty[Set[(DatasetResourceName, RollupName)], Double])) {
+      // We're selecting the cheapest sqlization _and_ keeping track
+      // of the estimated costs of all sqlizations.
+      case ((None, _), sqlized) =>
+        (Some(sqlized), Map(sqlized.rollups.map(_.namePair).toSet -> sqlized.estimatedCost))
+      case ((Some(previousMin), acc), sqlized) =>
+        val newMin = if(sqlized.estimatedCost < previousMin.estimatedCost) {
+          sqlized
+        } else {
+          previousMin
+        }
+
+        (Some(newMin), acc + (sqlized.rollups.map(_.namePair).toSet -> sqlized.estimatedCost))
+    }
 
     // Our etag will be the hash of the inputs that affect the result of the query
     val etag = ETagify(
@@ -333,6 +347,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
           sqlized.sql,
           sqlized.analysis,
           sqlized.rollups,
+          rollupStats,
           cryptProviders,
           sqlized.extractor,
           lastModified,
@@ -357,6 +372,8 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
   trait QueryServerRollupInfo {
     val rollupDatasetName: DatasetResourceName
     val rollupName: RollupName
+
+    def namePair = (rollupDatasetName, rollupName)
   }
 
   def tableExists(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], table: String): Boolean = {
@@ -477,6 +494,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
     sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]],
     nameAnalysis: SoQLAnalysis[DatabaseNamesMetaTypes],
     rollups: Seq[QueryServerRollupInfo],
+    rollupStats: Map[Set[(DatasetResourceName, RollupName)], Double],
     cryptProviders: CryptProviderProvider,
     extractor: ResultExtractor[DatabaseNamesMetaTypes],
     lastModified: DateTime,
@@ -520,7 +538,16 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
               case Left(errorResponse) => return errorResponse
               case Right(json) => json
             }
-          }.map("explain" -> _)
+          }.map("explain" -> _),
+          if(debug.rollupStats) {
+            val jsonifiedRollupStats = json"""{
+              "candidates": ${rollupStats.toVector.sortBy(_._2)},
+              "selected": ${rollups.map(_.namePair).toVector}
+            }"""
+            Some("rollupStats" -> jsonifiedRollupStats)
+          } else {
+            None
+          }
         ).flatten.toMap
       ).filter(_.nonEmpty)
 
