@@ -41,6 +41,7 @@ import com.socrata.soql.sqlizer.{Sqlizer, ResultExtractor, SqlizeAnnotation, Sql
 import com.socrata.soql.stdlib.analyzer2.SoQLRewritePassHelpers
 import com.socrata.soql.stdlib.analyzer2.rollup.SoQLRollupExact
 import com.socrata.datacoordinator.id.{RollupName, DatasetResourceName}
+import com.socrata.datacoordinator.truth.metadata.LifecycleStage
 import com.socrata.metrics.rollup.RollupMetrics
 import com.socrata.metrics.rollup.events.RollupHit
 
@@ -175,6 +176,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
 
                 // Needed for metrics + response
                 override val rollupDatasetName = rollup.copyInfo.datasetInfo.resourceName
+                override val rollupDatasetStage = rollup.copyInfo.lifecycleStage
                 override val rollupName = rollup.name
 
                 private val columns = statement.schema.keysIterator.toArray
@@ -279,7 +281,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
         tsu,
         if(onlyOne) 0.0 else CostEstimator(pgu.conn, sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded)).toString)
       )
-    }.foldLeft((Option.empty[Sqlized], Map.empty[Set[(DatasetResourceName, RollupName)], Double])) {
+    }.foldLeft((Option.empty[Sqlized], Map.empty[Set[((DatasetResourceName, LifecycleStage), RollupName)], Double])) {
       // We're selecting the cheapest sqlization _and_ keeping track
       // of the estimated costs of all sqlizations.
       case ((None, _), sqlized) =>
@@ -371,9 +373,10 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
 
   trait QueryServerRollupInfo {
     val rollupDatasetName: DatasetResourceName
+    val rollupDatasetStage: LifecycleStage
     val rollupName: RollupName
 
-    def namePair = (rollupDatasetName, rollupName)
+    def namePair = ((rollupDatasetName, rollupDatasetStage), rollupName)
   }
 
   def tableExists(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], table: String): Boolean = {
@@ -494,7 +497,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
     sql: Doc[SqlizeAnnotation[DatabaseNamesMetaTypes]],
     nameAnalysis: SoQLAnalysis[DatabaseNamesMetaTypes],
     rollups: Seq[QueryServerRollupInfo],
-    rollupStats: Map[Set[(DatasetResourceName, RollupName)], Double],
+    rollupStats: Map[Set[((DatasetResourceName, LifecycleStage), RollupName)], Double],
     cryptProviders: CryptProviderProvider,
     extractor: ResultExtractor[DatabaseNamesMetaTypes],
     lastModified: DateTime,
