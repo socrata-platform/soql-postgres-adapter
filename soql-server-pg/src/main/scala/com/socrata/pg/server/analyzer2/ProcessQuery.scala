@@ -302,17 +302,20 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
             (Some(newMin), acc + (sqlized.rollups.map(_.namePair).toSet -> sqlized.estimatedCost))
         }
       }((results,dur)=>{
-          val (Some(sqlized), rollupStats) = results
-          val candidates: Seq[DatasetRollupCost] = rollupStats.map { case (set, cost) =>
-            DatasetRollupCost(
-              group = set.map { case ((dataset, _), rollup) =>
-                DatasetRollup(dataset.underlying, rollup.underlying)
-              },
-              cost = cost
-            )
-          }.toSeq
-          val selection: Seq[DatasetRollup] = sqlized.rollups.map(_.namePair).map{ case ((dataset, _),rollup) => DatasetRollup(dataset.underlying,rollup.underlying)}
-          Metric.digest(RollupSelection(candidates, selection, dur.plus(nameAnalysesDuration).plus(relevantRollupsDuration), LocalDateTime.now()))
+        val (Some(sqlized), rollupStats) = results
+          if(relevantRollups.nonEmpty){
+            val candidates: Seq[DatasetRollupCost] = rollupStats.map { case (set, cost) =>
+              DatasetRollupCost(
+                group = set.map { case ((dataset, _), rollup) =>
+                  DatasetRollup(dataset.underlying, rollup.underlying)
+                },
+                cost = cost
+              )
+            }.toSeq
+            val selection: Seq[DatasetRollup] = sqlized.rollups.map(_.namePair).map{ case ((dataset, _),rollup) => DatasetRollup(dataset.underlying,rollup.underlying)}
+            // If we had candidates but no relevant rollup then we do not need metrics - since most of the metrics will be relating simply to general rewrite passes
+            Metric.digest(RollupSelection(candidates, selection, dur.plus(nameAnalysesDuration).plus(relevantRollupsDuration), LocalDateTime.now()))
+          }
           (sqlized, rollupStats)
         })
 
