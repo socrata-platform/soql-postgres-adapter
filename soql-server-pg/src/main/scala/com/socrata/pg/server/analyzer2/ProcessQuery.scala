@@ -104,7 +104,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
             stmt <- managed(pgu.conn.prepareStatement("SELECT pg_backend_pid()"))
             result <- managed(stmt.executeQuery())
           } {
-            if(!result.next()) throw new Exception("SELECT pg_backend_pid() should have returned exactly one row")
+            if (!result.next()) throw new Exception("SELECT pg_backend_pid() should have returned exactly one row")
             timeoutManager.register(result.getInt(1), timeout, rs)
           }
         case None =>
@@ -114,6 +114,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
     locally {
       import InputMetaTypes.DebugHelper._
       implicit def cpp = CryptProviderProvider.empty
+
       log.debug("Received analysis statement:\n{}", Lazy(analysis.statement.debugStr))
     }
 
@@ -130,7 +131,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
       request.auxTableData.get(dtn) match {
         case Some(auxTableData) =>
           val isOutOfDate = copyInfo.dataVersion < auxTableData.truthDataVersion
-          if(isOutOfDate) {
+          if (isOutOfDate) {
             Some((auxTableData.sfResourceName, stage))
           } else {
             None
@@ -151,38 +152,44 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
       analysis.statement.debugDoc.layoutPretty(LayoutOptions(PageWidth.Unbounded)).toString
     }
 
-    val relevantRollups =
-      if(request.allowRollups) {
-        copyCache.allCopies.flatMap { copy =>
-          pgu.datasetMapReader.rollups(copy).
-            iterator.
-            map { rollup => timeoutHandle.ping(); rollup }.
-            filter { rollup => rollup.isNewAnalyzer && tableExists(pgu, rollup.tableName) }.
-            flatMap { rollup => RollupAnalyzer(pgu, copy, rollup).map((rollup, _)) }.
-            map { case (rollup, (_foundTables, analysis, _locationSubcolumnsMap, _cryptProvider)) =>
-              // don't care about the other things because:
-              //   * we're not going to be sqlizing this rollup
-              //   * any referenced datasets we already know about
-              new RollupInfo[DatabaseNamesMetaTypes, RollupId] with QueryServerRollupInfo {
-                override val id = rollup.systemId
-                override val statement = analysis.statement
-                override val resourceName = ScopedResourceName(-1, ResourceName(s"rollup:${rollup.copyInfo.datasetInfo.systemId}/${rollup.copyInfo.systemId}/${rollup.name.underlying}"))
-                override val databaseName = DatabaseTableName(AugmentedTableName.RollupTable(rollup.tableName))
+    val (relevantRollups, relevantRollupsDuration) =
+      Timing.TimedResultReturning {
+        if (request.allowRollups) {
+          copyCache.allCopies.flatMap { copy =>
+            pgu.datasetMapReader.rollups(copy).
+              iterator.
+              map { rollup => timeoutHandle.ping(); rollup }.
+              filter { rollup => rollup.isNewAnalyzer && tableExists(pgu, rollup.tableName) }.
+              flatMap { rollup => RollupAnalyzer(pgu, copy, rollup).map((rollup, _)) }.
+              map { case (rollup, (_foundTables, analysis, _locationSubcolumnsMap, _cryptProvider)) =>
+                // don't care about the other things because:
+                //   * we're not going to be sqlizing this rollup
+                //   * any referenced datasets we already know about
+                new RollupInfo[DatabaseNamesMetaTypes, RollupId] with QueryServerRollupInfo {
+                  override val id = rollup.systemId
+                  override val statement = analysis.statement
+                  override val resourceName = ScopedResourceName(-1, ResourceName(s"rollup:${rollup.copyInfo.datasetInfo.systemId}/${rollup.copyInfo.systemId}/${rollup.name.underlying}"))
+                  override val databaseName = DatabaseTableName(AugmentedTableName.RollupTable(rollup.tableName))
 
-                // Needed for metrics + response
-                override val rollupDatasetName = rollup.copyInfo.datasetInfo.resourceName
-                override val rollupDatasetStage = rollup.copyInfo.lifecycleStage
-                override val rollupName = rollup.name
+                  // Needed for metrics + response
+                  override val rollupDatasetName = rollup.copyInfo.datasetInfo.resourceName
+                  override val rollupDatasetStage = rollup.copyInfo.lifecycleStage
+                  override val rollupName = rollup.name
 
-                private val columns = statement.schema.keysIterator.toArray
-                override def databaseColumnNameOfIndex(idx: Int) =
-                  DatabaseColumnName(Namespaces.rawAutoColumnName(columns(idx)))
+                  private val columns = statement.schema.keysIterator.toArray
+
+                  override def databaseColumnNameOfIndex(idx: Int) =
+                    DatabaseColumnName(Namespaces.rawAutoColumnName(columns(idx)))
+                }
               }
-            }
+          }
+        } else {
+          Nil
         }
-      } else {
-        Nil
-      }
+      }((results,dur)=>{
+        (results,dur)
+      })
+
 
     // Before doing rollups, extract our final hints and synthetic
     // info (rollups can/will destroy this).
@@ -303,7 +310,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
             )
           }.toSeq
           val selection: Seq[DatasetRollup] = sqlized.rollups.map(_.namePair).map{ case ((dataset, _),rollup) => DatasetRollup(dataset.underlying,rollup.underlying)}
-          Metric.digest(RollupSelection(candidates, selection, dur, LocalDateTime.now()))
+          Metric.digest(RollupSelection(candidates, selection, dur.plus(relevantRollupsDuration), LocalDateTime.now()))
           (sqlized, rollupStats)
         })
 
