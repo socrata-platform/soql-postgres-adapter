@@ -201,7 +201,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
     // Intermixed rewrites and rollups: rollups are attemted before
     // each group of rewrite passes and after all rewrite passes have
     // happened.
-    val nameAnalyses = locally {
+    val (nameAnalyses, nameAnalysesDuration) = locally {
       import DatabaseNamesMetaTypes.DebugHelper._
 
       val transformManager =
@@ -211,11 +211,13 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
           Stringifier.pretty
         )
 
-      transformManager(
-        DatabaseNamesMetaTypes.rewriteFrom(dmtState, metadataAnalysis),
-        relevantRollups,
-        passes
-      )
+      Timing.TimedResultReturning{
+        transformManager(
+          DatabaseNamesMetaTypes.rewriteFrom(dmtState, metadataAnalysis),
+          relevantRollups,
+          passes
+        )
+      }((results,dur)=>(results,dur))
     }
 
     case class Sqlized(
@@ -310,7 +312,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
             )
           }.toSeq
           val selection: Seq[DatasetRollup] = sqlized.rollups.map(_.namePair).map{ case ((dataset, _),rollup) => DatasetRollup(dataset.underlying,rollup.underlying)}
-          Metric.digest(RollupSelection(candidates, selection, dur.plus(relevantRollupsDuration), LocalDateTime.now()))
+          Metric.digest(RollupSelection(candidates, selection, dur.plus(nameAnalysesDuration).plus(relevantRollupsDuration), LocalDateTime.now()))
           (sqlized, rollupStats)
         })
 
