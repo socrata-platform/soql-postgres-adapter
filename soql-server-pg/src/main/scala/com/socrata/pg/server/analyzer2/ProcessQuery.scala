@@ -48,7 +48,7 @@ import com.socrata.datacoordinator.common.DbType
 import com.socrata.datacoordinator.common.Postgres
 import com.socrata.metrics.{DatasetRollup, DatasetRollupCost, Metric, RollupHit, RollupSelection}
 import com.socrata.pg.analyzer2.SoQLSqlizer
-import com.socrata.util.Timing
+import com.socrata.metrics.Timing
 
 object ProcessQuery {
   val log = LoggerFactory.getLogger(classOf[ProcessQuery])
@@ -304,6 +304,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
       }((results,dur)=>{
         val (Some(sqlized), rollupStats) = results
           if(relevantRollups.nonEmpty){
+            // If we had candidates but no relevant rollups then we do not need metrics - since most of the metrics will be relating simply to general rewrite passes
             val candidates: Seq[DatasetRollupCost] = rollupStats.map { case (set, cost) =>
               DatasetRollupCost(
                 group = set.map { case ((dataset, _), rollup) =>
@@ -313,7 +314,6 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
               )
             }.toSeq
             val selection: Seq[DatasetRollup] = sqlized.rollups.map(_.namePair).map{ case ((dataset, _),rollup) => DatasetRollup(dataset.underlying,rollup.underlying)}
-            // If we had candidates but no relevant rollup then we do not need metrics - since most of the metrics will be relating simply to general rewrite passes
             Metric.digest(RollupSelection(candidates, selection, dur.plus(nameAnalysesDuration).plus(relevantRollupsDuration), LocalDateTime.now()))
           }
           (sqlized, rollupStats)

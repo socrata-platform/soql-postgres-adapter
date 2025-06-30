@@ -39,7 +39,7 @@ import com.socrata.pg.query.QueryServerHelper
 import com.socrata.soql.ast.{JoinFunc, JoinQuery, JoinTable, Select}
 import com.socrata.soql.parsing.StandaloneParser
 import com.socrata.soql.typed.Qualifier
-import com.socrata.util.Timing
+import com.socrata.metrics.Timing
 
 import java.time.{Clock, LocalDateTime, ZoneId}
 import com.socrata.datacoordinator.common.Postgres
