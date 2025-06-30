@@ -263,8 +263,8 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
       timeoutHandle.ping()
     }
 
-    val (Some(sqlized), rollupStats) =
-      Timing.TimedResult {
+    val (sqlized, rollupStats) =
+      Timing.TimedResultReturning {
         sqlizerResults.iterator.map { sqlizerResult =>
           val (nameAnalysis, Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(systemContextUsed, tsu, _obfuscatorRequired))) = sqlizerResult
           log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
@@ -304,6 +304,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
           }.toSeq
           val selection: Seq[DatasetRollup] = sqlized.rollups.map(_.namePair).map{ case ((dataset, _),rollup) => DatasetRollup(dataset.underlying,rollup.underlying)}
           Metric.digest(RollupSelection(candidates, selection, dur, LocalDateTime.now()))
+          (sqlized, rollupStats)
         })
 
     // Our etag will be the hash of the inputs that affect the result of the query
