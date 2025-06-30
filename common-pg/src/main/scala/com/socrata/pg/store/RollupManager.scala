@@ -8,35 +8,33 @@ import scala.util.{Failure, Success, Try}
 import com.rojoma.simplearm.v2.using
 import com.rojoma.json.v3.ast.JNull
 import com.rojoma.json.v3.io.JsonReaderException
-import com.rojoma.json.v3.util.{JsonUtil, AllowMissing, AutomaticJsonDecodeBuilder}
+import com.rojoma.json.v3.util.{AllowMissing, AutomaticJsonDecodeBuilder, JsonUtil}
 import com.socrata.prettyprint.prelude._
-import com.socrata.datacoordinator.id.{RollupName, UserColumnId, DatasetInternalName, DatasetResourceName}
+import com.socrata.datacoordinator.id.{DatasetInternalName, DatasetResourceName, RollupName, UserColumnId}
 import com.socrata.datacoordinator.secondary.{RollupInfo => SecondaryRollupInfo}
 import com.socrata.datacoordinator.truth.loader.sql.{ChangeOwner, SqlTableDropper}
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, LifecycleStage}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.datacoordinator.util.collection.ColumnIdMap
-import com.socrata.pg.analyzer2.metatypes.{RollupMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName}
-import com.socrata.pg.analyzer2.{SqlNormalizer, SoQLRewriteSearch, SoQLExtraContext, TimestampProvider}
+import com.socrata.pg.analyzer2.metatypes.{AugmentedTableName, DatabaseNamesMetaTypes, RollupMetaTypes}
+import com.socrata.pg.analyzer2.{SoQLExtraContext, SoQLRewriteSearch, SqlNormalizer, TimestampProvider}
 import com.socrata.pg.error.RowSizeBufferSqlErrorContinue
 import com.socrata.pg.soql._
 import com.socrata.pg.soql.SqlizerContext.SqlizerContext
 import com.socrata.pg.store.index.SoQLIndexableRep
 import com.socrata.soql.{AnalysisContext, BinaryTree, Compound, Leaf, ParameterSpec, SoQLAnalysis, SoQLAnalyzer}
 import com.socrata.soql.analyzer.SoQLAnalyzerHelper
-import com.socrata.soql.analyzer2.{FoundTables, DatabaseColumnName, DatabaseTableName}
-import com.socrata.soql.stdlib.analyzer2.{UserParameters, SoQLRewritePassHelpers}
+import com.socrata.soql.analyzer2.{DatabaseColumnName, DatabaseTableName, FoundTables}
+import com.socrata.soql.stdlib.analyzer2.{SoQLRewritePassHelpers, UserParameters}
 import com.socrata.soql.collection.OrderedMap
 import com.socrata.soql.environment.{ColumnName, DatasetContext, ResourceName, TableName}
 import com.socrata.soql.exceptions.{NoSuchColumn, SoQLException}
-import com.socrata.soql.functions.{SoQLFunctions, SoQLFunctionInfo, SoQLTypeInfo, MonomorphicFunction}
+import com.socrata.soql.functions.{MonomorphicFunction, SoQLFunctionInfo, SoQLFunctions, SoQLTypeInfo}
 import com.socrata.soql.parsing.standalone_exceptions.{BadParse, StandaloneLexerException}
-import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLText, SoQLUrl}
+import com.socrata.soql.types.{SoQLText, SoQLType, SoQLUrl, SoQLValue}
 import com.typesafe.scalalogging.Logger
 import RollupManager.{parseAndCollectTableNames, _}
 import com.socrata.datacoordinator.util.{LoggedTimingReport, StackedTimingReport}
-import com.socrata.metrics.rollup.RollupMetrics
-import com.socrata.metrics.rollup.events.RollupBuilt
 import com.socrata.pg.query.QueryServerHelper
 import com.socrata.soql.ast.{JoinFunc, JoinQuery, JoinTable, Select}
 import com.socrata.soql.parsing.StandaloneParser
@@ -45,6 +43,7 @@ import com.socrata.util.Timing
 
 import java.time.{Clock, LocalDateTime, ZoneId}
 import com.socrata.datacoordinator.common.Postgres
+import com.socrata.metrics.{Metric, RollupBuilt}
 import com.socrata.pg.analyzer2.SoQLSqlizer
 
 object RollupManager {
@@ -252,7 +251,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
                 execute(d"ANALYZE" +#+ Doc(rollupInfo.tableName))
               }
             }((_,dur)=>{
-                RollupMetrics.digest(RollupBuilt(rollupInfo.copyInfo.datasetInfo.resourceName.underlying,rollupInfo.name.underlying,LocalDateTime.now(Clock.systemUTC()),dur,pgu.datasetMapReader.getTotalRelationSize(rollupInfo.tableName).getOrElse(-1L)))
+                Metric.digest(RollupBuilt(rollupInfo.copyInfo.datasetInfo.resourceName.underlying,rollupInfo.name.underlying,LocalDateTime.now(Clock.systemUTC()),dur,pgu.datasetMapReader.getTotalRelationSize(rollupInfo.tableName).getOrElse(-1L)))
               })
 
           case None =>
@@ -332,7 +331,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
               createIndexes(rollupInfo, rollupReps)
               analyze(rollupInfo)
             }((_,dur)=>{
-                RollupMetrics.digest(RollupBuilt(rollupInfo.copyInfo.datasetInfo.resourceName.underlying,rollupInfo.name.underlying,LocalDateTime.now(Clock.systemUTC()),dur,pgu.datasetMapReader.getTotalRelationSize(rollupInfo.tableName).getOrElse(-1L)))
+                Metric.digest(RollupBuilt(rollupInfo.copyInfo.datasetInfo.resourceName.underlying,rollupInfo.name.underlying,LocalDateTime.now(Clock.systemUTC()),dur,pgu.datasetMapReader.getTotalRelationSize(rollupInfo.tableName).getOrElse(-1L)))
               })
         }
       case Failure(e) =>

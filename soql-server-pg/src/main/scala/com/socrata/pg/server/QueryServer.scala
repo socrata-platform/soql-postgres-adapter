@@ -1,23 +1,22 @@
 package com.socrata.pg.server
 
 import scala.collection.{mutable => scm}
-
 import java.io.{ByteArrayInputStream, OutputStreamWriter}
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
-import java.sql.{Connection, SQLException, PreparedStatement}
+import java.sql.{Connection, PreparedStatement, SQLException}
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import javax.servlet.http.HttpServletResponse
 import com.socrata.pg.BuildInfo
-import com.rojoma.json.v3.ast.{JObject, JString, JValue, JArray, JNull}
+import com.rojoma.json.v3.ast.{JArray, JNull, JObject, JString, JValue}
 import com.rojoma.json.v3.io.CompactJsonWriter
-import com.rojoma.json.v3.util.{AutomaticJsonEncodeBuilder, JsonUtil, AutomaticJsonEncode}
+import com.rojoma.json.v3.util.{AutomaticJsonEncode, AutomaticJsonEncodeBuilder, JsonUtil}
 import com.rojoma.simplearm.v2._
 import com.socrata.prettyprint.prelude._
 import com.socrata.prettyprint.SimpleDocStream
 import com.socrata.datacoordinator.Row
 import com.socrata.datacoordinator.common.DataSourceFromConfig.DSInfo
-import com.socrata.datacoordinator.common.soql.{SoQLTypeContext, SoQLRep}
+import com.socrata.datacoordinator.common.soql.{SoQLRep, SoQLTypeContext}
 import com.socrata.datacoordinator.common.{DataSourceConfig, DataSourceFromConfig}
 import com.socrata.datacoordinator.id._
 import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
@@ -52,13 +51,12 @@ import com.socrata.soql.environment.{ColumnName, ResourceName, TableName}
 import com.socrata.soql.stdlib.{Context => SoQLContext}
 import com.socrata.soql.typed.CoreExpr
 import com.socrata.soql.types.SoQLID.ClearNumberRep
-import com.socrata.soql.types.{SoQLID, SoQLType, SoQLValue, SoQLVersion, SoQLNull}
+import com.socrata.soql.types.{SoQLID, SoQLNull, SoQLType, SoQLValue, SoQLVersion}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.curator.{CuratorFromConfig, DiscoveryFromConfig}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
 import com.socrata.http.common.util.HttpUtils
-import com.socrata.metrics.rollup.RollupMetrics
-import com.socrata.metrics.rollup.events.RollupHit
+import com.socrata.metrics.{Metric, RollupHit}
 import com.socrata.pg.server.CJSONWriter.utf8EncodingName
 import com.socrata.thirdparty.metrics.{MetricsReporter, SocrataHttpSupport}
 import com.socrata.thirdparty.typesafeconfig.Propertizer
@@ -395,7 +393,7 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
                   rollupName.foreach { rollupName=>
                     //rollup name exists and we just successfully executed the query, lets tell someone
                     logger.info("Old-analyzer rollup hit: {}/{}", datasetInfo.resourceName.underlying, rollupName.underlying)
-                    RollupMetrics.digest(RollupHit(datasetInfo.resourceName.underlying,rollupName.underlying,LocalDateTime.now(Clock.systemUTC())))
+                    Metric.digest(RollupHit(datasetInfo.resourceName.underlying,rollupName.underlying,LocalDateTime.now(Clock.systemUTC())))
                   }
                   if(debug) logger.info(s"Returning etag: ${etag.asBytes.mkString(",")}")
                   ETag(etag)(resp)

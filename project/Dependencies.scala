@@ -30,7 +30,7 @@ object Dependencies {
     val metrics = "4.2.30"
     val metricsScala = "4.3.3"
     val clojure = "1.5.1"
-    val rollupMetrics = "2.2"
+    val rollupMetrics = "4.0"
   }
 
   val c3p0 = "com.mchange" % "c3p0" % versions.c3p0

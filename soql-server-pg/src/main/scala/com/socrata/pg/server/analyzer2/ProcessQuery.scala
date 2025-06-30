@@ -2,16 +2,14 @@ package com.socrata.pg.server.analyzer2
 
 import scala.collection.{mutable => scm}
 import scala.concurrent.duration.FiniteDuration
-
-import java.io.{BufferedWriter, OutputStreamWriter, OutputStream, ByteArrayOutputStream, InputStreamReader, IOException}
+import java.io.{BufferedWriter, ByteArrayOutputStream, IOException, InputStreamReader, OutputStream, OutputStreamWriter}
 import java.nio.charset.StandardCharsets
-import java.sql.{Connection, PreparedStatement, SQLException, ResultSet}
+import java.sql.{Connection, PreparedStatement, ResultSet, SQLException}
 import java.time.{Clock, LocalDateTime}
 import java.util.Base64
 import java.util.zip.GZIPOutputStream
 import javax.servlet.http.HttpServletResponse
-
-import com.rojoma.json.v3.ast.{JArray, JString, JValue, JNull, JAtom, JObject}
+import com.rojoma.json.v3.ast.{JArray, JAtom, JNull, JObject, JString, JValue}
 import com.rojoma.json.v3.codec.JsonEncode
 import com.rojoma.json.v3.interpolation._
 import com.rojoma.json.v3.io.{CompactJsonWriter, JsonReader}
@@ -21,39 +19,36 @@ import org.joda.time.DateTime
 import org.postgresql.PGConnection
 import org.postgresql.copy.PGCopyInputStream
 import org.slf4j.LoggerFactory
-
 import com.socrata.http.server.HttpResponse
 import com.socrata.http.server.responses._
 import com.socrata.http.server.implicits._
-import com.socrata.http.server.util.{EntityTag, WeakEntityTag, Precondition}
+import com.socrata.http.server.util.{EntityTag, Precondition, WeakEntityTag}
 import com.socrata.prettyprint.prelude._
 import com.socrata.prettyprint.{SimpleDocStream, SimpleDocTree, tree => doctree}
 import com.socrata.simplecsv.scala.CSVParserBuilder
-
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.analyzer2.rollup.RollupInfo
 import com.socrata.soql.collection.OrderedMap
-import com.socrata.soql.environment.{ColumnName, ResourceName, Provenance, ScopedResourceName}
-import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLID, SoQLVersion, SoQLInterval, SoQLNull, CJsonWriteRep, NonObfuscatedType}
+import com.socrata.soql.environment.{ColumnName, Provenance, ResourceName, ScopedResourceName}
+import com.socrata.soql.types.{CJsonWriteRep, NonObfuscatedType, SoQLID, SoQLInterval, SoQLNull, SoQLType, SoQLValue, SoQLVersion}
 import com.socrata.soql.types.obfuscation.CryptProvider
 import com.socrata.soql.sql.Debug
-import com.socrata.soql.sqlizer.{Sqlizer, ResultExtractor, SqlizeAnnotation, SqlizerUniverse, SqlNamespaces}
+import com.socrata.soql.sqlizer.{ResultExtractor, SqlNamespaces, SqlizeAnnotation, Sqlizer, SqlizerUniverse}
 import com.socrata.soql.stdlib.analyzer2.SoQLRewritePassHelpers
 import com.socrata.soql.stdlib.analyzer2.rollup.SoQLRollupExact
-import com.socrata.datacoordinator.id.{RollupName, DatasetResourceName}
+import com.socrata.datacoordinator.id.{DatasetResourceName, RollupName}
 import com.socrata.datacoordinator.truth.metadata.LifecycleStage
-import com.socrata.metrics.rollup.RollupMetrics
-import com.socrata.metrics.rollup.events.RollupHit
-
-import com.socrata.pg.analyzer2.{CryptProviderProvider, CostEstimator, CryptProvidersByDatabaseNamesProvenance, RewriteSubcolumns, Namespaces, SoQLExtraContext, SoQLSqlizeAnnotation, TimestampProvider, TimestampUsage}
-import com.socrata.pg.analyzer2.metatypes.{CopyCache, InputMetaTypes, DatabaseMetaTypes, DatabaseNamesMetaTypes, AugmentedTableName, SoQLMetaTypesExt, Stage}
+import com.socrata.pg.analyzer2.{CostEstimator, CryptProviderProvider, CryptProvidersByDatabaseNamesProvenance, Namespaces, RewriteSubcolumns, SoQLExtraContext, SoQLSqlizeAnnotation, TimestampProvider, TimestampUsage}
+import com.socrata.pg.analyzer2.metatypes.{AugmentedTableName, CopyCache, DatabaseMetaTypes, DatabaseNamesMetaTypes, InputMetaTypes, SoQLMetaTypesExt, Stage}
 import com.socrata.pg.analyzer2.ordering._
-import com.socrata.pg.store.{PGSecondaryUniverse, SqlUtils, RollupAnalyzer, RollupId}
+import com.socrata.pg.store.{PGSecondaryUniverse, RollupAnalyzer, RollupId, SqlUtils}
 import com.socrata.pg.query.QueryResult
 import com.socrata.pg.server.CJSONWriter
 import com.socrata.datacoordinator.common.DbType
 import com.socrata.datacoordinator.common.Postgres
+import com.socrata.metrics.{DatasetRollup, DatasetRollupCost, Metric, RollupHit, RollupSelection}
 import com.socrata.pg.analyzer2.SoQLSqlizer
+import com.socrata.util.Timing
 
 object ProcessQuery {
   val log = LoggerFactory.getLogger(classOf[ProcessQuery])
@@ -268,33 +263,49 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
       timeoutHandle.ping()
     }
 
-    val (Some(sqlized), rollupStats) = sqlizerResults.iterator.map { sqlizerResult =>
-      val (nameAnalysis, Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(systemContextUsed, tsu, _obfuscatorRequired))) = sqlizerResult
-      log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
-      timeoutHandle.ping()
-      Sqlized(
-        nameAnalysis._1,
-        relevantRollups.filter { rr => nameAnalysis._2.contains(rr.id) },
-        sql,
-        extractor,
-        systemContextUsed,
-        tsu,
-        if(onlyOne) 0.0 else CostEstimator(pgu.conn, sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded)).toString)
-      )
-    }.foldLeft((Option.empty[Sqlized], Map.empty[Set[((DatasetResourceName, LifecycleStage), RollupName)], Double])) {
-      // We're selecting the cheapest sqlization _and_ keeping track
-      // of the estimated costs of all sqlizations.
-      case ((None, _), sqlized) =>
-        (Some(sqlized), Map(sqlized.rollups.map(_.namePair).toSet -> sqlized.estimatedCost))
-      case ((Some(previousMin), acc), sqlized) =>
-        val newMin = if(sqlized.estimatedCost < previousMin.estimatedCost) {
-          sqlized
-        } else {
-          previousMin
-        }
+    val (Some(sqlized), rollupStats) =
+      Timing.wrap {
+        sqlizerResults.iterator.map { sqlizerResult =>
+          val (nameAnalysis, Sqlizer.Result(sql, extractor, SoQLExtraContext.Result(systemContextUsed, tsu, _obfuscatorRequired))) = sqlizerResult
+          log.debug("Generated sql:\n{}", sql) // Doc's toString defaults to pretty-printing
+          timeoutHandle.ping()
+          Sqlized(
+            nameAnalysis._1,
+            relevantRollups.filter { rr => nameAnalysis._2.contains(rr.id) },
+            sql,
+            extractor,
+            systemContextUsed,
+            tsu,
+            if (onlyOne) 0.0 else CostEstimator(pgu.conn, sql.group.layoutPretty(LayoutOptions(PageWidth.Unbounded)).toString)
+          )
+        }.foldLeft((Option.empty[Sqlized], Map.empty[Set[((DatasetResourceName, LifecycleStage), RollupName)], Double])) {
+          // We're selecting the cheapest sqlization _and_ keeping track
+          // of the estimated costs of all sqlizations.
+          case ((None, _), sqlized) =>
+            (Some(sqlized), Map(sqlized.rollups.map(_.namePair).toSet -> sqlized.estimatedCost))
+          case ((Some(previousMin), acc), sqlized) =>
+            val newMin = if (sqlized.estimatedCost < previousMin.estimatedCost) {
+              sqlized
+            } else {
+              previousMin
+            }
 
-        (Some(newMin), acc + (sqlized.rollups.map(_.namePair).toSet -> sqlized.estimatedCost))
-    }
+            (Some(newMin), acc + (sqlized.rollups.map(_.namePair).toSet -> sqlized.estimatedCost))
+        }
+      }((results,dur)=>{
+          val (Some(sqlized), rollupStats) = results
+          val candidates: Seq[DatasetRollupCost] = rollupStats.map { case (set, cost) =>
+            DatasetRollupCost(
+              group = set.map { case ((dataset, _), rollup) =>
+                DatasetRollup(dataset.underlying, rollup.underlying)
+              },
+              cost = cost
+            )
+          }.toSeq
+          val selection: Seq[DatasetRollup] = sqlized.rollups.map(_.namePair).map{ case ((dataset, _),rollup) => DatasetRollup(dataset.underlying,rollup.underlying)}
+          Metric.digest(RollupSelection(candidates, selection, dur, LocalDateTime.now()))
+          (Some(sqlized), rollupStats)
+        })
 
     // Our etag will be the hash of the inputs that affect the result of the query
     val etag = ETagify(
@@ -573,7 +584,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
       val now = LocalDateTime.now(Clock.systemUTC())
       for(ri <- rollups) {
         log.info("New-analyzer rollup hit: {}/{}", ri.rollupDatasetName.underlying:Any, ri.rollupName.underlying)
-        RollupMetrics.digest(
+        Metric.digest(
           RollupHit(
             ri.rollupDatasetName.underlying,
             ri.rollupName.underlying,
