@@ -229,7 +229,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
               }
 
             logger.info("Actually building new rollup!")
-            Timing.wrap {
+            Timing.Timed {
               using(pgu.conn.createStatement()) { stmt =>
                 def execute(sql: Doc[Any]): Unit = {
                   logger.debug("Running {}", sql)
@@ -250,7 +250,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
 
                 execute(d"ANALYZE" +#+ Doc(rollupInfo.tableName))
               }
-            }((_,dur)=>{
+            }(dur=>{
                 Metric.digest(RollupBuilt(rollupInfo.copyInfo.datasetInfo.resourceName.underlying,rollupInfo.name.underlying,LocalDateTime.now(Clock.systemUTC()),dur,pgu.datasetMapReader.getTotalRelationSize(rollupInfo.tableName).getOrElse(-1L)))
               })
 
@@ -325,12 +325,12 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
                 dropRollup(or, immediate = true) // ick
               }
             }
-            Timing.wrap {
+            Timing.Timed {
               createRollupTable(rollupReps, rollupInfo)
               populateRollupTable(rollupInfo, rollupAnalyses, rollupReps)
               createIndexes(rollupInfo, rollupReps)
               analyze(rollupInfo)
-            }((_,dur)=>{
+            }(dur=>{
                 Metric.digest(RollupBuilt(rollupInfo.copyInfo.datasetInfo.resourceName.underlying,rollupInfo.name.underlying,LocalDateTime.now(Clock.systemUTC()),dur,pgu.datasetMapReader.getTotalRelationSize(rollupInfo.tableName).getOrElse(-1L)))
               })
         }
