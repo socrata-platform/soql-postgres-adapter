@@ -1,5 +1,4 @@
-// Set up the libraries
-@Library('socrata-pipeline-library')
+@Library('socrata-pipeline-library@9.0.0')
 
 import com.socrata.ReleaseMetadataService
 def rmsSupportedEnvironment = com.socrata.ReleaseMetadataService.SupportedEnvironment
@@ -40,7 +39,7 @@ pipeline {
   environment {
     DEPLOY_PATTERN = "${service_server}*"
     SECONDARY_DEPLOY_PATTERN = "${service_secondary}*"
-    WEBHOOK_ID = 'WORKFLOW_IQ'
+    WEBHOOK_ID = 'WORKFLOW_EGRESS_AUTOMATION'
   }
   stages {
     stage('Hotfix') {
@@ -57,6 +56,23 @@ pipeline {
             env.CURRENT_RELEASE_NAME = releaseTag.getReleaseName(env.BRANCH_NAME)
             env.HOTFIX_NAME = releaseTag.getHotfixName(env.CURRENT_RELEASE_NAME)
           }
+        }
+      }
+    }
+    stage('Generate Leaked Secrets Report') {
+      when {
+        not { expression { skip } }
+      }
+      steps {
+        script {
+          lastStage = env.STAGE_NAME
+          assert isInstalled('gitleaks'): 'gitleaks is missing.'
+          String secretsReportFileName = 'gitleaks-report.json'
+          String gitleaksCommand = getGitleaksCommand secretsReportFileName
+          assert sh (script: gitleaksCommand, returnStatus: true) == 0: \
+              'Attempt to run gitleaks failed.'
+          echo "Generated report ${secretsReportFileName}."
+          archiveArtifacts artifacts: secretsReportFileName, fingerprint: true
         }
       }
     }
