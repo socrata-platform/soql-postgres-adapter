@@ -93,6 +93,8 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
     precondition: Precondition,
     rs: ResourceScope
   ): HttpResponse = {
+    val startTime = MonotonicTime.now()
+
     val analysis = request.analysis
     val passes = request.passes
     val systemContext = request.context
@@ -363,6 +365,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
         val debug = request.debug.getOrElse(Debug.default)
 
         fulfillRequest(
+          startTime,
           columnsByName,
           copyCache,
           dataVersionsBySFName,
@@ -511,6 +514,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
   }
 
   def fulfillRequest(
+    startTime: MonotonicTime,
     columnsByName: Map[ColumnName, SerializationColumnInfo],
     copyCache: CopyCache[InputMetaTypes],
     dataVersionsBySFName: Seq[((SFResourceName, Stage), Long)],
@@ -532,8 +536,20 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
 
     if(debug.useCache) {
       for(result <- resultCache(etag)) {
-        log.info("Serving result from cache")
-        return buildResponse(result.etag, result.lastModified, result.contentType, outOfDate, result.body, cached = true)
+        return buildResponse(
+          result.etag,
+          result.lastModified,
+          result.contentType,
+          outOfDate,
+          { outputStream =>
+            try {
+              result.body(outputStream)
+            } finally {
+              log.info("Served result from cache (original took {}ms, cached took {}ms)", result.originalDurationMS, startTime.elapsed().toMilliseconds)
+            }
+          },
+          cached = true
+        )
       }
     }
 
@@ -610,7 +626,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
 
     val resultStream: OutputStream => Unit = { rawOutputStream =>
       for {
-        cos <- if(debug.useCache) resultCache.cachingOutputStream(rawOutputStream, etag, lastModified, contentType)
+        cos <- if(debug.useCache) resultCache.cachingOutputStream(rawOutputStream, etag, lastModified, contentType, startTime)
                else unmanaged(rawOutputStream)
         gzos <- managed(new GZIPOutputStream(cos))
         osw <- managed(new OutputStreamWriter(gzos, StandardCharsets.UTF_8))

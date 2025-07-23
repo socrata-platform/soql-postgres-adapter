@@ -9,7 +9,7 @@ import com.socrata.http.server.util.EntityTag
 
 trait ResultCache {
   def apply(key: EntityTag): Option[ResultCache.Result]
-  def cachingOutputStream(underlying: OutputStream, etag: EntityTag, lastModified: DateTime, contentType: String): Managed[OutputStream]
+  def cachingOutputStream(underlying: OutputStream, etag: EntityTag, lastModified: DateTime, contentType: String, startTime: MonotonicTime): Managed[OutputStream]
 
   // An outputstream that forwards to `underlying`, but will save up
   // to `limit` written bytes, which can be retrieved by calling
@@ -81,5 +81,5 @@ trait ResultCache {
 }
 
 object ResultCache {
-  case class Result(etag: EntityTag, lastModified: DateTime, contentType: String, body: OutputStream => Unit)
+  case class Result(etag: EntityTag, lastModified: DateTime, contentType: String, originalDurationMS: Long, body: OutputStream => Unit)
 }
