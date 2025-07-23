@@ -43,13 +43,13 @@ final class InMemoryResultCache(maxCache: Int, maxResponseSize: Int) extends Res
     Option(cache.synchronized { cache.get(k) })
   }
 
-  override def cachingOutputStream(underlying: OutputStream, etag: EntityTag, lastModified: DateTime, contentType: String): Managed[OutputStream] =
+  override def cachingOutputStream(underlying: OutputStream, etag: EntityTag, lastModified: DateTime, contentType: String, startTime: MonotonicTime): Managed[OutputStream] =
     managed(
       new CachingOutputStream(underlying, maxResponseSize) {
         override def save(): Unit = {
           for((bytes, endPtr) <- savedBytes) {
             log.info("Caching result")
-            val r = Result(etag, lastModified, contentType, _.write(bytes, 0, endPtr))
+            val r = Result(etag, lastModified, contentType, startTime.elapsed().toMilliseconds, _.write(bytes, 0, endPtr))
             cache.synchronized { cache.put(new WrappedETag(etag), r) }
           }
         }

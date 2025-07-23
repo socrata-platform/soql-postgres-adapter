@@ -35,7 +35,7 @@ final class JedisResultCache(jedisPool: JedisPool, maxValueSize: Int) extends Re
 
   private def key(etag: EntityTag) = EntityTagRenderer(etag).getBytes(StandardCharsets.UTF_8)
 
-  private val VERSION = 1
+  private val VERSION = 2
 
   private def parse(etag: EntityTag, data: Array[Byte]): Option[ResultCache.Result] = {
     val bais = new WritableByteArrayInputStream(data)
@@ -44,9 +44,10 @@ final class JedisResultCache(jedisPool: JedisPool, maxValueSize: Int) extends Re
       if(in.readInt() != VERSION) return None
       val lastModified = new DateTime(in.readLong())
       val contentType = in.readUTF()
+      val originalDurationMS = in.readLong()
       val len = in.readInt()
       if(len != bais.available) throw new Exception("Size mismatch")
-      Some(ResultCache.Result(etag, lastModified, contentType, bais.writeRemaining))
+      Some(ResultCache.Result(etag, lastModified, contentType, originalDurationMS, bais.writeRemaining))
     } catch {
       case e: Exception =>
         log.warn("Malformed data; ignoring the cached value", e)
@@ -54,13 +55,14 @@ final class JedisResultCache(jedisPool: JedisPool, maxValueSize: Int) extends Re
     }
   }
 
-  private def render(lastModified: DateTime, contentType: String, body: Array[Byte], bodyEnd: Int): Array[Byte] = {
+  private def render(lastModified: DateTime, contentType: String, startTime: MonotonicTime, body: Array[Byte], bodyEnd: Int): Array[Byte] = {
     val baos = new ByteArrayOutputStream
     val out = new DataOutputStream(baos)
 
     out.writeInt(VERSION)
     out.writeLong(lastModified.getMillis)
     out.writeUTF(contentType)
+    out.writeLong(startTime.elapsed().toMilliseconds)
     out.writeInt(bodyEnd)
     out.write(body, 0, bodyEnd)
     out.close()
@@ -80,14 +82,14 @@ final class JedisResultCache(jedisPool: JedisPool, maxValueSize: Int) extends Re
     }
   }
 
-  override def cachingOutputStream(underlying: OutputStream, etag: EntityTag, lastModified: DateTime, contentType: String): Managed[OutputStream] =
+  override def cachingOutputStream(underlying: OutputStream, etag: EntityTag, lastModified: DateTime, contentType: String, startTime: MonotonicTime): Managed[OutputStream] =
     managed(
       new CachingOutputStream(underlying, maxValueSize) {
         override def save(): Unit = {
           for((bytes, endPtr) <- savedBytes) {
             withJedis { jedis =>
               try {
-                jedis.set(key(etag), render(lastModified, contentType, bytes, endPtr))
+                jedis.set(key(etag), render(lastModified, contentType, startTime, bytes, endPtr))
               } catch {
                 case e: Exception =>
                   log.warn("Failed to set key {} in redis; not caching", etag:Any, e)
