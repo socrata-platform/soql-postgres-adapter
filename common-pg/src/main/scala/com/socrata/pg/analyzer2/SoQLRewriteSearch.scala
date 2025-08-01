@@ -1,23 +1,33 @@
 package com.socrata.pg.analyzer2
 
+import java.math.{BigDecimal => JBigDecimal}
+
 import com.socrata.prettyprint.prelude._
 
 import com.socrata.soql.analyzer2._
 import com.socrata.soql.environment.FunctionName
 import com.socrata.soql.functions.{Function, MonomorphicFunction, FunctionType, SoQLFunctions, SoQLTypeInfo}
-import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLText, SoQLBoolean, SoQLUrl}
+import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLText, SoQLBoolean, SoQLUrl, SoQLNumber}
 import com.socrata.soql.sqlizer._
 
 class SoQLRewriteSearch[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({ type ColumnType = SoQLType; type ColumnValue = SoQLValue })](override val searchBeforeQuery: Boolean) extends RewriteSearch[MT] {
   import SoQLTypeInfo.hasType
 
+  type NumberLiteral = JBigDecimal
   override def litText(s: String): Expr = LiteralValue[MT](SoQLText(s))(AtomicPositionInfo.Synthetic)
   override def litBool(b: Boolean): Expr = LiteralValue[MT](SoQLBoolean(false))(AtomicPositionInfo.Synthetic)
+  override def litNum(s: String): Option[NumberLiteral] =
+    try {
+      Some(new JBigDecimal(s))
+    } catch {
+      case e: NumberFormatException =>
+        None
+    }
 
   protected def isBoolean(t: SoQLType): Boolean = t == SoQLBoolean
   protected def isText(t: SoQLType): Boolean = t == SoQLText
 
-  override def fieldsOf(expr: Expr): Seq[Expr] = {
+  override def textFieldsOf(expr: Expr): Seq[Expr] = {
     expr.typ match {
       case SoQLText =>
         Seq(expr)
@@ -26,6 +36,15 @@ class SoQLRewriteSearch[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({ 
           FunctionCall[MT](urlUrlExtractor, Seq(expr))(FuncallPositionInfo.Synthetic),
           FunctionCall[MT](urlDescriptionExtractor, Seq(expr))(FuncallPositionInfo.Synthetic)
         )
+      case _ =>
+        Nil
+    }
+  }
+
+  override def numberFieldsOf(expr: Expr): Seq[Expr] = {
+    expr.typ match {
+      case SoQLNumber =>
+        Seq(expr)
       case _ =>
         Nil
     }
@@ -41,6 +60,17 @@ class SoQLRewriteSearch[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({ 
     assert(left.typ == SoQLBoolean)
     assert(right.typ == SoQLBoolean)
     FunctionCall[MT](or, Seq(left, right))(FuncallPositionInfo.Synthetic)
+  }
+
+  override def mkEq(left: Expr, right: JBigDecimal): Expr = {
+    assert(left.typ == SoQLNumber)
+    FunctionCall[MT](
+      MonomorphicFunction(
+        eq,
+        Map("a" -> SoQLNumber)
+      ),
+      Seq(left, LiteralValue[MT](SoQLNumber(right))(AtomicPositionInfo.Synthetic))
+    )(FuncallPositionInfo.Synthetic)
   }
 
   override def denull(string: Expr): Expr = {
@@ -79,6 +109,7 @@ class SoQLRewriteSearch[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({ 
   private val coalesce = MonomorphicFunction(SoQLFunctions.Coalesce, Map("a" -> SoQLText))
   private val or = SoQLFunctions.Or.monomorphic.get
   private val and = SoQLFunctions.And.monomorphic.get
+  private val eq = SoQLFunctions.Eq
   private val urlUrlExtractor = SoQLFunctions.UrlToUrl.monomorphic.get
   private val urlDescriptionExtractor = SoQLFunctions.UrlToDescription.monomorphic.get
 }
