@@ -9,6 +9,7 @@ import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import javax.servlet.http.HttpServletResponse
 import com.socrata.pg.BuildInfo
 import com.rojoma.json.v3.ast.{JArray, JNull, JObject, JString, JValue}
+import com.rojoma.json.v3.interpolation._
 import com.rojoma.json.v3.io.CompactJsonWriter
 import com.rojoma.json.v3.util.{AutomaticJsonEncode, AutomaticJsonEncodeBuilder, JsonUtil}
 import com.rojoma.simplearm.v2._
@@ -30,7 +31,7 @@ import com.socrata.http.server.curator.CuratorBroker
 import com.socrata.http.server.implicits._
 import com.socrata.http.server.livenesscheck.LivenessCheckResponder
 import com.socrata.http.server.responses._
-import com.socrata.http.server.routing.SimpleResource
+import com.socrata.http.server.routing.{SimpleResource, Extractor}
 import com.socrata.http.server.routing.SimpleRouteContext._
 import com.socrata.http.server.util.Precondition._
 import com.socrata.http.server.util.RequestId.ReqIdHeader
@@ -86,6 +87,10 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
 
   private val JsonContentType = "application/json; charset=utf-8"
 
+  implicit object DatasetInternalNameExtractor extends Extractor[DatasetInternalName] {
+    def extract(s: String): Option[DatasetInternalName] = DatasetInternalName(s)
+  }
+
   private val routerSet = locally {
     Routes(
       Route("/schema", SchemaResource),
@@ -94,7 +99,8 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
       Route("/query", QueryResource),
       Route("/version", VersionResource),
       Route("/info", InfoResource),
-      Route("/new-query", NewQueryResource)
+      Route("/new-query", NewQueryResource),
+      Route("/stats/{DatasetInternalName}", DatasetStatsResource),
     )
   }
 
@@ -104,6 +110,45 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
         s(req)
       case None =>
         NotFound
+    }
+  }
+
+  case class DatasetStatsResource(internalName: DatasetInternalName) extends SimpleResource {
+    override val get = doGet _
+
+    private def doGet(req: HttpRequest): HttpResponse = {
+      withPgu(dsInfo, None) { pgu =>
+        val copy = getCopy(pgu, internalName, req.queryParameter("copy")).getOrElse {
+          return NotFound
+        }
+
+        val schema = pgu.datasetMapReader.schema(copy)
+
+        val elems = for {
+          stmt <- managed(pgu.conn.prepareStatement("SELECT attname, array_to_json(most_common_vals) as mcv FROM pg_stats WHERE tablename = ?")).
+            and(_.setString(1, copy.dataTableName))
+          rs <- managed(stmt.executeQuery())
+        } {
+          val map = Map.newBuilder[String, Option[JArray]]
+          while(rs.next()) {
+            val colName = rs.getString("attname")
+            val elems = Option(rs.getString("mcv")).map(JsonUtil.parseJson[JArray](_).toOption.get)
+            map += colName -> elems
+          }
+          map.result()
+        }
+
+        val result = schema.values.iterator.map { colInfo =>
+          import com.rojoma.json.v3.util.OrJNull.implicits._
+          colInfo.fieldName.get -> elems.get(colInfo.physicalColumnBase).flatten.orJNull
+        }.toMap
+
+        OK ~> Json(json"""
+        {
+          most_common: $result
+        }
+        """)
+      }
     }
   }
 

@@ -1,7 +1,7 @@
 package com.socrata.pg.query
 
 import com.socrata.datacoordinator.common.soql.SoQLTypeContext
-import com.socrata.datacoordinator.id.{ColumnId, CopyId, DatasetId, DatasetResourceName, RollupName, UserColumnId}
+import com.socrata.datacoordinator.id.{ColumnId, CopyId, DatasetId, DatasetResourceName, RollupName, UserColumnId, DatasetInternalName}
 import com.socrata.datacoordinator.truth.loader.sql.PostgresRepBasedDataSqlizer
 import com.socrata.datacoordinator.truth.metadata.{ColumnInfo, CopyInfo, DatasetCopyContext, DatasetInfo, LifecycleStage}
 import com.socrata.datacoordinator.truth.sql.SqlColumnRep
@@ -167,6 +167,10 @@ object QueryServerHelper {
     } yield {
       getCopy(pgu, datasetInfo, reqCopy)
     }
+  }
+
+  def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], ds: DatasetInternalName, reqCopy: Option[String]): Option[CopyInfo] = {
+    getCopy(pgu, ds.underlying, reqCopy)
   }
 
   def getCopy(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], datasetInfo: DatasetInfo, reqCopy: Option[String]): CopyInfo = {
