@@ -219,7 +219,7 @@ class RollupManager(pgu: PGSecondaryUniverse[SoQLType, SoQLValue], copyInfo: Cop
                   // this query looks like a materialized view, since
                   // FTS indices in particular are heavyweight to
                   // compute and store.
-                  new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true).
+                  new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true, SoQLRewriteSearch.simpleDcnComparator).
                     searchTerm(schema).
                     map { searchTerm =>
                       d"CREATE INDEX IF NOT EXISTS idx_" ++ tableName ++ d"_fts ON" +#+ tableName +#+ d"USING GIN (to_tsvector('english'," ++ searchTerm ++ d"))" ++ Doc(tablespaceSql)

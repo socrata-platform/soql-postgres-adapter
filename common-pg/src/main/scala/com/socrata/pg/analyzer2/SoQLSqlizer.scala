@@ -11,7 +11,7 @@ import com.socrata.pg.analyzer2.metatypes.{DatabaseNamesMetaTypes, AugmentedTabl
 object SoQLSqlizer extends Sqlizer[DatabaseNamesMetaTypes](
   new SoQLExprSqlizer,
   Namespaces,
-  new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true),
+  new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true, SoQLRewriteSearch.simpleDcnComparator),
   DatabaseNamesMetaTypes.provenanceMapper,
   {
     case DatabaseTableName(AugmentedTableName.RollupTable(_)) => true

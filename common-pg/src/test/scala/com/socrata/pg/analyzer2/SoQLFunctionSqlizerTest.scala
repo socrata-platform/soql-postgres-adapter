@@ -64,7 +64,7 @@ object SoQLFunctionSqlizerTest {
   val TestSqlizer = new Sqlizer[TestMT](
     TestExprSqlizer,
     TestNamespaces,
-    new SoQLRewriteSearch(searchBeforeQuery = true),
+    new SoQLRewriteSearch[TestMT](searchBeforeQuery = true, SoQLRewriteSearch.simpleDcnComparator),
     ProvenanceMapper,
     _ => false,
     (sqlizer, physicalTableFor, extraContext) =>
@@ -118,9 +118,9 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
   def analyzeStatement(stmt: String, useSelectListReferences: Boolean = false) = {
     val tf = MockTableFinder[TestMT](
       (0, "table1") -> D(
+        "url" -> SoQLUrl,
         "text" -> SoQLText,
         "num" -> SoQLNumber,
-        "url" -> SoQLUrl,
         "geom" -> SoQLPolygon
       )
     )
