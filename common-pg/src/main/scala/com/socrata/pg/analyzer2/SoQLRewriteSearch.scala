@@ -37,9 +37,10 @@ class SoQLRewriteSearch[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({ 
       case SoQLText =>
         Seq(expr)
       case SoQLUrl =>
+        // They must be in this order because we need them in physical column order
         Seq(
-          FunctionCall[MT](urlUrlExtractor, Seq(expr))(FuncallPositionInfo.Synthetic),
-          FunctionCall[MT](urlDescriptionExtractor, Seq(expr))(FuncallPositionInfo.Synthetic)
+          FunctionCall[MT](urlDescriptionExtractor, Seq(expr))(FuncallPositionInfo.Synthetic),
+          FunctionCall[MT](urlUrlExtractor, Seq(expr))(FuncallPositionInfo.Synthetic)
         )
       case _ =>
         Nil
