@@ -10,8 +10,13 @@ import com.socrata.soql.functions.{Function, MonomorphicFunction, FunctionType, 
 import com.socrata.soql.types.{SoQLType, SoQLValue, SoQLText, SoQLBoolean, SoQLUrl, SoQLNumber}
 import com.socrata.soql.sqlizer._
 
-class SoQLRewriteSearch[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({ type ColumnType = SoQLType; type ColumnValue = SoQLValue })](override val searchBeforeQuery: Boolean) extends RewriteSearch[MT] {
+class SoQLRewriteSearch[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({ type ColumnType = SoQLType; type ColumnValue = SoQLValue })](
+  override val searchBeforeQuery: Boolean,
+  dcnComparator: (types.DatabaseColumnName[MT], types.DatabaseColumnName[MT]) => Boolean
+) extends RewriteSearch[MT] {
   import SoQLTypeInfo.hasType
+
+  override def compareDatabseColumnNames(a: DatabaseColumnName, b: DatabaseColumnName) = dcnComparator(a, b)
 
   type NumberLiteral = JBigDecimal
   override def litText(s: String): Expr = LiteralValue[MT](SoQLText(s))(AtomicPositionInfo.Synthetic)
@@ -131,4 +136,10 @@ object SoQLRewriteSearch {
   val PlainToTsQuery = mf("plainto_tsquery", FunctionName("plainto_tsquery (unnameable)"), Seq(SoQLText), Nil, SoQLText)
 
   val TsSearch = mf("tssearch", FunctionName("search (unnameable)"), Seq(SoQLText, SoQLText), Nil, SoQLBoolean)
+
+  def simpleDcnComparator[MT <: MetaTypes](a: types.DatabaseColumnName[MT], b: types.DatabaseColumnName[MT])(implicit ev: Ordering[MT#DatabaseColumnNameImpl]): Boolean = {
+    val DatabaseColumnName(aVal) = a
+    val DatabaseColumnName(bVal) = b
+    ev.lt(aVal, bVal)
+  }
 }
