@@ -256,6 +256,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
     // This has to happen before cost-estimation, because the EXPLAIN
     // it does will depend on the obfuscator temp function existing.
     if(sqlizerResults.exists(_._2.extraContextResult.obfuscatorRequired)) {
+      log.info("soql-side obfuscation used: datasets involved {}", analysis.statement.allTables.map(_.name))
       ObfuscatorHelper.setupObfuscators(pgu.conn, cryptProviders.allProviders.mapValues(_.key))
       timeoutHandle.ping()
     }
