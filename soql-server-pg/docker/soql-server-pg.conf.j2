@@ -87,5 +87,10 @@ com.socrata.soql-server-pg {
 
   max-concurrent-requests-per-dataset = {{ MAX_CONCURRENT_REQUESTS_PER_DATASET }}
 
+  threadpool {
+    max-threads = {{ PG_SECONDARY_MAX_REQUEST_THREADS }}
+    queue-length = {{ PG_SECONDARY_MAX_REQUEST_QUEUE_LENGTH }}
+  }
+
   instance = {{ PG_SECONDARY_INSTANCE }}
 }
