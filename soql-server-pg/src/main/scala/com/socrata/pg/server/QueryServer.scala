@@ -74,8 +74,13 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.collection.immutable.SortedMap
 import scala.language.existentials
 
-class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val leadingSearch: Boolean = true,
-                  val httpQueryTimeoutDelta: FiniteDuration = Duration.Zero, val processQuery: analyzer2.ProcessQuery) extends SecondaryBase {
+class QueryServer(
+  val dsInfo: DSInfo,
+  val caseSensitivity: CaseSensitivity,
+  val leadingSearch: Boolean = true,
+  val httpQueryTimeoutDelta: FiniteDuration = Duration.Zero,
+  val processQuery: analyzer2.ProcessQuery
+) extends SecondaryBase{ self =>
   import QueryServer._ // scalastyle:ignore import.grouping
   import QueryServerHelper._
   import com.socrata.pg.query.QueryResult._
@@ -189,12 +194,12 @@ class QueryServer(val dsInfo: DSInfo, val caseSensitivity: CaseSensitivity, val 
   }
 
   object QueryResource extends SimpleResource {
-    override val get = query(false) _
-    override val post = query(false) _
+    override val get = self.query(false) _
+    override val post = self.query(false) _
   }
 
   object InfoResource extends SimpleResource {
-    override val post = query(true) _
+    override val post = self.query(true) _
   }
 
   object NewQueryResource extends SimpleResource {
