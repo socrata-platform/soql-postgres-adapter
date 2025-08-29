@@ -126,15 +126,15 @@ pub trait Blowfish {
 // ..implemented with a blanket impl for both.
 impl <T> Blowfish for T where T: BlowfishImpl {
     fn encrypt(&self, n: u64) -> u64 {
-        let n = n.to_be();
+        let n = n.swap_bytes();
         let [hi, lo] = self.encrypt_lowlevel([(n >> 32) as u32, n as u32]);
-        u64::from_be((hi as u64) << 32 | (lo as u64))
+        ((hi as u64) << 32 | (lo as u64)).swap_bytes()
     }
 
     fn decrypt(&self, n: u64) -> u64 {
-        let n = n.to_be();
+        let n = n.swap_bytes();
         let [hi, lo] = self.decrypt_lowlevel([(n >> 32) as u32, n as u32]);
-        u64::from_be((hi as u64) << 32 | (lo as u64))
+        ((hi as u64) << 32 | (lo as u64)).swap_bytes()
     }
 }
 
