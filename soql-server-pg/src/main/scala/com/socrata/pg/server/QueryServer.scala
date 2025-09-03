@@ -768,20 +768,17 @@ object QueryServer extends DynamicPortMap {
         config.httpQueryTimeoutDelta,
         new analyzer2.ProcessQuery(resultCache, timeoutManager)
       )
-      val advertisedLivenessCheckInfo = new LivenessCheckInfo(hostPort(pong.livenessCheckInfo.getPort),
-                                                              pong.livenessCheckInfo.getResponse)
-      val auxData = new AuxiliaryData(livenessCheckInfo = Some(advertisedLivenessCheckInfo))
-      val curatorBroker = new CuratorBroker(discovery,
-                                            address,
-                                            config.discovery.name + "." + config.instance,
-                                            Some(auxData)) {
-        override def register(port: Int): Cookie = {
-          super.register(hostPort(port))
-        }
-      }
+      val poolOptions = SocrataServerJetty.Pool(config.threadpool)
+      val curatorBroker = new QueryServerBroker(
+        hostPort _,
+        discovery,
+        address,
+        config.discovery.name + "." + config.instance,
+        pong.livenessCheckInfo
+      )
       val logOptions = LoggingOptions(LoggerFactory.getLogger(""),
                                       logRequestHeaders = Set(ReqIdHeader, "X-Socrata-Resource"))
-      val handler = ThreadRenamingHandler(NewLoggingHandler(logOptions)(queryServer.route))
+      val handler = ThreadRenamingHandler(EnablingHandler(poolOptions.maxThreads, curatorBroker.allowRequests _, NewLoggingHandler(logOptions)(queryServer.route)))
       val server = new SocrataServerJetty(handler,
                      SocrataServerJetty.defaultOptions.
                        withGzipOptions(
@@ -794,7 +791,7 @@ object QueryServer extends DynamicPortMap {
                        ).
                        withPort(config.port).
                        withExtraHandlers(List(SocrataHttpSupport.getHandler(config.metrics))).
-                       withPoolOptions(SocrataServerJetty.Pool(config.threadpool)).
+                       withPoolOptions(poolOptions).
                        withBroker(curatorBroker))
       logger.info("starting pg query server")
       server.run()
