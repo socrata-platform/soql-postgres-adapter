@@ -491,6 +491,7 @@ class QueryServer(
             if(!rs.next()) {
               throw new Exception("Selecting a single value didn't return one?")
             }
+            logger.info(s"soql-side obfuscation used: main dataset used ${latestCopy.datasetInfo.resourceName}")
             rs.getBytes(1).map { b => "%02x".format(b & 0xff) }.mkString("bytea '\\x", "", "'")
           }
       }
