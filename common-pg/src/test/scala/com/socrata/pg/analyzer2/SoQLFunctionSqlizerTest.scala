@@ -103,7 +103,7 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
   // it out...
 
   def tableFinder(items: ((Int, String), Thing[Int, SoQLType])*) =
-    new MockTableFinder[TestMT](items.toMap)
+    MockTableFinder[TestMT](items: _*)
   val analyzer = new SoQLAnalyzer[TestMT](new SoQLTypeInfo2, SoQLFunctionInfo, SoQLFunctionSqlizerTest.ProvenanceMapper)
   def analyze(soqlexpr: String): String = {
     val s = analyzeStatement(s"SELECT ($soqlexpr)")
