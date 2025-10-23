@@ -171,6 +171,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
                   override val id = rollup.systemId
                   override val statement = analysis.statement
                   override val resourceName = ScopedResourceName(-1, ResourceName(s"rollup:${rollup.copyInfo.datasetInfo.systemId}/${rollup.copyInfo.systemId}/${rollup.name.underlying}"))
+                  override val canonicalName= CanonicalName(s"rollup:${rollup.copyInfo.datasetInfo.systemId}/${rollup.copyInfo.systemId}/${rollup.name.underlying}")
                   override val databaseName = DatabaseTableName(AugmentedTableName.RollupTable(rollup.tableName))
 
                   // Needed for metrics + response
@@ -805,6 +806,8 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
               walk(sb, doc)
             case SqlizeAnnotation.Table(_) =>
               walk(sb, doc)
+            case SqlizeAnnotation.CTE(_) =>
+              walk(sb, doc)
             case SqlizeAnnotation.OutputName(_) =>
               walk(sb, doc)
             case SqlizeAnnotation.Custom(SoQLSqlizeAnnotation.Hidden) =>
@@ -881,6 +884,16 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
                 sb.append(rn.name)
                 sb.append(" */")
               }
+            case SqlizeAnnotation.CTE(cteLabel) =>
+              walk(sb, doc)
+              for {
+                rn <- map.cteNames.get(cteLabel)
+                rn <- rn
+              } {
+                sb.append(" /* ")
+                sb.append(rn.name)
+                sb.append(" */")
+              }
             case SqlizeAnnotation.OutputName(name) =>
               walk(sb, doc)
               sb.append(" /* ")
@@ -907,19 +920,24 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
 
   class LabelMap[MT <: MetaTypes](analysis: SoQLAnalysis[MT]) extends StatementUniverse[MT] {
     val tableNames = new scm.HashMap[AutoTableLabel, Option[ResourceName]]
+    val cteNames = new scm.HashMap[AutoCTELabel, Option[ResourceName]]
     val virtualColumnNames = new scm.HashMap[(AutoTableLabel, ColumnLabel), (Option[ResourceName], ColumnName)]
     val physicalColumnNames = new scm.HashMap[(AutoTableLabel, DatabaseColumnName), (Option[ResourceName], ColumnName)]
 
-    walkStmt(analysis.statement, None)
+    walkStmt(AvailableCTEs.empty, analysis.statement, None)
 
-    private def walkStmt(stmt: Statement, currentLabel: Option[(AutoTableLabel, Option[ResourceName])]): Unit =
+    private def walkStmt(availableCTEs: AvailableCTEs[Unit], stmt: Statement, currentLabel: Option[(AutoTableLabel, Option[ResourceName])]): Unit =
       stmt match {
         case CombinedTables(_, left, right) =>
-          walkStmt(left, currentLabel)
-          walkStmt(right, None)
-        case CTE(defLbl, defAlias, defQ, _matHint, useQ) =>
-          walkStmt(defQ, Some((defLbl, defAlias)))
-          walkStmt(useQ, currentLabel)
+          walkStmt(availableCTEs, left, currentLabel)
+          walkStmt(availableCTEs, right, None)
+        case CTE(defns, useQ) =>
+          val newACTEs = defns.iterator.foldLeft(availableCTEs) { case (availableCTEs, (label, defn)) =>
+            cteNames += label -> defn.alias
+            walkStmt(availableCTEs, defn.query, None)
+            availableCTEs.add(label, defn.query, ())
+          }
+          walkStmt(newACTEs, useQ, currentLabel)
         case v: Values =>
           for {
             (tl, rn) <- currentLabel
@@ -928,7 +946,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
             virtualColumnNames += (tl, cl) -> (rn, schemaEntry.name)
           }
         case sel: Select =>
-          walkFrom(sel.from)
+          walkFrom(availableCTEs, sel.from)
           for {
             (tl, rn) <- currentLabel
             (cl, ne) <- sel.selectList
@@ -937,13 +955,13 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
           }
       }
 
-    private def walkFrom(from: From): Unit =
+    private def walkFrom(availableCTEs: AvailableCTEs[Unit], from: From): Unit =
       from.reduce[Unit](
-        walkAtomicFrom,
-        { (_, join) => walkAtomicFrom(join.right) }
+        walkAtomicFrom(availableCTEs, _),
+        { (_, join) => walkAtomicFrom(availableCTEs, join.right) }
       )
 
-    private def walkAtomicFrom(from: AtomicFrom): Unit =
+    private def walkAtomicFrom(availableCTEs: AvailableCTEs[Unit], from: AtomicFrom): Unit =
       from match {
         case ft: FromTable =>
           tableNames += ft.label -> Some(ft.definiteResourceName.name)
@@ -954,7 +972,12 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
           tableNames += fsr.label -> None
         case fs: FromStatement =>
           tableNames += fs.label -> fs.resourceName.map(_.name)
-          walkStmt(fs.statement, Some((fs.label, fs.resourceName.map(_.name))))
+          walkStmt(availableCTEs, fs.statement, Some((fs.label, fs.resourceName.map(_.name))))
+        case fc: FromCTE =>
+          tableNames += fc.label -> fc.resourceName.map(_.name)
+          for((acl, se) <- fc.basedOn.schema) {
+            virtualColumnNames += (fc.label, acl) -> (Some(fc.definiteResourceName.name), se.name)
+          }
       }
   }
 }

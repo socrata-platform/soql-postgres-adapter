@@ -29,4 +29,6 @@ object Namespaces extends SqlNamespaces[DatabaseNamesMetaTypes] {
   protected override def autoTablePrefix: String = "x" // "t" is taken by physical tables
 
   protected override def autoColumnPrefix: String = "i"
+
+  protected override def autoCTEPrefix: String = "cte"
 }
