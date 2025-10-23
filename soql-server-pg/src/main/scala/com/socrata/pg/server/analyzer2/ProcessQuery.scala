@@ -806,6 +806,8 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
               walk(sb, doc)
             case SqlizeAnnotation.Table(_) =>
               walk(sb, doc)
+            case SqlizeAnnotation.CTE(_) =>
+              walk(sb, doc)
             case SqlizeAnnotation.OutputName(_) =>
               walk(sb, doc)
             case SqlizeAnnotation.Custom(SoQLSqlizeAnnotation.Hidden) =>
@@ -882,6 +884,16 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
                 sb.append(rn.name)
                 sb.append(" */")
               }
+            case SqlizeAnnotation.CTE(cteLabel) =>
+              walk(sb, doc)
+              for {
+                rn <- map.cteNames.get(cteLabel)
+                rn <- rn
+              } {
+                sb.append(" /* ")
+                sb.append(rn.name)
+                sb.append(" */")
+              }
             case SqlizeAnnotation.OutputName(name) =>
               walk(sb, doc)
               sb.append(" /* ")
@@ -908,6 +920,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
 
   class LabelMap[MT <: MetaTypes](analysis: SoQLAnalysis[MT]) extends StatementUniverse[MT] {
     val tableNames = new scm.HashMap[AutoTableLabel, Option[ResourceName]]
+    val cteNames = new scm.HashMap[AutoCTELabel, Option[ResourceName]]
     val virtualColumnNames = new scm.HashMap[(AutoTableLabel, ColumnLabel), (Option[ResourceName], ColumnName)]
     val physicalColumnNames = new scm.HashMap[(AutoTableLabel, DatabaseColumnName), (Option[ResourceName], ColumnName)]
 
@@ -920,9 +933,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
           walkStmt(availableCTEs, right, None)
         case CTE(defns, useQ) =>
           val newACTEs = defns.iterator.foldLeft(availableCTEs) { case (availableCTEs, (label, defn)) =>
-            // yes, None here - a defn has an AutoTableLabel, but it
-            // doesn't name a "real" table.  It has to be materialized
-            // in FromCTE.
+            cteNames += label -> defn.alias
             walkStmt(availableCTEs, defn.query, None)
             availableCTEs.add(label, defn.query, ())
           }

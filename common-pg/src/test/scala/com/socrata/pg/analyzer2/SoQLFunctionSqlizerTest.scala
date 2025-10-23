@@ -40,6 +40,7 @@ object SoQLFunctionSqlizerTest {
     protected override def idxPrefix: String ="idx"
     protected override def autoTablePrefix: String = "x"
     protected override def autoColumnPrefix: String = "i"
+    protected override def autoCTEPrefix: String = "c"
   }
 
   object ProvenanceMapper extends types.ProvenanceMapper[TestMT] {
