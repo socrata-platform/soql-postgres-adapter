@@ -632,6 +632,53 @@ abstract class SoQLRepProvider[MT <: MetaTypes with metatypes.SoQLMetaTypesExt w
             createSimpleIndices(namespace.indexName(tableName, columnName), tableName, compressedDatabaseColumn(columnName))
         }
     },
+    SoQLDouble -> new SingleColumnRep(SoQLDouble, d"double precision") {
+      override def literal(e: LiteralValue) = {
+        val SoQLDouble(n) = e.value
+        exprSqlFactory(Doc(n.toString) +#+ d"::" +#+ sqlType, e)
+      }
+
+      def convertToText(e: ExprSql): Option[ExprSql] =
+        Some(exprSqlFactory(d"(" ++ e.compressed.sql ++ d") :: text", e.expr))
+
+      override protected def doExtractFrom(rs: ResultSet, dbCol: Int): CV = {
+        val d = rs.getDouble(dbCol)
+        if(rs.wasNull) {
+          SoQLNull
+        } else {
+          SoQLDouble(d)
+        }
+      }
+
+      override protected def doExtractFromCsv(v: Option[String]): CV = {
+        v match {
+          case Some(n) => SoQLDouble(java.lang.Double.valueOf(n))
+          case None => SoQLNull
+        }
+      }
+
+      override def ingressRep(tableName: DatabaseTableName, columnName: ColumnLabel) =
+        new IngressRep[MT] {
+          override def populatePreparedStatement(stmt: PreparedStatement, start: Int, cv: CV): Int = {
+            cv match {
+              case SoQLNull => stmt.setNull(start, Types.DOUBLE)
+              case SoQLDouble(n) => stmt.setDouble(start, n)
+              case other => badType("double", other)
+            }
+            start + 1
+          }
+          override def csvify(cv: CV): Seq[Option[String]] = {
+            cv match {
+              case SoQLNull => Seq(None)
+              case SoQLDouble(n) => Seq(Some(n.toString))
+              case other => badType("double", other)
+            }
+          }
+          override def placeholders = Seq(d"?")
+          override def indices =
+            createSimpleIndices(namespace.indexName(tableName, columnName), tableName, compressedDatabaseColumn(columnName))
+        }
+    },
     SoQLBoolean -> new SingleColumnRep(SoQLBoolean, d"boolean") {
       def literal(e: LiteralValue) = {
         val SoQLBoolean(b) = e.value
