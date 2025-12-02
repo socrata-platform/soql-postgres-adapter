@@ -566,6 +566,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
       BoolToText -> sqlizeCastToText,
       TextToNumber -> sqlizeCast("numeric"),
       NumberToText -> sqlizeCastToText,
+      NumberToDouble -> sqlizeCast("double precision"),
       FixedTimestampToText -> sqlizeCastToText,
       TextToFixedTimestamp -> sqlizeCast("timestamp with time zone"),
       FloatingTimestampToText -> sqlizeCastToText,
