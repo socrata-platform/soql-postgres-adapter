@@ -1,4 +1,4 @@
-FROM socrata/java8-focal
+FROM socrata/java8-jammy
 
 # TODO expose JMX
 ENV JMX_PORT 6300
