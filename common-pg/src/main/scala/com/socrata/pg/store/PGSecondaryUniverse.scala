@@ -131,7 +131,7 @@ class PGSecondaryUniverse[SoQLType, SoQLValue](
 
   lazy val datasetDropper =
     new SqlDatasetDropper(conn, writeLockTimeout, datasetMapWriter) {
-      override def updateSecondaryAndBackupInfo(datasetId: DatasetId, fakeVersion: Long): Unit = {
+      override def updateSecondaryAndBackupInfo(datasetId: DatasetId): Unit = {
         // Does not apply to secondary.  Suppress what data coordinator implementation does.
       }
     }

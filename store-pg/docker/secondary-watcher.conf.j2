@@ -64,7 +64,15 @@ com.socrata.coordinator.secondary-watcher {
     eurybates {
       # has a default in Dockerfile
       producers = "{{ EURYBATES_PRODUCERS }}"
-      activemq.connection-string = "{{ AMQ_URL }}"
+      activemq {
+        connection-string = "{{ AMQ_URL }}"
+        {% if AMQ_USER is defined -%}
+        user = "{{ AMQ_USER }}"
+        {%- endif %}
+        {% if AMQ_PASSWORD is defined -%}
+        password = "{{ AMQ_PASSWORD }}"
+        {%- endif %}
+      }
     }
     zookeeper {
       # must be a string instead of an array
