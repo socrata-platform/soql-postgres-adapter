@@ -199,7 +199,13 @@ object RollupAnalyzer {
 
     val dmtState = new DatabaseMetaTypes
 
-    val metadataAnalysis = dmtState.rewriteFrom(baseAnalysis, copyCache, RollupMetaTypes.provenanceMapper)
+    val metadataAnalysis = dmtState.rewriteFrom(baseAnalysis, copyCache, RollupMetaTypes.provenanceMapper) match {
+      case Right(analysis) =>
+        analysis
+      case Left(missingTables) =>
+        logger.info("Missing tables while converting rollups: {}", missingTables)
+        return None
+    }
     val cryptProviders = CryptProvidersByDatabaseNamesProvenance(metadataAnalysis.statement)
 
     val analysis = locally {
