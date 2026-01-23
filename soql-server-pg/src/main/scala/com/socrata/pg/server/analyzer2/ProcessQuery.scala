@@ -125,7 +125,15 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
     // terms of copies and columns
     val copyCache = new InputMetaTypes.CopyCache(pgu)
     val dmtState = new DatabaseMetaTypes
-    val metadataAnalysis = dmtState.rewriteFrom(analysis, copyCache, InputMetaTypes.provenanceMapper) // this populates the copy cache
+    val metadataAnalysis =
+      // this populates the copy cache
+      dmtState.rewriteFrom(analysis, copyCache, InputMetaTypes.provenanceMapper) match {
+        case Right(analysis) =>
+          analysis
+        case Left(missingTables) =>
+          log.warn("Was sent an analysis referencing tables I do not have: {}", missingTables)
+          return NotFound ~> Json(missingTables)
+      }
 
     timeoutHandle.ping()
 
