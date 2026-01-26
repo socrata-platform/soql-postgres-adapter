@@ -132,7 +132,7 @@ class ProcessQuery(resultCache: ResultCache, timeoutManager: ProcessQuery.Timeou
           analysis
         case Left(missingTables) =>
           log.warn("Was sent an analysis referencing tables I do not have: {}", missingTables)
-          return NotFound ~> Json(missingTables)
+          return NotFound ~> Header("X-Socrata-Missing-Dataset", "true") ~> Json(missingTables)
       }
 
     timeoutHandle.ping()
