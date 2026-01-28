@@ -293,6 +293,14 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
     args(0)
   }
 
+  def sqlizeJsonIndex = ofs { (f, args, ctx) =>
+    assert(args.length == 2)
+
+    val sql = args(0).compressed.sql.parenthesized +#+ d"->" +#+ (args(1).compressed.sql.parenthesized +#+ d":: int").parenthesized
+
+    exprSqlFactory(sql, f)
+  }
+
   def sqlizeExtractDateSubfield(field: Doc) = ofs { (f, args, ctx) =>
     assert(args.length == 1)
     assert(args(0).typ == SoQLFloatingTimestamp || args(0).typ == SoQLDate || args(0).typ == SoQLTime)
@@ -542,7 +550,7 @@ class SoQLFunctionSqlizer[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with (
 
       // json
       JsonProp -> sqlizeBinaryOp("->"),
-      JsonIndex -> sqlizeBinaryOp("->"),
+      JsonIndex -> sqlizeJsonIndex,
       TextToJson -> sqlizeCast("jsonb"),
       JsonToText -> sqlizeCastToText,
 
