@@ -778,8 +778,17 @@ object QueryServer extends DynamicPortMap {
         pong.livenessCheckInfo
       )
       val logOptions = LoggingOptions(LoggerFactory.getLogger(""),
-                                      logRequestHeaders = Set(ReqIdHeader, "X-Socrata-Resource"))
-      val handler = ThreadRenamingHandler(EnablingHandler(poolOptions.maxThreads, curatorBroker.allowRequests _, NewLoggingHandler(logOptions)(queryServer.route)))
+                                      logRequestHeaders = Set(ReqIdHeader, "X-Socrata-Reseource"))
+
+      // When the number of concurrent requests exceeds "deregisterAbove",
+      // remove the zookeeper registration.  When it drops down back
+      // below "reregisterBelow", reenable it.  These are soft limits, as
+      // requests to change the registration need to be propagated out
+      // to ZK and thence to QC.
+      val reregisterBelow = (poolOptions.maxThreads * config.reregisterFraction).toInt
+      val deregisterAbove = (poolOptions.maxThreads * config.deregisterFraction).toInt
+      val handler = ThreadRenamingHandler(EnablingHandler(reregisterBelow, deregisterAbove, curatorBroker.allowRequests _, NewLoggingHandler(logOptions)(queryServer.route)))
+
       val server = new SocrataServerJetty(handler,
                      SocrataServerJetty.defaultOptions.
                        withGzipOptions(

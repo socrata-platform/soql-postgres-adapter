@@ -3,7 +3,7 @@ package com.socrata.pg.server
 import java.util.concurrent.atomic.AtomicInteger
 import com.socrata.http.server.{HttpRequest, HttpService}
 
-class EnablingHandler(limit: Int, enable: Boolean => _, underlying: HttpService) extends HttpService {
+class EnablingHandler(reregisterBelow: Int, deregisterAbove: Int, enable: Boolean => _, underlying: HttpService) extends HttpService {
   private val inProgress = new AtomicInteger(0)
 
   def apply(req: HttpRequest) = { resp =>
@@ -12,15 +12,20 @@ class EnablingHandler(limit: Int, enable: Boolean => _, underlying: HttpService)
   }
 
   private class EnablingHelper extends AutoCloseable {
-    enable(inProgress.incrementAndGet() < limit)
+    trigger(inProgress.incrementAndGet())
 
     override def close() {
-      enable(inProgress.decrementAndGet() < limit)
+      trigger(inProgress.decrementAndGet())
+    }
+
+    def trigger(n: Int): Unit = {
+      if(n > deregisterAbove) enable(false)
+      else if(n < reregisterBelow) enable(true)
     }
   }
 }
 
 object EnablingHandler {
-  def apply(limit: Int, enable: Boolean => _, handler: HttpService): EnablingHandler =
-    new EnablingHandler(limit, enable, handler)
+  def apply(reregisterBelow: Int, deregisterAbove: Int, enable: Boolean => _, handler: HttpService): EnablingHandler =
+    new EnablingHandler(reregisterBelow, deregisterAbove, enable, handler)
 }
