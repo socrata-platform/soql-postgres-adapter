@@ -780,9 +780,9 @@ object QueryServer extends DynamicPortMap {
       val logOptions = LoggingOptions(LoggerFactory.getLogger(""),
                                       logRequestHeaders = Set(ReqIdHeader, "X-Socrata-Reseource"))
 
-      // When the number of concurrent requests exceeds "highWater",
+      // When the number of concurrent requests exceeds "deregisterAbove",
       // remove the zookeeper registration.  When it drops down back
-      // below "lowWater", reenable it.  These are soft limits, as
+      // below "reregisterBelow", reenable it.  These are soft limits, as
       // requests to change the registration need to be propagated out
       // to ZK and thence to QC.
       val reregisterBelow = (poolOptions.maxThreads * config.reregisterFraction).toInt
