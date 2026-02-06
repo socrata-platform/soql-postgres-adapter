@@ -7,6 +7,9 @@ com.socrata.soql-server-pg {
   port = 6090
   liveness-check.port = 6091
 
+  low-water-percent = {{ PG_SECONDARY_LOW_WATER_PERCENT }}
+  high-water-percent = {{ PG_SECONDARY_HIGH_WATER_PERCENT }}
+
   {% if PG_SECONDARY_CACHE_REDIS_URL_LINE is defined -%}
   cache {
     type: "redis"
