@@ -2,6 +2,7 @@ import sbt._
 
 object Dependencies {
   object versions {
+    val aws = "2.41.23"
     val c3p0 = "0.9.5-pre9"
     val commonsCli = "1.2"
     val commonsCodec = "1.11"
@@ -32,6 +33,8 @@ object Dependencies {
     val clojure = "1.5.1"
     val rollupMetrics = "4.1"
   }
+
+  val cloudwatch = "software.amazon.awssdk" % "cloudwatch" % versions.aws exclude("commons-logging", "commons-logging")
 
   val c3p0 = "com.mchange" % "c3p0" % versions.c3p0
 

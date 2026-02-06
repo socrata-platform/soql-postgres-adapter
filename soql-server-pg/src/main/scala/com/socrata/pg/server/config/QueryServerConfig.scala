@@ -24,4 +24,5 @@ class QueryServerConfig(val config: Config, val root: String) extends ConfigClas
 
   val reregisterFraction = getInt("reregister-percent") / 100.0
   val deregisterFraction = getInt("deregister-percent") / 100.0
+  val cloudwatchMetrics = getBoolean("cloudwatch-metrics")
 }
