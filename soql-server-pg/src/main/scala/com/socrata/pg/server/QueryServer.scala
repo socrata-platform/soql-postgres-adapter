@@ -1,5 +1,6 @@
 package com.socrata.pg.server
 
+import scala.concurrent.duration._
 import scala.collection.{mutable => scm}
 import java.io.{ByteArrayInputStream, OutputStreamWriter}
 import java.nio.charset.StandardCharsets
@@ -68,6 +69,8 @@ import org.apache.curator.x.discovery.ServiceInstanceBuilder
 import org.apache.log4j.PropertyConfigurator
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
+import software.amazon.awssdk.services.cloudwatch.CloudWatchClient
+import software.amazon.awssdk.services.cloudwatch.model.{MetricDatum, PutMetricDataRequest, StandardUnit}
 
 import java.time.{Clock, LocalDateTime}
 import scala.concurrent.duration.{Duration, FiniteDuration}
@@ -718,6 +721,16 @@ class QueryServer(
 }
 
 object QueryServer extends DynamicPortMap {
+  val config = try {
+    new QueryServerConfig(withDefaultAddress(ConfigFactory.load()), "com.socrata.soql-server-pg")
+  } catch {
+    case e: Exception =>
+      e.printStackTrace()
+      sys.exit(1)
+  }
+
+  PropertyConfigurator.configure(Propertizer("log4j", config.log4j))
+
   private val logger = Logger[QueryServer]
 
   def withDefaultAddress(config: Config): Config = {
@@ -730,16 +743,6 @@ object QueryServer extends DynamicPortMap {
       config.withFallback(addressConfig)
     }
   }
-
-  val config = try {
-    new QueryServerConfig(withDefaultAddress(ConfigFactory.load()), "com.socrata.soql-server-pg")
-  } catch {
-    case e: Exception =>
-      e.printStackTrace()
-      sys.exit(1)
-  }
-
-  PropertyConfigurator.configure(Propertizer("log4j", config.log4j))
 
   def main(args:Array[String]): Unit = {
     val address = config.discovery.address
@@ -760,6 +763,7 @@ object QueryServer extends DynamicPortMap {
       resultCache <- config.cache.makeCache
       timeoutManager <- managed(new analyzer2.BundledTimeoutManager(dsInfo.dataSource))
         .and(_.start())
+      scope <- managed(new ResourceScope)
     } {
       pong.start()
       val queryServer = new QueryServer(
@@ -787,8 +791,43 @@ object QueryServer extends DynamicPortMap {
       // to ZK and thence to QC.
       val reregisterBelow = (poolOptions.maxThreads * config.reregisterFraction).toInt
       val deregisterAbove = (poolOptions.maxThreads * config.deregisterFraction).toInt
-      val handler = ThreadRenamingHandler(EnablingHandler(reregisterBelow, deregisterAbove, curatorBroker.allowRequests _, NewLoggingHandler(logOptions)(queryServer.route)))
 
+      val cloudwatchClient: Option[CloudWatchClient] =
+        if(config.cloudwatchMetrics) {
+          Some(scope.open(CloudWatchClient.create()))
+        } else {
+          None
+        }
+
+      def emitConcurrencyMetric(n: Int): Unit = {
+        logger.debug("Max concurrent requests: {}", n)
+        for(client <- cloudwatchClient) {
+          client.putMetricData(
+            PutMetricDataRequest.builder
+              .namespace("ECS/Metrics/SoqlServerPG")
+              .metricData(
+                MetricDatum.builder()
+                  .metricName("Request Concurrency")
+                  .value(n)
+                  .unit(StandardUnit.COUNT)
+                  .build()
+              )
+              .build()
+          )
+        }
+      }
+
+      val handler = scope.open(
+        EnablingHandler(
+          reregisterBelow,
+          deregisterAbove,
+          curatorBroker.allowRequests _,
+          30.seconds,
+          emitConcurrencyMetric,
+          ThreadRenamingHandler(NewLoggingHandler(logOptions)(queryServer.route))
+        )
+      )
+      handler.start()
       val server = new SocrataServerJetty(handler,
                      SocrataServerJetty.defaultOptions.
                        withGzipOptions(

@@ -10,6 +10,8 @@ com.socrata.soql-server-pg {
   reregister-percent = {{ PG_SECONDARY_REREGISTER_PERCENT }}
   deregister-percent = {{ PG_SECONDARY_DEREGISTER_PERCENT }}
 
+  cloudwatch-metrics = {{ PG_SECONDARY_CLOUDWATCH }}
+
   {% if PG_SECONDARY_CACHE_REDIS_URL_LINE is defined -%}
   cache {
     type: "redis"
