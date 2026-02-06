@@ -785,9 +785,9 @@ object QueryServer extends DynamicPortMap {
       // below "lowWater", reenable it.  These are soft limits, as
       // requests to change the registration need to be propagated out
       // to ZK and thence to QC.
-      val lowWater = (poolOptions.maxThreads * config.lowWater).toInt
-      val highWater = (poolOptions.maxThreads * config.highWater).toInt
-      val handler = ThreadRenamingHandler(EnablingHandler(lowWater, highWater, curatorBroker.allowRequests _, NewLoggingHandler(logOptions)(queryServer.route)))
+      val reregisterBelow = (poolOptions.maxThreads * config.reregisterFraction).toInt
+      val deregisterAbove = (poolOptions.maxThreads * config.deregisterFraction).toInt
+      val handler = ThreadRenamingHandler(EnablingHandler(reregisterBelow, deregisterAbove, curatorBroker.allowRequests _, NewLoggingHandler(logOptions)(queryServer.route)))
 
       val server = new SocrataServerJetty(handler,
                      SocrataServerJetty.defaultOptions.

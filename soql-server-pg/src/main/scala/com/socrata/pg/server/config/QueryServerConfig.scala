@@ -22,6 +22,6 @@ class QueryServerConfig(val config: Config, val root: String) extends ConfigClas
   val httpQueryTimeoutDelta = getDuration("http-query-timeout-delta")
   val cache = QueryServerCacheConfig(config, path("cache"))
 
-  val lowWater = getInt("low-water-percent") / 100.0
-  val highWater = getInt("high-water-percent") / 100.0
+  val reregisterFraction = getInt("reregister-percent") / 100.0
+  val deregisterFraction = getInt("deregister-percent") / 100.0
 }

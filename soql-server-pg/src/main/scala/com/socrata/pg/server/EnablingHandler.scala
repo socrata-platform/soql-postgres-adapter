@@ -3,7 +3,7 @@ package com.socrata.pg.server
 import java.util.concurrent.atomic.AtomicInteger
 import com.socrata.http.server.{HttpRequest, HttpService}
 
-class EnablingHandler(lowWater: Int, highWater: Int, enable: Boolean => _, underlying: HttpService) extends HttpService {
+class EnablingHandler(reregisterBelow: Int, deregisterAbove: Int, enable: Boolean => _, underlying: HttpService) extends HttpService {
   private val inProgress = new AtomicInteger(0)
 
   def apply(req: HttpRequest) = { resp =>
@@ -19,13 +19,13 @@ class EnablingHandler(lowWater: Int, highWater: Int, enable: Boolean => _, under
     }
 
     def trigger(n: Int): Unit = {
-      if(n > highWater) enable(false)
-      else if(n < lowWater) enable(true)
+      if(n > deregisterAbove) enable(false)
+      else if(n < reregisterBelow) enable(true)
     }
   }
 }
 
 object EnablingHandler {
-  def apply(lowWater: Int, highWater: Int, enable: Boolean => _, handler: HttpService): EnablingHandler =
-    new EnablingHandler(lowWater, highWater, enable, handler)
+  def apply(reregisterBelow: Int, deregisterAbove: Int, enable: Boolean => _, handler: HttpService): EnablingHandler =
+    new EnablingHandler(reregisterBelow, deregisterAbove, enable, handler)
 }
