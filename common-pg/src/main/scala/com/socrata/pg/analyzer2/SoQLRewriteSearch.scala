@@ -12,6 +12,7 @@ import com.socrata.soql.sqlizer._
 
 class SoQLRewriteSearch[MT <: MetaTypes with metatypes.SoQLMetaTypesExt with ({ type ColumnType = SoQLType; type ColumnValue = SoQLValue })](
   override val searchBeforeQuery: Boolean,
+  override val pushDownSearches: Boolean,
   dcnComparator: (types.DatabaseColumnName[MT], types.DatabaseColumnName[MT]) => Boolean
 ) extends RewriteSearch[MT] {
   import SoQLTypeInfo.hasType
