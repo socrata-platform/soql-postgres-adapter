@@ -11,7 +11,15 @@ import com.socrata.pg.analyzer2.metatypes.{DatabaseNamesMetaTypes, AugmentedTabl
 object SoQLSqlizer extends Sqlizer[DatabaseNamesMetaTypes](
   new SoQLExprSqlizer,
   Namespaces,
-  new SoQLRewriteSearch[DatabaseNamesMetaTypes](searchBeforeQuery = true, SoQLRewriteSearch.simpleDcnComparator),
+  new SoQLRewriteSearch[DatabaseNamesMetaTypes](
+    searchBeforeQuery = true,
+    // This should be temporary; we should decide if push down
+    // searches should be on or off and then set it one way or the
+    // other permanently.  But right now we don't really know what the
+    // effect will be on real queries.
+    pushDownSearches = System.getenv("PREVENT_PUSH_DOWN_SEARCHES") eq null,
+    SoQLRewriteSearch.simpleDcnComparator
+  ),
   DatabaseNamesMetaTypes.provenanceMapper,
   {
     case DatabaseTableName(AugmentedTableName.RollupTable(_)) => true

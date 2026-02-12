@@ -65,7 +65,7 @@ object SoQLFunctionSqlizerTest {
   val TestSqlizer = new Sqlizer[TestMT](
     TestExprSqlizer,
     TestNamespaces,
-    new SoQLRewriteSearch[TestMT](searchBeforeQuery = true, SoQLRewriteSearch.simpleDcnComparator),
+    new SoQLRewriteSearch[TestMT](searchBeforeQuery = true, pushDownSearches = true, SoQLRewriteSearch.simpleDcnComparator),
     ProvenanceMapper,
     _ => false,
     (sqlizer, physicalTableFor, extraContext) =>
