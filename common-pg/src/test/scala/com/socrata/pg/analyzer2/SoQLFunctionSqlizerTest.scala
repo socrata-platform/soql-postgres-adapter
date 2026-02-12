@@ -152,7 +152,7 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
   }
 
   test("subquery search") {
-    analyzeStatement("SELECT text, url |> select 1 SEARCH 'hello'") must equal("""SELECT 1 :: numeric AS i3 FROM (SELECT x1.text AS i1, x1.url_url AS i2_url, x1.url_description AS i2_description FROM table1 AS x1) AS x2 WHERE (to_tsvector('english', ((((coalesce(x2.i1, text "")) || (text " ")) || (coalesce(x2.i2_description, text ""))) || (text " ")) || (coalesce(x2.i2_url, text "")))) @@ (plainto_tsquery('english', text "hello"))""")
+    analyzeStatement("SELECT text, url |> select 1 SEARCH 'hello'") must equal("""SELECT 1 :: numeric AS i3 FROM (SELECT x1.text AS i1, x1.url_url AS i2_url, x1.url_description AS i2_description FROM table1 AS x1 WHERE (to_tsvector('english', ((((coalesce(x1.text, text "")) || (text " ")) || (coalesce(x1.url_description, text ""))) || (text " ")) || (coalesce(x1.url_url, text "")))) @@ (plainto_tsquery('english', text "hello"))) AS x2 WHERE (to_tsvector('english', ((((coalesce(x2.i1, text "")) || (text " ")) || (coalesce(x2.i2_description, text ""))) || (text " ")) || (coalesce(x2.i2_url, text "")))) @@ (plainto_tsquery('english', text "hello"))""")
   }
 
   test("subquery search - compressed") {
