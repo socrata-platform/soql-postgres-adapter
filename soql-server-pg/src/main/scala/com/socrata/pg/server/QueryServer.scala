@@ -7,7 +7,7 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.sql.{Connection, PreparedStatement, SQLException}
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
-import javax.servlet.http.HttpServletResponse
+import jakarta.servlet.http.HttpServletResponse
 import com.socrata.pg.BuildInfo
 import com.rojoma.json.v3.ast.{JArray, JNull, JObject, JString, JValue}
 import com.rojoma.json.v3.io.CompactJsonWriter

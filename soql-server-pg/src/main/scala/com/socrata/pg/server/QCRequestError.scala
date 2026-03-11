@@ -3,7 +3,7 @@ package com.socrata.pg.server
 import com.rojoma.json.v3.ast.{JObject, JString}
 import com.rojoma.json.v3.util.AutomaticJsonCodecBuilder
 
-import javax.servlet.http.HttpServletResponse
+import jakarta.servlet.http.HttpServletResponse
 
 
 case class QCRequestError(description: String,
