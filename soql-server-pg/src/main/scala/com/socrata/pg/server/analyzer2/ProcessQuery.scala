@@ -8,7 +8,7 @@ import java.sql.{Connection, PreparedStatement, ResultSet, SQLException}
 import java.time.{Clock, LocalDateTime}
 import java.util.Base64
 import java.util.zip.GZIPOutputStream
-import javax.servlet.http.HttpServletResponse
+import jakarta.servlet.http.HttpServletResponse
 import com.rojoma.json.v3.ast.{JArray, JAtom, JNull, JObject, JString, JValue}
 import com.rojoma.json.v3.codec.JsonEncode
 import com.rojoma.json.v3.interpolation._
