@@ -21,3 +21,7 @@ assembly/assemblyMergeStrategy ~= { old =>
     case x => old(x)
   }
 }
+
+excludeDependencies ++= Seq(
+  ExclusionRule("log4j", "log4j")
+)

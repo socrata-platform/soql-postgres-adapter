@@ -16,7 +16,7 @@ object Dependencies {
     val liquibasePlugin = "1.9.5.0"
     val postgresql = "42.6.0"
     val simpleArm = "1.1.10"
-    val slf4j = "1.7.5"
+    val slf4j = "2.0.9"
     val scalatest = "3.0.8"
     val socrataUtils = "0.11.0"
     val socrataCuratorUtils = "1.2.0"
@@ -30,7 +30,7 @@ object Dependencies {
     val rojomaJson = "3.13.0"
     val metrics = "4.2.30"
     val metricsScala = "4.3.3"
-    val clojure = "1.5.1"
+    val clojure = "1.12.4"
     val rollupMetrics = "4.1"
   }
 
