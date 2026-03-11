@@ -1,4 +1,4 @@
-FROM socrata/java8-jammy
+FROM socrata/java-jammy:25
 
 EXPOSE 6090
 EXPOSE 6091/udp
@@ -34,7 +34,7 @@ ENV PG_SECONDARY_DEREGISTER_PERCENT 90
 ENV PG_SECONDARY_CLOUDWATCH false
 ENV JAVA_MAX_METASPACE 64m
 ENV JAVA_OOM_BEHAVIOR -XX:+ExitOnOutOfMemoryError
-ENV JAVA_GC_LOG_BEHAVIOR="-Xloggc:/tmp/gc.log -XX:+PrintGCDateStamps -XX:+PrintGCDetails -XX:+PrintTenuringDistribution -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=50M -XX:+TraceClassLoading -XX:+PrintGCCause -XX:+TraceClassUnloading"
+ENV JAVA_GC_LOG_BEHAVIOR="-Xlog:gc:/tmp/gc.log:time,level,tags:filesize=50M,filecount=10 -Xlog:age*=debug -Xlog:class+load,class+unload"
 ENV MAX_CONCURRENT_REQUESTS_PER_DATASET 15
 
 WORKDIR $SERVER_ROOT
