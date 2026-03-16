@@ -33,7 +33,9 @@ libraryDependencies ++= Seq(
 
 enablePlugins(BuildInfoPlugin)
 
-buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion,git.gitHeadCommit)
+git.gitUncommittedChanges := false // prevent JGit working-tree inspection, for submodule docker build
+
+buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, "revision" -> git.gitHeadCommit.value.getOrElse("unknown")) // when submodule docker build, ignore lack of git info
 
 buildInfoPackage := "com.socrata.pg"
 
