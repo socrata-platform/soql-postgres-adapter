@@ -3,6 +3,7 @@ import Dependencies._
 name := "soql-server-pg"
 
 libraryDependencies ++= Seq(
+  cloudwatch,
   commonsCollections,
   jedis,
   secondarylib,
@@ -20,3 +21,15 @@ assembly/assemblyOutputPath := target.value / (assembly/assemblyJarName).value
 mainClass := Some("com.socrata.pg.server.QueryServer")
 
 addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full)
+
+assembly/assemblyMergeStrategy ~= { old =>
+  {
+    case x if x.endsWith("io.netty.versions.properties") => MergeStrategy.first
+    case x if x.endsWith("module-info.class") => MergeStrategy.discard
+    case x => old(x)
+  }
+}
+
+excludeDependencies ++= Seq(
+  ExclusionRule("log4j", "log4j")
+)

@@ -150,6 +150,7 @@ object Hashable {
         case rewrite.Pass.RemoveTrivialJoins => hasher.hashByte(12)
         case rewrite.Pass.RemoveSyntheticColumns => hasher.hashByte(13)
         case rewrite.Pass.RemoveSystemColumns => hasher.hashByte(14)
+        case rewrite.Pass.MaterializeNamedQueries => hasher.hashByte(15)
       }
   }
 

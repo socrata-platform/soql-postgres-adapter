@@ -1,4 +1,4 @@
-@Library('socrata-pipeline-library@9.7.0')
+@Library('socrata-pipeline-library@9.9.2')
 
 import com.socrata.ReleaseMetadataService
 def rmsSupportedEnvironment = com.socrata.ReleaseMetadataService.SupportedEnvironment
@@ -27,7 +27,7 @@ pipeline {
     timeout(time: 100, unit: 'MINUTES')
   }
   parameters {
-    string(name: 'AGENT', defaultValue: 'build-worker-pg13', description: 'Which build agent to use?')
+    string(name: 'AGENT', defaultValue: 'worker-java-multi-pg13', description: 'Which build agent to use?')
     string(name: 'BRANCH_SPECIFIER', defaultValue: 'origin/main', description: 'Use this branch for building the artifact.')
     booleanParam(name: 'RELEASE_BUILD', defaultValue: false, description: 'Are we building a release candidate?')
     booleanParam(name: 'RELEASE_DRY_RUN', defaultValue: false, description: 'To test out the release build.')
@@ -277,16 +277,10 @@ pipeline {
           steps {
             script {
               lastStage = env.STAGE_NAME
-              env.ENVIRONMENT = (isHotfix) ? 'rc' : 'staging'
-              marathonDeploy(
-                serviceName: env.DEPLOY_PATTERN,
-                tag: env.BUILD_ID,
-                environment: env.ENVIRONMENT,
-                waitTime: '60'
-              )
-              // While working on migrating from marathon to ECS, we are keeping the tagged images up to date
-              // Once the migration is done, we will remove the marathonDeploy and leave in place this publish which triggers the ECS deployment
-              env.TARGET_DEPLOY_TAG = (env.ENVIRONMENT == 'rc') ? 'rc' : 'latest'
+              env.TARGET_DEPLOY_TAG = (isHotfix) ? 'rc' : 'latest'
+              // Deploy to ECS container
+              // Although this uses the publish method, it actually triggers the deployment of the ECS service
+              // There is a lambda that watches for when these specific tags point to a new image and triggers the service deployment
               dockerize_server.publish(
                 sourceTag: env.DOCKER_TAG,
                 targetTag: env.TARGET_DEPLOY_TAG,
@@ -315,13 +309,9 @@ pipeline {
           steps {
             script {
               lastStage = env.STAGE_NAME
-              marathonDeploy(
-                serviceName: env.SECONDARY_DEPLOY_PATTERN,
-                tag: env.SECONDARY_BUILD_ID,
-                environment: env.ENVIRONMENT,
-              )
-              // While working on migrating from marathon to ECS, we are keeping the tagged images up to date
-              // Once the migration is done, we will remove the marathonDeploy and leave in place this publish which triggers the ECS deployment
+              // Deploy to ECS container
+              // Although this uses the publish method, it actually triggers the deployment of the ECS service
+              // There is a lambda that watches for when these specific tags point to a new image and triggers the service deployment
               dockerize_secondary.publish(
                 sourceTag: env.SECONDARY_DOCKER_TAG,
                 targetTag: env.TARGET_DEPLOY_TAG,

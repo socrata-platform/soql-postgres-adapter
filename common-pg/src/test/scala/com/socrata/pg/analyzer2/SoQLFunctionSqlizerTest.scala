@@ -40,6 +40,7 @@ object SoQLFunctionSqlizerTest {
     protected override def idxPrefix: String ="idx"
     protected override def autoTablePrefix: String = "x"
     protected override def autoColumnPrefix: String = "i"
+    protected override def autoCTEPrefix: String = "c"
   }
 
   object ProvenanceMapper extends types.ProvenanceMapper[TestMT] {
@@ -64,7 +65,7 @@ object SoQLFunctionSqlizerTest {
   val TestSqlizer = new Sqlizer[TestMT](
     TestExprSqlizer,
     TestNamespaces,
-    new SoQLRewriteSearch[TestMT](searchBeforeQuery = true, SoQLRewriteSearch.simpleDcnComparator),
+    new SoQLRewriteSearch[TestMT](searchBeforeQuery = true, pushDownSearches = true, SoQLRewriteSearch.simpleDcnComparator),
     ProvenanceMapper,
     _ => false,
     (sqlizer, physicalTableFor, extraContext) =>
@@ -103,7 +104,7 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
   // it out...
 
   def tableFinder(items: ((Int, String), Thing[Int, SoQLType])*) =
-    new MockTableFinder[TestMT](items.toMap)
+    MockTableFinder[TestMT](items: _*)
   val analyzer = new SoQLAnalyzer[TestMT](new SoQLTypeInfo2, SoQLFunctionInfo, SoQLFunctionSqlizerTest.ProvenanceMapper)
   def analyze(soqlexpr: String): String = {
     val s = analyzeStatement(s"SELECT ($soqlexpr)")
@@ -151,7 +152,7 @@ class SoQLFunctionSqlizerTest extends FunSuite with MustMatchers with SqlizerUni
   }
 
   test("subquery search") {
-    analyzeStatement("SELECT text, url |> select 1 SEARCH 'hello'") must equal("""SELECT 1 :: numeric AS i3 FROM (SELECT x1.text AS i1, x1.url_url AS i2_url, x1.url_description AS i2_description FROM table1 AS x1) AS x2 WHERE (to_tsvector('english', ((((coalesce(x2.i1, text "")) || (text " ")) || (coalesce(x2.i2_description, text ""))) || (text " ")) || (coalesce(x2.i2_url, text "")))) @@ (plainto_tsquery('english', text "hello"))""")
+    analyzeStatement("SELECT text, url |> select 1 SEARCH 'hello'") must equal("""SELECT 1 :: numeric AS i3 FROM (SELECT x1.text AS i1, x1.url_url AS i2_url, x1.url_description AS i2_description FROM table1 AS x1 WHERE (to_tsvector('english', ((((coalesce(x1.text, text "")) || (text " ")) || (coalesce(x1.url_description, text ""))) || (text " ")) || (coalesce(x1.url_url, text "")))) @@ (plainto_tsquery('english', text "hello"))) AS x2 WHERE (to_tsvector('english', ((((coalesce(x2.i1, text "")) || (text " ")) || (coalesce(x2.i2_description, text ""))) || (text " ")) || (coalesce(x2.i2_url, text "")))) @@ (plainto_tsquery('english', text "hello"))""")
   }
 
   test("subquery search - compressed") {

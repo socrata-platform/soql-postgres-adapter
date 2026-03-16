@@ -55,7 +55,7 @@ trait SecondaryBase {
     // Keep in mind that postgres limits the application_name to 64 chars (unless you recompile).
     // The X-Socrata values are set in the MDC for logging in the query servers, while the "-id" values
     // are set by the secondary watcher processes, so we use whichever we can find.
-    Thread.currentThread().getId() + " " +
+    Thread.currentThread().getId + " " +
       Option(MDC.get("X-Socrata-RequestId")).orElse(Option(MDC.get("job-id"))).getOrElse("-") + " " +
       // X-Socrata-Resource is set to the soda fountain resource name, not what the request came into core with.
       // It would be nice to expose the 4x4 the request came into core with but that requires more plumbing work.

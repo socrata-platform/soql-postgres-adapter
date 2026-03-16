@@ -24,9 +24,10 @@ object CryptProvidersByDatabaseNamesProvenance extends StatementUniverse[Databas
 
   private def findCryptProvidersAF(from: AtomicFrom, acc: Acc): Acc =
     from match {
-      case FromStatement(stmt, _, _, _) => findCryptProvidersS(stmt, acc)
+      case FromStatement(stmt, _, _, _, _) => findCryptProvidersS(stmt, acc)
+      case _: FromCTE => acc
       case _: FromSingleRow => acc
-      case FromTable(dtn@DatabaseTableName(copyInfo), _, _, _, _, _) =>
+      case FromTable(dtn@DatabaseTableName(copyInfo), _, _, _, _, _, _) =>
         val prov = DatabaseNamesMetaTypes.provenanceMapper.toProvenance(DatabaseNamesMetaTypes.rewriteDTN(dtn))
         acc.get(prov) match {
           case Some(dsInfo) =>
@@ -47,8 +48,10 @@ object CryptProvidersByDatabaseNamesProvenance extends StatementUniverse[Databas
     stmt match {
       case CombinedTables(_op, left, right) =>
         findCryptProvidersS(left, findCryptProvidersS(right, acc))
-      case CTE(_, _, q1, _, q2) =>
-        findCryptProvidersS(q1, findCryptProvidersS(q2, acc))
+      case CTE(defns, q) =>
+        defns.valuesIterator.foldLeft(findCryptProvidersS(q, acc)) { (acc, defn) =>
+          findCryptProvidersS(defn.query, acc)
+        }
       case s: Select =>
         findCryptProvidersF(s.from, acc)
       case v: Values =>

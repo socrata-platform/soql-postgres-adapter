@@ -15,7 +15,7 @@ import com.typesafe.scalalogging.Logger
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
 import java.io.{OutputStreamWriter, Writer}
-import javax.servlet.http.HttpServletResponse
+import jakarta.servlet.http.HttpServletResponse
 
 final abstract class CJSONWriter
 

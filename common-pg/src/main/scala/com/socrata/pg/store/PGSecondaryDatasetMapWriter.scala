@@ -161,13 +161,13 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
           stmt.setString(1, soql)
           stmt.setString(2, name.underlying)
           stmt.setLong(3, copyInfo.systemId.underlying)
-          t("create-or-update-rollup", "action" -> "update", "copy-id" -> copyInfo.systemId, "name" -> name)(
-            using(stmt.executeQuery()){resultSet =>
+          t("create-or-update-rollup", "action" -> "update", "copy-id" -> copyInfo.systemId, "name" -> name) {
+            using(stmt.executeQuery()) { resultSet =>
               if(resultSet.next()){
                  Some(new LocalRollupInfo(copyInfo, name, soql, resultSet.getString("table_name"),RollupId(resultSet.getLong("system_id"))))
               }else None
             }
-          )
+          }
         }
       case None =>
 
@@ -177,13 +177,13 @@ class PGSecondaryDatasetMapWriter[CT](override val conn: Connection,
           stmt.setLong(2, copyInfo.systemId.underlying)
           stmt.setString(3, soql)
           stmt.setString(4, tableName)
-          t("create-or-update-rollup", "action" -> "insert", "copy-id" -> copyInfo.systemId, "name" -> name)(
-            using(stmt.executeQuery()){resultSet =>
+          t("create-or-update-rollup", "action" -> "insert", "copy-id" -> copyInfo.systemId, "name" -> name) {
+            using(stmt.executeQuery()) { resultSet =>
               if(resultSet.next()){
                 Some(new LocalRollupInfo(copyInfo, name, soql, tableName,RollupId(resultSet.getLong("system_id"))))
               }else None
             }
-          )
+          }
         }
     }
   }

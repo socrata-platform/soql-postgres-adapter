@@ -53,17 +53,25 @@ final class DatabaseMetaTypes extends MetaTypes {
     copyCache: CopyCache[MT],
     fromProv: types.FromProvenance[MT]
   )(implicit changesOnlyLabels: MetaTypes.ChangesOnlyLabels[MT, DatabaseMetaTypes])
-      : SoQLAnalysis[DatabaseMetaTypes] =
+      : Either[Set[types.DatabaseTableName[MT]], SoQLAnalysis[DatabaseMetaTypes]] =
   {
-    analysis.rewriteDatabaseNames[DatabaseMetaTypes](
-      { dtn => DatabaseTableName(copyCache(dtn).get._1) }, // TODO proper error
-      { case (dtn, DatabaseColumnName(userColumnId)) =>
-        DatabaseColumnName(copyCache(dtn).get._2.get(userColumnId).get) // TODO proper errors
-      },
-      fromProv,
-      provenanceMapper,
-      typeInfo.updateProvenance
-    )
+    val requestedTables = analysis.physicalTableMap.valuesIterator.toSet
+    val missingTables = requestedTables.filter { dtn => copyCache(dtn).isEmpty }
+
+    if(missingTables.nonEmpty) {
+      Left(missingTables)
+    } else {
+      val rewritten = analysis.rewriteDatabaseNames[DatabaseMetaTypes](
+        { dtn => DatabaseTableName(copyCache(dtn).get._1) }, // This get cannot fail, we just populated the cache
+        { case (dtn, DatabaseColumnName(userColumnId)) =>
+          DatabaseColumnName(copyCache(dtn).get._2.get(userColumnId).get) // TODO proper errors
+        },
+        fromProv,
+        provenanceMapper,
+        typeInfo.updateProvenance
+      )
+      Right(rewritten)
+    }
   }
 }
 

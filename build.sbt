@@ -2,6 +2,8 @@ ThisBuild / Test / fork := true
 
 ThisBuild / scalacOptions ++= Seq("-deprecation", "-feature", "-Xfatal-warnings")
 
+ThisBuild / scalaVersion := "2.12.21"
+
 ThisBuild / organization := "com.socrata"
 
 ThisBuild / resolvers += "socrata" at "https://repo.socrata.com/artifactory/libs-release"

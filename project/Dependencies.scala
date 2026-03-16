@@ -2,6 +2,7 @@ import sbt._
 
 object Dependencies {
   object versions {
+    val aws = "2.41.23"
     val c3p0 = "0.9.5-pre9"
     val commonsCli = "1.2"
     val commonsCodec = "1.11"
@@ -15,23 +16,25 @@ object Dependencies {
     val liquibasePlugin = "1.9.5.0"
     val postgresql = "42.6.0"
     val simpleArm = "1.1.10"
-    val slf4j = "1.7.5"
+    val slf4j = "2.0.9"
     val scalatest = "3.0.8"
     val socrataUtils = "0.11.0"
     val socrataCuratorUtils = "1.2.0"
     val socrataThirdPartyUtils = "5.0.0"
-    val socrataHttp = "3.16.3"
-    val soqlStdlib = "4.14.88"
+    val socrataHttp = "3.16.5-jdk11"
+    val soqlStdlib = "4.14.92"
     val simpleCsv = "0.0.2"
     val typesafeConfig = "1.0.0"
-    val dataCoordinator = "4.2.43"
+    val dataCoordinator = "4.2.46"
     val typesafeScalaLogging = "3.9.2"
     val rojomaJson = "3.13.0"
     val metrics = "4.2.30"
     val metricsScala = "4.3.3"
-    val clojure = "1.5.1"
+    val clojure = "1.12.4"
     val rollupMetrics = "4.1"
   }
+
+  val cloudwatch = "software.amazon.awssdk" % "cloudwatch" % versions.aws exclude("commons-logging", "commons-logging")
 
   val c3p0 = "com.mchange" % "c3p0" % versions.c3p0
 
